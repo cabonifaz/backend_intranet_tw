@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/TW.Intranet.API/TW.Intranet.API.csproj" />
+    <Project Path="src/TW.Intranet.Aplicacion/TW.Intranet.Aplicacion.csproj" />
+    <Project Path="src/TW.Intranet.Dominio/TW.Intranet.Dominio.csproj" />
+    <Project Path="src/TW.Intranet.Infraestructura/TW.Intranet.Infraestructura.csproj" />
+  </Folder>
+</Solution>

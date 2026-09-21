@@ -1,0 +1,6 @@
+@TW.Intranet.API_HostAddress = http://localhost:5277
+
+GET {{TW.Intranet.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
