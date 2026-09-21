@@ -6,6 +6,10 @@
 # dotenv files
 .env
 
+# Configuración local con credenciales reales (nunca subir a git)
+appsettings.Local.json
+appsettings.*.Local.json
+
 # User-specific files
 *.rsuser
 *.suo
