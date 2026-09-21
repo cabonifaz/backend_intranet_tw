@@ -1,3 +1,5 @@
+using Scalar.AspNetCore;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Carga appsettings.Local.json si existe (para desarrollo local, no se sube a git)
@@ -24,8 +26,17 @@ builder.Services.AddCors(options =>
 // ── CONTROLLERS ───────────────────────────────────────────────────────────────
 builder.Services.AddControllers();
 
-// ── OPENAPI ───────────────────────────────────────────────────────────────────
-builder.Services.AddOpenApi();
+// ── OPENAPI / SWAGGER ─────────────────────────────────────────────────────────
+builder.Services.AddOpenApi(options =>
+{
+    options.AddDocumentTransformer((document, context, _) =>
+    {
+        document.Info.Title = "TW Intranet API";
+        document.Info.Version = "v1";
+        document.Info.Description = "API interna de Total Weight — Intranet";
+        return Task.CompletedTask;
+    });
+});
 
 // ── CADENA DE CONEXIÓN (disponible para inyección en adaptadores) ──────────────
 var cfg = builder.Configuration;
@@ -42,8 +53,15 @@ builder.Services.AddSingleton(new CadenaConexionBd(cadenaConexion));
 // ─────────────────────────────────────────────────────────────────────────────
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
+if (!app.Environment.IsProduction())
+{
     app.MapOpenApi();
+    app.MapScalarApiReference(options =>
+    {
+        options.Title = "TW Intranet API";
+        options.Theme = ScalarTheme.DeepSpace;
+    });
+}
 
 app.UseHttpsRedirection();
 app.UseCors("PoliticaCors");
