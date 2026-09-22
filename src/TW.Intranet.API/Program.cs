@@ -1,4 +1,11 @@
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
+using TW.Intranet.Aplicacion.CasosDeUso;
+using TW.Intranet.Aplicacion.Puertos;
+using TW.Intranet.Infraestructura.Adaptadores;
+using TW.Intranet.Infraestructura.Configuracion;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -31,15 +38,16 @@ builder.Services.AddOpenApi(options =>
 {
     options.AddDocumentTransformer((document, context, _) =>
     {
-        document.Info.Title = "TW Intranet API";
-        document.Info.Version = "v1";
+        document.Info.Title       = "TW Intranet API";
+        document.Info.Version     = "v1";
         document.Info.Description = "API interna de Total Weight — Intranet";
         return Task.CompletedTask;
     });
 });
 
-// ── CADENA DE CONEXIÓN (disponible para inyección en adaptadores) ──────────────
+// ── CONFIGURACIÓN BD + JWT (disponible para inyección en adaptadores) ─────────
 var cfg = builder.Configuration;
+
 var cadenaConexion =
     $"Server={cfg["Database:Host"]};" +
     $"Port={cfg["Database:Port"]};" +
@@ -48,7 +56,42 @@ var cadenaConexion =
     $"Password={cfg["Database:Password"]};" +
     "AllowPublicKeyRetrieval=true;SslMode=None;";
 
+var configuracionJwt = new ConfiguracionJwt(
+    Secret:          cfg["Jwt:Secret"] ?? throw new InvalidOperationException("Jwt:Secret no configurado."),
+    ExpirationHours: int.Parse(cfg["Jwt:ExpirationHours"] ?? "8"),
+    Issuer:          cfg["Jwt:Issuer"]   ?? "TW.Intranet",
+    Audience:        cfg["Jwt:Audience"] ?? "TW.Intranet.Clients");
+
 builder.Services.AddSingleton(new CadenaConexionBd(cadenaConexion));
+builder.Services.AddSingleton(configuracionJwt);
+
+// ── AUTENTICACIÓN JWT ─────────────────────────────────────────────────────────
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer           = true,
+            ValidateAudience         = true,
+            ValidateLifetime         = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer              = configuracionJwt.Issuer,
+            ValidAudience            = configuracionJwt.Audience,
+            IssuerSigningKey         = new SymmetricSecurityKey(
+                                           Encoding.UTF8.GetBytes(configuracionJwt.Secret)),
+            ClockSkew                = TimeSpan.Zero,
+        };
+    });
+
+builder.Services.AddAuthorization();
+
+// ── INYECCIÓN DE DEPENDENCIAS (Puertos → Adaptadores) ────────────────────────
+builder.Services.AddScoped<IAutenticacionRepositorio, AutenticacionRepositorio>();
+builder.Services.AddScoped<IJwtServicio,              JwtServicio>();
+builder.Services.AddScoped<IVerificadorContrasena,    BcryptVerificadorContrasena>();
+
+// Casos de uso
+builder.Services.AddScoped<IniciarSesionCasoDeUso>();
 
 // ─────────────────────────────────────────────────────────────────────────────
 var app = builder.Build();
@@ -65,9 +108,8 @@ if (!app.Environment.IsProduction())
 
 app.UseHttpsRedirection();
 app.UseCors("PoliticaCors");
+app.UseAuthentication();
+app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
-
-// Registro simple que los adaptadores de infraestructura reciben por DI
-public record CadenaConexionBd(string Valor);
