@@ -17,10 +17,10 @@ public record ClienteDetalleDto(
     string?  ReglaVip,
     decimal? DescuentoVipPct,
     string?  PatronMasasAsignado,
-    bool     SsomaPaseIngreso,
-    bool     SsomaTrabajoAltura,
-    bool     SsomaEspacioConfinado,
-    bool     SsomaInduccionPrevia,
+    bool     SsomaPolizaSctr,
+    bool     SsomaCamioneta4x4,
+    bool     SsomaInduccionSsoma,
+    bool     SsomaExamenMedico,
     string?  SsomaNotas,
     string   Estado
 );

@@ -111,10 +111,10 @@ public class MaestrosRepositorio(CadenaConexionBd conexion) : IMaestrosRepositor
                 ReglaVip:               nullable("regla_vip")          ? null : reader.GetString("regla_vip"),
                 DescuentoVipPct:        nullable("descuento_vip_pct")  ? null : reader.GetDecimal("descuento_vip_pct"),
                 PatronMasasAsignado:    nullable("patron_masas_asignado") ? null : reader.GetString("patron_masas_asignado"),
-                SsomaPaseIngreso:       reader.GetBoolean("ssoma_pase_ingreso"),
-                SsomaTrabajoAltura:     reader.GetBoolean("ssoma_trabajo_altura"),
-                SsomaEspacioConfinado:  reader.GetBoolean("ssoma_espacio_confinado"),
-                SsomaInduccionPrevia:   reader.GetBoolean("ssoma_induccion_previa"),
+                SsomaPolizaSctr:        reader.GetBoolean("ssoma_poliza_sctr"),
+                SsomaCamioneta4x4:      reader.GetBoolean("ssoma_camioneta_4x4"),
+                SsomaInduccionSsoma:    reader.GetBoolean("ssoma_induccion_ssoma"),
+                SsomaExamenMedico:      reader.GetBoolean("ssoma_examen_medico"),
                 SsomaNotas:             nullable("ssoma_notas")        ? null : reader.GetString("ssoma_notas"),
                 Estado:                 reader.GetString("estado")
             );
@@ -155,10 +155,10 @@ public class MaestrosRepositorio(CadenaConexionBd conexion) : IMaestrosRepositor
             cmd.Parameters.AddWithValue("p_regla_vip",               dto.ReglaVip         ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("p_descuento_vip_pct",       dto.DescuentoVipPct  ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("p_patron_masas_asignado",   dto.PatronMasasAsignado ?? (object)DBNull.Value);
-            cmd.Parameters.AddWithValue("p_ssoma_pase_ingreso",      dto.SsomaPaseIngreso     ? 1 : 0);
-            cmd.Parameters.AddWithValue("p_ssoma_trabajo_altura",    dto.SsomaTrabajoAltura   ? 1 : 0);
-            cmd.Parameters.AddWithValue("p_ssoma_espacio_confinado", dto.SsomaEspacioConfinado ? 1 : 0);
-            cmd.Parameters.AddWithValue("p_ssoma_induccion_previa",  dto.SsomaInduccionPrevia  ? 1 : 0);
+            cmd.Parameters.AddWithValue("p_ssoma_poliza_sctr",       dto.SsomaPolizaSctr     ? 1 : 0);
+            cmd.Parameters.AddWithValue("p_ssoma_camioneta_4x4",     dto.SsomaCamioneta4x4   ? 1 : 0);
+            cmd.Parameters.AddWithValue("p_ssoma_induccion_ssoma",   dto.SsomaInduccionSsoma ? 1 : 0);
+            cmd.Parameters.AddWithValue("p_ssoma_examen_medico",     dto.SsomaExamenMedico   ? 1 : 0);
             cmd.Parameters.AddWithValue("p_ssoma_notas",             dto.SsomaNotas       ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("p_usu_cre",                 usuCre);
 
@@ -184,6 +184,51 @@ public class MaestrosRepositorio(CadenaConexionBd conexion) : IMaestrosRepositor
         catch (Exception ex)
         {
             return new RespuestaDto<long>(3, ex.Message);
+        }
+    }
+
+    public async Task<RespuestaDto<List<CatalogoItemDto>>> ObtenerCatalogoAsync(
+        string descripcion, CancellationToken ct)
+    {
+        try
+        {
+            await using var conn = new MySqlConnection(conexion.Valor);
+            await conn.OpenAsync(ct);
+
+            await using var cmd = new MySqlCommand("SP_ObtenerCatalogo", conn)
+            {
+                CommandType = System.Data.CommandType.StoredProcedure
+            };
+            cmd.Parameters.AddWithValue("p_descripcion", descripcion);
+
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+
+            if (!await reader.ReadAsync(ct))
+                return new RespuestaDto<List<CatalogoItemDto>>(3, "El procedimiento no devolvió resultado.");
+
+            int    idTipo  = reader.GetInt32("IdTipoMensaje");
+            string mensaje = reader.GetString("Mensaje");
+
+            if (idTipo != 2)
+                return new RespuestaDto<List<CatalogoItemDto>>(idTipo, mensaje);
+
+            await reader.NextResultAsync(ct);
+
+            var lista = new List<CatalogoItemDto>();
+            while (await reader.ReadAsync(ct))
+            {
+                lista.Add(new CatalogoItemDto(
+                    Id:     reader.GetInt32("id"),
+                    Nombre: reader.GetString("nombre"),
+                    Codigo: reader.IsDBNull(reader.GetOrdinal("codigo")) ? null : reader.GetString("codigo")
+                ));
+            }
+
+            return new RespuestaDto<List<CatalogoItemDto>>(2, mensaje, lista);
+        }
+        catch (Exception ex)
+        {
+            return new RespuestaDto<List<CatalogoItemDto>>(3, ex.Message);
         }
     }
 

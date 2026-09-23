@@ -35,10 +35,10 @@ BEGIN
             regla_vip,
             descuento_vip_pct,
             patron_masas_asignado,
-            ssoma_pase_ingreso,
-            ssoma_trabajo_altura,
-            ssoma_espacio_confinado,
-            ssoma_induccion_previa,
+            ssoma_poliza_sctr,
+            ssoma_camioneta_4x4,
+            ssoma_induccion_ssoma,
+            ssoma_examen_medico,
             ssoma_notas,
             estado
         FROM cliente

@@ -2,39 +2,36 @@
 -- SP_GuardarCliente
 -- Inserta o actualiza un cliente.
 -- Si p_id_cliente = 0 → INSERT; caso contrario → UPDATE.
--- Valida RUC único (excluyendo registros soft-deleted y el
--- registro actual en edición).
 -- ============================================================
 DROP PROCEDURE IF EXISTS SP_GuardarCliente;
 
 DELIMITER //
 
 CREATE PROCEDURE SP_GuardarCliente(
-    IN p_id_cliente           BIGINT,
-    IN p_tipo_documento       VARCHAR(20),
-    IN p_ruc                  VARCHAR(11),
-    IN p_tipo_cliente         VARCHAR(50),
-    IN p_razon_social         VARCHAR(300),
-    IN p_nombre_comercial     VARCHAR(200),
-    IN p_condicion_fiscal     VARCHAR(50),
-    IN p_condicion_contribuyente VARCHAR(50),
-    IN p_condicion_pago       VARCHAR(50),
-    IN p_linea_credito_usd    DECIMAL(15,2),
-    IN p_telefono_central     VARCHAR(30),
-    IN p_domicilio_fiscal     VARCHAR(500),
-    IN p_es_vip               TINYINT(1),
-    IN p_regla_vip            VARCHAR(100),
-    IN p_descuento_vip_pct    DECIMAL(5,2),
-    IN p_patron_masas_asignado VARCHAR(100),
-    IN p_ssoma_pase_ingreso   TINYINT(1),
-    IN p_ssoma_trabajo_altura TINYINT(1),
-    IN p_ssoma_espacio_confinado TINYINT(1),
-    IN p_ssoma_induccion_previa TINYINT(1),
-    IN p_ssoma_notas          TEXT,
-    IN p_usu_cre              VARCHAR(100)
+    IN p_id_cliente              BIGINT,
+    IN p_tipo_documento          VARCHAR(20)   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+    IN p_ruc                     VARCHAR(11)   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+    IN p_tipo_cliente            VARCHAR(50)   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+    IN p_razon_social            VARCHAR(300)  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+    IN p_nombre_comercial        VARCHAR(200)  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+    IN p_condicion_fiscal        VARCHAR(50)   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+    IN p_condicion_contribuyente VARCHAR(50)   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+    IN p_condicion_pago          VARCHAR(50)   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+    IN p_linea_credito_usd       DECIMAL(15,2),
+    IN p_telefono_central        VARCHAR(30)   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+    IN p_domicilio_fiscal        VARCHAR(500)  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+    IN p_es_vip                  TINYINT(1),
+    IN p_regla_vip               VARCHAR(100)  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+    IN p_descuento_vip_pct       DECIMAL(5,2),
+    IN p_patron_masas_asignado   VARCHAR(100)  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+    IN p_ssoma_poliza_sctr       TINYINT(1),
+    IN p_ssoma_camioneta_4x4     TINYINT(1),
+    IN p_ssoma_induccion_ssoma   TINYINT(1),
+    IN p_ssoma_examen_medico     TINYINT(1),
+    IN p_ssoma_notas             TEXT          CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+    IN p_usu_cre                 VARCHAR(100)  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
 )
 BEGIN
-    -- Validar RUC duplicado (activos únicamente)
     IF EXISTS (
         SELECT 1 FROM cliente
         WHERE ruc = p_ruc
@@ -48,16 +45,16 @@ BEGIN
             condicion_fiscal, condicion_contribuyente, condicion_pago,
             linea_credito_usd, telefono_central, domicilio_fiscal,
             es_vip, regla_vip, descuento_vip_pct, patron_masas_asignado,
-            ssoma_pase_ingreso, ssoma_trabajo_altura, ssoma_espacio_confinado,
-            ssoma_induccion_previa, ssoma_notas,
+            ssoma_poliza_sctr, ssoma_camioneta_4x4, ssoma_induccion_ssoma,
+            ssoma_examen_medico, ssoma_notas,
             estado, SoftDelete, UsuCre, FchCre
         ) VALUES (
             p_tipo_documento, p_ruc, p_tipo_cliente, p_razon_social, p_nombre_comercial,
             p_condicion_fiscal, p_condicion_contribuyente, p_condicion_pago,
             p_linea_credito_usd, p_telefono_central, p_domicilio_fiscal,
             p_es_vip, p_regla_vip, p_descuento_vip_pct, p_patron_masas_asignado,
-            p_ssoma_pase_ingreso, p_ssoma_trabajo_altura, p_ssoma_espacio_confinado,
-            p_ssoma_induccion_previa, p_ssoma_notas,
+            p_ssoma_poliza_sctr, p_ssoma_camioneta_4x4, p_ssoma_induccion_ssoma,
+            p_ssoma_examen_medico, p_ssoma_notas,
             'Activo', 0, p_usu_cre, NOW()
         );
 
@@ -80,10 +77,10 @@ BEGIN
             regla_vip               = p_regla_vip,
             descuento_vip_pct       = p_descuento_vip_pct,
             patron_masas_asignado   = p_patron_masas_asignado,
-            ssoma_pase_ingreso      = p_ssoma_pase_ingreso,
-            ssoma_trabajo_altura    = p_ssoma_trabajo_altura,
-            ssoma_espacio_confinado = p_ssoma_espacio_confinado,
-            ssoma_induccion_previa  = p_ssoma_induccion_previa,
+            ssoma_poliza_sctr       = p_ssoma_poliza_sctr,
+            ssoma_camioneta_4x4     = p_ssoma_camioneta_4x4,
+            ssoma_induccion_ssoma   = p_ssoma_induccion_ssoma,
+            ssoma_examen_medico     = p_ssoma_examen_medico,
             ssoma_notas             = p_ssoma_notas,
             UsuMod                  = p_usu_cre,
             FchMod                  = NOW()

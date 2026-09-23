@@ -111,6 +111,9 @@ builder.Services.AddScoped<ObtenerClientePorIdCasoDeUso>();
 builder.Services.AddScoped<GuardarClienteCasoDeUso>();
 builder.Services.AddScoped<CambiarEstadoClienteCasoDeUso>();
 
+// Casos de uso — Maestros: Catálogos
+builder.Services.AddScoped<ObtenerCatalogoCasoDeUso>();
+
 // ─────────────────────────────────────────────────────────────────────────────
 var app = builder.Build();
 

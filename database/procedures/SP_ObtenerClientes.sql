@@ -8,8 +8,8 @@ DROP PROCEDURE IF EXISTS SP_ObtenerClientes;
 DELIMITER //
 
 CREATE PROCEDURE SP_ObtenerClientes(
-    IN p_busqueda  VARCHAR(300),
-    IN p_estado    VARCHAR(20)
+    IN p_busqueda  VARCHAR(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+    IN p_estado    VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
 )
 BEGIN
     SELECT 2 AS IdTipoMensaje, 'Éxito.' AS Mensaje;

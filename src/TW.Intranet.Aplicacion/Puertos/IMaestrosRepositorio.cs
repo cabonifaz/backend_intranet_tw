@@ -15,4 +15,7 @@ public interface IMaestrosRepositorio
 
     Task<RespuestaDto<object>> CambiarEstadoClienteAsync(
         CambiarEstadoClienteDto dto, string usuMod, CancellationToken ct);
+
+    Task<RespuestaDto<List<CatalogoItemDto>>> ObtenerCatalogoAsync(
+        string descripcion, CancellationToken ct);
 }

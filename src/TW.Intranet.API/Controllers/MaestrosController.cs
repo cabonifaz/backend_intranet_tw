@@ -13,7 +13,8 @@ public class MaestrosController(
     ObtenerClientesCasoDeUso      obtenerClientesCasoDeUso,
     ObtenerClientePorIdCasoDeUso  obtenerClientePorIdCasoDeUso,
     GuardarClienteCasoDeUso       guardarClienteCasoDeUso,
-    CambiarEstadoClienteCasoDeUso cambiarEstadoCasoDeUso) : ControllerBase
+    CambiarEstadoClienteCasoDeUso cambiarEstadoCasoDeUso,
+    ObtenerCatalogoCasoDeUso      obtenerCatalogoCasoDeUso) : ControllerBase
 {
     private string UsuarioActual =>
         User.FindFirstValue(ClaimTypes.Email)
@@ -68,6 +69,22 @@ public class MaestrosController(
         {
             2 => Ok(respuesta),
             1 => BadRequest(respuesta),
+            _ => StatusCode(500, respuesta),
+        };
+    }
+
+    // ── Catálogos ─────────────────────────────────────────────────────────────
+
+    /// <summary>Devuelve los items de un catálogo de tabla_maestra por su Descripcion.</summary>
+    [HttpGet("catalogos/{descripcion}")]
+    public async Task<IActionResult> ObtenerCatalogo(string descripcion, CancellationToken ct)
+    {
+        var respuesta = await obtenerCatalogoCasoDeUso.EjecutarAsync(descripcion, ct);
+
+        return respuesta.IdTipoMensaje switch
+        {
+            2 => Ok(respuesta),
+            1 => NotFound(respuesta),
             _ => StatusCode(500, respuesta),
         };
     }

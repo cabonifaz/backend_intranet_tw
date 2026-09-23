@@ -8,8 +8,8 @@ DELIMITER //
 
 CREATE PROCEDURE SP_CambiarEstadoCliente(
     IN p_id_cliente BIGINT,
-    IN p_estado     VARCHAR(20),
-    IN p_usu_mod    VARCHAR(100)
+    IN p_estado     VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+    IN p_usu_mod    VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
 )
 BEGIN
     IF NOT EXISTS (
