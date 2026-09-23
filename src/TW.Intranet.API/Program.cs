@@ -90,8 +90,17 @@ builder.Services.AddScoped<IAutenticacionRepositorio, AutenticacionRepositorio>(
 builder.Services.AddScoped<IJwtServicio,              JwtServicio>();
 builder.Services.AddScoped<IVerificadorContrasena,    BcryptVerificadorContrasena>();
 
-// Casos de uso
+// Casos de uso — Autenticación
 builder.Services.AddScoped<IniciarSesionCasoDeUso>();
+
+// ── INYECCIÓN DE DEPENDENCIAS — Dashboard ─────────────────────────────────────
+builder.Services.AddScoped<IDashboardRepositorio,       DashboardRepositorio>();
+builder.Services.AddScoped<INotificacionesRepositorio,  NotificacionesRepositorio>();
+
+// Casos de uso — Dashboard
+builder.Services.AddScoped<ObtenerResumenDashboardCasoDeUso>();
+builder.Services.AddScoped<ObtenerAlertasOperativasCasoDeUso>();
+builder.Services.AddScoped<ObtenerNotificacionesCasoDeUso>();
 
 // ─────────────────────────────────────────────────────────────────────────────
 var app = builder.Build();
