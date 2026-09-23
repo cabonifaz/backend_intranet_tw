@@ -36,14 +36,14 @@ CREATE PROCEDURE SP_GuardarCliente(
 BEGIN
     -- Validar RUC duplicado (activos únicamente)
     IF EXISTS (
-        SELECT 1 FROM clientes
+        SELECT 1 FROM cliente
         WHERE ruc = p_ruc
           AND SoftDelete = 0
           AND (p_id_cliente = 0 OR id_cliente <> p_id_cliente)
     ) THEN
         SELECT 1 AS IdTipoMensaje, 'El RUC ya está registrado para otro cliente activo.' AS Mensaje;
     ELSEIF p_id_cliente = 0 THEN
-        INSERT INTO clientes (
+        INSERT INTO cliente (
             tipo_documento, ruc, tipo_cliente, razon_social, nombre_comercial,
             condicion_fiscal, condicion_contribuyente, condicion_pago,
             linea_credito_usd, telefono_central, domicilio_fiscal,
@@ -64,29 +64,29 @@ BEGIN
         SELECT 2 AS IdTipoMensaje, 'Cliente registrado correctamente.' AS Mensaje;
         SELECT LAST_INSERT_ID() AS id_cliente;
     ELSE
-        UPDATE clientes SET
-            tipo_documento         = p_tipo_documento,
-            ruc                    = p_ruc,
-            tipo_cliente           = p_tipo_cliente,
-            razon_social           = p_razon_social,
-            nombre_comercial       = p_nombre_comercial,
-            condicion_fiscal       = p_condicion_fiscal,
+        UPDATE cliente SET
+            tipo_documento          = p_tipo_documento,
+            ruc                     = p_ruc,
+            tipo_cliente            = p_tipo_cliente,
+            razon_social            = p_razon_social,
+            nombre_comercial        = p_nombre_comercial,
+            condicion_fiscal        = p_condicion_fiscal,
             condicion_contribuyente = p_condicion_contribuyente,
-            condicion_pago         = p_condicion_pago,
-            linea_credito_usd      = p_linea_credito_usd,
-            telefono_central       = p_telefono_central,
-            domicilio_fiscal       = p_domicilio_fiscal,
-            es_vip                 = p_es_vip,
-            regla_vip              = p_regla_vip,
-            descuento_vip_pct      = p_descuento_vip_pct,
-            patron_masas_asignado  = p_patron_masas_asignado,
-            ssoma_pase_ingreso     = p_ssoma_pase_ingreso,
-            ssoma_trabajo_altura   = p_ssoma_trabajo_altura,
+            condicion_pago          = p_condicion_pago,
+            linea_credito_usd       = p_linea_credito_usd,
+            telefono_central        = p_telefono_central,
+            domicilio_fiscal        = p_domicilio_fiscal,
+            es_vip                  = p_es_vip,
+            regla_vip               = p_regla_vip,
+            descuento_vip_pct       = p_descuento_vip_pct,
+            patron_masas_asignado   = p_patron_masas_asignado,
+            ssoma_pase_ingreso      = p_ssoma_pase_ingreso,
+            ssoma_trabajo_altura    = p_ssoma_trabajo_altura,
             ssoma_espacio_confinado = p_ssoma_espacio_confinado,
-            ssoma_induccion_previa = p_ssoma_induccion_previa,
-            ssoma_notas            = p_ssoma_notas,
-            UsuMod                 = p_usu_cre,
-            FchMod                 = NOW()
+            ssoma_induccion_previa  = p_ssoma_induccion_previa,
+            ssoma_notas             = p_ssoma_notas,
+            UsuMod                  = p_usu_cre,
+            FchMod                  = NOW()
         WHERE id_cliente = p_id_cliente AND SoftDelete = 0;
 
         SELECT 2 AS IdTipoMensaje, 'Cliente actualizado correctamente.' AS Mensaje;

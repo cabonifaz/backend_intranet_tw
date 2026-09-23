@@ -24,7 +24,7 @@ BEGIN
         c.condicion_contribuyente,
         c.es_vip,
         c.estado
-    FROM clientes c
+    FROM cliente c
     WHERE c.SoftDelete = 0
       AND (p_estado IS NULL OR p_estado = '' OR c.estado = p_estado)
       AND (
