@@ -102,6 +102,15 @@ builder.Services.AddScoped<ObtenerResumenDashboardCasoDeUso>();
 builder.Services.AddScoped<ObtenerAlertasOperativasCasoDeUso>();
 builder.Services.AddScoped<ObtenerNotificacionesCasoDeUso>();
 
+// ── INYECCIÓN DE DEPENDENCIAS — Maestros ──────────────────────────────────────
+builder.Services.AddScoped<IMaestrosRepositorio, MaestrosRepositorio>();
+
+// Casos de uso — Maestros: Clientes
+builder.Services.AddScoped<ObtenerClientesCasoDeUso>();
+builder.Services.AddScoped<ObtenerClientePorIdCasoDeUso>();
+builder.Services.AddScoped<GuardarClienteCasoDeUso>();
+builder.Services.AddScoped<CambiarEstadoClienteCasoDeUso>();
+
 // ─────────────────────────────────────────────────────────────────────────────
 var app = builder.Build();
 
