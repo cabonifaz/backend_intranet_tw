@@ -119,6 +119,11 @@ builder.Services.AddScoped<ObtenerSedesPorClienteCasoDeUso>();
 builder.Services.AddScoped<GuardarSedeCasoDeUso>();
 builder.Services.AddScoped<CambiarEstadoSedeCasoDeUso>();
 
+// Casos de uso — Maestros: Contactos
+builder.Services.AddScoped<ObtenerContactosPorClienteCasoDeUso>();
+builder.Services.AddScoped<GuardarContactoCasoDeUso>();
+builder.Services.AddScoped<CambiarEstadoContactoCasoDeUso>();
+
 // ─────────────────────────────────────────────────────────────────────────────
 var app = builder.Build();
 

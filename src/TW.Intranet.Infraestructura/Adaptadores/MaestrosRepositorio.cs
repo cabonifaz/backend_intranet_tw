@@ -367,6 +367,151 @@ public class MaestrosRepositorio(CadenaConexionBd conexion) : IMaestrosRepositor
         }
     }
 
+    // ── Contactos ─────────────────────────────────────────────────────────────
+
+    public async Task<RespuestaDto<List<ContactoClienteDto>>> ObtenerContactosPorClienteAsync(
+        long idCliente, CancellationToken ct)
+    {
+        try
+        {
+            await using var conn = new MySqlConnection(conexion.Valor);
+            await conn.OpenAsync(ct);
+
+            await using var cmd = new MySqlCommand("SP_ObtenerContactosPorCliente", conn)
+            {
+                CommandType = System.Data.CommandType.StoredProcedure
+            };
+            cmd.Parameters.AddWithValue("p_id_cliente", idCliente);
+
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+
+            if (!await reader.ReadAsync(ct))
+                return new RespuestaDto<List<ContactoClienteDto>>(3, "El procedimiento no devolvió resultado.");
+
+            int    idTipo  = reader.GetInt32("IdTipoMensaje");
+            string mensaje = reader.GetString("Mensaje");
+
+            if (idTipo != 2)
+                return new RespuestaDto<List<ContactoClienteDto>>(idTipo, mensaje);
+
+            await reader.NextResultAsync(ct);
+
+            var lista = new List<ContactoClienteDto>();
+            while (await reader.ReadAsync(ct))
+            {
+                var n = (string col) => reader.IsDBNull(reader.GetOrdinal(col));
+                lista.Add(new ContactoClienteDto(
+                    IdContacto:                     reader.GetInt64("id_contacto"),
+                    IdCliente:                      reader.GetInt64("id_cliente"),
+                    IdSede:                         n("id_sede") ? null : reader.GetInt64("id_sede"),
+                    Nombres:                        reader.GetString("nombres"),
+                    DocumentoIdentidad:             n("documento_identidad")             ? null : reader.GetString("documento_identidad"),
+                    Cargo:                          n("cargo")                           ? null : reader.GetString("cargo"),
+                    Area:                           n("area")                            ? null : reader.GetString("area"),
+                    Correo:                         n("correo")                          ? null : reader.GetString("correo"),
+                    TelefonoMovil:                  n("telefono_movil")                  ? null : reader.GetString("telefono_movil"),
+                    TelefonoAnexo:                  n("telefono_anexo")                  ? null : reader.GetString("telefono_anexo"),
+                    EsContactoPrincipal:            reader.GetBoolean("es_contacto_principal"),
+                    AutorizadoAprobarCotizaciones:  reader.GetBoolean("autorizado_aprobar_cotizaciones"),
+                    RecibeAlertasCalibracion:       reader.GetBoolean("recibe_alertas_calibracion"),
+                    AutorizadoRecepcionTecnica:     reader.GetBoolean("autorizado_recepcion_tecnica"),
+                    Estado:                         reader.GetString("estado")
+                ));
+            }
+
+            return new RespuestaDto<List<ContactoClienteDto>>(2, mensaje, lista);
+        }
+        catch (Exception ex)
+        {
+            return new RespuestaDto<List<ContactoClienteDto>>(3, ex.Message);
+        }
+    }
+
+    public async Task<RespuestaDto<long>> GuardarContactoAsync(
+        GuardarContactoDto dto, string usuCre, CancellationToken ct)
+    {
+        try
+        {
+            await using var conn = new MySqlConnection(conexion.Valor);
+            await conn.OpenAsync(ct);
+
+            await using var cmd = new MySqlCommand("SP_GuardarContacto", conn)
+            {
+                CommandType = System.Data.CommandType.StoredProcedure
+            };
+            cmd.Parameters.AddWithValue("p_id_contacto",                     dto.IdContacto);
+            cmd.Parameters.AddWithValue("p_id_cliente",                      dto.IdCliente);
+            cmd.Parameters.AddWithValue("p_id_sede",                         dto.IdSede    ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("p_nombres",                         dto.Nombres);
+            cmd.Parameters.AddWithValue("p_documento_identidad",             dto.DocumentoIdentidad            ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("p_cargo",                           dto.Cargo                         ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("p_area",                            dto.Area                          ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("p_correo",                          dto.Correo                        ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("p_telefono_movil",                  dto.TelefonoMovil                 ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("p_telefono_anexo",                  dto.TelefonoAnexo                 ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("p_es_contacto_principal",           dto.EsContactoPrincipal           ? 1 : 0);
+            cmd.Parameters.AddWithValue("p_autorizado_aprobar_cotizaciones", dto.AutorizadoAprobarCotizaciones ? 1 : 0);
+            cmd.Parameters.AddWithValue("p_recibe_alertas_calibracion",      dto.RecibeAlertasCalibracion      ? 1 : 0);
+            cmd.Parameters.AddWithValue("p_autorizado_recepcion_tecnica",    dto.AutorizadoRecepcionTecnica    ? 1 : 0);
+            cmd.Parameters.AddWithValue("p_usu_cre",                         usuCre);
+
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+
+            if (!await reader.ReadAsync(ct))
+                return new RespuestaDto<long>(3, "El procedimiento no devolvió resultado.");
+
+            int    idTipo  = reader.GetInt32("IdTipoMensaje");
+            string mensaje = reader.GetString("Mensaje");
+
+            if (idTipo != 2)
+                return new RespuestaDto<long>(idTipo, mensaje);
+
+            await reader.NextResultAsync(ct);
+
+            if (!await reader.ReadAsync(ct))
+                return new RespuestaDto<long>(3, "El procedimiento no devolvió el identificador.");
+
+            long idContacto = reader.GetInt64("id_contacto");
+            return new RespuestaDto<long>(2, mensaje, idContacto);
+        }
+        catch (Exception ex)
+        {
+            return new RespuestaDto<long>(3, ex.Message);
+        }
+    }
+
+    public async Task<RespuestaDto<object>> CambiarEstadoContactoAsync(
+        CambiarEstadoContactoDto dto, string usuMod, CancellationToken ct)
+    {
+        try
+        {
+            await using var conn = new MySqlConnection(conexion.Valor);
+            await conn.OpenAsync(ct);
+
+            await using var cmd = new MySqlCommand("SP_CambiarEstadoContacto", conn)
+            {
+                CommandType = System.Data.CommandType.StoredProcedure
+            };
+            cmd.Parameters.AddWithValue("p_id_contacto", dto.IdContacto);
+            cmd.Parameters.AddWithValue("p_estado",      dto.Estado);
+            cmd.Parameters.AddWithValue("p_usu_mod",     usuMod);
+
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+
+            if (!await reader.ReadAsync(ct))
+                return new RespuestaDto<object>(3, "El procedimiento no devolvió resultado.");
+
+            int    idTipo  = reader.GetInt32("IdTipoMensaje");
+            string mensaje = reader.GetString("Mensaje");
+
+            return new RespuestaDto<object>(idTipo, mensaje);
+        }
+        catch (Exception ex)
+        {
+            return new RespuestaDto<object>(3, ex.Message);
+        }
+    }
+
     public async Task<RespuestaDto<object>> CambiarEstadoClienteAsync(
         CambiarEstadoClienteDto dto, string usuMod, CancellationToken ct)
     {

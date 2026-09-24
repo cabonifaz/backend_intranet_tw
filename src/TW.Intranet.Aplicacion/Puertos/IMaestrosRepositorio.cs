@@ -29,4 +29,15 @@ public interface IMaestrosRepositorio
 
     Task<RespuestaDto<object>> CambiarEstadoSedeAsync(
         CambiarEstadoSedeDto dto, string usuMod, CancellationToken ct);
+
+    // ── Contactos ─────────────────────────────────────────────────────────────
+
+    Task<RespuestaDto<List<ContactoClienteDto>>> ObtenerContactosPorClienteAsync(
+        long idCliente, CancellationToken ct);
+
+    Task<RespuestaDto<long>> GuardarContactoAsync(
+        GuardarContactoDto dto, string usuCre, CancellationToken ct);
+
+    Task<RespuestaDto<object>> CambiarEstadoContactoAsync(
+        CambiarEstadoContactoDto dto, string usuMod, CancellationToken ct);
 }

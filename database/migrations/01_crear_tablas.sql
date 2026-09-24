@@ -181,8 +181,8 @@ CREATE TABLE sede (
     PRIMARY KEY (id_sede)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE persona_contacto (
-    id_persona          BIGINT          NOT NULL AUTO_INCREMENT,
+CREATE TABLE usuario_extranet (
+    id_usuario_extranet BIGINT          NOT NULL AUTO_INCREMENT,
     nombre              VARCHAR(100)    NOT NULL,
     apellido            VARCHAR(100)    NOT NULL,
     correo              VARCHAR(150)    NOT NULL,
@@ -196,12 +196,12 @@ CREATE TABLE persona_contacto (
     modificado_por      BIGINT          NULL,
     eliminado_en        DATETIME        NULL,
     eliminado_por       BIGINT          NULL,
-    PRIMARY KEY (id_persona)
+    PRIMARY KEY (id_usuario_extranet)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE contacto (
-    id_contacto         BIGINT          NOT NULL AUTO_INCREMENT,
-    id_persona          BIGINT          NOT NULL,
+CREATE TABLE acceso_extranet_cliente (
+    id_acceso           BIGINT          NOT NULL AUTO_INCREMENT,
+    id_usuario_extranet BIGINT          NOT NULL,
     id_cliente          BIGINT          NOT NULL,
     cargo               VARCHAR(100)    NULL,
     id_rol_extranet     INT             NULL,
@@ -215,7 +215,7 @@ CREATE TABLE contacto (
     modificado_por      BIGINT          NULL,
     eliminado_en        DATETIME        NULL,
     eliminado_por       BIGINT          NULL,
-    PRIMARY KEY (id_contacto)
+    PRIMARY KEY (id_acceso)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE equipo (

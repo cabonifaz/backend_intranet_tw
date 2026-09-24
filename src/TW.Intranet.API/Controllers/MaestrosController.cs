@@ -15,9 +15,12 @@ public class MaestrosController(
     GuardarClienteCasoDeUso       guardarClienteCasoDeUso,
     CambiarEstadoClienteCasoDeUso cambiarEstadoCasoDeUso,
     ObtenerCatalogoCasoDeUso      obtenerCatalogoCasoDeUso,
-    ObtenerSedesPorClienteCasoDeUso obtenerSedesPorClienteCasoDeUso,
-    GuardarSedeCasoDeUso            guardarSedeCasoDeUso,
-    CambiarEstadoSedeCasoDeUso      cambiarEstadoSedeCasoDeUso) : ControllerBase
+    ObtenerSedesPorClienteCasoDeUso    obtenerSedesPorClienteCasoDeUso,
+    GuardarSedeCasoDeUso               guardarSedeCasoDeUso,
+    CambiarEstadoSedeCasoDeUso         cambiarEstadoSedeCasoDeUso,
+    ObtenerContactosPorClienteCasoDeUso obtenerContactosPorClienteCasoDeUso,
+    GuardarContactoCasoDeUso            guardarContactoCasoDeUso,
+    CambiarEstadoContactoCasoDeUso      cambiarEstadoContactoCasoDeUso) : ControllerBase
 {
     private string UsuarioActual =>
         User.FindFirstValue(ClaimTypes.Email)
@@ -135,6 +138,58 @@ public class MaestrosController(
             return BadRequest(new RespuestaDto<object>(1, "El identificador de la ruta no coincide con el cuerpo."));
 
         var respuesta = await cambiarEstadoSedeCasoDeUso.EjecutarAsync(dto, UsuarioActual, ct);
+
+        return respuesta.IdTipoMensaje switch
+        {
+            2 => Ok(respuesta),
+            1 => BadRequest(respuesta),
+            _ => StatusCode(500, respuesta),
+        };
+    }
+
+    // ── Contactos ─────────────────────────────────────────────────────────────
+
+    /// <summary>Devuelve los contactos de un cliente.</summary>
+    [HttpGet("clientes/{idCliente:long}/contactos")]
+    public async Task<IActionResult> ObtenerContactos(long idCliente, CancellationToken ct)
+    {
+        var respuesta = await obtenerContactosPorClienteCasoDeUso.EjecutarAsync(idCliente, ct);
+
+        return respuesta.IdTipoMensaje switch
+        {
+            2 => Ok(respuesta),
+            1 => NotFound(respuesta),
+            _ => StatusCode(500, respuesta),
+        };
+    }
+
+    /// <summary>Crea o actualiza un contacto. IdContacto = 0 para nuevo.</summary>
+    [HttpPost("contactos")]
+    public async Task<IActionResult> GuardarContacto(
+        [FromBody] GuardarContactoDto dto, CancellationToken ct)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var respuesta = await guardarContactoCasoDeUso.EjecutarAsync(dto, UsuarioActual, ct);
+
+        return respuesta.IdTipoMensaje switch
+        {
+            2 => Ok(respuesta),
+            1 => BadRequest(respuesta),
+            _ => StatusCode(500, respuesta),
+        };
+    }
+
+    /// <summary>Activa o desactiva un contacto.</summary>
+    [HttpPatch("contactos/{id:long}/estado")]
+    public async Task<IActionResult> CambiarEstadoContacto(
+        long id, [FromBody] CambiarEstadoContactoDto dto, CancellationToken ct)
+    {
+        if (id != dto.IdContacto)
+            return BadRequest(new RespuestaDto<object>(1, "El identificador de la ruta no coincide con el cuerpo."));
+
+        var respuesta = await cambiarEstadoContactoCasoDeUso.EjecutarAsync(dto, UsuarioActual, ct);
 
         return respuesta.IdTipoMensaje switch
         {
