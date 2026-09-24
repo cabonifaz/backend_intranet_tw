@@ -21,5 +21,6 @@ public record GuardarClienteDto(
     bool     SsomaCamioneta4x4,
     bool     SsomaInduccionSsoma,
     bool     SsomaExamenMedico,
-    string?  SsomaNotas
+    string?  SsomaNotas,
+    string?  Categoria
 );

@@ -40,6 +40,7 @@ BEGIN
             ssoma_induccion_ssoma,
             ssoma_examen_medico,
             ssoma_notas,
+            categoria,
             estado
         FROM cliente
         WHERE id_cliente = p_id_cliente AND SoftDelete = 0;

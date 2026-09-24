@@ -116,6 +116,7 @@ public class MaestrosRepositorio(CadenaConexionBd conexion) : IMaestrosRepositor
                 SsomaInduccionSsoma:    reader.GetBoolean("ssoma_induccion_ssoma"),
                 SsomaExamenMedico:      reader.GetBoolean("ssoma_examen_medico"),
                 SsomaNotas:             nullable("ssoma_notas")        ? null : reader.GetString("ssoma_notas"),
+                Categoria:              nullable("categoria")          ? null : reader.GetString("categoria"),
                 Estado:                 reader.GetString("estado")
             );
 
@@ -160,6 +161,7 @@ public class MaestrosRepositorio(CadenaConexionBd conexion) : IMaestrosRepositor
             cmd.Parameters.AddWithValue("p_ssoma_induccion_ssoma",   dto.SsomaInduccionSsoma ? 1 : 0);
             cmd.Parameters.AddWithValue("p_ssoma_examen_medico",     dto.SsomaExamenMedico   ? 1 : 0);
             cmd.Parameters.AddWithValue("p_ssoma_notas",             dto.SsomaNotas       ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("p_categoria",               dto.Categoria        ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("p_usu_cre",                 usuCre);
 
             await using var reader = await cmd.ExecuteReaderAsync(ct);

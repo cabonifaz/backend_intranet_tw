@@ -29,6 +29,7 @@ CREATE PROCEDURE SP_GuardarCliente(
     IN p_ssoma_induccion_ssoma   TINYINT(1),
     IN p_ssoma_examen_medico     TINYINT(1),
     IN p_ssoma_notas             TEXT          CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+    IN p_categoria               VARCHAR(50)   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
     IN p_usu_cre                 VARCHAR(100)  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
 )
 BEGIN
@@ -46,7 +47,7 @@ BEGIN
             linea_credito_usd, telefono_central, domicilio_fiscal,
             es_vip, regla_vip, descuento_vip_pct, patron_masas_asignado,
             ssoma_poliza_sctr, ssoma_camioneta_4x4, ssoma_induccion_ssoma,
-            ssoma_examen_medico, ssoma_notas,
+            ssoma_examen_medico, ssoma_notas, categoria,
             estado, SoftDelete, UsuCre, FchCre
         ) VALUES (
             p_tipo_documento, p_ruc, p_tipo_cliente, p_razon_social, p_nombre_comercial,
@@ -54,7 +55,7 @@ BEGIN
             p_linea_credito_usd, p_telefono_central, p_domicilio_fiscal,
             p_es_vip, p_regla_vip, p_descuento_vip_pct, p_patron_masas_asignado,
             p_ssoma_poliza_sctr, p_ssoma_camioneta_4x4, p_ssoma_induccion_ssoma,
-            p_ssoma_examen_medico, p_ssoma_notas,
+            p_ssoma_examen_medico, p_ssoma_notas, p_categoria,
             'Activo', 0, p_usu_cre, NOW()
         );
 
@@ -82,6 +83,7 @@ BEGIN
             ssoma_induccion_ssoma   = p_ssoma_induccion_ssoma,
             ssoma_examen_medico     = p_ssoma_examen_medico,
             ssoma_notas             = p_ssoma_notas,
+            categoria               = p_categoria,
             UsuMod                  = p_usu_cre,
             FchMod                  = NOW()
         WHERE id_cliente = p_id_cliente AND SoftDelete = 0;
