@@ -14,7 +14,10 @@ public class MaestrosController(
     ObtenerClientePorIdCasoDeUso  obtenerClientePorIdCasoDeUso,
     GuardarClienteCasoDeUso       guardarClienteCasoDeUso,
     CambiarEstadoClienteCasoDeUso cambiarEstadoCasoDeUso,
-    ObtenerCatalogoCasoDeUso      obtenerCatalogoCasoDeUso) : ControllerBase
+    ObtenerCatalogoCasoDeUso      obtenerCatalogoCasoDeUso,
+    ObtenerSedesPorClienteCasoDeUso obtenerSedesPorClienteCasoDeUso,
+    GuardarSedeCasoDeUso            guardarSedeCasoDeUso,
+    CambiarEstadoSedeCasoDeUso      cambiarEstadoSedeCasoDeUso) : ControllerBase
 {
     private string UsuarioActual =>
         User.FindFirstValue(ClaimTypes.Email)
@@ -85,6 +88,58 @@ public class MaestrosController(
         {
             2 => Ok(respuesta),
             1 => NotFound(respuesta),
+            _ => StatusCode(500, respuesta),
+        };
+    }
+
+    // ── Sedes ─────────────────────────────────────────────────────────────────
+
+    /// <summary>Devuelve las sedes activas de un cliente.</summary>
+    [HttpGet("clientes/{idCliente:long}/sedes")]
+    public async Task<IActionResult> ObtenerSedes(long idCliente, CancellationToken ct)
+    {
+        var respuesta = await obtenerSedesPorClienteCasoDeUso.EjecutarAsync(idCliente, ct);
+
+        return respuesta.IdTipoMensaje switch
+        {
+            2 => Ok(respuesta),
+            1 => NotFound(respuesta),
+            _ => StatusCode(500, respuesta),
+        };
+    }
+
+    /// <summary>Crea o actualiza una sede. IdSede = 0 para nueva sede.</summary>
+    [HttpPost("sedes")]
+    public async Task<IActionResult> GuardarSede(
+        [FromBody] GuardarSedeDto dto, CancellationToken ct)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var respuesta = await guardarSedeCasoDeUso.EjecutarAsync(dto, UsuarioActual, ct);
+
+        return respuesta.IdTipoMensaje switch
+        {
+            2 => Ok(respuesta),
+            1 => BadRequest(respuesta),
+            _ => StatusCode(500, respuesta),
+        };
+    }
+
+    /// <summary>Activa o desactiva una sede.</summary>
+    [HttpPatch("sedes/{id:long}/estado")]
+    public async Task<IActionResult> CambiarEstadoSede(
+        long id, [FromBody] CambiarEstadoSedeDto dto, CancellationToken ct)
+    {
+        if (id != dto.IdSede)
+            return BadRequest(new RespuestaDto<object>(1, "El identificador de la ruta no coincide con el cuerpo."));
+
+        var respuesta = await cambiarEstadoSedeCasoDeUso.EjecutarAsync(dto, UsuarioActual, ct);
+
+        return respuesta.IdTipoMensaje switch
+        {
+            2 => Ok(respuesta),
+            1 => BadRequest(respuesta),
             _ => StatusCode(500, respuesta),
         };
     }

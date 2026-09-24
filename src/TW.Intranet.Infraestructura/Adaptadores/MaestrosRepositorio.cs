@@ -232,6 +232,141 @@ public class MaestrosRepositorio(CadenaConexionBd conexion) : IMaestrosRepositor
         }
     }
 
+    // ── Sedes ─────────────────────────────────────────────────────────────────
+
+    public async Task<RespuestaDto<List<SedeClienteDto>>> ObtenerSedesPorClienteAsync(
+        long idCliente, CancellationToken ct)
+    {
+        try
+        {
+            await using var conn = new MySqlConnection(conexion.Valor);
+            await conn.OpenAsync(ct);
+
+            await using var cmd = new MySqlCommand("SP_ObtenerSedesPorCliente", conn)
+            {
+                CommandType = System.Data.CommandType.StoredProcedure
+            };
+            cmd.Parameters.AddWithValue("p_id_cliente", idCliente);
+
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+
+            if (!await reader.ReadAsync(ct))
+                return new RespuestaDto<List<SedeClienteDto>>(3, "El procedimiento no devolvió resultado.");
+
+            int    idTipo  = reader.GetInt32("IdTipoMensaje");
+            string mensaje = reader.GetString("Mensaje");
+
+            if (idTipo != 2)
+                return new RespuestaDto<List<SedeClienteDto>>(idTipo, mensaje);
+
+            await reader.NextResultAsync(ct);
+
+            var lista = new List<SedeClienteDto>();
+            while (await reader.ReadAsync(ct))
+            {
+                var nullable = (string col) => reader.IsDBNull(reader.GetOrdinal(col));
+                lista.Add(new SedeClienteDto(
+                    IdSede:          reader.GetInt64("id_sede"),
+                    IdCliente:       reader.GetInt64("id_cliente"),
+                    Nombre:          reader.GetString("nombre"),
+                    TipoInstalacion: nullable("tipo_instalacion") ? null : reader.GetString("tipo_instalacion"),
+                    Region:          nullable("region")           ? null : reader.GetString("region"),
+                    Provincia:       nullable("provincia")        ? null : reader.GetString("provincia"),
+                    Distrito:        nullable("distrito")         ? null : reader.GetString("distrito"),
+                    Urbanizacion:    nullable("urbanizacion")     ? null : reader.GetString("urbanizacion"),
+                    DireccionExacta: nullable("direccion_exacta") ? null : reader.GetString("direccion_exacta"),
+                    Estado:          reader.GetString("estado")
+                ));
+            }
+
+            return new RespuestaDto<List<SedeClienteDto>>(2, mensaje, lista);
+        }
+        catch (Exception ex)
+        {
+            return new RespuestaDto<List<SedeClienteDto>>(3, ex.Message);
+        }
+    }
+
+    public async Task<RespuestaDto<long>> GuardarSedeAsync(
+        GuardarSedeDto dto, string usuCre, CancellationToken ct)
+    {
+        try
+        {
+            await using var conn = new MySqlConnection(conexion.Valor);
+            await conn.OpenAsync(ct);
+
+            await using var cmd = new MySqlCommand("SP_GuardarSede", conn)
+            {
+                CommandType = System.Data.CommandType.StoredProcedure
+            };
+            cmd.Parameters.AddWithValue("p_id_sede",          dto.IdSede);
+            cmd.Parameters.AddWithValue("p_id_cliente",       dto.IdCliente);
+            cmd.Parameters.AddWithValue("p_nombre",           dto.Nombre);
+            cmd.Parameters.AddWithValue("p_tipo_instalacion", dto.TipoInstalacion ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("p_region",           dto.Region          ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("p_provincia",        dto.Provincia       ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("p_distrito",         dto.Distrito        ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("p_urbanizacion",     dto.Urbanizacion    ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("p_direccion_exacta", dto.DireccionExacta ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("p_usu_cre",          usuCre);
+
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+
+            if (!await reader.ReadAsync(ct))
+                return new RespuestaDto<long>(3, "El procedimiento no devolvió resultado.");
+
+            int    idTipo  = reader.GetInt32("IdTipoMensaje");
+            string mensaje = reader.GetString("Mensaje");
+
+            if (idTipo != 2)
+                return new RespuestaDto<long>(idTipo, mensaje);
+
+            await reader.NextResultAsync(ct);
+
+            if (!await reader.ReadAsync(ct))
+                return new RespuestaDto<long>(3, "El procedimiento no devolvió el identificador.");
+
+            long idSede = reader.GetInt64("id_sede");
+            return new RespuestaDto<long>(2, mensaje, idSede);
+        }
+        catch (Exception ex)
+        {
+            return new RespuestaDto<long>(3, ex.Message);
+        }
+    }
+
+    public async Task<RespuestaDto<object>> CambiarEstadoSedeAsync(
+        CambiarEstadoSedeDto dto, string usuMod, CancellationToken ct)
+    {
+        try
+        {
+            await using var conn = new MySqlConnection(conexion.Valor);
+            await conn.OpenAsync(ct);
+
+            await using var cmd = new MySqlCommand("SP_CambiarEstadoSede", conn)
+            {
+                CommandType = System.Data.CommandType.StoredProcedure
+            };
+            cmd.Parameters.AddWithValue("p_id_sede",  dto.IdSede);
+            cmd.Parameters.AddWithValue("p_estado",   dto.Estado);
+            cmd.Parameters.AddWithValue("p_usu_mod",  usuMod);
+
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+
+            if (!await reader.ReadAsync(ct))
+                return new RespuestaDto<object>(3, "El procedimiento no devolvió resultado.");
+
+            int    idTipo  = reader.GetInt32("IdTipoMensaje");
+            string mensaje = reader.GetString("Mensaje");
+
+            return new RespuestaDto<object>(idTipo, mensaje);
+        }
+        catch (Exception ex)
+        {
+            return new RespuestaDto<object>(3, ex.Message);
+        }
+    }
+
     public async Task<RespuestaDto<object>> CambiarEstadoClienteAsync(
         CambiarEstadoClienteDto dto, string usuMod, CancellationToken ct)
     {

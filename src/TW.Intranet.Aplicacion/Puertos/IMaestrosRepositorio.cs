@@ -18,4 +18,15 @@ public interface IMaestrosRepositorio
 
     Task<RespuestaDto<List<CatalogoItemDto>>> ObtenerCatalogoAsync(
         string descripcion, CancellationToken ct);
+
+    // ── Sedes ─────────────────────────────────────────────────────────────────
+
+    Task<RespuestaDto<List<SedeClienteDto>>> ObtenerSedesPorClienteAsync(
+        long idCliente, CancellationToken ct);
+
+    Task<RespuestaDto<long>> GuardarSedeAsync(
+        GuardarSedeDto dto, string usuCre, CancellationToken ct);
+
+    Task<RespuestaDto<object>> CambiarEstadoSedeAsync(
+        CambiarEstadoSedeDto dto, string usuMod, CancellationToken ct);
 }
