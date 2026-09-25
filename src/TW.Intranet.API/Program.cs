@@ -81,6 +81,38 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                                            Encoding.UTF8.GetBytes(configuracionJwt.Secret)),
             ClockSkew                = TimeSpan.Zero,
         };
+
+        options.Events = new Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var claims      = context.Principal?.Claims;
+                var subClaim    = claims?.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)
+                               ?? claims?.FirstOrDefault(c => c.Type == "sub");
+                var tokenClaim  = claims?.FirstOrDefault(c => c.Type == "sesion_token");
+
+                if (subClaim is null || tokenClaim is null)
+                {
+                    context.Fail("Token sin claims requeridos.");
+                    return;
+                }
+
+                if (!long.TryParse(subClaim.Value, out var idUsuario))
+                {
+                    context.Fail("Claim 'sub' inválido.");
+                    return;
+                }
+
+                var repositorio = context.HttpContext.RequestServices
+                    .GetRequiredService<IAutenticacionRepositorio>();
+
+                var esValido = await repositorio.VerificarSesionTokenAsync(
+                    idUsuario, tokenClaim.Value, context.HttpContext.RequestAborted);
+
+                if (!esValido)
+                    context.Fail("Sesión invalidada. Por favor inicia sesión nuevamente.");
+            }
+        };
     });
 
 builder.Services.AddAuthorization();

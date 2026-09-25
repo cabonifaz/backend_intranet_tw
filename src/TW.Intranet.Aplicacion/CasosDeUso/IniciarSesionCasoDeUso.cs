@@ -32,9 +32,13 @@ public class IniciarSesionCasoDeUso(
             return new RespuestaDto<IniciarSesionSalidaDto>(
                 1, "No tienes permiso para acceder a la intranet.");
 
-        var token = jwtServicio.GenerarToken(usuario);
+        var loginResult = await repositorio.ActualizarUltimoLoginAsync(usuario.IdUsuario, ct);
+        if (loginResult.IdTipoMensaje != 2)
+            return new RespuestaDto<IniciarSesionSalidaDto>(loginResult.IdTipoMensaje, loginResult.Mensaje);
 
-        await repositorio.ActualizarUltimoLoginAsync(usuario.IdUsuario, ct);
+        usuario.SesionToken = loginResult.Datos!;
+
+        var token = jwtServicio.GenerarToken(usuario);
 
         var salida = new IniciarSesionSalidaDto(
             token,
