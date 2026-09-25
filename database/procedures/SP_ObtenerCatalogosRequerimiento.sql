@@ -1,7 +1,7 @@
 -- ============================================================
 -- SP_ObtenerCatalogosRequerimiento
 -- Catálogos para el formulario de RQ (Origen, Área, Prioridad).
--- Mock: devuelve los valores que ya están en tabla_maestra.
+-- Lee directamente de tabla_maestra (IdMaestro 63, 64, 65).
 -- ============================================================
 DROP PROCEDURE IF EXISTS SP_ObtenerCatalogosRequerimiento;
 
@@ -13,34 +13,21 @@ BEGIN
     SELECT 2 AS IdTipoMensaje, 'Éxito.' AS Mensaje;
 
     -- 2. Origen (IdMaestro = 63)
-    SELECT Num1 AS id_item, String1 AS label
-    FROM (
-        SELECT 1 AS Num1, 'Llamada telefónica'  AS String1
-        UNION ALL SELECT 2, 'Correo electrónico'
-        UNION ALL SELECT 3, 'WhatsApp'
-        UNION ALL SELECT 4, 'Visita presencial'
-        UNION ALL SELECT 5, 'Plataforma extranet'
-    ) AS origen
+    SELECT Num1 AS id, String1 AS nombre
+    FROM tabla_maestra
+    WHERE IdMaestro = 63 AND IdEmpresa = 1 AND eliminado_en IS NULL
     ORDER BY Num1;
 
     -- 3. Área (IdMaestro = 64)
-    SELECT Num1 AS id_item, String1 AS label
-    FROM (
-        SELECT 1 AS Num1, 'Calibración'    AS String1
-        UNION ALL SELECT 2, 'Mantenimiento'
-        UNION ALL SELECT 3, 'Metrología'
-        UNION ALL SELECT 4, 'Soporte técnico'
-        UNION ALL SELECT 5, 'Instalación'
-    ) AS area
+    SELECT Num1 AS id, String1 AS nombre
+    FROM tabla_maestra
+    WHERE IdMaestro = 64 AND IdEmpresa = 1 AND eliminado_en IS NULL
     ORDER BY Num1;
 
     -- 4. Prioridad (IdMaestro = 65)
-    SELECT Num1 AS id_item, String1 AS label
-    FROM (
-        SELECT 1 AS Num1, 'Alta'  AS String1
-        UNION ALL SELECT 2, 'Media'
-        UNION ALL SELECT 3, 'Baja'
-    ) AS prioridad
+    SELECT Num1 AS id, String1 AS nombre
+    FROM tabla_maestra
+    WHERE IdMaestro = 65 AND IdEmpresa = 1 AND eliminado_en IS NULL
     ORDER BY Num1;
 END //
 

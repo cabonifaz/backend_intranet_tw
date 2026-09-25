@@ -36,16 +36,16 @@ public class IniciarSesionCasoDeUso(
         if (loginResult.IdTipoMensaje != 2)
             return new RespuestaDto<IniciarSesionSalidaDto>(loginResult.IdTipoMensaje, loginResult.Mensaje);
 
-        usuario.SesionToken = loginResult.Datos!;
+        var usuarioConToken = usuario with { SesionToken = loginResult.Datos! };
 
-        var token = jwtServicio.GenerarToken(usuario);
+        var token = jwtServicio.GenerarToken(usuarioConToken);
 
         var salida = new IniciarSesionSalidaDto(
             token,
-            usuario.Nombre,
-            usuario.Apellido,
-            usuario.Correo,
-            usuario.RolSistema);
+            usuarioConToken.Nombre,
+            usuarioConToken.Apellido,
+            usuarioConToken.Correo,
+            usuarioConToken.RolSistema);
 
         return new RespuestaDto<IniciarSesionSalidaDto>(2, "Sesión iniciada exitosamente.", salida);
     }

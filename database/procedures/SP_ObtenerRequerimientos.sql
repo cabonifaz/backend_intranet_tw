@@ -33,7 +33,9 @@ BEGIN
            AND id_prioridad = 1
            AND DATEDIFF(NOW(), fecha_creacion) >= 7)                          AS sla_urgentes,
         (SELECT COUNT(*) FROM requerimiento
-         WHERE estado = 'anulado' AND eliminado_en IS NULL)                   AS bloqueados;
+         WHERE estado IN ('nuevo','en_proceso','con_propuesta')
+           AND eliminado_en IS NULL
+           AND DATEDIFF(NOW(), fecha_creacion) > 15)                          AS bloqueados;
 
     -- 3. Lista paginada
     SELECT

@@ -115,7 +115,7 @@ public class CrmRepositorio(CadenaConexionBd conexion) : ICrmRepositorio
             {
                 var lista = new List<CatalogoItemDto>();
                 while (r.Read())
-                    lista.Add(new CatalogoItemDto(r.GetInt32("id_item"), r.GetString("label"), null));
+                    lista.Add(new CatalogoItemDto(r.GetInt32("id"), r.GetString("nombre"), null));
                 return lista;
             }
 

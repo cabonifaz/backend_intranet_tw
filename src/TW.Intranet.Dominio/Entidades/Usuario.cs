@@ -1,6 +1,6 @@
 namespace TW.Intranet.Dominio.Entidades;
 
-public class Usuario
+public record Usuario
 {
     public long   IdUsuario    { get; init; }
     public string Nombre       { get; init; } = string.Empty;
@@ -10,5 +10,5 @@ public class Usuario
     public string RolSistema   { get; init; } = string.Empty;
     public string CanalAcceso  { get; init; } = string.Empty;
     public string Estado       { get; init; } = string.Empty;
-    public string SesionToken  { get; set; }  = string.Empty;
+    public string SesionToken  { get; init; } = string.Empty;
 }
