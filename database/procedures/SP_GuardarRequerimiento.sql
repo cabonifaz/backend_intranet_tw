@@ -68,7 +68,7 @@ BEGIN
             modificado_en    = NOW(),
             modificado_por   = p_id_usuario
         WHERE id_requerimiento = p_id_requerimiento
-          AND eliminado_en IS NULL;
+          AND SoftDelete = 0;
 
         SELECT 2 AS IdTipoMensaje, 'Requerimiento actualizado exitosamente.' AS Mensaje;
         SELECT p_id_requerimiento AS id_requerimiento;

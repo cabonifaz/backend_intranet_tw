@@ -24,18 +24,18 @@ BEGIN
     -- 2. KPIs reales
     SELECT
         (SELECT COUNT(*) FROM requerimiento
-         WHERE estado NOT IN ('cerrado','anulado') AND eliminado_en IS NULL) AS rq_activos,
+         WHERE estado NOT IN ('cerrado','anulado') AND SoftDelete = 0) AS rq_activos,
         (SELECT COUNT(*) FROM requerimiento
-         WHERE estado = 'nuevo' AND eliminado_en IS NULL)                     AS sin_propuesta,
+         WHERE estado = 'nuevo' AND SoftDelete = 0)                     AS sin_propuesta,
         (SELECT COUNT(*) FROM requerimiento
          WHERE estado NOT IN ('cerrado','anulado')
-           AND eliminado_en IS NULL
+           AND SoftDelete = 0
            AND id_prioridad = 1
-           AND DATEDIFF(NOW(), fecha_creacion) >= 7)                          AS sla_urgentes,
+           AND DATEDIFF(NOW(), fecha_creacion) >= 7)                    AS sla_urgentes,
         (SELECT COUNT(*) FROM requerimiento
          WHERE estado IN ('nuevo','en_proceso','con_propuesta')
-           AND eliminado_en IS NULL
-           AND DATEDIFF(NOW(), fecha_creacion) > 15)                          AS bloqueados;
+           AND SoftDelete = 0
+           AND DATEDIFF(NOW(), fecha_creacion) > 15)                    AS bloqueados;
 
     -- 3. Lista paginada
     SELECT
@@ -68,7 +68,7 @@ BEGIN
     LEFT JOIN tabla_maestra tm_orig ON tm_orig.IdMaestro = 63 AND tm_orig.Num1 = r.id_origen AND tm_orig.IdEmpresa = 1
     LEFT JOIN tabla_maestra tm_area ON tm_area.IdMaestro = 64 AND tm_area.Num1 = r.id_area  AND tm_area.IdEmpresa = 1
     LEFT JOIN tabla_maestra tm_prio ON tm_prio.IdMaestro = 65 AND tm_prio.Num1 = r.id_prioridad AND tm_prio.IdEmpresa = 1
-    WHERE r.eliminado_en IS NULL
+    WHERE r.SoftDelete = 0
       AND (p_estado   IS NULL OR p_estado   = '' OR r.estado       = p_estado)
       AND (p_busqueda IS NULL OR p_busqueda = ''
            OR r.numero        LIKE CONCAT('%', p_busqueda, '%')
@@ -81,7 +81,7 @@ BEGIN
     SELECT COUNT(*) AS total
     FROM requerimiento r
     JOIN cliente c ON c.id_cliente = r.id_cliente
-    WHERE r.eliminado_en IS NULL
+    WHERE r.SoftDelete = 0
       AND (p_estado   IS NULL OR p_estado   = '' OR r.estado       = p_estado)
       AND (p_busqueda IS NULL OR p_busqueda = ''
            OR r.numero        LIKE CONCAT('%', p_busqueda, '%')

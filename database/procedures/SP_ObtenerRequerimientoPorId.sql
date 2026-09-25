@@ -54,7 +54,7 @@ BEGIN
     LEFT JOIN tabla_maestra tm_area ON tm_area.IdMaestro = 64 AND tm_area.Num1 = r.id_area    AND tm_area.IdEmpresa = 1
     LEFT JOIN tabla_maestra tm_prio ON tm_prio.IdMaestro = 65 AND tm_prio.Num1 = r.id_prioridad AND tm_prio.IdEmpresa = 1
     WHERE r.id_requerimiento = p_id_requerimiento
-      AND r.eliminado_en IS NULL;
+      AND r.SoftDelete = 0;
 END //
 
 DELIMITER ;
