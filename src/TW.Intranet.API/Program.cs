@@ -124,6 +124,13 @@ builder.Services.AddScoped<ObtenerContactosPorClienteCasoDeUso>();
 builder.Services.AddScoped<GuardarContactoCasoDeUso>();
 builder.Services.AddScoped<CambiarEstadoContactoCasoDeUso>();
 
+// ── INYECCIÓN DE DEPENDENCIAS — CRM ──────────────────────────────────────────
+builder.Services.AddScoped<ICrmRepositorio, CrmRepositorio>();
+builder.Services.AddScoped<ObtenerRequerimientosCasoDeUso>();
+builder.Services.AddScoped<ObtenerCatalogosRequerimientoCasoDeUso>();
+builder.Services.AddScoped<ObtenerRequerimientoPorIdCasoDeUso>();
+builder.Services.AddScoped<GuardarRequerimientoCasoDeUso>();
+
 // ─────────────────────────────────────────────────────────────────────────────
 var app = builder.Build();
 
