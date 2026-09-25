@@ -24,6 +24,7 @@ BEGIN
         r.id_sede,
         co.nombres                      AS nombre_contacto,
         sc.nombre                       AS nombre_sede,
+        r.fecha_creacion,
         CONCAT(u.nombre, ' ', u.apellido) AS responsable,
         r.id_origen,
         tm_orig.String1                 AS origen_label,

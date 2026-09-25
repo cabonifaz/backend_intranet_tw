@@ -10,6 +10,8 @@ public record RequerimientoFichaDto(
     long?     IdSede,
     string?   NombreContacto,
     string?   NombreSede,
+    string?   Responsable,
+    DateTime  FechaCreacion,
     int       IdOrigen,
     string?   OrigenLabel,
     int       IdArea,

@@ -189,6 +189,8 @@ public class CrmRepositorio(CadenaConexionBd conexion) : ICrmRepositorio
                 IdSede:          nullableLong("id_sede"),
                 NombreContacto:  nullable("nombre_contacto"),
                 NombreSede:      nullable("nombre_sede"),
+                Responsable:     nullable("responsable"),
+                FechaCreacion:   reader.GetDateTime("fecha_creacion"),
                 IdOrigen:        reader.GetInt32("id_origen"),
                 OrigenLabel:     nullable("origen_label"),
                 IdArea:          reader.GetInt32("id_area"),
