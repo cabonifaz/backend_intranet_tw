@@ -10,7 +10,7 @@ DELIMITER //
 
 CREATE PROCEDURE SP_VerificarSesionToken(
     IN p_id_usuario   BIGINT,
-    IN p_sesion_token VARCHAR(36)
+    IN p_sesion_token VARCHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
 )
 BEGIN
     IF EXISTS (
