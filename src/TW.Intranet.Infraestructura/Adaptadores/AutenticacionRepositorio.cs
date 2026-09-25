@@ -58,7 +58,7 @@ public class AutenticacionRepositorio(CadenaConexionBd conexion) : IAutenticacio
         }
     }
 
-    public async Task<RespuestaDto<object>> ActualizarUltimoLoginAsync(
+    public async Task<RespuestaDto<string>> ActualizarUltimoLoginAsync(
         long idUsuario, CancellationToken ct)
     {
         try
@@ -75,16 +75,51 @@ public class AutenticacionRepositorio(CadenaConexionBd conexion) : IAutenticacio
             await using var reader = await cmd.ExecuteReaderAsync(ct);
 
             if (!await reader.ReadAsync(ct))
-                return new RespuestaDto<object>(3, "El procedimiento no devolvió resultado.");
+                return new RespuestaDto<string>(3, "El procedimiento no devolvió resultado.");
 
             int    idTipo  = reader.GetInt32("IdTipoMensaje");
             string mensaje = reader.GetString("Mensaje");
 
-            return new RespuestaDto<object>(idTipo, mensaje);
+            if (idTipo != 2)
+                return new RespuestaDto<string>(idTipo, mensaje);
+
+            await reader.NextResultAsync(ct);
+            string sesionToken = string.Empty;
+            if (await reader.ReadAsync(ct))
+                sesionToken = reader.GetString("sesion_token");
+
+            return new RespuestaDto<string>(2, mensaje, sesionToken);
         }
         catch (Exception ex)
         {
-            return new RespuestaDto<object>(3, ex.Message);
+            return new RespuestaDto<string>(3, ex.Message);
+        }
+    }
+
+    public async Task<bool> VerificarSesionTokenAsync(
+        long idUsuario, string sesionToken, CancellationToken ct)
+    {
+        try
+        {
+            await using var conn = new MySqlConnection(conexion.Valor);
+            await conn.OpenAsync(ct);
+
+            await using var cmd = new MySqlCommand("SP_VerificarSesionToken", conn)
+            {
+                CommandType = System.Data.CommandType.StoredProcedure
+            };
+            cmd.Parameters.AddWithValue("p_id_usuario",   idUsuario);
+            cmd.Parameters.AddWithValue("p_sesion_token", sesionToken);
+
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+
+            if (!await reader.ReadAsync(ct)) return false;
+
+            return reader.GetInt32("IdTipoMensaje") == 2;
+        }
+        catch
+        {
+            return false;
         }
     }
 }

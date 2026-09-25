@@ -81,6 +81,38 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                                            Encoding.UTF8.GetBytes(configuracionJwt.Secret)),
             ClockSkew                = TimeSpan.Zero,
         };
+
+        options.Events = new Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var claims      = context.Principal?.Claims;
+                var subClaim    = claims?.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)
+                               ?? claims?.FirstOrDefault(c => c.Type == "sub");
+                var tokenClaim  = claims?.FirstOrDefault(c => c.Type == "sesion_token");
+
+                if (subClaim is null || tokenClaim is null)
+                {
+                    context.Fail("Token sin claims requeridos.");
+                    return;
+                }
+
+                if (!long.TryParse(subClaim.Value, out var idUsuario))
+                {
+                    context.Fail("Claim 'sub' inválido.");
+                    return;
+                }
+
+                var repositorio = context.HttpContext.RequestServices
+                    .GetRequiredService<IAutenticacionRepositorio>();
+
+                var esValido = await repositorio.VerificarSesionTokenAsync(
+                    idUsuario, tokenClaim.Value, context.HttpContext.RequestAborted);
+
+                if (!esValido)
+                    context.Fail("Sesión invalidada. Por favor inicia sesión nuevamente.");
+            }
+        };
     });
 
 builder.Services.AddAuthorization();
@@ -90,8 +122,46 @@ builder.Services.AddScoped<IAutenticacionRepositorio, AutenticacionRepositorio>(
 builder.Services.AddScoped<IJwtServicio,              JwtServicio>();
 builder.Services.AddScoped<IVerificadorContrasena,    BcryptVerificadorContrasena>();
 
-// Casos de uso
+// Casos de uso — Autenticación
 builder.Services.AddScoped<IniciarSesionCasoDeUso>();
+
+// ── INYECCIÓN DE DEPENDENCIAS — Dashboard ─────────────────────────────────────
+builder.Services.AddScoped<IDashboardRepositorio,       DashboardRepositorio>();
+builder.Services.AddScoped<INotificacionesRepositorio,  NotificacionesRepositorio>();
+
+// Casos de uso — Dashboard
+builder.Services.AddScoped<ObtenerResumenDashboardCasoDeUso>();
+builder.Services.AddScoped<ObtenerAlertasOperativasCasoDeUso>();
+builder.Services.AddScoped<ObtenerNotificacionesCasoDeUso>();
+
+// ── INYECCIÓN DE DEPENDENCIAS — Maestros ──────────────────────────────────────
+builder.Services.AddScoped<IMaestrosRepositorio, MaestrosRepositorio>();
+
+// Casos de uso — Maestros: Clientes
+builder.Services.AddScoped<ObtenerClientesCasoDeUso>();
+builder.Services.AddScoped<ObtenerClientePorIdCasoDeUso>();
+builder.Services.AddScoped<GuardarClienteCasoDeUso>();
+builder.Services.AddScoped<CambiarEstadoClienteCasoDeUso>();
+
+// Casos de uso — Maestros: Catálogos
+builder.Services.AddScoped<ObtenerCatalogoCasoDeUso>();
+
+// Casos de uso — Maestros: Sedes
+builder.Services.AddScoped<ObtenerSedesPorClienteCasoDeUso>();
+builder.Services.AddScoped<GuardarSedeCasoDeUso>();
+builder.Services.AddScoped<CambiarEstadoSedeCasoDeUso>();
+
+// Casos de uso — Maestros: Contactos
+builder.Services.AddScoped<ObtenerContactosPorClienteCasoDeUso>();
+builder.Services.AddScoped<GuardarContactoCasoDeUso>();
+builder.Services.AddScoped<CambiarEstadoContactoCasoDeUso>();
+
+// ── INYECCIÓN DE DEPENDENCIAS — CRM ──────────────────────────────────────────
+builder.Services.AddScoped<ICrmRepositorio, CrmRepositorio>();
+builder.Services.AddScoped<ObtenerRequerimientosCasoDeUso>();
+builder.Services.AddScoped<ObtenerCatalogosRequerimientoCasoDeUso>();
+builder.Services.AddScoped<ObtenerRequerimientoPorIdCasoDeUso>();
+builder.Services.AddScoped<GuardarRequerimientoCasoDeUso>();
 
 // ─────────────────────────────────────────────────────────────────────────────
 var app = builder.Build();
