@@ -43,13 +43,17 @@ public class MaestrosRepositorio(CadenaConexionBd conexion) : IMaestrosRepositor
                 lista.Add(new ClienteListaItemDto(
                     IdCliente:              reader.GetInt64("id_cliente"),
                     Ruc:                    reader.GetString("ruc"),
+                    Codigo:                 reader.GetString("codigo"),
                     RazonSocial:            reader.GetString("razon_social"),
                     NombreComercial:        reader.IsDBNull(reader.GetOrdinal("nombre_comercial")) ? null : reader.GetString("nombre_comercial"),
                     TipoCliente:            reader.GetString("tipo_cliente"),
                     CondicionFiscal:        reader.GetString("condicion_fiscal"),
                     CondicionContribuyente: reader.GetString("condicion_contribuyente"),
                     EsVip:                  reader.GetBoolean("es_vip"),
-                    Estado:                 reader.GetString("estado")
+                    Estado:                 reader.GetString("estado"),
+                    SedeNombre:             reader.IsDBNull(reader.GetOrdinal("sede_nombre"))  ? null : reader.GetString("sede_nombre"),
+                    SedeRegion:             reader.IsDBNull(reader.GetOrdinal("sede_region"))  ? null : reader.GetString("sede_region"),
+                    CantidadContactos:      reader.GetInt32("cantidad_contactos")
                 ));
             }
 
