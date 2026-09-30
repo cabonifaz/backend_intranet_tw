@@ -25,4 +25,4 @@ CREATE TABLE IF NOT EXISTS contacto_cliente (
     UsuMod                           VARCHAR(100) NULL,
     FchMod                           DATETIME     NULL,
     PRIMARY KEY (id_contacto)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

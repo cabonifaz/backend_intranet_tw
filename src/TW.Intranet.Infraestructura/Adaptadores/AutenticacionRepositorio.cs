@@ -117,8 +117,15 @@ public class AutenticacionRepositorio(CadenaConexionBd conexion) : IAutenticacio
 
             return reader.GetInt32("IdTipoMensaje") == 2;
         }
-        catch
+        catch (MySqlException ex)
         {
+            // Error de infraestructura (BD caída, timeout, etc.) → propagar como 500,
+            // no tratar como sesión inválida (que devolvería 401).
+            throw new InvalidOperationException("Error al verificar la sesión en la base de datos.", ex);
+        }
+        catch (InvalidCastException)
+        {
+            // Resultado inesperado del SP → sesión inválida
             return false;
         }
     }

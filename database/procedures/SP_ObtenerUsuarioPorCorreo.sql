@@ -9,7 +9,7 @@ DROP PROCEDURE IF EXISTS SP_ObtenerUsuarioPorCorreo;
 DELIMITER //
 
 CREATE PROCEDURE SP_ObtenerUsuarioPorCorreo(
-    IN p_correo VARCHAR(150) CHARSET utf8mb4 COLLATE utf8mb4_unicode_ci
+    IN p_correo VARCHAR(150) CHARSET utf8mb4 COLLATE utf8mb4_0900_ai_ci
 )
 BEGIN
     DECLARE v_id BIGINT DEFAULT NULL;
