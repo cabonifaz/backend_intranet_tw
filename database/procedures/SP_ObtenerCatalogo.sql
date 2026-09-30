@@ -7,7 +7,7 @@ DROP PROCEDURE IF EXISTS SP_ObtenerCatalogo;
 DELIMITER //
 
 CREATE PROCEDURE SP_ObtenerCatalogo(
-    IN p_descripcion VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+    IN p_descripcion VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci
 )
 BEGIN
     IF NOT EXISTS (

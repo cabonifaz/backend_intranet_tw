@@ -1,6 +1,6 @@
 -- ============================================================
 -- SP_ObtenerRequerimientoPorId
--- Devuelve los datos completos de un RQ para el formulario de edición.
+-- Devuelve los datos completos de un RQ + su historial.
 -- ============================================================
 DROP PROCEDURE IF EXISTS SP_ObtenerRequerimientoPorId;
 
@@ -13,7 +13,7 @@ BEGIN
     -- 1. Header
     SELECT 2 AS IdTipoMensaje, 'Éxito.' AS Mensaje;
 
-    -- 2. Datos reales del RQ
+    -- 2. Datos del requerimiento
     SELECT
         r.id_requerimiento,
         r.numero,
@@ -22,16 +22,16 @@ BEGIN
         c.ruc,
         r.id_contacto,
         r.id_sede,
-        co.nombres                      AS nombre_contacto,
-        sc.nombre                       AS nombre_sede,
+        co.nombres                        AS nombre_contacto,
+        sc.nombre                         AS nombre_sede,
         r.fecha_creacion,
         CONCAT(u.nombre, ' ', u.apellido) AS responsable,
         r.id_origen,
-        tm_orig.String1                 AS origen_label,
+        tm_orig.String1                   AS origen_label,
         r.id_area,
-        tm_area.String1                 AS area_label,
+        tm_area.String1                   AS area_label,
         r.id_prioridad,
-        tm_prio.String1                 AS prioridad_label,
+        tm_prio.String1                   AS prioridad_label,
         r.fecha_necesidad,
         r.descripcion,
         r.notificar_correo,
@@ -49,13 +49,27 @@ BEGIN
     FROM requerimiento r
     JOIN cliente c ON c.id_cliente = r.id_cliente
     LEFT JOIN contacto_cliente co ON co.id_contacto = r.id_contacto
-    LEFT JOIN sede_cliente sc ON sc.id_sede = r.id_sede AND sc.SoftDelete = 0
-    LEFT JOIN usuario u ON u.id_usuario = r.id_usuario_creador
-    LEFT JOIN tabla_maestra tm_orig ON tm_orig.IdMaestro = 63 AND tm_orig.Num1 = r.id_origen  AND tm_orig.IdEmpresa = 1
-    LEFT JOIN tabla_maestra tm_area ON tm_area.IdMaestro = 64 AND tm_area.Num1 = r.id_area    AND tm_area.IdEmpresa = 1
-    LEFT JOIN tabla_maestra tm_prio ON tm_prio.IdMaestro = 65 AND tm_prio.Num1 = r.id_prioridad AND tm_prio.IdEmpresa = 1
+    LEFT JOIN sede_cliente sc     ON sc.id_sede = r.id_sede AND sc.SoftDelete = 0
+    LEFT JOIN usuario u           ON u.id_usuario = r.id_usuario_creador
+    LEFT JOIN tabla_maestra tm_orig ON tm_orig.IdMaestro = 63 AND tm_orig.Num1 = r.id_origen     AND tm_orig.IdEmpresa = 1
+    LEFT JOIN tabla_maestra tm_area ON tm_area.IdMaestro = 64 AND tm_area.Num1 = r.id_area       AND tm_area.IdEmpresa = 1
+    LEFT JOIN tabla_maestra tm_prio ON tm_prio.IdMaestro = 65 AND tm_prio.Num1 = r.id_prioridad  AND tm_prio.IdEmpresa = 1
     WHERE r.id_requerimiento = p_id_requerimiento
       AND r.SoftDelete = 0;
+
+    -- 3. Historial de actividades (más reciente primero)
+    SELECT
+        h.id_historial,
+        h.tipo,
+        h.tipo_label,
+        h.icono,
+        h.descripcion,
+        h.usuario,
+        h.fecha
+    FROM historial_requerimiento h
+    WHERE h.id_requerimiento = p_id_requerimiento
+      AND h.SoftDelete = 0
+    ORDER BY h.fecha DESC;
 END //
 
 DELIMITER ;

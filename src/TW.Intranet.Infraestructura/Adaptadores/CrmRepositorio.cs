@@ -58,6 +58,9 @@ public class CrmRepositorio(CadenaConexionBd conexion) : ICrmRepositorio
                 string? nullable(string col) =>
                     reader.IsDBNull(reader.GetOrdinal(col)) ? null : reader.GetString(col);
 
+                DateTime? nullableDate(string col) =>
+                    reader.IsDBNull(reader.GetOrdinal(col)) ? null : reader.GetDateTime(col);
+
                 items.Add(new RequerimientoListaItemDto(
                     IdRequerimiento: reader.GetInt64("id_requerimiento"),
                     Numero:          reader.GetString("numero"),
@@ -71,6 +74,7 @@ public class CrmRepositorio(CadenaConexionBd conexion) : ICrmRepositorio
                     IdPrioridad:     reader.GetInt32("id_prioridad"),
                     Responsable:     nullable("responsable"),
                     FechaCreacion:   reader.GetDateTime("fecha_creacion"),
+                    FechaNecesidad:  nullableDate("fecha_necesidad"),
                     Estado:          reader.GetString("estado"),
                     EstadoLabel:     nullable("estado_label")
                 ));
@@ -114,25 +118,23 @@ public class CrmRepositorio(CadenaConexionBd conexion) : ICrmRepositorio
             if (idTipo != 2)
                 return new RespuestaDto<CatalogosRequerimientoDto>(idTipo, mensaje);
 
-            static List<CatalogoItemDto> leerItems(MySqlDataReader r)
-            {
-                var lista = new List<CatalogoItemDto>();
-                while (r.Read())
-                    lista.Add(new CatalogoItemDto(r.GetInt32("id"), r.GetString("nombre"), null));
-                return lista;
-            }
+            await reader.NextResultAsync(ct);
+            var origenes = LeerItems(reader);
 
             await reader.NextResultAsync(ct);
-            var origenes = leerItems(reader);
+            var areas = LeerItems(reader);
 
             await reader.NextResultAsync(ct);
-            var areas = leerItems(reader);
+            var prioridades = LeerItems(reader);
 
             await reader.NextResultAsync(ct);
-            var prioridades = leerItems(reader);
+            var motivos = LeerItems(reader);
+
+            await reader.NextResultAsync(ct);
+            var estadosRq = LeerItemsConCodigo(reader);
 
             return new RespuestaDto<CatalogosRequerimientoDto>(2, mensaje,
-                new CatalogosRequerimientoDto(origenes, areas, prioridades));
+                new CatalogosRequerimientoDto(origenes, areas, prioridades, motivos, estadosRq));
         }
         catch (Exception ex)
         {
@@ -203,10 +205,27 @@ public class CrmRepositorio(CadenaConexionBd conexion) : ICrmRepositorio
                 RequiereVisita:  reader.GetBoolean("requiere_visita"),
                 ClienteDeuda:    reader.GetBoolean("cliente_deuda"),
                 Estado:          reader.GetString("estado"),
-                EstadoLabel:     nullable("estado_label")
+                EstadoLabel:     nullable("estado_label"),
+                Historial:       Array.Empty<HistorialItemDto>()
             );
 
-            return new RespuestaDto<RequerimientoFichaDto>(2, mensaje, ficha);
+            // Leer historial (tercer result set)
+            await reader.NextResultAsync(ct);
+            var historial = new List<HistorialItemDto>();
+            while (await reader.ReadAsync(ct))
+            {
+                historial.Add(new HistorialItemDto(
+                    IdHistorial:  reader.GetInt64("id_historial"),
+                    Tipo:         reader.GetString("tipo"),
+                    TipoLabel:    reader.IsDBNull(reader.GetOrdinal("tipo_label"))   ? null : reader.GetString("tipo_label"),
+                    Icono:        reader.IsDBNull(reader.GetOrdinal("icono"))         ? null : reader.GetString("icono"),
+                    Descripcion:  reader.GetString("descripcion"),
+                    Usuario:      reader.IsDBNull(reader.GetOrdinal("usuario"))       ? null : reader.GetString("usuario"),
+                    Fecha:        reader.GetDateTime("fecha")
+                ));
+            }
+
+            return new RespuestaDto<RequerimientoFichaDto>(2, mensaje, ficha with { Historial = historial });
         }
         catch (Exception ex)
         {
@@ -240,6 +259,68 @@ public class CrmRepositorio(CadenaConexionBd conexion) : ICrmRepositorio
             cmd.Parameters.AddWithValue("p_requiere_visita",  comando.RequiereVisita  ? 1 : 0);
             cmd.Parameters.AddWithValue("p_cliente_deuda",    comando.ClienteDeuda    ? 1 : 0);
             cmd.Parameters.AddWithValue("p_id_usuario",       idUsuario);
+
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+
+            if (!await reader.ReadAsync(ct))
+                return new RespuestaDto<long>(3, "El procedimiento no devolvió resultado.");
+
+            int    idTipo  = reader.GetInt32("IdTipoMensaje");
+            string mensaje = reader.GetString("Mensaje");
+
+            if (idTipo != 2)
+                return new RespuestaDto<long>(idTipo, mensaje);
+
+            await reader.NextResultAsync(ct);
+            long idRq = 0;
+            if (await reader.ReadAsync(ct))
+                idRq = reader.GetInt64("id_requerimiento");
+
+            return new RespuestaDto<long>(2, mensaje, idRq);
+        }
+        catch (Exception ex)
+        {
+            return new RespuestaDto<long>(3, ex.Message);
+        }
+    }
+
+    private static List<CatalogoItemDto> LeerItems(MySqlDataReader r)
+    {
+        var lista = new List<CatalogoItemDto>();
+        while (r.Read())
+            lista.Add(new CatalogoItemDto(r.GetInt32("id"), r.GetString("nombre"), null));
+        return lista;
+    }
+
+    private static List<CatalogoItemDto> LeerItemsConCodigo(MySqlDataReader r)
+    {
+        var lista = new List<CatalogoItemDto>();
+        while (r.Read())
+        {
+            string? codigo = r.IsDBNull(r.GetOrdinal("codigo")) ? null : r.GetString("codigo");
+            lista.Add(new CatalogoItemDto(r.GetInt32("id"), r.GetString("nombre"), codigo));
+        }
+        return lista;
+    }
+
+    // ── AnularRequerimiento ───────────────────────────────────────────────────
+    public async Task<RespuestaDto<long>> AnularRequerimientoAsync(
+        long idRequerimiento, AnularRequerimientoComandoDto comando, long idUsuario, string rol, CancellationToken ct)
+    {
+        try
+        {
+            await using var conn = new MySqlConnection(conexion.Valor);
+            await conn.OpenAsync(ct);
+
+            await using var cmd = new MySqlCommand("SP_AnularRequerimiento", conn)
+            {
+                CommandType = System.Data.CommandType.StoredProcedure
+            };
+            cmd.Parameters.AddWithValue("p_id_requerimiento", idRequerimiento);
+            cmd.Parameters.AddWithValue("p_id_motivo",        comando.IdMotivo);
+            cmd.Parameters.AddWithValue("p_justificacion",    comando.Justificacion);
+            cmd.Parameters.AddWithValue("p_id_usuario",       idUsuario);
+            cmd.Parameters.AddWithValue("p_rol",              rol);
 
             await using var reader = await cmd.ExecuteReaderAsync(ct);
 

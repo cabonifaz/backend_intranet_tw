@@ -13,7 +13,8 @@ public class CrmController(
     ObtenerRequerimientosCasoDeUso        obtenerRequerimientosCasoDeUso,
     ObtenerCatalogosRequerimientoCasoDeUso obtenerCatalogosCasoDeUso,
     ObtenerRequerimientoPorIdCasoDeUso    obtenerRequerimientoPorIdCasoDeUso,
-    GuardarRequerimientoCasoDeUso         guardarRequerimientoCasoDeUso
+    GuardarRequerimientoCasoDeUso         guardarRequerimientoCasoDeUso,
+    AnularRequerimientoCasoDeUso          anularRequerimientoCasoDeUso
 ) : ControllerBase
 {
     [HttpGet("requerimientos")]
@@ -24,12 +25,7 @@ public class CrmController(
         [FromQuery] int porPagina = 10,
         CancellationToken ct = default)
     {
-        // Datos del usuario logueado, tomados del token JWT
-        var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier)
-                          ?? User.FindFirstValue("sub");
-        if (!long.TryParse(idUsuarioClaim, out long idUsuario))
-            return Unauthorized();
-
+        if (!TryObtenerIdUsuario(out long idUsuario)) return Unauthorized();
         var rol = User.FindFirstValue("rol") ?? "";
 
         var respuesta = await obtenerRequerimientosCasoDeUso.EjecutarAsync(
@@ -75,8 +71,7 @@ public class CrmController(
         [FromBody] GuardarRequerimientoComandoDto comando,
         CancellationToken ct = default)
     {
-        var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        long.TryParse(idUsuarioClaim, out long idUsuario);
+        if (!TryObtenerIdUsuario(out long idUsuario)) return Unauthorized();
 
         var respuesta = await guardarRequerimientoCasoDeUso.EjecutarAsync(comando, idUsuario, ct);
 
@@ -86,5 +81,30 @@ public class CrmController(
             1 => BadRequest(respuesta),
             _ => StatusCode(500, respuesta),
         };
+    }
+
+    [HttpPatch("requerimientos/{id:long}/anular")]
+    public async Task<IActionResult> AnularRequerimiento(
+        long id,
+        [FromBody] AnularRequerimientoComandoDto comando,
+        CancellationToken ct = default)
+    {
+        if (!TryObtenerIdUsuario(out long idUsuario)) return Unauthorized();
+        var rol = User.FindFirstValue("rol") ?? "";
+
+        var respuesta = await anularRequerimientoCasoDeUso.EjecutarAsync(id, comando, idUsuario, rol, ct);
+
+        return respuesta.IdTipoMensaje switch
+        {
+            2 => Ok(respuesta),
+            1 => BadRequest(respuesta),
+            _ => StatusCode(500, respuesta),
+        };
+    }
+
+    private bool TryObtenerIdUsuario(out long idUsuario)
+    {
+        var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        return long.TryParse(claim, out idUsuario) && idUsuario > 0;
     }
 }

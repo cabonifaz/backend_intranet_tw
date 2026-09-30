@@ -15,4 +15,7 @@ public interface ICrmRepositorio
 
     Task<RespuestaDto<long>> GuardarRequerimientoAsync(
         GuardarRequerimientoComandoDto comando, long idUsuario, CancellationToken ct);
+
+    Task<RespuestaDto<long>> AnularRequerimientoAsync(
+        long idRequerimiento, AnularRequerimientoComandoDto comando, long idUsuario, string rol, CancellationToken ct);
 }

@@ -24,5 +24,6 @@ public record RequerimientoFichaDto(
     bool      RequiereVisita,
     bool      ClienteDeuda,
     string    Estado,
-    string?   EstadoLabel
+    string?   EstadoLabel,
+    IReadOnlyList<HistorialItemDto> Historial
 );
