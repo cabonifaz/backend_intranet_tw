@@ -24,8 +24,16 @@ public class CrmController(
         [FromQuery] int porPagina = 10,
         CancellationToken ct = default)
     {
+        // Datos del usuario logueado, tomados del token JWT
+        var idUsuarioClaim = User.FindFirstValue(ClaimTypes.NameIdentifier)
+                          ?? User.FindFirstValue("sub");
+        if (!long.TryParse(idUsuarioClaim, out long idUsuario))
+            return Unauthorized();
+
+        var rol = User.FindFirstValue("rol") ?? "";
+
         var respuesta = await obtenerRequerimientosCasoDeUso.EjecutarAsync(
-            estado, busqueda, pagina, porPagina, ct);
+            estado, busqueda, pagina, porPagina, idUsuario, rol, ct);
 
         return respuesta.IdTipoMensaje switch
         {
