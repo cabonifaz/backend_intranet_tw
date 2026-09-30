@@ -5,7 +5,8 @@ namespace TW.Intranet.Aplicacion.Puertos;
 public interface ICrmRepositorio
 {
     Task<RespuestaDto<RequerimientosPaginadoDto>> ObtenerRequerimientosAsync(
-        string? estado, string? busqueda, int pagina, int porPagina, CancellationToken ct);
+        string? estado, string? busqueda, int pagina, int porPagina,
+        long idUsuario, string rol, CancellationToken ct);
 
     Task<RespuestaDto<CatalogosRequerimientoDto>> ObtenerCatalogosAsync(CancellationToken ct);
 

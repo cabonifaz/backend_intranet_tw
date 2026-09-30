@@ -9,7 +9,8 @@ public class CrmRepositorio(CadenaConexionBd conexion) : ICrmRepositorio
 {
     // ── ObtenerRequerimientos ─────────────────────────────────────────────────
     public async Task<RespuestaDto<RequerimientosPaginadoDto>> ObtenerRequerimientosAsync(
-        string? estado, string? busqueda, int pagina, int porPagina, CancellationToken ct)
+        string? estado, string? busqueda, int pagina, int porPagina,
+        long idUsuario, string rol, CancellationToken ct)
     {
         try
         {
@@ -24,6 +25,8 @@ public class CrmRepositorio(CadenaConexionBd conexion) : ICrmRepositorio
             cmd.Parameters.AddWithValue("p_busqueda",   busqueda ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("p_pagina",     pagina);
             cmd.Parameters.AddWithValue("p_por_pagina", porPagina);
+            cmd.Parameters.AddWithValue("p_id_usuario", idUsuario);
+            cmd.Parameters.AddWithValue("p_rol",        rol);
 
             await using var reader = await cmd.ExecuteReaderAsync(ct);
 
