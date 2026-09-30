@@ -4,8 +4,8 @@ namespace TW.Intranet.Aplicacion.Puertos;
 
 public interface IMaestrosRepositorio
 {
-    Task<RespuestaDto<List<ClienteListaItemDto>>> ObtenerClientesAsync(
-        string? busqueda, string? estado, CancellationToken ct);
+    Task<RespuestaDto<ClientesPaginadoDto>> ObtenerClientesAsync(
+        string? busqueda, string? estado, int pagina, int porPagina, CancellationToken ct);
 
     Task<RespuestaDto<ClienteDetalleDto>> ObtenerClientePorIdAsync(
         long idCliente, CancellationToken ct);
@@ -40,4 +40,14 @@ public interface IMaestrosRepositorio
 
     Task<RespuestaDto<object>> CambiarEstadoContactoAsync(
         CambiarEstadoContactoDto dto, string usuMod, CancellationToken ct);
+
+    // ── Categorías de cliente ─────────────────────────────────────────────────
+
+    Task<RespuestaDto<List<CategoriaClienteDto>>> ObtenerCategoriasAsync(CancellationToken ct);
+
+    Task<RespuestaDto<long>> GuardarCategoriaAsync(
+        GuardarCategoriaDto dto, string usuCre, CancellationToken ct);
+
+    Task<RespuestaDto<object>> CambiarEstadoCategoriaAsync(
+        CambiarEstadoCategoriaDto dto, string usuMod, CancellationToken ct);
 }

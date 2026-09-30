@@ -22,6 +22,7 @@ public record ClienteDetalleDto(
     bool     SsomaInduccionSsoma,
     bool     SsomaExamenMedico,
     string?  SsomaNotas,
-    string?  Categoria,
+    int?     IdCategoria,
+    string?  NombreCategoria,
     string   Estado
 );

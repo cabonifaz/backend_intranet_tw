@@ -1,6 +1,6 @@
 -- ============================================================
 -- SP_ObtenerClientes
--- Lista de clientes para el módulo de Mantenimiento de Maestros.
+-- Lista paginada de clientes para Mantenimiento de Maestros.
 -- Soporta búsqueda por RUC/razón social y filtro por estado.
 -- ============================================================
 DROP PROCEDURE IF EXISTS SP_ObtenerClientes;
@@ -8,12 +8,19 @@ DROP PROCEDURE IF EXISTS SP_ObtenerClientes;
 DELIMITER //
 
 CREATE PROCEDURE SP_ObtenerClientes(
-    IN p_busqueda  VARCHAR(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
-    IN p_estado    VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+    IN p_busqueda   VARCHAR(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_estado     VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_pagina     INT,
+    IN p_por_pagina INT
 )
 BEGIN
+    DECLARE v_offset INT;
+    SET v_offset = (p_pagina - 1) * p_por_pagina;
+
+    -- 1. Header
     SELECT 2 AS IdTipoMensaje, 'Éxito.' AS Mensaje;
 
+    -- 2. Datos paginados
     SELECT
         c.id_cliente,
         c.ruc,
@@ -39,11 +46,24 @@ BEGIN
       AND (p_estado IS NULL OR p_estado = '' OR c.estado = p_estado)
       AND (
           p_busqueda IS NULL OR p_busqueda = ''
-          OR c.ruc              LIKE CONCAT('%', p_busqueda, '%')
-          OR c.razon_social      LIKE CONCAT('%', p_busqueda, '%')
-          OR c.nombre_comercial  LIKE CONCAT('%', p_busqueda, '%')
+          OR c.ruc             LIKE CONCAT('%', p_busqueda, '%')
+          OR c.razon_social     LIKE CONCAT('%', p_busqueda, '%')
+          OR c.nombre_comercial LIKE CONCAT('%', p_busqueda, '%')
       )
-    ORDER BY c.razon_social ASC;
+    ORDER BY c.razon_social ASC
+    LIMIT p_por_pagina OFFSET v_offset;
+
+    -- 3. Total sin paginar
+    SELECT COUNT(*) AS total
+    FROM cliente c
+    WHERE c.SoftDelete = 0
+      AND (p_estado IS NULL OR p_estado = '' OR c.estado = p_estado)
+      AND (
+          p_busqueda IS NULL OR p_busqueda = ''
+          OR c.ruc             LIKE CONCAT('%', p_busqueda, '%')
+          OR c.razon_social     LIKE CONCAT('%', p_busqueda, '%')
+          OR c.nombre_comercial LIKE CONCAT('%', p_busqueda, '%')
+      );
 END //
 
 DELIMITER ;

@@ -9,8 +9,8 @@ public class MaestrosRepositorio(CadenaConexionBd conexion) : IMaestrosRepositor
 {
     // ── Clientes ──────────────────────────────────────────────────────────────
 
-    public async Task<RespuestaDto<List<ClienteListaItemDto>>> ObtenerClientesAsync(
-        string? busqueda, string? estado, CancellationToken ct)
+    public async Task<RespuestaDto<ClientesPaginadoDto>> ObtenerClientesAsync(
+        string? busqueda, string? estado, int pagina, int porPagina, CancellationToken ct)
     {
         try
         {
@@ -23,51 +23,53 @@ public class MaestrosRepositorio(CadenaConexionBd conexion) : IMaestrosRepositor
             };
             cmd.Parameters.AddWithValue("p_busqueda",   busqueda ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("p_estado",     estado   ?? (object)DBNull.Value);
-            // El SP ahora pagina; pedimos una sola página grande para devolver la lista completa
-            cmd.Parameters.AddWithValue("p_pagina",     1);
-            cmd.Parameters.AddWithValue("p_por_pagina", 1000);
+            cmd.Parameters.AddWithValue("p_pagina",     pagina);
+            cmd.Parameters.AddWithValue("p_por_pagina", porPagina);
 
             await using var reader = await cmd.ExecuteReaderAsync(ct);
 
             if (!await reader.ReadAsync(ct))
-                return new RespuestaDto<List<ClienteListaItemDto>>(3, "El procedimiento no devolvió resultado.");
+                return new RespuestaDto<ClientesPaginadoDto>(3, "El procedimiento no devolvió resultado.");
 
             int    idTipo  = reader.GetInt32("IdTipoMensaje");
             string mensaje = reader.GetString("Mensaje");
 
             if (idTipo != 2)
-                return new RespuestaDto<List<ClienteListaItemDto>>(idTipo, mensaje);
+                return new RespuestaDto<ClientesPaginadoDto>(idTipo, mensaje);
 
             await reader.NextResultAsync(ct);
 
             var lista = new List<ClienteListaItemDto>();
             while (await reader.ReadAsync(ct))
             {
-                string? n(string col) =>
-                    reader.IsDBNull(reader.GetOrdinal(col)) ? null : reader.GetString(col);
-
                 lista.Add(new ClienteListaItemDto(
                     IdCliente:              reader.GetInt64("id_cliente"),
                     Ruc:                    reader.GetString("ruc"),
                     Codigo:                 reader.GetString("codigo"),
                     RazonSocial:            reader.GetString("razon_social"),
-                    NombreComercial:        n("nombre_comercial"),
-                    TipoCliente:            n("tipo_cliente") ?? "",
-                    CondicionFiscal:        n("condicion_fiscal") ?? "",
-                    CondicionContribuyente: n("condicion_contribuyente") ?? "",
+                    NombreComercial:        reader.IsDBNull(reader.GetOrdinal("nombre_comercial")) ? null : reader.GetString("nombre_comercial"),
+                    TipoCliente:            reader.GetString("tipo_cliente"),
+                    CondicionFiscal:        reader.GetString("condicion_fiscal"),
+                    CondicionContribuyente: reader.GetString("condicion_contribuyente"),
                     EsVip:                  reader.GetBoolean("es_vip"),
                     Estado:                 reader.GetString("estado"),
-                    SedeNombre:             n("sede_nombre"),
-                    SedeRegion:             n("sede_region"),
+                    SedeNombre:             reader.IsDBNull(reader.GetOrdinal("sede_nombre"))  ? null : reader.GetString("sede_nombre"),
+                    SedeRegion:             reader.IsDBNull(reader.GetOrdinal("sede_region"))  ? null : reader.GetString("sede_region"),
                     CantidadContactos:      reader.GetInt32("cantidad_contactos")
                 ));
             }
 
-            return new RespuestaDto<List<ClienteListaItemDto>>(2, mensaje, lista);
+            await reader.NextResultAsync(ct);
+            int total = 0;
+            if (await reader.ReadAsync(ct))
+                total = reader.GetInt32("total");
+
+            return new RespuestaDto<ClientesPaginadoDto>(2, mensaje,
+                new ClientesPaginadoDto(lista, total, pagina, porPagina));
         }
         catch (Exception ex)
         {
-            return new RespuestaDto<List<ClienteListaItemDto>>(3, ex.Message);
+            return new RespuestaDto<ClientesPaginadoDto>(3, ex.Message);
         }
     }
 
@@ -126,7 +128,8 @@ public class MaestrosRepositorio(CadenaConexionBd conexion) : IMaestrosRepositor
                 SsomaInduccionSsoma:    reader.GetBoolean("ssoma_induccion_ssoma"),
                 SsomaExamenMedico:      reader.GetBoolean("ssoma_examen_medico"),
                 SsomaNotas:             nullable("ssoma_notas")        ? null : reader.GetString("ssoma_notas"),
-                Categoria:              nullable("categoria")          ? null : reader.GetString("categoria"),
+                IdCategoria:            reader.IsDBNull(reader.GetOrdinal("id_categoria"))     ? null : reader.GetInt32("id_categoria"),
+                NombreCategoria:        reader.IsDBNull(reader.GetOrdinal("nombre_categoria")) ? null : reader.GetString("nombre_categoria"),
                 Estado:                 reader.GetString("estado")
             );
 
@@ -171,7 +174,7 @@ public class MaestrosRepositorio(CadenaConexionBd conexion) : IMaestrosRepositor
             cmd.Parameters.AddWithValue("p_ssoma_induccion_ssoma",   dto.SsomaInduccionSsoma ? 1 : 0);
             cmd.Parameters.AddWithValue("p_ssoma_examen_medico",     dto.SsomaExamenMedico   ? 1 : 0);
             cmd.Parameters.AddWithValue("p_ssoma_notas",             dto.SsomaNotas       ?? (object)DBNull.Value);
-            cmd.Parameters.AddWithValue("p_categoria",               dto.Categoria        ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("p_id_categoria",            dto.IdCategoria      ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("p_usu_cre",                 usuCre);
 
             await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -539,6 +542,133 @@ public class MaestrosRepositorio(CadenaConexionBd conexion) : IMaestrosRepositor
             cmd.Parameters.AddWithValue("p_id_cliente", dto.IdCliente);
             cmd.Parameters.AddWithValue("p_estado",     dto.Estado);
             cmd.Parameters.AddWithValue("p_usu_mod",    usuMod);
+
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+
+            if (!await reader.ReadAsync(ct))
+                return new RespuestaDto<object>(3, "El procedimiento no devolvió resultado.");
+
+            int    idTipo  = reader.GetInt32("IdTipoMensaje");
+            string mensaje = reader.GetString("Mensaje");
+
+            return new RespuestaDto<object>(idTipo, mensaje);
+        }
+        catch (Exception ex)
+        {
+            return new RespuestaDto<object>(3, ex.Message);
+        }
+    }
+
+    // ── Categorías de cliente ─────────────────────────────────────────────────
+
+    public async Task<RespuestaDto<List<CategoriaClienteDto>>> ObtenerCategoriasAsync(CancellationToken ct)
+    {
+        try
+        {
+            await using var conn = new MySqlConnection(conexion.Valor);
+            await conn.OpenAsync(ct);
+
+            await using var cmd = new MySqlCommand("SP_ObtenerCategorias", conn)
+            {
+                CommandType = System.Data.CommandType.StoredProcedure
+            };
+
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+
+            if (!await reader.ReadAsync(ct))
+                return new RespuestaDto<List<CategoriaClienteDto>>(3, "El procedimiento no devolvió resultado.");
+
+            int    idTipo  = reader.GetInt32("IdTipoMensaje");
+            string mensaje = reader.GetString("Mensaje");
+
+            if (idTipo != 2)
+                return new RespuestaDto<List<CategoriaClienteDto>>(idTipo, mensaje);
+
+            await reader.NextResultAsync(ct);
+
+            var lista = new List<CategoriaClienteDto>();
+            while (await reader.ReadAsync(ct))
+            {
+                var n = (string col) => reader.IsDBNull(reader.GetOrdinal(col));
+                lista.Add(new CategoriaClienteDto(
+                    IdCategoria:       reader.GetInt32("id_categoria"),
+                    Nombre:            reader.GetString("nombre"),
+                    Descripcion:       n("descripcion")        ? null : reader.GetString("descripcion"),
+                    PrioridadAtencion: n("prioridad_atencion") ? null : reader.GetInt32("prioridad_atencion"),
+                    PctGananciaMin:    n("pct_ganancia_min")   ? null : reader.GetDecimal("pct_ganancia_min"),
+                    PctGananciaMax:    n("pct_ganancia_max")   ? null : reader.GetDecimal("pct_ganancia_max"),
+                    Estado:            reader.GetString("estado")
+                ));
+            }
+
+            return new RespuestaDto<List<CategoriaClienteDto>>(2, mensaje, lista);
+        }
+        catch (Exception ex)
+        {
+            return new RespuestaDto<List<CategoriaClienteDto>>(3, ex.Message);
+        }
+    }
+
+    public async Task<RespuestaDto<long>> GuardarCategoriaAsync(
+        GuardarCategoriaDto dto, string usuCre, CancellationToken ct)
+    {
+        try
+        {
+            await using var conn = new MySqlConnection(conexion.Valor);
+            await conn.OpenAsync(ct);
+
+            await using var cmd = new MySqlCommand("SP_GuardarCategoria", conn)
+            {
+                CommandType = System.Data.CommandType.StoredProcedure
+            };
+            cmd.Parameters.AddWithValue("p_id_categoria",       dto.IdCategoria);
+            cmd.Parameters.AddWithValue("p_nombre",             dto.Nombre);
+            cmd.Parameters.AddWithValue("p_descripcion",        dto.Descripcion       ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("p_prioridad_atencion", dto.PrioridadAtencion ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("p_pct_ganancia_min",   dto.PctGananciaMin    ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("p_pct_ganancia_max",   dto.PctGananciaMax    ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("p_usu_cre",            usuCre);
+
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+
+            if (!await reader.ReadAsync(ct))
+                return new RespuestaDto<long>(3, "El procedimiento no devolvió resultado.");
+
+            int    idTipo  = reader.GetInt32("IdTipoMensaje");
+            string mensaje = reader.GetString("Mensaje");
+
+            if (idTipo != 2)
+                return new RespuestaDto<long>(idTipo, mensaje);
+
+            await reader.NextResultAsync(ct);
+
+            if (!await reader.ReadAsync(ct))
+                return new RespuestaDto<long>(3, "El procedimiento no devolvió el identificador.");
+
+            long idCategoria = reader.GetInt64("id_categoria");
+            return new RespuestaDto<long>(2, mensaje, idCategoria);
+        }
+        catch (Exception ex)
+        {
+            return new RespuestaDto<long>(3, ex.Message);
+        }
+    }
+
+    public async Task<RespuestaDto<object>> CambiarEstadoCategoriaAsync(
+        CambiarEstadoCategoriaDto dto, string usuMod, CancellationToken ct)
+    {
+        try
+        {
+            await using var conn = new MySqlConnection(conexion.Valor);
+            await conn.OpenAsync(ct);
+
+            await using var cmd = new MySqlCommand("SP_CambiarEstadoCategoria", conn)
+            {
+                CommandType = System.Data.CommandType.StoredProcedure
+            };
+            cmd.Parameters.AddWithValue("p_id_categoria", dto.IdCategoria);
+            cmd.Parameters.AddWithValue("p_estado",       dto.Estado);
+            cmd.Parameters.AddWithValue("p_usu_mod",      usuMod);
 
             await using var reader = await cmd.ExecuteReaderAsync(ct);
 

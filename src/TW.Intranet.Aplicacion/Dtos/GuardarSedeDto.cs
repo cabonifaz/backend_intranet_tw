@@ -1,13 +1,15 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace TW.Intranet.Aplicacion.Dtos;
 
 public record GuardarSedeDto(
     long    IdSede,
     long    IdCliente,
-    string  Nombre,
-    string? TipoInstalacion,
-    string? Region,
-    string? Provincia,
-    string? Distrito,
-    string? Urbanizacion,
-    string  DireccionExacta
+    [Required][StringLength(200)] string  Nombre,
+    [StringLength(100)]           string? TipoInstalacion,
+    [Required][StringLength(100)] string? Region,
+    [Required][StringLength(100)] string? Provincia,
+    [Required][StringLength(100)] string? Distrito,
+    [StringLength(200)]           string? Urbanizacion,
+    [Required][StringLength(500)] string  DireccionExacta
 );

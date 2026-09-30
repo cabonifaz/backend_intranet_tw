@@ -19,31 +19,34 @@ BEGIN
         SELECT 2 AS IdTipoMensaje, 'Éxito.' AS Mensaje;
 
         SELECT
-            id_cliente,
-            tipo_documento,
-            ruc,
-            tipo_cliente,
-            razon_social,
-            nombre_comercial,
-            condicion_fiscal,
-            condicion_contribuyente,
-            condicion_pago,
-            linea_credito_usd,
-            telefono_central,
-            domicilio_fiscal,
-            es_vip,
-            regla_vip,
-            descuento_vip_pct,
-            patron_masas_asignado,
-            ssoma_poliza_sctr,
-            ssoma_camioneta_4x4,
-            ssoma_induccion_ssoma,
-            ssoma_examen_medico,
-            ssoma_notas,
-            categoria,
-            estado
-        FROM cliente
-        WHERE id_cliente = p_id_cliente AND SoftDelete = 0;
+            c.id_cliente,
+            c.tipo_documento,
+            c.ruc,
+            c.tipo_cliente,
+            c.razon_social,
+            c.nombre_comercial,
+            c.condicion_fiscal,
+            c.condicion_contribuyente,
+            c.condicion_pago,
+            c.linea_credito_usd,
+            c.telefono_central,
+            c.domicilio_fiscal,
+            c.es_vip,
+            c.regla_vip,
+            c.descuento_vip_pct,
+            c.patron_masas_asignado,
+            c.ssoma_poliza_sctr,
+            c.ssoma_camioneta_4x4,
+            c.ssoma_induccion_ssoma,
+            c.ssoma_examen_medico,
+            c.ssoma_notas,
+            c.id_categoria,
+            cc.nombre AS nombre_categoria,
+            c.estado
+        FROM cliente c
+        LEFT JOIN categoria_cliente cc
+            ON cc.id_categoria = c.id_categoria AND cc.SoftDelete = 0
+        WHERE c.id_cliente = p_id_cliente AND c.SoftDelete = 0;
     END IF;
 END //
 

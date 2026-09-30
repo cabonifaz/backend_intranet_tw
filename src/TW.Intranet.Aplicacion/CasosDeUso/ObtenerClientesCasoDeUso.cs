@@ -5,7 +5,7 @@ namespace TW.Intranet.Aplicacion.CasosDeUso;
 
 public class ObtenerClientesCasoDeUso(IMaestrosRepositorio repositorio)
 {
-    public async Task<RespuestaDto<List<ClienteListaItemDto>>> EjecutarAsync(
-        string? busqueda, string? estado, CancellationToken ct = default)
-        => await repositorio.ObtenerClientesAsync(busqueda, estado, ct);
+    public async Task<RespuestaDto<ClientesPaginadoDto>> EjecutarAsync(
+        string? busqueda, string? estado, int pagina, int porPagina, CancellationToken ct = default)
+        => await repositorio.ObtenerClientesAsync(busqueda, estado, pagina, porPagina, ct);
 }

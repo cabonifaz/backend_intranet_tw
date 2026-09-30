@@ -1,26 +1,28 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace TW.Intranet.Aplicacion.Dtos;
 
 public record GuardarClienteDto(
     long     IdCliente,
-    string   TipoDocumento,
-    string   Ruc,
-    string   TipoCliente,
-    string   RazonSocial,
-    string?  NombreComercial,
-    string   CondicionFiscal,
-    string   CondicionContribuyente,
+    [Required]                                   string   TipoDocumento,
+    [Required][StringLength(11, MinimumLength = 11)] string   Ruc,
+    [Required]                                   string   TipoCliente,
+    [Required][StringLength(300)]                string   RazonSocial,
+    [StringLength(300)]                          string?  NombreComercial,
+    [Required]                                   string   CondicionFiscal,
+    [Required]                                   string   CondicionContribuyente,
     string?  CondicionPago,
-    decimal? LineaCreditoUsd,
-    string?  TelefonoCentral,
-    string?  DomicilioFiscal,
+    [Range(0, double.MaxValue)] decimal? LineaCreditoUsd,
+    [StringLength(30)]          string?  TelefonoCentral,
+    [StringLength(500)]         string?  DomicilioFiscal,
     bool     EsVip,
     string?  ReglaVip,
-    decimal? DescuentoVipPct,
+    [Range(0, 100)] decimal? DescuentoVipPct,
     string?  PatronMasasAsignado,
     bool     SsomaPolizaSctr,
     bool     SsomaCamioneta4x4,
     bool     SsomaInduccionSsoma,
     bool     SsomaExamenMedico,
-    string?  SsomaNotas,
-    string?  Categoria
+    [StringLength(1000)] string?  SsomaNotas,
+    int?     IdCategoria
 );

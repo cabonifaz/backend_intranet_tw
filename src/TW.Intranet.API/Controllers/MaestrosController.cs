@@ -20,23 +20,29 @@ public class MaestrosController(
     CambiarEstadoSedeCasoDeUso         cambiarEstadoSedeCasoDeUso,
     ObtenerContactosPorClienteCasoDeUso obtenerContactosPorClienteCasoDeUso,
     GuardarContactoCasoDeUso            guardarContactoCasoDeUso,
-    CambiarEstadoContactoCasoDeUso      cambiarEstadoContactoCasoDeUso) : ControllerBase
+    CambiarEstadoContactoCasoDeUso      cambiarEstadoContactoCasoDeUso,
+    ObtenerCategoriasCasoDeUso          obtenerCategoriasCasoDeUso,
+    GuardarCategoriaCasoDeUso           guardarCategoriaCasoDeUso,
+    CambiarEstadoCategoriaCasoDeUso     cambiarEstadoCategoriaCasoDeUso) : ControllerBase
 {
-    private string UsuarioActual =>
-        User.FindFirstValue(ClaimTypes.Email)
-        ?? User.FindFirstValue(ClaimTypes.NameIdentifier)
-        ?? "sistema";
+    private bool TryObtenerUsuarioActual(out string usuarioActual)
+    {
+        usuarioActual = User.FindFirstValue(ClaimTypes.Email) ?? "";
+        return !string.IsNullOrEmpty(usuarioActual);
+    }
 
     // ── Clientes ──────────────────────────────────────────────────────────────
 
-    /// <summary>Devuelve la lista de clientes con búsqueda y filtro por estado opcionales.</summary>
+    /// <summary>Devuelve la lista paginada de clientes con búsqueda y filtro por estado opcionales.</summary>
     [HttpGet("clientes")]
     public async Task<IActionResult> ObtenerClientes(
         [FromQuery] string? busqueda,
         [FromQuery] string? estado,
-        CancellationToken ct)
+        [FromQuery] int pagina    = 1,
+        [FromQuery] int porPagina = 20,
+        CancellationToken ct = default)
     {
-        var respuesta = await obtenerClientesCasoDeUso.EjecutarAsync(busqueda, estado, ct);
+        var respuesta = await obtenerClientesCasoDeUso.EjecutarAsync(busqueda, estado, pagina, porPagina, ct);
 
         return respuesta.IdTipoMensaje switch
         {
@@ -69,7 +75,8 @@ public class MaestrosController(
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
-        var respuesta = await guardarClienteCasoDeUso.EjecutarAsync(dto, UsuarioActual, ct);
+        if (!TryObtenerUsuarioActual(out string usuarioActual)) return Unauthorized();
+        var respuesta = await guardarClienteCasoDeUso.EjecutarAsync(dto, usuarioActual, ct);
 
         return respuesta.IdTipoMensaje switch
         {
@@ -119,7 +126,8 @@ public class MaestrosController(
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
-        var respuesta = await guardarSedeCasoDeUso.EjecutarAsync(dto, UsuarioActual, ct);
+        if (!TryObtenerUsuarioActual(out string usuarioActual)) return Unauthorized();
+        var respuesta = await guardarSedeCasoDeUso.EjecutarAsync(dto, usuarioActual, ct);
 
         return respuesta.IdTipoMensaje switch
         {
@@ -137,7 +145,8 @@ public class MaestrosController(
         if (id != dto.IdSede)
             return BadRequest(new RespuestaDto<object>(1, "El identificador de la ruta no coincide con el cuerpo."));
 
-        var respuesta = await cambiarEstadoSedeCasoDeUso.EjecutarAsync(dto, UsuarioActual, ct);
+        if (!TryObtenerUsuarioActual(out string usuarioActual)) return Unauthorized();
+        var respuesta = await cambiarEstadoSedeCasoDeUso.EjecutarAsync(dto, usuarioActual, ct);
 
         return respuesta.IdTipoMensaje switch
         {
@@ -171,7 +180,8 @@ public class MaestrosController(
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
-        var respuesta = await guardarContactoCasoDeUso.EjecutarAsync(dto, UsuarioActual, ct);
+        if (!TryObtenerUsuarioActual(out string usuarioActual)) return Unauthorized();
+        var respuesta = await guardarContactoCasoDeUso.EjecutarAsync(dto, usuarioActual, ct);
 
         return respuesta.IdTipoMensaje switch
         {
@@ -189,7 +199,8 @@ public class MaestrosController(
         if (id != dto.IdContacto)
             return BadRequest(new RespuestaDto<object>(1, "El identificador de la ruta no coincide con el cuerpo."));
 
-        var respuesta = await cambiarEstadoContactoCasoDeUso.EjecutarAsync(dto, UsuarioActual, ct);
+        if (!TryObtenerUsuarioActual(out string usuarioActual)) return Unauthorized();
+        var respuesta = await cambiarEstadoContactoCasoDeUso.EjecutarAsync(dto, usuarioActual, ct);
 
         return respuesta.IdTipoMensaje switch
         {
@@ -209,7 +220,65 @@ public class MaestrosController(
         if (id != dto.IdCliente)
             return BadRequest(new RespuestaDto<object>(1, "El identificador de la ruta no coincide con el cuerpo."));
 
-        var respuesta = await cambiarEstadoCasoDeUso.EjecutarAsync(dto, UsuarioActual, ct);
+        if (!TryObtenerUsuarioActual(out string usuarioActual)) return Unauthorized();
+        var respuesta = await cambiarEstadoCasoDeUso.EjecutarAsync(dto, usuarioActual, ct);
+
+        return respuesta.IdTipoMensaje switch
+        {
+            2 => Ok(respuesta),
+            1 => BadRequest(respuesta),
+            _ => StatusCode(500, respuesta),
+        };
+    }
+
+    // ── Categorías de cliente ─────────────────────────────────────────────────
+
+    /// <summary>Devuelve la lista de categorías de cliente.</summary>
+    [HttpGet("categorias")]
+    public async Task<IActionResult> ObtenerCategorias(CancellationToken ct)
+    {
+        var respuesta = await obtenerCategoriasCasoDeUso.EjecutarAsync(ct);
+
+        return respuesta.IdTipoMensaje switch
+        {
+            2 => Ok(respuesta),
+            1 => NotFound(respuesta),
+            _ => StatusCode(500, respuesta),
+        };
+    }
+
+    /// <summary>Crea o actualiza una categoría de cliente. IdCategoria = 0 para nueva.</summary>
+    [HttpPost("categorias")]
+    public async Task<IActionResult> GuardarCategoria(
+        [FromBody] GuardarCategoriaDto dto,
+        CancellationToken ct)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        if (!TryObtenerUsuarioActual(out string usuarioActual)) return Unauthorized();
+        var respuesta = await guardarCategoriaCasoDeUso.EjecutarAsync(dto, usuarioActual, ct);
+
+        return respuesta.IdTipoMensaje switch
+        {
+            2 => Ok(respuesta),
+            1 => BadRequest(respuesta),
+            _ => StatusCode(500, respuesta),
+        };
+    }
+
+    /// <summary>Activa o desactiva una categoría de cliente.</summary>
+    [HttpPatch("categorias/{id:int}/estado")]
+    public async Task<IActionResult> CambiarEstadoCategoria(
+        int id,
+        [FromBody] CambiarEstadoCategoriaDto dto,
+        CancellationToken ct)
+    {
+        if (id != dto.IdCategoria)
+            return BadRequest(new RespuestaDto<object>(1, "El identificador de la ruta no coincide con el cuerpo."));
+
+        if (!TryObtenerUsuarioActual(out string usuarioActual)) return Unauthorized();
+        var respuesta = await cambiarEstadoCategoriaCasoDeUso.EjecutarAsync(dto, usuarioActual, ct);
 
         return respuesta.IdTipoMensaje switch
         {
