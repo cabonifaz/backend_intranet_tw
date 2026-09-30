@@ -21,8 +21,11 @@ public class MaestrosRepositorio(CadenaConexionBd conexion) : IMaestrosRepositor
             {
                 CommandType = System.Data.CommandType.StoredProcedure
             };
-            cmd.Parameters.AddWithValue("p_busqueda", busqueda ?? (object)DBNull.Value);
-            cmd.Parameters.AddWithValue("p_estado",   estado   ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("p_busqueda",   busqueda ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("p_estado",     estado   ?? (object)DBNull.Value);
+            // El SP ahora pagina; pedimos una sola página grande para devolver la lista completa
+            cmd.Parameters.AddWithValue("p_pagina",     1);
+            cmd.Parameters.AddWithValue("p_por_pagina", 1000);
 
             await using var reader = await cmd.ExecuteReaderAsync(ct);
 
@@ -40,19 +43,22 @@ public class MaestrosRepositorio(CadenaConexionBd conexion) : IMaestrosRepositor
             var lista = new List<ClienteListaItemDto>();
             while (await reader.ReadAsync(ct))
             {
+                string? n(string col) =>
+                    reader.IsDBNull(reader.GetOrdinal(col)) ? null : reader.GetString(col);
+
                 lista.Add(new ClienteListaItemDto(
                     IdCliente:              reader.GetInt64("id_cliente"),
                     Ruc:                    reader.GetString("ruc"),
                     Codigo:                 reader.GetString("codigo"),
                     RazonSocial:            reader.GetString("razon_social"),
-                    NombreComercial:        reader.IsDBNull(reader.GetOrdinal("nombre_comercial")) ? null : reader.GetString("nombre_comercial"),
-                    TipoCliente:            reader.GetString("tipo_cliente"),
-                    CondicionFiscal:        reader.GetString("condicion_fiscal"),
-                    CondicionContribuyente: reader.GetString("condicion_contribuyente"),
+                    NombreComercial:        n("nombre_comercial"),
+                    TipoCliente:            n("tipo_cliente") ?? "",
+                    CondicionFiscal:        n("condicion_fiscal") ?? "",
+                    CondicionContribuyente: n("condicion_contribuyente") ?? "",
                     EsVip:                  reader.GetBoolean("es_vip"),
                     Estado:                 reader.GetString("estado"),
-                    SedeNombre:             reader.IsDBNull(reader.GetOrdinal("sede_nombre"))  ? null : reader.GetString("sede_nombre"),
-                    SedeRegion:             reader.IsDBNull(reader.GetOrdinal("sede_region"))  ? null : reader.GetString("sede_region"),
+                    SedeNombre:             n("sede_nombre"),
+                    SedeRegion:             n("sede_region"),
                     CantidadContactos:      reader.GetInt32("cantidad_contactos")
                 ));
             }
