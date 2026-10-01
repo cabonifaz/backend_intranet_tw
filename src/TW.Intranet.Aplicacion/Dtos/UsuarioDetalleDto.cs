@@ -9,7 +9,7 @@ public record UsuarioDetalleDto(
     string    Correo,
     string    RolSistema,
     string    RolSistemaLabel,
-    string?   AreaComercial,
+    string?   Area,
     string?   Telefono,
     string    Estado,
     DateTime? UltimoAcceso,
@@ -21,9 +21,9 @@ public record UsuarioDetalleDto(
     string?   Cargo,
 
     // 02 Asignación operativa
-    string?   BaseOperativa,
+    /// <summary>Código de SEDE_OPERATIVA_TW (ej. "lima_central").</summary>
+    string?   SedeOperativa,
     long?     IdSupervisorDirecto,
-    List<int> SedesAutorizadas,
 
     // 03 Certificación técnica
     bool      HabilitadoFirmaInacal,

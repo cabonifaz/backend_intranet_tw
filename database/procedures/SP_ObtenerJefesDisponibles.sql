@@ -14,7 +14,7 @@ BEGIN
         u.correo,
         u.rol_sistema,
         tm_rol.String1      AS rol_sistema_label,
-        u.area_comercial,
+        u.area,
         u.telefono,
         'Activo'            AS estado,
         u.ultimo_login      AS ultimo_acceso,

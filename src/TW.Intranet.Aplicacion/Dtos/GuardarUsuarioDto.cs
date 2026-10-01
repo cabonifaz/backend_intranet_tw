@@ -11,11 +11,12 @@ public class GuardarUsuarioDto
     public string?   Correo          { get; set; }
     public string?   Telefono        { get; set; }
     public string?   Cargo           { get; set; }
+    /// <summary>Código de AREA_USUARIO (ej. "comercial").</summary>
+    public string?   Area            { get; set; }
     public string?   RolSistema      { get; set; }
-    public string?   AreaComercial   { get; set; }
-    public string?   BaseOperativa   { get; set; }
+    /// <summary>Código de SEDE_OPERATIVA_TW (ej. "lima_central").</summary>
+    public string?   SedeOperativa   { get; set; }
     public long?     IdSupervisorDirecto { get; set; }
-    public List<int> SedesAutorizadas    { get; set; } = new();
 
     public bool      HabilitadoFirmaInacal        { get; set; }
     public string?   NumeroRegistroInacal         { get; set; }

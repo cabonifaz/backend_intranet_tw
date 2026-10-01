@@ -233,9 +233,11 @@ public class MaestrosRepositorio(CadenaConexionBd conexion) : IMaestrosRepositor
             while (await reader.ReadAsync(ct))
             {
                 lista.Add(new CatalogoItemDto(
-                    Id:     reader.GetInt32("id"),
-                    Nombre: reader.GetString("nombre"),
-                    Codigo: reader.IsDBNull(reader.GetOrdinal("codigo")) ? null : reader.GetString("codigo")
+                    Id:      reader.GetInt32("id"),
+                    Nombre:  reader.GetString("nombre"),
+                    Codigo:  reader.IsDBNull(reader.GetOrdinal("codigo"))  ? null : reader.GetString("codigo"),
+                    Num2:    reader.IsDBNull(reader.GetOrdinal("num2"))    ? null : reader.GetDecimal("num2"),
+                    String3: reader.IsDBNull(reader.GetOrdinal("string3")) ? null : reader.GetString("string3")
                 ));
             }
 

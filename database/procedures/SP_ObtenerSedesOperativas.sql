@@ -1,4 +1,6 @@
--- HU-83 — Sedes operativas para asignar al usuario (catálogo 69)
+-- HU-83 — Sedes de Total Weight (catálogo 69 SEDE_OPERATIVA_TW).
+--   Se mantiene por compatibilidad; el front puede usar también
+--   GET /api/maestros/catalogos/SEDE_OPERATIVA_TW.
 DROP PROCEDURE IF EXISTS SP_ObtenerSedesOperativas;
 
 DELIMITER $$
@@ -10,8 +12,9 @@ BEGIN
     SELECT
         Num1    AS id_sede,
         String1 AS nombre,
-        String2 AS ubicacion,
-        String3 AS tipo
+        String3 AS ubicacion,
+        'Sede TW' AS tipo,
+        String2 AS codigo
     FROM tabla_maestra
     WHERE IdMaestro = 69
       AND IdEmpresa = 1

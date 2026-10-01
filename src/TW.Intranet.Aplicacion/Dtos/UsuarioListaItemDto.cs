@@ -8,7 +8,8 @@ public record UsuarioListaItemDto(
     string    Correo,
     string    RolSistema,
     string    RolSistemaLabel,
-    string?   AreaComercial,
+    /// <summary>Código de AREA_USUARIO (ej. "comercial").</summary>
+    string?   Area,
     string?   Telefono,
     string    Estado,
     DateTime? UltimoAcceso,

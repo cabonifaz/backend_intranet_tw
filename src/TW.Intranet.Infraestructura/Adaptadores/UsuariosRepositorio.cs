@@ -1,5 +1,4 @@
 using System.Data;
-using System.Text.Json;
 using MySqlConnector;
 using TW.Intranet.Aplicacion.Dtos;
 using TW.Intranet.Aplicacion.Puertos;
@@ -52,7 +51,7 @@ public class UsuariosRepositorio(CadenaConexionBd conexion) : IUsuariosRepositor
                 var tipoDocumento    = Texto(r, "tipo_documento") ?? "DNI";
                 var numeroDocumento  = Texto(r, "numero_documento") ?? "";
                 var cargo            = Texto(r, "cargo");
-                var baseOperativa    = Texto(r, "base_operativa");
+                var sedeOperativa    = Texto(r, "sede_operativa");
                 var idSupervisor     = EnteroLargoNulo(r, "id_supervisor");
                 var habilitadoInacal = Booleano(r, "habilitado_firma_inacal");
                 var registroInacal   = Texto(r, "numero_registro_inacal");
@@ -62,18 +61,12 @@ public class UsuariosRepositorio(CadenaConexionBd conexion) : IUsuariosRepositor
                 var enviarCorreo     = Booleano(r, "enviar_credenciales_correo");
                 var dosFactores      = Booleano(r, "autenticacion_2fa");
 
-                // 3er resultado: sedes autorizadas
-                var sedes = new List<int>();
-                await r.NextResultAsync(ct);
-                while (await r.ReadAsync(ct))
-                    sedes.Add(Entero(r, "id_sede_operativa"));
-
                 var detalle = new UsuarioDetalleDto(
                     lista.IdUsuario, lista.Nombre, lista.Apellido, lista.Correo,
-                    lista.RolSistema, lista.RolSistemaLabel, lista.AreaComercial, lista.Telefono,
+                    lista.RolSistema, lista.RolSistemaLabel, lista.Area, lista.Telefono,
                     lista.Estado, lista.UltimoAcceso, lista.FechaCreacion,
                     tipoDocumento, numeroDocumento, cargo,
-                    baseOperativa, idSupervisor, sedes,
+                    sedeOperativa, idSupervisor,
                     habilitadoInacal, registroInacal, fechaExpiracion, induccionSctr,
                     forzarCambio, enviarCorreo, dosFactores);
 
@@ -124,11 +117,10 @@ public class UsuariosRepositorio(CadenaConexionBd conexion) : IUsuariosRepositor
                 p.AddWithValue("p_correo",                         dto.Correo!);
                 p.AddWithValue("p_telefono",                       Valor(dto.Telefono));
                 p.AddWithValue("p_cargo",                          Valor(dto.Cargo));
+                p.AddWithValue("p_area",                           Valor(dto.Area));
                 p.AddWithValue("p_rol_sistema",                    dto.RolSistema!);
-                p.AddWithValue("p_area_comercial",                 Valor(dto.AreaComercial));
-                p.AddWithValue("p_base_operativa",                 Valor(dto.BaseOperativa));
+                p.AddWithValue("p_sede_operativa",                 Valor(dto.SedeOperativa));
                 p.AddWithValue("p_id_supervisor",                  (object?)dto.IdSupervisorDirecto ?? DBNull.Value);
-                p.AddWithValue("p_sedes_json",                     JsonSerializer.Serialize(dto.SedesAutorizadas ?? new List<int>()));
                 p.AddWithValue("p_habilitado_firma_inacal",        dto.HabilitadoFirmaInacal ? 1 : 0);
                 p.AddWithValue("p_numero_registro_inacal",         Valor(dto.NumeroRegistroInacal));
                 p.AddWithValue("p_fecha_expiracion_certificacion", (object?)fechaExpiracion ?? DBNull.Value);
@@ -296,7 +288,7 @@ public class UsuariosRepositorio(CadenaConexionBd conexion) : IUsuariosRepositor
         Correo:          Texto(r, "correo") ?? "",
         RolSistema:      Texto(r, "rol_sistema") ?? "",
         RolSistemaLabel: Texto(r, "rol_sistema_label") ?? Texto(r, "rol_sistema") ?? "",
-        AreaComercial:   Texto(r, "area_comercial"),
+        Area:            Texto(r, "area"),
         Telefono:        Texto(r, "telefono"),
         Estado:          Texto(r, "estado") ?? "",
         UltimoAcceso:    FechaHora(r, "ultimo_acceso"),

@@ -1,6 +1,7 @@
 -- HU-83 — Crear (p_id_usuario = 0) o editar un usuario
 --   p_password_hash: NULL = no cambia la contraseña (solo en edición)
---   p_sedes_json:    arreglo JSON de ids de sede, ej. '[1,3,4]'
+--   p_area:           código de AREA_USUARIO (79)
+--   p_sede_operativa: código de SEDE_OPERATIVA_TW (69)
 DROP PROCEDURE IF EXISTS SP_GuardarUsuario;
 
 DELIMITER $$
@@ -14,11 +15,10 @@ CREATE PROCEDURE SP_GuardarUsuario(
     IN p_correo                         VARCHAR(150) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_telefono                       VARCHAR(30)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_cargo                          VARCHAR(150) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_area                           VARCHAR(60)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_rol_sistema                    VARCHAR(80)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
-    IN p_area_comercial                 VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
-    IN p_base_operativa                 VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_sede_operativa                 VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_id_supervisor                  BIGINT,
-    IN p_sedes_json                     TEXT,
     IN p_habilitado_firma_inacal        TINYINT,
     IN p_numero_registro_inacal         VARCHAR(50)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_fecha_expiracion_certificacion DATE,
@@ -31,8 +31,7 @@ CREATE PROCEDURE SP_GuardarUsuario(
     IN p_id_usuario_ejecutor            BIGINT
 )
 proc: BEGIN
-    DECLARE v_id      BIGINT;
-    DECLARE v_usu     VARCHAR(150) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_id BIGINT;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -63,6 +62,22 @@ proc: BEGIN
         LEAVE proc;
     END IF;
 
+    IF p_area IS NOT NULL AND p_area <> '' AND NOT EXISTS (
+        SELECT 1 FROM tabla_maestra
+        WHERE IdMaestro = 79 AND IdEmpresa = 1 AND String2 = p_area
+    ) THEN
+        SELECT 1 AS IdTipoMensaje, 'El área seleccionada no es válida.' AS Mensaje;
+        LEAVE proc;
+    END IF;
+
+    IF p_sede_operativa IS NOT NULL AND p_sede_operativa <> '' AND NOT EXISTS (
+        SELECT 1 FROM tabla_maestra
+        WHERE IdMaestro = 69 AND IdEmpresa = 1 AND String2 = p_sede_operativa
+    ) THEN
+        SELECT 1 AS IdTipoMensaje, 'La sede operativa seleccionada no es válida.' AS Mensaje;
+        LEAVE proc;
+    END IF;
+
     IF p_id_supervisor IS NOT NULL AND p_id_usuario <> 0 AND p_id_supervisor = p_id_usuario THEN
         SELECT 1 AS IdTipoMensaje, 'Un usuario no puede ser su propio supervisor.' AS Mensaje;
         LEAVE proc;
@@ -80,22 +95,19 @@ proc: BEGIN
         LEAVE proc;
     END IF;
 
-    SELECT correo INTO v_usu FROM usuario WHERE id_usuario = p_id_usuario_ejecutor LIMIT 1;
-
     START TRANSACTION;
 
-    -- ── Crear o actualizar ───────────────────────────────────────────────
     IF p_id_usuario = 0 THEN
         INSERT INTO usuario (
             nombre, apellido, tipo_documento, numero_documento, correo,
-            telefono, cargo, rol_sistema, area_comercial, base_operativa,
+            telefono, cargo, area, rol_sistema, sede_operativa,
             id_supervisor, habilitado_firma_inacal, numero_registro_inacal,
             fecha_expiracion_certificacion, requiere_induccion_sctr,
             password_hash, forzar_cambio_contrasena, enviar_credenciales_correo,
             autenticacion_2fa, canal_acceso, estado, creado_en, creado_por
         ) VALUES (
             p_nombre, p_apellido, p_tipo_documento, p_numero_documento, p_correo,
-            p_telefono, p_cargo, p_rol_sistema, p_area_comercial, p_base_operativa,
+            p_telefono, p_cargo, NULLIF(p_area, ''), p_rol_sistema, NULLIF(p_sede_operativa, ''),
             p_id_supervisor, IFNULL(p_habilitado_firma_inacal, 0), p_numero_registro_inacal,
             p_fecha_expiracion_certificacion, IFNULL(p_requiere_induccion_sctr, 0),
             p_password_hash, IFNULL(p_forzar_cambio_contrasena, 0), IFNULL(p_enviar_credenciales_correo, 1),
@@ -113,9 +125,9 @@ proc: BEGIN
             correo                         = p_correo,
             telefono                       = p_telefono,
             cargo                          = p_cargo,
+            area                           = NULLIF(p_area, ''),
             rol_sistema                    = p_rol_sistema,
-            area_comercial                 = p_area_comercial,
-            base_operativa                 = p_base_operativa,
+            sede_operativa                 = NULLIF(p_sede_operativa, ''),
             id_supervisor                  = p_id_supervisor,
             habilitado_firma_inacal        = IFNULL(p_habilitado_firma_inacal, 0),
             numero_registro_inacal         = p_numero_registro_inacal,
@@ -134,16 +146,6 @@ proc: BEGIN
             modificado_por                 = p_id_usuario_ejecutor
         WHERE id_usuario = p_id_usuario;
         SET v_id = p_id_usuario;
-    END IF;
-
-    -- ── Sedes autorizadas: se reemplazan por la lista recibida ───────────
-    IF p_sedes_json IS NOT NULL AND p_sedes_json <> '' THEN
-        DELETE FROM usuario_sede_autorizada WHERE id_usuario = v_id;
-
-        INSERT IGNORE INTO usuario_sede_autorizada (id_usuario, id_sede_operativa, UsuCre, FchCre)
-        SELECT v_id, j.id_sede, v_usu, NOW()
-        FROM JSON_TABLE(p_sedes_json, '$[*]' COLUMNS (id_sede INT PATH '$')) AS j
-        WHERE j.id_sede IS NOT NULL;
     END IF;
 
     COMMIT;
