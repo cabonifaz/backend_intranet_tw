@@ -195,6 +195,13 @@ builder.Services.AddScoped<ObtenerTextoBasePorIdCasoDeUso>();
 builder.Services.AddScoped<GuardarTextoBaseCasoDeUso>();
 builder.Services.AddScoped<CambiarEstadoTextoBaseCasoDeUso>();
 
+// ── INYECCIÓN DE DEPENDENCIAS — Suministros (HU-86) ──────────────────────────
+builder.Services.AddScoped<ISuministrosRepositorio, SuministrosRepositorio>();
+builder.Services.AddScoped<ObtenerSuministrosCasoDeUso>();
+builder.Services.AddScoped<ObtenerSuministroPorIdCasoDeUso>();
+builder.Services.AddScoped<GuardarSuministroCasoDeUso>();
+builder.Services.AddScoped<CambiarEstadoSuministroCasoDeUso>();
+
 // ─────────────────────────────────────────────────────────────────────────────
 var app = builder.Build();
 
