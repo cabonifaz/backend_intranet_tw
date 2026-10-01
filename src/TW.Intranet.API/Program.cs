@@ -169,6 +169,25 @@ builder.Services.AddScoped<ObtenerRequerimientoPorIdCasoDeUso>();
 builder.Services.AddScoped<GuardarRequerimientoCasoDeUso>();
 builder.Services.AddScoped<AnularRequerimientoCasoDeUso>();
 
+// ── INYECCIÓN DE DEPENDENCIAS — Usuarios y Suplencias (HU-82/83/84) ──────────
+builder.Services.AddScoped<IUsuariosRepositorio, UsuariosRepositorio>();
+builder.Services.AddScoped<IHasherContrasena,    BcryptHasherContrasena>();
+
+// Casos de uso — Usuarios
+builder.Services.AddScoped<ObtenerUsuariosCasoDeUso>();
+builder.Services.AddScoped<ObtenerUsuarioPorIdCasoDeUso>();
+builder.Services.AddScoped<ObtenerJefesDisponiblesCasoDeUso>();
+builder.Services.AddScoped<ObtenerSedesOperativasCasoDeUso>();
+builder.Services.AddScoped<GuardarUsuarioCasoDeUso>();
+builder.Services.AddScoped<CambiarEstadoUsuarioCasoDeUso>();
+
+// Casos de uso — Suplencias
+builder.Services.AddScoped<ObtenerSuplentesCasoDeUso>();
+builder.Services.AddScoped<ObtenerSuplentePorIdCasoDeUso>();
+builder.Services.AddScoped<ObtenerSuplenciasPorUsuarioCasoDeUso>();
+builder.Services.AddScoped<GuardarSuplenteCasoDeUso>();
+builder.Services.AddScoped<CambiarEstadoSuplenteCasoDeUso>();
+
 // ─────────────────────────────────────────────────────────────────────────────
 var app = builder.Build();
 

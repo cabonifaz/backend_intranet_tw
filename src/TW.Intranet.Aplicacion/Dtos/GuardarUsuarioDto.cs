@@ -1,0 +1,31 @@
+namespace TW.Intranet.Aplicacion.Dtos;
+
+/// <summary>Body de POST /api/maestros/usuarios. IdUsuario = 0 para crear.</summary>
+public class GuardarUsuarioDto
+{
+    public long      IdUsuario       { get; set; }
+    public string?   Nombre          { get; set; }
+    public string?   Apellido        { get; set; }
+    public string?   TipoDocumento   { get; set; }
+    public string?   NumeroDocumento { get; set; }
+    public string?   Correo          { get; set; }
+    public string?   Telefono        { get; set; }
+    public string?   Cargo           { get; set; }
+    public string?   RolSistema      { get; set; }
+    public string?   AreaComercial   { get; set; }
+    public string?   BaseOperativa   { get; set; }
+    public long?     IdSupervisorDirecto { get; set; }
+    public List<int> SedesAutorizadas    { get; set; } = new();
+
+    public bool      HabilitadoFirmaInacal        { get; set; }
+    public string?   NumeroRegistroInacal         { get; set; }
+    public string?   FechaExpiracionCertificacion { get; set; }
+    public bool      RequiereInduccionSctr        { get; set; }
+
+    /// <summary>Obligatoria al crear. En edición, vacía = no se cambia la contraseña.</summary>
+    public string?   ContrasenaTemporal       { get; set; }
+    public bool      ForzarCambioContrasena   { get; set; }
+    public bool      EnviarCredencialesCorreo { get; set; }
+    public bool      Autenticacion2fa         { get; set; }
+    public bool      GuardarComoBorrador      { get; set; }
+}

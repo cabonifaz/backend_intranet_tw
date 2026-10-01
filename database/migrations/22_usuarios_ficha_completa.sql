@@ -1,6 +1,7 @@
 -- ============================================================
 -- Migración 22 — HU-82/83/84: ficha completa de usuario,
 --   catálogo de roles, sedes operativas y sedes autorizadas
+-- (YA EJECUTADA en total_weight_stg el 2026-10-01)
 -- ============================================================
 
 -- 1. Columnas nuevas en usuario
