@@ -188,6 +188,13 @@ builder.Services.AddScoped<ObtenerSuplenciasPorUsuarioCasoDeUso>();
 builder.Services.AddScoped<GuardarSuplenteCasoDeUso>();
 builder.Services.AddScoped<CambiarEstadoSuplenteCasoDeUso>();
 
+// ── INYECCIÓN DE DEPENDENCIAS — Textos Base (HU-85) ──────────────────────────
+builder.Services.AddScoped<ITextosBaseRepositorio, TextosBaseRepositorio>();
+builder.Services.AddScoped<ObtenerTextosBaseCasoDeUso>();
+builder.Services.AddScoped<ObtenerTextoBasePorIdCasoDeUso>();
+builder.Services.AddScoped<GuardarTextoBaseCasoDeUso>();
+builder.Services.AddScoped<CambiarEstadoTextoBaseCasoDeUso>();
+
 // ─────────────────────────────────────────────────────────────────────────────
 var app = builder.Build();
 
