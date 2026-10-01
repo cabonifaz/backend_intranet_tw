@@ -210,6 +210,10 @@ builder.Services.AddScoped<ObtenerProcedimientosOpcionesCasoDeUso>();
 builder.Services.AddScoped<GuardarProcedimientoCasoDeUso>();
 builder.Services.AddScoped<CambiarEstadoProcedimientoCasoDeUso>();
 
+// ── INYECCIÓN DE DEPENDENCIAS — Catálogos editables (HU-86) ──────────────────
+builder.Services.AddScoped<ICatalogosRepositorio, CatalogosRepositorio>();
+builder.Services.AddScoped<AgregarItemCatalogoCasoDeUso>();
+
 // ─────────────────────────────────────────────────────────────────────────────
 var app = builder.Build();
 
