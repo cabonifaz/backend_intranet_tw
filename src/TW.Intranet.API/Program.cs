@@ -202,6 +202,14 @@ builder.Services.AddScoped<ObtenerSuministroPorIdCasoDeUso>();
 builder.Services.AddScoped<GuardarSuministroCasoDeUso>();
 builder.Services.AddScoped<CambiarEstadoSuministroCasoDeUso>();
 
+// ── INYECCIÓN DE DEPENDENCIAS — Procedimientos (HU-87) ───────────────────────
+builder.Services.AddScoped<IProcedimientosRepositorio, ProcedimientosRepositorio>();
+builder.Services.AddScoped<ObtenerProcedimientosCasoDeUso>();
+builder.Services.AddScoped<ObtenerProcedimientoPorIdCasoDeUso>();
+builder.Services.AddScoped<ObtenerProcedimientosOpcionesCasoDeUso>();
+builder.Services.AddScoped<GuardarProcedimientoCasoDeUso>();
+builder.Services.AddScoped<CambiarEstadoProcedimientoCasoDeUso>();
+
 // ─────────────────────────────────────────────────────────────────────────────
 var app = builder.Build();
 
