@@ -8,14 +8,14 @@ CREATE PROCEDURE SP_ObtenerSuministroPorId(
 )
 BEGIN
     IF NOT EXISTS (
-        SELECT 1 FROM catalogo_item WHERE id_catalogo_item = p_id_suministro AND eliminado_en IS NULL
+        SELECT 1 FROM suministros WHERE id_suministro = p_id_suministro AND eliminado_en IS NULL
     ) THEN
         SELECT 1 AS IdTipoMensaje, 'Suministro no encontrado.' AS Mensaje;
     ELSE
         SELECT 2 AS IdTipoMensaje, 'Éxito.' AS Mensaje;
 
         SELECT
-        ci.id_catalogo_item                               AS id_suministro,
+        ci.id_suministro                               AS id_suministro,
         ci.codigo,
         ci.clase,
         COALESCE(t_cla.String1, ci.clase)                 AS clase_label,
@@ -56,17 +56,17 @@ BEGIN
         ci.creado_en                                      AS fecha_registro,
         COALESCE(ci.modificado_en, ci.creado_en)          AS fecha_modificacion,
         ci.total_ediciones,
-        UPPER(LEFT(SHA2(CONCAT(ci.id_catalogo_item, '|', ci.codigo, '|',
+        UPPER(LEFT(SHA2(CONCAT(ci.id_suministro, '|', ci.codigo, '|',
               COALESCE(ci.modificado_en, ci.creado_en), '|', ci.total_ediciones), 256), 16)) AS firma_digital,
         ci.url_foto,
         ci.url_manual_pdf
-    FROM catalogo_item ci
+    FROM suministros ci
     LEFT JOIN tabla_maestra t_cla ON t_cla.IdMaestro = 71 AND t_cla.IdEmpresa = 1 AND t_cla.String2 = ci.clase
     LEFT JOIN tabla_maestra t_tip ON t_tip.IdMaestro = 72 AND t_tip.IdEmpresa = 1 AND t_tip.String2 = ci.tipo
     LEFT JOIN tabla_maestra t_sub ON t_sub.IdMaestro = 73 AND t_sub.IdEmpresa = 1 AND t_sub.String2 = ci.subtipo
     LEFT JOIN tabla_maestra t_pro ON t_pro.IdMaestro = 74 AND t_pro.IdEmpresa = 1 AND t_pro.String2 = ci.procedencia
     LEFT JOIN usuario u ON u.id_usuario = ci.creado_por
-    WHERE ci.id_catalogo_item = p_id_suministro;
+    WHERE ci.id_suministro = p_id_suministro;
     END IF;
 END$$
 

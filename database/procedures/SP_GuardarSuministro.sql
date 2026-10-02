@@ -66,7 +66,7 @@ proc: BEGIN
     END IF;
 
     IF p_id_suministro <> 0 AND NOT EXISTS (
-        SELECT 1 FROM catalogo_item WHERE id_catalogo_item = p_id_suministro AND eliminado_en IS NULL
+        SELECT 1 FROM suministros WHERE id_suministro = p_id_suministro AND eliminado_en IS NULL
     ) THEN
         SELECT 1 AS IdTipoMensaje, 'Suministro no encontrado.' AS Mensaje;
         LEAVE proc;
@@ -79,11 +79,11 @@ proc: BEGIN
                    END;
 
     IF v_estado = 'activo' AND EXISTS (
-        SELECT 1 FROM catalogo_item
+        SELECT 1 FROM suministros
         WHERE descripcion = p_descripcion_auto
           AND estado = 'activo'
           AND eliminado_en IS NULL
-          AND (p_id_suministro = 0 OR id_catalogo_item <> p_id_suministro)
+          AND (p_id_suministro = 0 OR id_suministro <> p_id_suministro)
     ) THEN
         SELECT 1 AS IdTipoMensaje, 'Ya existe un suministro activo con la misma descripción.' AS Mensaje;
         LEAVE proc;
@@ -103,7 +103,7 @@ proc: BEGIN
 
     IF p_id_suministro = 0 THEN
         -- ── Crear ────────────────────────────────────────────────────────
-        INSERT INTO catalogo_item (
+        INSERT INTO suministros (
             codigo, descripcion, id_tipo_item, id_moneda, precio_referencia, unidad_medida, activo,
             clase, tipo, subtipo, marca, modelo, descripcion_manual, alcance, cta_contable,
             procedencia, casillero, usar_en_propuestas, codigo_unspsc,
@@ -125,7 +125,7 @@ proc: BEGIN
         );
         SET v_id     = LAST_INSERT_ID();
         SET v_codigo = CONCAT('SUM-', LPAD(v_id, 4, '0'));
-        UPDATE catalogo_item SET codigo = v_codigo WHERE id_catalogo_item = v_id;
+        UPDATE suministros SET codigo = v_codigo WHERE id_suministro = v_id;
 
         INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion, id_usuario, registrado_en)
         VALUES ('suministro', v_id, 'creacion', NULL, v_estado,
@@ -160,9 +160,9 @@ proc: BEGIN
                    IF(NOT (id_segundo_procedimiento <=> v_proc2),                    'Procedimiento 2', NULL)
                )
           INTO v_codigo, v_estado_ant, v_cambios
-        FROM catalogo_item WHERE id_catalogo_item = p_id_suministro;
+        FROM suministros WHERE id_suministro = p_id_suministro;
 
-        UPDATE catalogo_item SET
+        UPDATE suministros SET
             descripcion              = p_descripcion_auto,
             id_tipo_item             = IF(p_clase = 'servicio', 2, 1),
             precio_referencia        = p_precio_min_referencia,
@@ -192,7 +192,7 @@ proc: BEGIN
             total_ediciones          = total_ediciones + 1,
             modificado_en            = NOW(),
             modificado_por           = p_id_usuario
-        WHERE id_catalogo_item = p_id_suministro;
+        WHERE id_suministro = p_id_suministro;
 
         SET v_id = p_id_suministro;
 

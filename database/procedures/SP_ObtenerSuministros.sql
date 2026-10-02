@@ -23,7 +23,7 @@ BEGIN
 
     -- 2. Datos paginados
     SELECT
-        ci.id_catalogo_item                               AS id_suministro,
+        ci.id_suministro                               AS id_suministro,
         ci.codigo,
         ci.clase,
         COALESCE(t_cla.String1, ci.clase)                 AS clase_label,
@@ -45,7 +45,7 @@ BEGIN
         END                                               AS estado,
         IF(ci.estado = 'activo', 1, 0)                    AS es_activo_en_catalogo,
         ci.usar_en_propuestas
-    FROM catalogo_item ci
+    FROM suministros ci
     LEFT JOIN tabla_maestra t_cla ON t_cla.IdMaestro = 71 AND t_cla.IdEmpresa = 1 AND t_cla.String2 = ci.clase
     LEFT JOIN tabla_maestra t_tip ON t_tip.IdMaestro = 72 AND t_tip.IdEmpresa = 1 AND t_tip.String2 = ci.tipo
     LEFT JOIN tabla_maestra t_sub ON t_sub.IdMaestro = 73 AND t_sub.IdEmpresa = 1 AND t_sub.String2 = ci.subtipo
@@ -62,14 +62,14 @@ BEGIN
           OR ci.marca              LIKE CONCAT('%', p_busqueda, '%')
           OR ci.modelo             LIKE CONCAT('%', p_busqueda, '%')
           OR ci.codigo             LIKE CONCAT('%', p_busqueda, '%')
-          OR CAST(ci.id_catalogo_item AS CHAR) = p_busqueda
+          OR CAST(ci.id_suministro AS CHAR) = p_busqueda
       )
-    ORDER BY ci.id_catalogo_item DESC
+    ORDER BY ci.id_suministro DESC
     LIMIT v_por_pagina OFFSET v_offset;
 
     -- 3. Total sin paginar
     SELECT COUNT(*) AS total
-    FROM catalogo_item ci
+    FROM suministros ci
     WHERE ci.eliminado_en IS NULL
       AND (p_clase  IS NULL OR p_clase  = '' OR ci.clase = p_clase)
       AND (p_tipo   IS NULL OR p_tipo   = '' OR ci.tipo  = p_tipo)
@@ -82,7 +82,7 @@ BEGIN
           OR ci.marca              LIKE CONCAT('%', p_busqueda, '%')
           OR ci.modelo             LIKE CONCAT('%', p_busqueda, '%')
           OR ci.codigo             LIKE CONCAT('%', p_busqueda, '%')
-          OR CAST(ci.id_catalogo_item AS CHAR) = p_busqueda
+          OR CAST(ci.id_suministro AS CHAR) = p_busqueda
       );
 END$$
 
