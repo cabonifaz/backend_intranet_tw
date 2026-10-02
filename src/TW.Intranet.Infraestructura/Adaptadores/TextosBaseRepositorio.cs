@@ -51,7 +51,6 @@ public class TextosBaseRepositorio(CadenaConexionBd conexion)
                     SeccionDossier:             Texto(r, "seccion_dossier"),
                     OrdenAparicion:             Entero(r, "orden_aparicion"),
                     NivelSangria:               Texto(r, "nivel_sangria") ?? "estandar",
-                    AplicaTodosServicios:       Booleano(r, "aplica_todos_servicios"),
                     AplicaCalibracionLab:       Booleano(r, "aplica_calibracion_lab"),
                     AplicaCalibracionPlanta:    Booleano(r, "aplica_calibracion_planta"),
                     AplicaMantenimiento:        Booleano(r, "aplica_mantenimiento"),
@@ -80,7 +79,6 @@ public class TextosBaseRepositorio(CadenaConexionBd conexion)
                 p.AddWithValue("p_es_predeterminado",            Bit(dto.EsPredeterminado));
                 p.AddWithValue("p_es_negrita_por_defecto",       Bit(dto.EsNegritaPorDefecto));
                 p.AddWithValue("p_activo",                       Bit(dto.Activo));
-                p.AddWithValue("p_aplica_todos_servicios",       Bit(dto.AplicaTodosServicios));
                 p.AddWithValue("p_aplica_calibracion_lab",       Bit(dto.AplicaCalibracionLab));
                 p.AddWithValue("p_aplica_calibracion_planta",    Bit(dto.AplicaCalibracionPlanta));
                 p.AddWithValue("p_aplica_mantenimiento",         Bit(dto.AplicaMantenimiento));

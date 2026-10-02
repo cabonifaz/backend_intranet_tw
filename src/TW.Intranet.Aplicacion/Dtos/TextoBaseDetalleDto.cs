@@ -21,7 +21,6 @@ public record TextoBaseDetalleDto(
     string    NivelSangria,
 
     // Aplicabilidad
-    bool      AplicaTodosServicios,
     bool      AplicaCalibracionLab,
     bool      AplicaCalibracionPlanta,
     bool      AplicaMantenimiento,

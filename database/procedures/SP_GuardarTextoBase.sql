@@ -17,7 +17,6 @@ CREATE PROCEDURE SP_GuardarTextoBase(
     IN p_es_predeterminado            TINYINT,
     IN p_es_negrita_por_defecto       TINYINT,
     IN p_activo                       TINYINT,
-    IN p_aplica_todos_servicios       TINYINT,
     IN p_aplica_calibracion_lab       TINYINT,
     IN p_aplica_calibracion_planta    TINYINT,
     IN p_aplica_mantenimiento         TINYINT,
@@ -87,7 +86,7 @@ proc: BEGIN
         INSERT INTO texto_base (
             codigo_corto, tipo_categoria, nombre, texto_clausula, seccion_dossier,
             orden_aparicion, nivel_sangria, es_predeterminado, es_negrita_por_defecto,
-            aplica_todos_servicios, aplica_calibracion_lab, aplica_calibracion_planta,
+            aplica_calibracion_lab, aplica_calibracion_planta,
             aplica_mantenimiento, aplica_venta_suministros,
             visible_gestores_comerciales, visible_tecnicos_metrologos, visible_supervisores,
             version, estado, id_usuario_creador, SoftDelete, UsuCre, FchCre
@@ -95,7 +94,7 @@ proc: BEGIN
             p_codigo_corto, p_tipo_categoria, p_nombre, p_texto_clausula, p_seccion_dossier,
             IFNULL(p_orden_aparicion, 1), IFNULL(p_nivel_sangria, 'estandar'),
             IFNULL(p_es_predeterminado, 0), IFNULL(p_es_negrita_por_defecto, 0),
-            IFNULL(p_aplica_todos_servicios, 0), IFNULL(p_aplica_calibracion_lab, 0), IFNULL(p_aplica_calibracion_planta, 0),
+            IFNULL(p_aplica_calibracion_lab, 0), IFNULL(p_aplica_calibracion_planta, 0),
             IFNULL(p_aplica_mantenimiento, 0), IFNULL(p_aplica_venta_suministros, 0),
             IFNULL(p_visible_gestores_comerciales, 1), IFNULL(p_visible_tecnicos_metrologos, 1), IFNULL(p_visible_supervisores, 1),
             1, v_estado, p_id_usuario, 0, v_usu, NOW()
@@ -122,7 +121,6 @@ proc: BEGIN
                    'nivelSangria',               nivel_sangria,
                    'esPredeterminado',           es_predeterminado,
                    'esNegritaPorDefecto',        es_negrita_por_defecto,
-                   'aplicaTodosServicios',       aplica_todos_servicios,
                    'aplicaCalibracionLab',       aplica_calibracion_lab,
                    'aplicaCalibracionPlanta',    aplica_calibracion_planta,
                    'aplicaMantenimiento',        aplica_mantenimiento,
@@ -145,7 +143,6 @@ proc: BEGIN
             nivel_sangria                = IFNULL(p_nivel_sangria, 'estandar'),
             es_predeterminado            = IFNULL(p_es_predeterminado, 0),
             es_negrita_por_defecto       = IFNULL(p_es_negrita_por_defecto, 0),
-            aplica_todos_servicios       = IFNULL(p_aplica_todos_servicios, 0),
             aplica_calibracion_lab       = IFNULL(p_aplica_calibracion_lab, 0),
             aplica_calibracion_planta    = IFNULL(p_aplica_calibracion_planta, 0),
             aplica_mantenimiento         = IFNULL(p_aplica_mantenimiento, 0),

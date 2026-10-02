@@ -34,7 +34,8 @@ BEGIN
                password_hash,
                rol_sistema,
                canal_acceso,
-               estado
+               estado,
+               forzar_cambio_contrasena
         FROM   usuario
         WHERE  id_usuario = v_id;
     END IF;

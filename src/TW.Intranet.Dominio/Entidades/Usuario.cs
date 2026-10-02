@@ -11,4 +11,5 @@ public record Usuario
     public string CanalAcceso  { get; init; } = string.Empty;
     public string Estado       { get; init; } = string.Empty;
     public string SesionToken  { get; init; } = string.Empty;
+    public bool   ForzarCambioContrasena { get; init; }
 }

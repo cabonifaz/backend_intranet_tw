@@ -124,6 +124,7 @@ builder.Services.AddScoped<IVerificadorContrasena,    BcryptVerificadorContrasen
 
 // Casos de uso — Autenticación
 builder.Services.AddScoped<IniciarSesionCasoDeUso>();
+builder.Services.AddScoped<CambiarContrasenaCasoDeUso>();
 
 // ── INYECCIÓN DE DEPENDENCIAS — Dashboard ─────────────────────────────────────
 builder.Services.AddScoped<IDashboardRepositorio,       DashboardRepositorio>();
@@ -213,6 +214,13 @@ builder.Services.AddScoped<CambiarEstadoProcedimientoCasoDeUso>();
 // ── INYECCIÓN DE DEPENDENCIAS — Catálogos editables (HU-86) ──────────────────
 builder.Services.AddScoped<ICatalogosRepositorio, CatalogosRepositorio>();
 builder.Services.AddScoped<AgregarItemCatalogoCasoDeUso>();
+
+// ── INYECCIÓN DE DEPENDENCIAS — Equipos del Cliente (HU-88) ──────────────────
+builder.Services.AddScoped<IEquiposClienteRepositorio, EquiposClienteRepositorio>();
+builder.Services.AddScoped<ObtenerEquiposClienteCasoDeUso>();
+builder.Services.AddScoped<ObtenerEquipoClientePorIdCasoDeUso>();
+builder.Services.AddScoped<GuardarEquipoClienteCasoDeUso>();
+builder.Services.AddScoped<CambiarEstadoEquipoClienteCasoDeUso>();
 
 // ─────────────────────────────────────────────────────────────────────────────
 var app = builder.Build();

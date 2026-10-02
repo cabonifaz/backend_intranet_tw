@@ -15,7 +15,6 @@ public class GuardarTextoBaseDto
     public bool    EsNegritaPorDefecto { get; set; }
     public bool    Activo              { get; set; } = true;
 
-    public bool AplicaTodosServicios    { get; set; }
     public bool AplicaCalibracionLab    { get; set; }
     public bool AplicaCalibracionPlanta { get; set; }
     public bool AplicaMantenimiento     { get; set; }

@@ -45,7 +45,8 @@ public class IniciarSesionCasoDeUso(
             usuarioConToken.Nombre,
             usuarioConToken.Apellido,
             usuarioConToken.Correo,
-            usuarioConToken.RolSistema);
+            usuarioConToken.RolSistema,
+            usuarioConToken.ForzarCambioContrasena);
 
         return new RespuestaDto<IniciarSesionSalidaDto>(2, "Sesión iniciada exitosamente.", salida);
     }

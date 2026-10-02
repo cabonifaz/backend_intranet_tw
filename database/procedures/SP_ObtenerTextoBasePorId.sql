@@ -34,7 +34,6 @@ BEGIN
             tb.seccion_dossier,
             tb.orden_aparicion,
             tb.nivel_sangria,
-            tb.aplica_todos_servicios,
             tb.aplica_calibracion_lab,
             tb.aplica_calibracion_planta,
             tb.aplica_mantenimiento,
