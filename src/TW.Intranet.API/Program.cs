@@ -81,6 +81,38 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                                            Encoding.UTF8.GetBytes(configuracionJwt.Secret)),
             ClockSkew                = TimeSpan.Zero,
         };
+
+        options.Events = new Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var claims      = context.Principal?.Claims;
+                var subClaim    = claims?.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)
+                               ?? claims?.FirstOrDefault(c => c.Type == "sub");
+                var tokenClaim  = claims?.FirstOrDefault(c => c.Type == "sesion_token");
+
+                if (subClaim is null || tokenClaim is null)
+                {
+                    context.Fail("Token sin claims requeridos.");
+                    return;
+                }
+
+                if (!long.TryParse(subClaim.Value, out var idUsuario))
+                {
+                    context.Fail("Claim 'sub' inválido.");
+                    return;
+                }
+
+                var repositorio = context.HttpContext.RequestServices
+                    .GetRequiredService<IAutenticacionRepositorio>();
+
+                var esValido = await repositorio.VerificarSesionTokenAsync(
+                    idUsuario, tokenClaim.Value, context.HttpContext.RequestAborted);
+
+                if (!esValido)
+                    context.Fail("Sesión invalidada. Por favor inicia sesión nuevamente.");
+            }
+        };
     });
 
 builder.Services.AddAuthorization();
@@ -90,8 +122,112 @@ builder.Services.AddScoped<IAutenticacionRepositorio, AutenticacionRepositorio>(
 builder.Services.AddScoped<IJwtServicio,              JwtServicio>();
 builder.Services.AddScoped<IVerificadorContrasena,    BcryptVerificadorContrasena>();
 
-// Casos de uso
+// Casos de uso — Autenticación
 builder.Services.AddScoped<IniciarSesionCasoDeUso>();
+builder.Services.AddScoped<CambiarContrasenaCasoDeUso>();
+
+// ── INYECCIÓN DE DEPENDENCIAS — Dashboard ─────────────────────────────────────
+builder.Services.AddScoped<IDashboardRepositorio,       DashboardRepositorio>();
+builder.Services.AddScoped<INotificacionesRepositorio,  NotificacionesRepositorio>();
+
+// Casos de uso — Dashboard
+builder.Services.AddScoped<ObtenerResumenDashboardCasoDeUso>();
+builder.Services.AddScoped<ObtenerAlertasOperativasCasoDeUso>();
+builder.Services.AddScoped<ObtenerNotificacionesCasoDeUso>();
+
+// ── INYECCIÓN DE DEPENDENCIAS — Maestros ──────────────────────────────────────
+builder.Services.AddScoped<IMaestrosRepositorio, MaestrosRepositorio>();
+
+// Casos de uso — Maestros: Clientes
+builder.Services.AddScoped<ObtenerClientesCasoDeUso>();
+builder.Services.AddScoped<ObtenerClientePorIdCasoDeUso>();
+builder.Services.AddScoped<GuardarClienteCasoDeUso>();
+builder.Services.AddScoped<CambiarEstadoClienteCasoDeUso>();
+
+// Casos de uso — Maestros: Catálogos
+builder.Services.AddScoped<ObtenerCatalogoCasoDeUso>();
+
+// Casos de uso — Maestros: Sedes
+builder.Services.AddScoped<ObtenerSedesPorClienteCasoDeUso>();
+builder.Services.AddScoped<GuardarSedeCasoDeUso>();
+builder.Services.AddScoped<CambiarEstadoSedeCasoDeUso>();
+
+// Casos de uso — Maestros: Contactos
+builder.Services.AddScoped<ObtenerContactosPorClienteCasoDeUso>();
+builder.Services.AddScoped<GuardarContactoCasoDeUso>();
+builder.Services.AddScoped<CambiarEstadoContactoCasoDeUso>();
+
+// Casos de uso — Maestros: Categorías de cliente
+builder.Services.AddScoped<ObtenerCategoriasCasoDeUso>();
+builder.Services.AddScoped<GuardarCategoriaCasoDeUso>();
+builder.Services.AddScoped<CambiarEstadoCategoriaCasoDeUso>();
+
+// ── INYECCIÓN DE DEPENDENCIAS — CRM ──────────────────────────────────────────
+builder.Services.AddScoped<ICrmRepositorio, CrmRepositorio>();
+builder.Services.AddScoped<ObtenerRequerimientosCasoDeUso>();
+builder.Services.AddScoped<ObtenerCatalogosRequerimientoCasoDeUso>();
+builder.Services.AddScoped<ObtenerRequerimientoPorIdCasoDeUso>();
+builder.Services.AddScoped<GuardarRequerimientoCasoDeUso>();
+builder.Services.AddScoped<AnularRequerimientoCasoDeUso>();
+
+// ── INYECCIÓN DE DEPENDENCIAS — Usuarios y Suplencias (HU-82/83/84) ──────────
+builder.Services.AddScoped<IUsuariosRepositorio, UsuariosRepositorio>();
+builder.Services.AddScoped<IHasherContrasena,    BcryptHasherContrasena>();
+
+// Casos de uso — Usuarios
+builder.Services.AddScoped<ObtenerUsuariosCasoDeUso>();
+builder.Services.AddScoped<ObtenerUsuarioPorIdCasoDeUso>();
+builder.Services.AddScoped<ObtenerJefesDisponiblesCasoDeUso>();
+builder.Services.AddScoped<ObtenerSedesOperativasCasoDeUso>();
+builder.Services.AddScoped<GuardarUsuarioCasoDeUso>();
+builder.Services.AddScoped<CambiarEstadoUsuarioCasoDeUso>();
+
+// Casos de uso — Suplencias
+builder.Services.AddScoped<ObtenerSuplentesCasoDeUso>();
+builder.Services.AddScoped<ObtenerSuplentePorIdCasoDeUso>();
+builder.Services.AddScoped<ObtenerSuplenciasPorUsuarioCasoDeUso>();
+builder.Services.AddScoped<GuardarSuplenteCasoDeUso>();
+builder.Services.AddScoped<CambiarEstadoSuplenteCasoDeUso>();
+
+// ── INYECCIÓN DE DEPENDENCIAS — Textos Base (HU-85) ──────────────────────────
+builder.Services.AddScoped<ITextosBaseRepositorio, TextosBaseRepositorio>();
+builder.Services.AddScoped<ObtenerTextosBaseCasoDeUso>();
+builder.Services.AddScoped<ObtenerTextoBasePorIdCasoDeUso>();
+builder.Services.AddScoped<GuardarTextoBaseCasoDeUso>();
+builder.Services.AddScoped<CambiarEstadoTextoBaseCasoDeUso>();
+
+// ── INYECCIÓN DE DEPENDENCIAS — Suministros (HU-86) ──────────────────────────
+builder.Services.AddScoped<ISuministrosRepositorio, SuministrosRepositorio>();
+builder.Services.AddScoped<ObtenerSuministrosCasoDeUso>();
+builder.Services.AddScoped<ObtenerSuministroPorIdCasoDeUso>();
+builder.Services.AddScoped<GuardarSuministroCasoDeUso>();
+builder.Services.AddScoped<CambiarEstadoSuministroCasoDeUso>();
+
+// ── INYECCIÓN DE DEPENDENCIAS — Procedimientos (HU-87) ───────────────────────
+builder.Services.AddScoped<IProcedimientosRepositorio, ProcedimientosRepositorio>();
+builder.Services.AddScoped<ObtenerProcedimientosCasoDeUso>();
+builder.Services.AddScoped<ObtenerProcedimientoPorIdCasoDeUso>();
+builder.Services.AddScoped<ObtenerProcedimientosOpcionesCasoDeUso>();
+builder.Services.AddScoped<GuardarProcedimientoCasoDeUso>();
+builder.Services.AddScoped<CambiarEstadoProcedimientoCasoDeUso>();
+
+// ── INYECCIÓN DE DEPENDENCIAS — Catálogos editables (HU-86) ──────────────────
+builder.Services.AddScoped<ICatalogosRepositorio, CatalogosRepositorio>();
+builder.Services.AddScoped<AgregarItemCatalogoCasoDeUso>();
+
+// ── INYECCIÓN DE DEPENDENCIAS — Equipos del Cliente (HU-88) ──────────────────
+builder.Services.AddScoped<IEquiposClienteRepositorio, EquiposClienteRepositorio>();
+builder.Services.AddScoped<ObtenerEquiposClienteCasoDeUso>();
+builder.Services.AddScoped<ObtenerEquipoClientePorIdCasoDeUso>();
+builder.Services.AddScoped<GuardarEquipoClienteCasoDeUso>();
+builder.Services.AddScoped<CambiarEstadoEquipoClienteCasoDeUso>();
+
+// ── INYECCIÓN DE DEPENDENCIAS — Propuestas (HU-07) ───────────────────────────
+builder.Services.AddScoped<IPropuestasRepositorio, PropuestasRepositorio>();
+builder.Services.AddScoped<ObtenerDatosNuevaPropuestaCasoDeUso>();
+builder.Services.AddScoped<ObtenerPropuestasCasoDeUso>();
+builder.Services.AddScoped<ObtenerPropuestaPorIdCasoDeUso>();
+builder.Services.AddScoped<GuardarPropuestaCasoDeUso>();
 
 // ─────────────────────────────────────────────────────────────────────────────
 var app = builder.Build();

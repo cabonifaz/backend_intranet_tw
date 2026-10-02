@@ -40,14 +40,15 @@ public class AutenticacionRepositorio(CadenaConexionBd conexion) : IAutenticacio
 
             var usuario = new Usuario
             {
-                IdUsuario    = reader.GetInt64("id_usuario"),
-                Nombre       = reader.GetString("nombre"),
-                Apellido     = reader.GetString("apellido"),
-                Correo       = reader.GetString("correo"),
-                PasswordHash = reader.GetString("password_hash"),
-                RolSistema   = reader.GetString("rol_sistema"),
-                CanalAcceso  = reader.GetString("canal_acceso"),
-                Estado       = reader.GetString("estado"),
+                IdUsuario              = reader.GetInt64("id_usuario"),
+                Nombre                 = reader.GetString("nombre"),
+                Apellido               = reader.GetString("apellido"),
+                Correo                 = reader.GetString("correo"),
+                PasswordHash           = reader.GetString("password_hash"),
+                RolSistema             = reader.GetString("rol_sistema"),
+                CanalAcceso            = reader.GetString("canal_acceso"),
+                Estado                 = reader.GetString("estado"),
+                ForzarCambioContrasena = reader.GetBoolean("forzar_cambio_contrasena"),
             };
 
             return new RespuestaDto<Usuario>(2, mensaje, usuario);
@@ -58,7 +59,7 @@ public class AutenticacionRepositorio(CadenaConexionBd conexion) : IAutenticacio
         }
     }
 
-    public async Task<RespuestaDto<object>> ActualizarUltimoLoginAsync(
+    public async Task<RespuestaDto<string>> ActualizarUltimoLoginAsync(
         long idUsuario, CancellationToken ct)
     {
         try
@@ -75,16 +76,128 @@ public class AutenticacionRepositorio(CadenaConexionBd conexion) : IAutenticacio
             await using var reader = await cmd.ExecuteReaderAsync(ct);
 
             if (!await reader.ReadAsync(ct))
-                return new RespuestaDto<object>(3, "El procedimiento no devolvió resultado.");
+                return new RespuestaDto<string>(3, "El procedimiento no devolvió resultado.");
 
             int    idTipo  = reader.GetInt32("IdTipoMensaje");
             string mensaje = reader.GetString("Mensaje");
 
-            return new RespuestaDto<object>(idTipo, mensaje);
+            if (idTipo != 2)
+                return new RespuestaDto<string>(idTipo, mensaje);
+
+            await reader.NextResultAsync(ct);
+            string sesionToken = string.Empty;
+            if (await reader.ReadAsync(ct))
+                sesionToken = reader.GetString("sesion_token");
+
+            return new RespuestaDto<string>(2, mensaje, sesionToken);
         }
         catch (Exception ex)
         {
-            return new RespuestaDto<object>(3, ex.Message);
+            return new RespuestaDto<string>(3, ex.Message);
+        }
+    }
+
+    public async Task<RespuestaDto<string>> ObtenerHashPorIdAsync(
+        long idUsuario, CancellationToken ct)
+    {
+        try
+        {
+            await using var conn = new MySqlConnection(conexion.Valor);
+            await conn.OpenAsync(ct);
+
+            await using var cmd = new MySqlCommand("SP_ObtenerHashUsuarioPorId", conn)
+            {
+                CommandType = System.Data.CommandType.StoredProcedure
+            };
+            cmd.Parameters.AddWithValue("p_id_usuario", idUsuario);
+
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+
+            if (!await reader.ReadAsync(ct))
+                return new RespuestaDto<string>(3, "El procedimiento no devolvió resultado.");
+
+            int    idTipo  = reader.GetInt32("IdTipoMensaje");
+            string mensaje = reader.GetString("Mensaje");
+
+            if (idTipo != 2)
+                return new RespuestaDto<string>(idTipo, mensaje);
+
+            await reader.NextResultAsync(ct);
+
+            if (!await reader.ReadAsync(ct))
+                return new RespuestaDto<string>(3, "El procedimiento no devolvió el hash.");
+
+            string passwordHash = reader.GetString("password_hash");
+            return new RespuestaDto<string>(2, mensaje, passwordHash);
+        }
+        catch (Exception ex)
+        {
+            return new RespuestaDto<string>(3, ex.Message);
+        }
+    }
+
+    public async Task<RespuestaDto<bool>> CambiarContrasenaAsync(
+        long idUsuario, string passwordHashNuevo, CancellationToken ct)
+    {
+        try
+        {
+            await using var conn = new MySqlConnection(conexion.Valor);
+            await conn.OpenAsync(ct);
+
+            await using var cmd = new MySqlCommand("SP_CambiarContrasenaUsuario", conn)
+            {
+                CommandType = System.Data.CommandType.StoredProcedure
+            };
+            cmd.Parameters.AddWithValue("p_id_usuario",          idUsuario);
+            cmd.Parameters.AddWithValue("p_password_hash_nuevo", passwordHashNuevo);
+
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+
+            if (!await reader.ReadAsync(ct))
+                return new RespuestaDto<bool>(3, "El procedimiento no devolvió resultado.");
+
+            int    idTipo  = reader.GetInt32("IdTipoMensaje");
+            string mensaje = reader.GetString("Mensaje");
+
+            return new RespuestaDto<bool>(idTipo, mensaje, idTipo == 2);
+        }
+        catch (Exception ex)
+        {
+            return new RespuestaDto<bool>(3, ex.Message);
+        }
+    }
+
+    public async Task<bool> VerificarSesionTokenAsync(
+        long idUsuario, string sesionToken, CancellationToken ct)
+    {
+        try
+        {
+            await using var conn = new MySqlConnection(conexion.Valor);
+            await conn.OpenAsync(ct);
+
+            await using var cmd = new MySqlCommand("SP_VerificarSesionToken", conn)
+            {
+                CommandType = System.Data.CommandType.StoredProcedure
+            };
+            cmd.Parameters.AddWithValue("p_id_usuario",   idUsuario);
+            cmd.Parameters.AddWithValue("p_sesion_token", sesionToken);
+
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+
+            if (!await reader.ReadAsync(ct)) return false;
+
+            return reader.GetInt32("IdTipoMensaje") == 2;
+        }
+        catch (MySqlException ex)
+        {
+            // Error de infraestructura (BD caída, timeout, etc.) → propagar como 500,
+            // no tratar como sesión inválida (que devolvería 401).
+            throw new InvalidOperationException("Error al verificar la sesión en la base de datos.", ex);
+        }
+        catch (InvalidCastException)
+        {
+            // Resultado inesperado del SP → sesión inválida
+            return false;
         }
     }
 }

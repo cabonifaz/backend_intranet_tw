@@ -20,9 +20,10 @@ public class JwtServicio(ConfiguracionJwt config) : IJwtServicio
             new Claim(JwtRegisteredClaimNames.Sub,   usuario.IdUsuario.ToString()),
             new Claim(JwtRegisteredClaimNames.Email, usuario.Correo),
             new Claim(JwtRegisteredClaimNames.Jti,   Guid.NewGuid().ToString()),
-            new Claim("nombre",    usuario.Nombre),
-            new Claim("apellido",  usuario.Apellido),
-            new Claim("rol",       usuario.RolSistema),
+            new Claim("nombre",       usuario.Nombre),
+            new Claim("apellido",     usuario.Apellido),
+            new Claim("rol",          usuario.RolSistema),
+            new Claim("sesion_token", usuario.SesionToken),
         };
 
         var token = new JwtSecurityToken(

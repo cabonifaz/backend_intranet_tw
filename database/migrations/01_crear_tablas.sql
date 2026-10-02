@@ -107,7 +107,7 @@ CREATE TABLE tabla_maestra (
     eliminado_en    DATETIME        NULL,
     eliminado_por   BIGINT          NULL,
     PRIMARY KEY (IdTablaMaestra)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 -- ============================================================
@@ -137,7 +137,7 @@ CREATE TABLE usuario (
     eliminado_en        DATETIME        NULL,
     eliminado_por       BIGINT          NULL,
     PRIMARY KEY (id_usuario)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE cliente (
     id_cliente          BIGINT          NOT NULL AUTO_INCREMENT,
@@ -157,7 +157,7 @@ CREATE TABLE cliente (
     eliminado_en        DATETIME        NULL,
     eliminado_por       BIGINT          NULL,
     PRIMARY KEY (id_cliente)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE sede (
     id_sede             BIGINT          NOT NULL AUTO_INCREMENT,
@@ -179,10 +179,10 @@ CREATE TABLE sede (
     eliminado_en        DATETIME        NULL,
     eliminado_por       BIGINT          NULL,
     PRIMARY KEY (id_sede)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-CREATE TABLE persona_contacto (
-    id_persona          BIGINT          NOT NULL AUTO_INCREMENT,
+CREATE TABLE usuario_extranet (
+    id_usuario_extranet BIGINT          NOT NULL AUTO_INCREMENT,
     nombre              VARCHAR(100)    NOT NULL,
     apellido            VARCHAR(100)    NOT NULL,
     correo              VARCHAR(150)    NOT NULL,
@@ -196,12 +196,12 @@ CREATE TABLE persona_contacto (
     modificado_por      BIGINT          NULL,
     eliminado_en        DATETIME        NULL,
     eliminado_por       BIGINT          NULL,
-    PRIMARY KEY (id_persona)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    PRIMARY KEY (id_usuario_extranet)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-CREATE TABLE contacto (
-    id_contacto         BIGINT          NOT NULL AUTO_INCREMENT,
-    id_persona          BIGINT          NOT NULL,
+CREATE TABLE acceso_extranet_cliente (
+    id_acceso           BIGINT          NOT NULL AUTO_INCREMENT,
+    id_usuario_extranet BIGINT          NOT NULL,
     id_cliente          BIGINT          NOT NULL,
     cargo               VARCHAR(100)    NULL,
     id_rol_extranet     INT             NULL,
@@ -215,8 +215,8 @@ CREATE TABLE contacto (
     modificado_por      BIGINT          NULL,
     eliminado_en        DATETIME        NULL,
     eliminado_por       BIGINT          NULL,
-    PRIMARY KEY (id_contacto)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    PRIMARY KEY (id_acceso)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE equipo (
     id_equipo                   BIGINT          NOT NULL AUTO_INCREMENT,
@@ -250,7 +250,7 @@ CREATE TABLE equipo (
     eliminado_en                DATETIME        NULL,
     eliminado_por               BIGINT          NULL,
     PRIMARY KEY (id_equipo)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- INSERT-ONLY: sin bloque auditoría (es el trail de auditoría del equipo)
 CREATE TABLE equipo_historial (
@@ -263,7 +263,7 @@ CREATE TABLE equipo_historial (
     registrado_por      BIGINT          NOT NULL,
     registrado_en       DATETIME        NOT NULL,
     PRIMARY KEY (id_historial)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE patron_medicion (
     id_patron                   BIGINT          NOT NULL AUTO_INCREMENT,
@@ -285,7 +285,7 @@ CREATE TABLE patron_medicion (
     eliminado_en                DATETIME        NULL,
     eliminado_por               BIGINT          NULL,
     PRIMARY KEY (id_patron)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE rol_permiso (
     id                  BIGINT          NOT NULL AUTO_INCREMENT,
@@ -299,7 +299,7 @@ CREATE TABLE rol_permiso (
     eliminado_en        DATETIME        NULL,
     eliminado_por       BIGINT          NULL,
     PRIMARY KEY (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE tecnico_scorecard (
     id_scorecard                    BIGINT          NOT NULL AUTO_INCREMENT,
@@ -324,7 +324,7 @@ CREATE TABLE tecnico_scorecard (
     eliminado_en                    DATETIME        NULL,
     eliminado_por                   BIGINT          NULL,
     PRIMARY KEY (id_scorecard)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE catalogo_item (
     id_catalogo_item    BIGINT          NOT NULL AUTO_INCREMENT,
@@ -345,7 +345,7 @@ CREATE TABLE catalogo_item (
     eliminado_en        DATETIME        NULL,
     eliminado_por       BIGINT          NULL,
     PRIMARY KEY (id_catalogo_item)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 -- ============================================================
@@ -368,7 +368,7 @@ CREATE TABLE requisito_ssoma_cliente (
     eliminado_en        DATETIME        NULL,
     eliminado_por       BIGINT          NULL,
     PRIMARY KEY (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE condicion_comercial (
     id_condicion        BIGINT          NOT NULL AUTO_INCREMENT,
@@ -384,7 +384,7 @@ CREATE TABLE condicion_comercial (
     eliminado_en        DATETIME        NULL,
     eliminado_por       BIGINT          NULL,
     PRIMARY KEY (id_condicion)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE plantilla_certificado (
     id_plantilla        BIGINT          NOT NULL AUTO_INCREMENT,
@@ -399,7 +399,7 @@ CREATE TABLE plantilla_certificado (
     eliminado_en        DATETIME        NULL,
     eliminado_por       BIGINT          NULL,
     PRIMARY KEY (id_plantilla)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE configuracion_notificacion (
     id_config           BIGINT          NOT NULL AUTO_INCREMENT,
@@ -414,7 +414,7 @@ CREATE TABLE configuracion_notificacion (
     eliminado_en        DATETIME        NULL,
     eliminado_por       BIGINT          NULL,
     PRIMARY KEY (id_config)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE contrato_marco (
     id_contrato             BIGINT          NOT NULL AUTO_INCREMENT,
@@ -436,7 +436,7 @@ CREATE TABLE contrato_marco (
     eliminado_en            DATETIME        NULL,
     eliminado_por           BIGINT          NULL,
     PRIMARY KEY (id_contrato)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 -- ============================================================
@@ -467,7 +467,7 @@ CREATE TABLE requerimiento (
     eliminado_en        DATETIME        NULL,
     eliminado_por       BIGINT          NULL,
     PRIMARY KEY (id_requerimiento)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE propuesta_comercial (
     id_propuesta            BIGINT          NOT NULL AUTO_INCREMENT,
@@ -505,7 +505,7 @@ CREATE TABLE propuesta_comercial (
     eliminado_en            DATETIME        NULL,
     eliminado_por           BIGINT          NULL,
     PRIMARY KEY (id_propuesta)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE propuesta_item (
     id_item             BIGINT          NOT NULL AUTO_INCREMENT,
@@ -525,7 +525,7 @@ CREATE TABLE propuesta_item (
     eliminado_en        DATETIME        NULL,
     eliminado_por       BIGINT          NULL,
     PRIMARY KEY (id_item)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE visto_bueno (
     id_vb               BIGINT          NOT NULL AUTO_INCREMENT,
@@ -545,7 +545,7 @@ CREATE TABLE visto_bueno (
     eliminado_en        DATETIME        NULL,
     eliminado_por       BIGINT          NULL,
     PRIMARY KEY (id_vb)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE seguimiento_comercial (
     id_seguimiento          BIGINT          NOT NULL AUTO_INCREMENT,
@@ -568,7 +568,7 @@ CREATE TABLE seguimiento_comercial (
     eliminado_en            DATETIME        NULL,
     eliminado_por           BIGINT          NULL,
     PRIMARY KEY (id_seguimiento)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE orden_compra (
     id_oc                   BIGINT          NOT NULL AUTO_INCREMENT,
@@ -597,7 +597,7 @@ CREATE TABLE orden_compra (
     eliminado_en            DATETIME        NULL,
     eliminado_por           BIGINT          NULL,
     PRIMARY KEY (id_oc)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE comision_comercial (
     id_comision             BIGINT          NOT NULL AUTO_INCREMENT,
@@ -621,7 +621,7 @@ CREATE TABLE comision_comercial (
     eliminado_en            DATETIME        NULL,
     eliminado_por           BIGINT          NULL,
     PRIMARY KEY (id_comision)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE oc_propuesta (
     id                  BIGINT          NOT NULL AUTO_INCREMENT,
@@ -636,7 +636,7 @@ CREATE TABLE oc_propuesta (
     eliminado_en        DATETIME        NULL,
     eliminado_por       BIGINT          NULL,
     PRIMARY KEY (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 -- ============================================================
@@ -662,7 +662,7 @@ CREATE TABLE expediente_digital (
     eliminado_en            DATETIME        NULL,
     eliminado_por           BIGINT          NULL,
     PRIMARY KEY (id_expediente)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE expediente_bloqueador (
     id_bloqueador       BIGINT          NOT NULL AUTO_INCREMENT,
@@ -679,7 +679,7 @@ CREATE TABLE expediente_bloqueador (
     eliminado_en        DATETIME        NULL,
     eliminado_por       BIGINT          NULL,
     PRIMARY KEY (id_bloqueador)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE orden_servicio (
     id_os                       BIGINT          NOT NULL AUTO_INCREMENT,
@@ -712,7 +712,7 @@ CREATE TABLE orden_servicio (
     eliminado_en                DATETIME        NULL,
     eliminado_por               BIGINT          NULL,
     PRIMARY KEY (id_os)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE os_personal (
     id                  BIGINT          NOT NULL AUTO_INCREMENT,
@@ -728,7 +728,7 @@ CREATE TABLE os_personal (
     eliminado_en        DATETIME        NULL,
     eliminado_por       BIGINT          NULL,
     PRIMARY KEY (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE os_equipo (
     id                      BIGINT          NOT NULL AUTO_INCREMENT,
@@ -744,7 +744,7 @@ CREATE TABLE os_equipo (
     eliminado_en            DATETIME        NULL,
     eliminado_por           BIGINT          NULL,
     PRIMARY KEY (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE orden_metrologia (
     id_om                       BIGINT          NOT NULL AUTO_INCREMENT,
@@ -774,7 +774,7 @@ CREATE TABLE orden_metrologia (
     eliminado_en                DATETIME        NULL,
     eliminado_por               BIGINT          NULL,
     PRIMARY KEY (id_om)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE om_equipo (
     id          BIGINT          NOT NULL AUTO_INCREMENT,
@@ -789,7 +789,7 @@ CREATE TABLE om_equipo (
     eliminado_en    DATETIME    NULL,
     eliminado_por   BIGINT      NULL,
     PRIMARY KEY (id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE backlog_programacion (
     id_backlog              BIGINT          NOT NULL AUTO_INCREMENT,
@@ -809,7 +809,7 @@ CREATE TABLE backlog_programacion (
     eliminado_en            DATETIME        NULL,
     eliminado_por           BIGINT          NULL,
     PRIMARY KEY (id_backlog)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE precotizacion (
     id_precotizacion        BIGINT          NOT NULL AUTO_INCREMENT,
@@ -833,7 +833,7 @@ CREATE TABLE precotizacion (
     eliminado_en            DATETIME        NULL,
     eliminado_por           BIGINT          NULL,
     PRIMARY KEY (id_precotizacion)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE ticket_metrologia (
     id_ticket_met           BIGINT          NOT NULL AUTO_INCREMENT,
@@ -855,7 +855,7 @@ CREATE TABLE ticket_metrologia (
     eliminado_en            DATETIME        NULL,
     eliminado_por           BIGINT          NULL,
     PRIMARY KEY (id_ticket_met)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 -- ============================================================
@@ -882,7 +882,7 @@ CREATE TABLE ssoma_documento (
     eliminado_en        DATETIME        NULL,
     eliminado_por       BIGINT          NULL,
     PRIMARY KEY (id_ssoma_doc)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE evento_campo (
     id_evento           BIGINT          NOT NULL AUTO_INCREMENT,
@@ -902,7 +902,7 @@ CREATE TABLE evento_campo (
     eliminado_en        DATETIME        NULL,
     eliminado_por       BIGINT          NULL,
     PRIMARY KEY (id_evento)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE demora_registro (
     id_demora           BIGINT          NOT NULL AUTO_INCREMENT,
@@ -921,7 +921,7 @@ CREATE TABLE demora_registro (
     eliminado_en        DATETIME        NULL,
     eliminado_por       BIGINT          NULL,
     PRIMARY KEY (id_demora)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE variable_ambiental (
     id_variable         BIGINT          NOT NULL AUTO_INCREMENT,
@@ -941,7 +941,7 @@ CREATE TABLE variable_ambiental (
     eliminado_en        DATETIME        NULL,
     eliminado_por       BIGINT          NULL,
     PRIMARY KEY (id_variable)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE medicion_metrologica (
     id_medicion             BIGINT          NOT NULL AUTO_INCREMENT,
@@ -967,7 +967,7 @@ CREATE TABLE medicion_metrologica (
     eliminado_en            DATETIME        NULL,
     eliminado_por           BIGINT          NULL,
     PRIMARY KEY (id_medicion)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE informe_tecnico (
     id_informe                  BIGINT          NOT NULL AUTO_INCREMENT,
@@ -996,7 +996,7 @@ CREATE TABLE informe_tecnico (
     eliminado_en                DATETIME        NULL,
     eliminado_por               BIGINT          NULL,
     PRIMARY KEY (id_informe)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE evidencia_fotografica (
     id_evidencia        BIGINT          NOT NULL AUTO_INCREMENT,
@@ -1020,7 +1020,7 @@ CREATE TABLE evidencia_fotografica (
     eliminado_en        DATETIME        NULL,
     eliminado_por       BIGINT          NULL,
     PRIMARY KEY (id_evidencia)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE conformidad_digital (
     id_conformidad          BIGINT          NOT NULL AUTO_INCREMENT,
@@ -1041,7 +1041,7 @@ CREATE TABLE conformidad_digital (
     eliminado_en            DATETIME        NULL,
     eliminado_por           BIGINT          NULL,
     PRIMARY KEY (id_conformidad)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE gasto_viatico (
     id_gasto            BIGINT          NOT NULL AUTO_INCREMENT,
@@ -1064,7 +1064,7 @@ CREATE TABLE gasto_viatico (
     eliminado_en        DATETIME        NULL,
     eliminado_por       BIGINT          NULL,
     PRIMARY KEY (id_gasto)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE incidencia_operativa (
     id_incidencia       BIGINT          NOT NULL AUTO_INCREMENT,
@@ -1083,7 +1083,7 @@ CREATE TABLE incidencia_operativa (
     eliminado_en        DATETIME        NULL,
     eliminado_por       BIGINT          NULL,
     PRIMARY KEY (id_incidencia)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE jornada_laboral (
     id_jornada              BIGINT          NOT NULL AUTO_INCREMENT,
@@ -1107,7 +1107,7 @@ CREATE TABLE jornada_laboral (
     eliminado_en            DATETIME        NULL,
     eliminado_por           BIGINT          NULL,
     PRIMARY KEY (id_jornada)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE contingencia_zero_device (
     id_contingencia         BIGINT          NOT NULL AUTO_INCREMENT,
@@ -1129,7 +1129,7 @@ CREATE TABLE contingencia_zero_device (
     eliminado_en            DATETIME        NULL,
     eliminado_por           BIGINT          NULL,
     PRIMARY KEY (id_contingencia)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE alerta_predictiva (
     id_alerta               BIGINT          NOT NULL AUTO_INCREMENT,
@@ -1151,7 +1151,7 @@ CREATE TABLE alerta_predictiva (
     eliminado_en            DATETIME        NULL,
     eliminado_por           BIGINT          NULL,
     PRIMARY KEY (id_alerta)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE item_presalida (
     id_item             BIGINT          NOT NULL AUTO_INCREMENT,
@@ -1170,7 +1170,7 @@ CREATE TABLE item_presalida (
     eliminado_en        DATETIME        NULL,
     eliminado_por       BIGINT          NULL,
     PRIMARY KEY (id_item)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE repuesto_instalado (
     id_repuesto         BIGINT          NOT NULL AUTO_INCREMENT,
@@ -1190,7 +1190,7 @@ CREATE TABLE repuesto_instalado (
     eliminado_en        DATETIME        NULL,
     eliminado_por       BIGINT          NULL,
     PRIMARY KEY (id_repuesto)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
 -- ============================================================
@@ -1217,7 +1217,7 @@ CREATE TABLE documento_adjunto (
     eliminado_en        DATETIME        NULL,
     eliminado_por       BIGINT          NULL,
     PRIMARY KEY (id_documento)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- INSERT-ONLY: sin bloque auditoría (es el log de cambios de estado)
 CREATE TABLE auditoria_evento (
@@ -1232,7 +1232,7 @@ CREATE TABLE auditoria_evento (
     registrado_en   DATETIME        NOT NULL,
     metadata        JSON            NULL,
     PRIMARY KEY (id_auditoria)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE ticket_soporte (
     id_ticket           BIGINT          NOT NULL AUTO_INCREMENT,
@@ -1256,7 +1256,7 @@ CREATE TABLE ticket_soporte (
     eliminado_en        DATETIME        NULL,
     eliminado_por       BIGINT          NULL,
     PRIMARY KEY (id_ticket)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE notificacion (
     id_notificacion     BIGINT          NOT NULL AUTO_INCREMENT,
@@ -1277,7 +1277,7 @@ CREATE TABLE notificacion (
     eliminado_en        DATETIME        NULL,
     eliminado_por       BIGINT          NULL,
     PRIMARY KEY (id_notificacion)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE sesion_usuario (
     id_sesion           BIGINT          NOT NULL AUTO_INCREMENT,
@@ -1299,7 +1299,7 @@ CREATE TABLE sesion_usuario (
     eliminado_en        DATETIME        NULL,
     eliminado_por       BIGINT          NULL,
     PRIMARY KEY (id_sesion)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE sync_pendiente (
     id_sync             BIGINT          NOT NULL AUTO_INCREMENT,
@@ -1322,7 +1322,7 @@ CREATE TABLE sync_pendiente (
     eliminado_en        DATETIME        NULL,
     eliminado_por       BIGINT          NULL,
     PRIMARY KEY (id_sync)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE procedimiento_tecnico (
     id_procedimiento    BIGINT          NOT NULL AUTO_INCREMENT,
@@ -1345,7 +1345,7 @@ CREATE TABLE procedimiento_tecnico (
     eliminado_en        DATETIME        NULL,
     eliminado_por       BIGINT          NULL,
     PRIMARY KEY (id_procedimiento)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- INSERT-ONLY: sin bloque auditoría (log de descargas, nunca se modifica)
 CREATE TABLE descarga_documento (
@@ -1358,7 +1358,7 @@ CREATE TABLE descarga_documento (
     canal               ENUM('extranet','intranet','movil') NOT NULL,
     registrado_en       DATETIME        NOT NULL,
     PRIMARY KEY (id_descarga)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE exportacion_ergosoft (
     id_exportacion          BIGINT          NOT NULL AUTO_INCREMENT,
@@ -1381,7 +1381,7 @@ CREATE TABLE exportacion_ergosoft (
     eliminado_en            DATETIME        NULL,
     eliminado_por           BIGINT          NULL,
     PRIMARY KEY (id_exportacion)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE token_acceso_publico (
     id_token            BIGINT          NOT NULL AUTO_INCREMENT,
@@ -1401,7 +1401,7 @@ CREATE TABLE token_acceso_publico (
     eliminado_en        DATETIME        NULL,
     eliminado_por       BIGINT          NULL,
     PRIMARY KEY (id_token)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- ============================================================
 -- FIN — 60 tablas creadas

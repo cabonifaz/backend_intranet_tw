@@ -1,0 +1,328 @@
+using System.Text.Json;
+using MySqlConnector;
+using TW.Intranet.Aplicacion.Dtos;
+using TW.Intranet.Aplicacion.Puertos;
+using TW.Intranet.Infraestructura.Configuracion;
+
+namespace TW.Intranet.Infraestructura.Adaptadores;
+
+/// <summary>Propuestas comerciales (HU-07).</summary>
+public class PropuestasRepositorio(CadenaConexionBd conexion)
+    : RepositorioSpBase(conexion), IPropuestasRepositorio
+{
+    // ── Datos heredados del RQ ────────────────────────────────────────────────
+    public Task<RespuestaDto<DatosNuevaPropuestaDto>> ObtenerDatosNuevaPropuestaAsync(long idRequerimiento, CancellationToken ct)
+        => EjecutarAsync("SP_ObtenerDatosNuevaPropuesta",
+            p => p.AddWithValue("p_id_requerimiento", idRequerimiento),
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<DatosNuevaPropuestaDto>(1, "Requerimiento no encontrado.");
+
+                var idRq        = EnteroLargo(r, "id_requerimiento");
+                var numeroRq    = Texto(r, "numero_requerimiento") ?? "";
+                var estadoRq    = Texto(r, "estado_requerimiento") ?? "";
+                var idCliente   = EnteroLargo(r, "id_cliente");
+                var razonSocial = Texto(r, "razon_social") ?? "";
+                var ruc         = Texto(r, "ruc") ?? "";
+                var idSede      = EnteroLargoNulo(r, "id_sede");
+                var nombreSede  = Texto(r, "nombre_sede");
+                var idContacto  = EnteroLargoNulo(r, "id_contacto");
+                var nombreCont  = Texto(r, "nombre_contacto");
+                var cargoCont   = Texto(r, "cargo_contacto");
+                var idArea      = EnteroNulo(r, "id_area");
+                var areaLabel   = Texto(r, "area_label");
+                var idPrioridad = EnteroNulo(r, "id_prioridad");
+                var prioLabel   = Texto(r, "prioridad_label");
+                var descripcion = Texto(r, "descripcion") ?? "";
+
+                PropuestaExistenteDto? existente = null;
+                await r.NextResultAsync(ct);
+                if (await r.ReadAsync(ct))
+                    existente = new PropuestaExistenteDto(
+                        EnteroLargo(r, "id_propuesta"), Texto(r, "numero") ?? "",
+                        Entero(r, "version"), Texto(r, "estado") ?? "");
+
+                return new RespuestaDto<DatosNuevaPropuestaDto>(2, mensaje, new DatosNuevaPropuestaDto(
+                    idRq, numeroRq, estadoRq, idCliente, razonSocial, ruc, idSede, nombreSede,
+                    idContacto, nombreCont, cargoCont, idArea, areaLabel, idPrioridad, prioLabel,
+                    descripcion, existente));
+            }, ct);
+
+    // ── Listado ───────────────────────────────────────────────────────────────
+    public Task<RespuestaDto<PropuestasPaginadoDto>> ObtenerPropuestasAsync(
+        long? idRequerimiento, string? estado, string? busqueda, int pagina, int porPagina, CancellationToken ct)
+        => EjecutarAsync("SP_ObtenerPropuestas",
+            p =>
+            {
+                p.AddWithValue("p_id_requerimiento", Valor(idRequerimiento));
+                p.AddWithValue("p_estado",           Valor(estado));
+                p.AddWithValue("p_busqueda",         Valor(busqueda));
+                p.AddWithValue("p_pagina",           pagina);
+                p.AddWithValue("p_por_pagina",       porPagina);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                var items = new List<PropuestaResumenDto>();
+                while (await r.ReadAsync(ct))
+                {
+                    items.Add(new PropuestaResumenDto(
+                        EnteroLargo(r, "id_propuesta"), Texto(r, "numero") ?? "", Entero(r, "version"),
+                        EnteroLargo(r, "id_requerimiento"), Texto(r, "numero_requerimiento") ?? "",
+                        EnteroLargo(r, "id_cliente"), Texto(r, "razon_social") ?? "", Texto(r, "referencia"),
+                        Texto(r, "moneda"), DecimalNulo(r, "total") ?? 0, DecimalNulo(r, "total_opcionales") ?? 0,
+                        Texto(r, "estado") ?? "", FechaHora(r, "fecha_creacion"), Texto(r, "responsable")));
+                }
+                int total = await LeerTotalAsync(r, ct);
+                return new RespuestaDto<PropuestasPaginadoDto>(2, mensaje,
+                    new PropuestasPaginadoDto(items, total, pagina, porPagina));
+            }, ct);
+
+    // ── Propuesta completa ────────────────────────────────────────────────────
+    public Task<RespuestaDto<PropuestaDetalleDto>> ObtenerPropuestaPorIdAsync(long idPropuesta, CancellationToken ct)
+        => EjecutarAsync("SP_ObtenerPropuestaPorId",
+            p => p.AddWithValue("p_id_propuesta", idPropuesta),
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<PropuestaDetalleDto>(1, "Propuesta no encontrada.");
+
+                var d = new PropuestaDetalleDto
+                {
+                    IdPropuesta           = EnteroLargo(r, "id_propuesta"),
+                    Numero                = Texto(r, "numero") ?? "",
+                    Version               = Entero(r, "version"),
+                    Estado                = Texto(r, "estado") ?? "",
+                    IdPropuestaPadre      = EnteroLargoNulo(r, "id_propuesta_padre"),
+                    IdRequerimiento       = EnteroLargo(r, "id_requerimiento"),
+                    NumeroRequerimiento   = Texto(r, "numero_requerimiento") ?? "",
+                    IdCliente             = EnteroLargo(r, "id_cliente"),
+                    RazonSocial           = Texto(r, "razon_social") ?? "",
+                    Ruc                   = Texto(r, "ruc") ?? "",
+                    IdSede                = EnteroLargoNulo(r, "id_sede"),
+                    NombreSede            = Texto(r, "nombre_sede"),
+                    IdContacto            = EnteroLargoNulo(r, "id_contacto"),
+                    NombreContacto        = Texto(r, "nombre_contacto"),
+                    CargoContacto         = Texto(r, "cargo_contacto"),
+                    IdResponsable         = EnteroLargoNulo(r, "id_responsable"),
+                    NombreResponsable     = Texto(r, "nombre_responsable"),
+                    TipoServicio          = Texto(r, "tipo_servicio"),
+                    Referencia            = Texto(r, "referencia"),
+                    Introduccion          = Texto(r, "introduccion"),
+                    NotasGenerales        = Texto(r, "notas_generales"),
+                    SeccionesActivas      = LeerListaJson(Texto(r, "secciones_activas")),
+                    EsTercerizado         = Booleano(r, "es_tercerizado"),
+                    TerceroRuc            = Texto(r, "tercero_ruc"),
+                    TerceroRazonSocial    = Texto(r, "tercero_razon_social"),
+                    TerceroDireccion      = Texto(r, "tercero_direccion"),
+                    IdMoneda              = Entero(r, "id_moneda"),
+                    Moneda                = Texto(r, "moneda"),
+                    MonedaSimbolo         = Texto(r, "moneda_simbolo"),
+                    TipoCambio            = DecimalNulo(r, "tipo_cambio"),
+                    GarantiaMeses         = EnteroNulo(r, "garantia_meses"),
+                    MostrarGarantia       = Booleano(r, "mostrar_garantia"),
+                    PlazoEntregaDias      = EnteroNulo(r, "plazo_entrega_dias"),
+                    PlazoEntregaUnidad    = Texto(r, "plazo_entrega_unidad"),
+                    PlazoEntregaCondicion = Texto(r, "plazo_entrega_condicion"),
+                    VigenciaDias          = EnteroNulo(r, "vigencia_dias"),
+                    AplicaIgv             = Booleano(r, "aplica_igv"),
+                    PreciosIncluyenIgv    = Booleano(r, "precios_incluyen_igv"),
+                    IgvPct                = DecimalNulo(r, "igv_pct") ?? 18,
+                    Subtotal              = DecimalNulo(r, "subtotal") ?? 0,
+                    DescuentoPct          = DecimalNulo(r, "descuento_pct"),
+                    DescuentoMonto        = DecimalNulo(r, "descuento_monto") ?? 0,
+                    IdMotivoDescuento     = EnteroNulo(r, "id_motivo_descuento"),
+                    IgvMonto              = DecimalNulo(r, "igv_monto") ?? 0,
+                    Total                 = DecimalNulo(r, "total") ?? 0,
+                    SubtotalOpcionales    = DecimalNulo(r, "subtotal_opcionales") ?? 0,
+                    DescuentoOpcionales   = DecimalNulo(r, "descuento_opcionales") ?? 0,
+                    TotalOpcionales       = DecimalNulo(r, "total_opcionales") ?? 0,
+                    NombreCreador         = Texto(r, "nombre_creador"),
+                    FechaCreacion         = FechaHora(r, "fecha_creacion"),
+                    FechaEnvio            = FechaHora(r, "fecha_envio"),
+                    FechaExpiracion       = Fecha(r, "fecha_expiracion"),
+                };
+                d.EsEditable = d.Estado == "borrador";
+
+                // Ítems
+                await r.NextResultAsync(ct);
+                while (await r.ReadAsync(ct))
+                    d.Items.Add(new PropuestaItemDto
+                    {
+                        IdItem            = EnteroLargo(r, "id_item"),
+                        Seccion           = Texto(r, "seccion"),
+                        IdCatalogoItem    = EnteroLargoNulo(r, "id_catalogo_item"),
+                        Descripcion       = Texto(r, "descripcion"),
+                        Alcance           = Texto(r, "alcance"),
+                        PuntosCalibracion = Texto(r, "puntos_calibracion"),
+                        Cantidad          = DecimalNulo(r, "cantidad") ?? 0,
+                        Frecuencia        = DecimalNulo(r, "frecuencia") ?? 1,
+                        PrecioUnitario    = DecimalNulo(r, "precio_unitario") ?? 0,
+                        Descuento         = DecimalNulo(r, "descuento") ?? 0,
+                        Subtotal          = DecimalNulo(r, "subtotal") ?? 0,
+                        EsEspaciado       = Booleano(r, "es_espaciado"),
+                        Orden             = Entero(r, "orden"),
+                    });
+
+                // Textos
+                await r.NextResultAsync(ct);
+                while (await r.ReadAsync(ct))
+                    d.Textos.Add(new PropuestaTextoDto
+                    {
+                        Id          = EnteroLargo(r, "id"),
+                        Seccion     = Texto(r, "seccion"),
+                        Tipo        = Texto(r, "tipo"),
+                        Texto       = Texto(r, "texto"),
+                        IdTextoBase = EnteroLargoNulo(r, "id_texto_base"),
+                        Orden       = Entero(r, "orden"),
+                    });
+
+                // Formas de pago
+                await r.NextResultAsync(ct);
+                while (await r.ReadAsync(ct))
+                    d.FormasPago.Add(new PropuestaFormaPagoDto
+                    {
+                        Id             = EnteroLargo(r, "id"),
+                        Porcentaje     = DecimalNulo(r, "porcentaje") ?? 0,
+                        Condicion      = Texto(r, "condicion"),
+                        CondicionLabel = Texto(r, "condicion_label"),
+                        Orden          = Entero(r, "orden"),
+                    });
+
+                // Equipos
+                await r.NextResultAsync(ct);
+                while (await r.ReadAsync(ct))
+                    d.Equipos.Add(new PropuestaEquipoDto
+                    {
+                        Id            = EnteroLargo(r, "id"),
+                        IdEquipo      = EnteroLargoNulo(r, "id_equipo"),
+                        LocalSede     = Texto(r, "local_sede"),
+                        Tipo          = Texto(r, "tipo"),
+                        Subtipo       = Texto(r, "subtipo"),
+                        NumSerie      = Texto(r, "num_serie"),
+                        Marca         = Texto(r, "marca"),
+                        Modelo        = Texto(r, "modelo"),
+                        CodigoCliente = Texto(r, "codigo_cliente"),
+                        CodigoTw      = Texto(r, "codigo_tw"),
+                        Orden         = Entero(r, "orden"),
+                    });
+
+                return new RespuestaDto<PropuestaDetalleDto>(2, mensaje, d);
+            }, ct);
+
+    // ── Guardar (crear / actualizar / nueva versión) ──────────────────────────
+    public Task<RespuestaDto<GuardarPropuestaResultadoDto>> GuardarPropuestaAsync(
+        GuardarPropuestaDto dto, long idUsuario, CancellationToken ct)
+    {
+        // Arreglos JSON con las claves que lee el SP (JSON_TABLE)
+        var items = dto.Items.Select((i, n) => new
+        {
+            seccion            = i.Seccion,
+            id_catalogo_item   = i.IdCatalogoItem,
+            descripcion        = i.Descripcion?.Trim(),
+            alcance            = i.Alcance,
+            puntos_calibracion = i.PuntosCalibracion,
+            cantidad           = i.EsEspaciado ? 0 : i.Cantidad,
+            frecuencia         = i.Frecuencia <= 0 ? 1 : i.Frecuencia,
+            precio_unitario    = i.EsEspaciado ? 0 : i.PrecioUnitario,
+            descuento          = i.EsEspaciado ? 0 : i.Descuento,
+            es_espaciado       = i.EsEspaciado ? 1 : 0,
+            orden              = i.Orden > 0 ? i.Orden : n + 1,
+        });
+        var textos = dto.Textos.Select((t, n) => new
+        {
+            seccion       = t.Seccion,
+            tipo          = t.Tipo,
+            texto         = t.Texto,
+            id_texto_base = t.IdTextoBase,
+            orden         = t.Orden > 0 ? t.Orden : n + 1,
+        });
+        var pagos = dto.FormasPago.Select((f, n) => new
+        {
+            porcentaje = f.Porcentaje,
+            condicion  = f.Condicion?.Trim(),
+            orden      = f.Orden > 0 ? f.Orden : n + 1,
+        });
+        var equipos = dto.Equipos.Select((e, n) => new
+        {
+            id             = e.Id,
+            id_equipo      = e.IdEquipo,
+            local_sede     = e.LocalSede,
+            tipo           = e.Tipo,
+            subtipo        = e.Subtipo,
+            num_serie      = e.NumSerie?.Trim(),
+            marca          = e.Marca?.Trim(),
+            modelo         = e.Modelo?.Trim(),
+            codigo_cliente = e.CodigoCliente,
+            codigo_tw      = e.CodigoTw,
+            orden          = e.Orden > 0 ? e.Orden : n + 1,
+        });
+
+        return EjecutarAsync("SP_GuardarPropuesta",
+            p =>
+            {
+                p.AddWithValue("p_id_propuesta",            dto.IdPropuesta);
+                p.AddWithValue("p_id_propuesta_base",       Valor(dto.IdPropuestaBase));
+                p.AddWithValue("p_id_requerimiento",        dto.IdRequerimiento);
+                p.AddWithValue("p_id_sede",                 Valor(dto.IdSede));
+                p.AddWithValue("p_id_contacto",             Valor(dto.IdContacto));
+                p.AddWithValue("p_id_responsable",          Valor(dto.IdResponsable));
+                p.AddWithValue("p_tipo_servicio",           Valor(dto.TipoServicio));
+                p.AddWithValue("p_referencia",              Valor(dto.Referencia));
+                p.AddWithValue("p_introduccion",            Valor(dto.Introduccion));
+                p.AddWithValue("p_notas_generales",         Valor(dto.NotasGenerales));
+                p.AddWithValue("p_secciones_activas",       dto.SeccionesActivas is null ? DBNull.Value : JsonSerializer.Serialize(dto.SeccionesActivas));
+                p.AddWithValue("p_es_tercerizado",          Bit(dto.EsTercerizado));
+                p.AddWithValue("p_tercero_ruc",             dto.EsTercerizado ? Valor(dto.TerceroRuc) : DBNull.Value);
+                p.AddWithValue("p_tercero_razon_social",    dto.EsTercerizado ? Valor(dto.TerceroRazonSocial) : DBNull.Value);
+                p.AddWithValue("p_tercero_direccion",       dto.EsTercerizado ? Valor(dto.TerceroDireccion) : DBNull.Value);
+                p.AddWithValue("p_id_moneda",               dto.IdMoneda);
+                p.AddWithValue("p_tipo_cambio",             Valor(dto.TipoCambio));
+                p.AddWithValue("p_garantia_meses",          Valor(dto.GarantiaMeses));
+                p.AddWithValue("p_mostrar_garantia",        Bit(dto.MostrarGarantia));
+                p.AddWithValue("p_plazo_entrega_dias",      Valor(dto.PlazoEntregaDias));
+                p.AddWithValue("p_plazo_entrega_unidad",    Valor(dto.PlazoEntregaUnidad));
+                p.AddWithValue("p_plazo_entrega_condicion", Valor(dto.PlazoEntregaCondicion));
+                p.AddWithValue("p_vigencia_dias",           Valor(dto.VigenciaDias));
+                p.AddWithValue("p_aplica_igv",              Bit(dto.AplicaIgv));
+                p.AddWithValue("p_precios_incluyen_igv",    Bit(dto.PreciosIncluyenIgv));
+                p.AddWithValue("p_descuento_pct",           Valor(dto.DescuentoPct));
+                p.AddWithValue("p_descuento_monto",         Valor(dto.DescuentoMonto));
+                p.AddWithValue("p_id_motivo_descuento",     Valor(dto.IdMotivoDescuento));
+                p.AddWithValue("p_descuento_opcionales",    Valor(dto.DescuentoOpcionales));
+                p.AddWithValue("p_items_json",              JsonSerializer.Serialize(items));
+                p.AddWithValue("p_textos_json",             JsonSerializer.Serialize(textos));
+                p.AddWithValue("p_pagos_json",              JsonSerializer.Serialize(pagos));
+                p.AddWithValue("p_equipos_json",            JsonSerializer.Serialize(equipos));
+                p.AddWithValue("p_id_usuario",              idUsuario);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<GuardarPropuestaResultadoDto>(3, "El procedimiento no devolvió el resultado.");
+
+                return new RespuestaDto<GuardarPropuestaResultadoDto>(2, mensaje, new GuardarPropuestaResultadoDto(
+                    EnteroLargo(r, "id_propuesta"),
+                    Texto(r, "numero") ?? "",
+                    Entero(r, "version"),
+                    DecimalNulo(r, "subtotal") ?? 0,
+                    DecimalNulo(r, "descuento_monto") ?? 0,
+                    DecimalNulo(r, "igv_monto") ?? 0,
+                    DecimalNulo(r, "total") ?? 0,
+                    DecimalNulo(r, "subtotal_opcionales") ?? 0,
+                    DecimalNulo(r, "descuento_opcionales") ?? 0,
+                    DecimalNulo(r, "total_opcionales") ?? 0));
+            }, ct);
+    }
+
+    private static List<string> LeerListaJson(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return new();
+        try { return JsonSerializer.Deserialize<List<string>>(json) ?? new(); }
+        catch (JsonException) { return new(); }
+    }
+}

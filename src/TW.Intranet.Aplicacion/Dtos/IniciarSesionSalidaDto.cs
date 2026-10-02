@@ -5,5 +5,6 @@ public record IniciarSesionSalidaDto(
     string Nombre,
     string Apellido,
     string Correo,
-    string RolSistema
+    string RolSistema,
+    bool   ForzarCambioContrasena
 );
