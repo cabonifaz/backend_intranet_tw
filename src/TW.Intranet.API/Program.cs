@@ -222,12 +222,13 @@ builder.Services.AddScoped<ObtenerEquipoClientePorIdCasoDeUso>();
 builder.Services.AddScoped<GuardarEquipoClienteCasoDeUso>();
 builder.Services.AddScoped<CambiarEstadoEquipoClienteCasoDeUso>();
 
-// ── INYECCIÓN DE DEPENDENCIAS — Propuestas (HU-07) ───────────────────────────
+// ── INYECCIÓN DE DEPENDENCIAS — Propuestas (HU-07 / HU-08) ───────────────────
 builder.Services.AddScoped<IPropuestasRepositorio, PropuestasRepositorio>();
 builder.Services.AddScoped<ObtenerDatosNuevaPropuestaCasoDeUso>();
 builder.Services.AddScoped<ObtenerPropuestasCasoDeUso>();
 builder.Services.AddScoped<ObtenerPropuestaPorIdCasoDeUso>();
 builder.Services.AddScoped<GuardarPropuestaCasoDeUso>();
+builder.Services.AddScoped<ObtenerKpisPropuestasCasoDeUso>();
 
 // ─────────────────────────────────────────────────────────────────────────────
 var app = builder.Build();

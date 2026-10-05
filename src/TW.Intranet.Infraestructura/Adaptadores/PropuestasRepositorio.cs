@@ -50,17 +50,20 @@ public class PropuestasRepositorio(CadenaConexionBd conexion)
                     descripcion, existente));
             }, ct);
 
-    // ── Listado ───────────────────────────────────────────────────────────────
-    public Task<RespuestaDto<PropuestasPaginadoDto>> ObtenerPropuestasAsync(
-        long? idRequerimiento, string? estado, string? busqueda, int pagina, int porPagina, CancellationToken ct)
+    // ── Listado (bandeja HU-08) ───────────────────────────────────────────────
+    public Task<RespuestaDto<PropuestasPaginadoDto>> ObtenerPropuestasAsync(FiltrosPropuestasDto f, CancellationToken ct)
         => EjecutarAsync("SP_ObtenerPropuestas",
             p =>
             {
-                p.AddWithValue("p_id_requerimiento", Valor(idRequerimiento));
-                p.AddWithValue("p_estado",           Valor(estado));
-                p.AddWithValue("p_busqueda",         Valor(busqueda));
-                p.AddWithValue("p_pagina",           pagina);
-                p.AddWithValue("p_por_pagina",       porPagina);
+                p.AddWithValue("p_id_requerimiento",    Valor(f.IdRequerimiento));
+                p.AddWithValue("p_estado",              Valor(f.Estado));
+                p.AddWithValue("p_busqueda",            Valor(f.Busqueda));
+                p.AddWithValue("p_pagina",              f.Pagina);
+                p.AddWithValue("p_por_pagina",          f.PorPagina);
+                p.AddWithValue("p_grupo_estado",        Valor(f.GrupoEstado));
+                p.AddWithValue("p_anio",                Valor(f.Anio));
+                p.AddWithValue("p_id_comercial",        Valor(f.IdComercial));
+                p.AddWithValue("p_solo_ultima_version", Bit(f.SoloUltimaVersion));
             },
             async (r, mensaje) =>
             {
@@ -73,11 +76,40 @@ public class PropuestasRepositorio(CadenaConexionBd conexion)
                         EnteroLargo(r, "id_requerimiento"), Texto(r, "numero_requerimiento") ?? "",
                         EnteroLargo(r, "id_cliente"), Texto(r, "razon_social") ?? "", Texto(r, "referencia"),
                         Texto(r, "moneda"), DecimalNulo(r, "total") ?? 0, DecimalNulo(r, "total_opcionales") ?? 0,
-                        Texto(r, "estado") ?? "", FechaHora(r, "fecha_creacion"), Texto(r, "responsable")));
+                        Texto(r, "estado") ?? "", FechaHora(r, "fecha_creacion"), Texto(r, "responsable"),
+                        Texto(r, "ruc"),
+                        Texto(r, "estado_grupo") ?? "",
+                        Texto(r, "accion") ?? "ver_detalle",
+                        EnteroNulo(r, "sla_dias_restantes"),
+                        FechaHora(r, "fecha_modificacion"),
+                        EnteroLargoNulo(r, "id_responsable")));
                 }
                 int total = await LeerTotalAsync(r, ct);
                 return new RespuestaDto<PropuestasPaginadoDto>(2, mensaje,
-                    new PropuestasPaginadoDto(items, total, pagina, porPagina));
+                    new PropuestasPaginadoDto(items, total, f.Pagina, f.PorPagina));
+            }, ct);
+
+    // ── KPIs (bandeja HU-08) ──────────────────────────────────────────────────
+    public Task<RespuestaDto<KpisPropuestasDto>> ObtenerKpisAsync(int? anio, long? idComercial, CancellationToken ct)
+        => EjecutarAsync("SP_ObtenerKpisPropuestas",
+            p =>
+            {
+                p.AddWithValue("p_anio",         Valor(anio));
+                p.AddWithValue("p_id_comercial", Valor(idComercial));
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<KpisPropuestasDto>(2, mensaje, new KpisPropuestasDto(0, 0, 0, 0, 0, 0));
+
+                return new RespuestaDto<KpisPropuestasDto>(2, mensaje, new KpisPropuestasDto(
+                    (int)(DecimalNulo(r, "pendientes")      ?? 0),
+                    DecimalNulo(r, "variacion_pendientes")  ?? 0,
+                    (int)(DecimalNulo(r, "por_visto_bueno") ?? 0),
+                    (int)(DecimalNulo(r, "por_enviar")      ?? 0),
+                    (int)(DecimalNulo(r, "en_seguimiento")  ?? 0),
+                    (int)(DecimalNulo(r, "sla_vencidos")    ?? 0)));
             }, ct);
 
     // ── Propuesta completa ────────────────────────────────────────────────────

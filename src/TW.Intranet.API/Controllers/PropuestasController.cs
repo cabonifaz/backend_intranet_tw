@@ -14,7 +14,8 @@ public class PropuestasController(
     ObtenerDatosNuevaPropuestaCasoDeUso obtenerDatosNueva,
     ObtenerPropuestasCasoDeUso          obtenerPropuestas,
     ObtenerPropuestaPorIdCasoDeUso      obtenerPropuestaPorId,
-    GuardarPropuestaCasoDeUso           guardarPropuesta) : ControllerBase
+    GuardarPropuestaCasoDeUso           guardarPropuesta,
+    ObtenerKpisPropuestasCasoDeUso      obtenerKpis) : ControllerBase
 {
     private long IdUsuarioActual =>
         long.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub"), out var id)
@@ -33,16 +34,19 @@ public class PropuestasController(
     public async Task<IActionResult> ObtenerDatosNueva([FromQuery] long idRequerimiento, CancellationToken ct = default)
         => Responder(await obtenerDatosNueva.EjecutarAsync(idRequerimiento, ct), noEncontradoComo404: true);
 
-    /// <summary>Listado paginado (filtrable por requerimiento, estado y búsqueda).</summary>
+    /// <summary>
+    /// Bandeja de propuestas (HU-08). Filtros por query string: idRequerimiento, estado (BD),
+    /// grupoEstado (todas | borrador | por_vb | en_seguimiento | aceptada | rechazada | cerrada),
+    /// busqueda, anio, idComercial, soloUltimaVersion (true por defecto), pagina, porPagina.
+    /// </summary>
     [HttpGet]
-    public async Task<IActionResult> ObtenerPropuestas(
-        [FromQuery] long? idRequerimiento,
-        [FromQuery] string? estado,
-        [FromQuery] string? busqueda,
-        [FromQuery] int pagina = 1,
-        [FromQuery] int porPagina = 10,
-        CancellationToken ct = default)
-        => Responder(await obtenerPropuestas.EjecutarAsync(idRequerimiento, estado, busqueda, pagina, porPagina, ct));
+    public async Task<IActionResult> ObtenerPropuestas([FromQuery] FiltrosPropuestasDto filtros, CancellationToken ct = default)
+        => Responder(await obtenerPropuestas.EjecutarAsync(filtros, ct));
+
+    /// <summary>Tarjetas resumen de la bandeja (HU-08). Filtros opcionales: anio, idComercial.</summary>
+    [HttpGet("kpis")]
+    public async Task<IActionResult> ObtenerKpis([FromQuery] int? anio, [FromQuery] long? idComercial, CancellationToken ct = default)
+        => Responder(await obtenerKpis.EjecutarAsync(anio, idComercial, ct));
 
     /// <summary>Propuesta completa: cabecera, ítems, textos, formas de pago y equipos.</summary>
     [HttpGet("{id:long}")]
