@@ -15,12 +15,9 @@ public record ProcedimientoDetalleDto(
     DateTime? FechaRegistro,
 
     // 01 Identificación
-    string    TipoProcedimiento,
     bool      EsActivo,
 
-    // 02 Descripción y alcance
-    string    Alcance,
-    string    AprobadoPor,
+    // 02 Documento aprobado
     string    UrlPdfAprobado,
 
     // Trazabilidad

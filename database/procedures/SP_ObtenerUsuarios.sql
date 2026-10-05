@@ -29,6 +29,7 @@ BEGIN
         COALESCE(tm_rol.String1, u.rol_sistema) AS rol_sistema_label,
         u.area,
         u.telefono,
+        u.anexo,
         CASE u.estado
             WHEN 'activo'     THEN 'Activo'
             WHEN 'inactivo'   THEN 'Inactivo'

@@ -30,10 +30,7 @@ BEGIN
             ELSE p.estado
         END                    AS estado,
         p.FchCre               AS fecha_registro,
-        p.tipo_procedimiento,
         IF(p.estado = 'activo', 1, 0)                    AS es_activo,
-        p.alcance,
-        p.aprobado_por,
         p.url_pdf_aprobado,
         COALESCE(CONCAT(u.nombre, ' ', u.apellido), p.UsuCre) AS usuario_registro,
         p.pc_registro,

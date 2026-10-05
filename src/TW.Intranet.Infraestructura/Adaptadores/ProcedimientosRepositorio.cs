@@ -45,10 +45,7 @@ public class ProcedimientosRepositorio(CadenaConexionBd conexion)
                 var detalle = new ProcedimientoDetalleDto(
                     l.IdProcedimiento, l.Codigo, l.Anio, l.Version, l.EsFormatoDigitalIso,
                     l.NormaBase, l.AutorNorma, l.Descripcion, l.Estado, l.FechaRegistro,
-                    TipoProcedimiento: Texto(r, "tipo_procedimiento") ?? "",
                     EsActivo:          Booleano(r, "es_activo"),
-                    Alcance:           Texto(r, "alcance") ?? "",
-                    AprobadoPor:       Texto(r, "aprobado_por") ?? "",
                     UrlPdfAprobado:    Texto(r, "url_pdf_aprobado") ?? "",
                     UsuarioRegistro:   Texto(r, "usuario_registro") ?? "",
                     PcRegistro:        Texto(r, "pc_registro") ?? "",
@@ -81,10 +78,7 @@ public class ProcedimientosRepositorio(CadenaConexionBd conexion)
                 p.AddWithValue("p_version",                dto.Version);
                 p.AddWithValue("p_autor_norma",            Valor(dto.AutorNorma));
                 p.AddWithValue("p_norma_base",             Valor(dto.NormaBase));
-                p.AddWithValue("p_tipo_procedimiento",     Valor(dto.TipoProcedimiento));
                 p.AddWithValue("p_descripcion",            dto.Descripcion!.Trim());
-                p.AddWithValue("p_alcance",                Valor(dto.Alcance));
-                p.AddWithValue("p_aprobado_por",           Valor(dto.AprobadoPor));
                 p.AddWithValue("p_es_formato_digital_iso", Bit(dto.EsFormatoDigitalIso));
                 p.AddWithValue("p_url_pdf_aprobado",       Valor(dto.UrlPdfAprobado));
                 p.AddWithValue("p_es_activo",              Bit(dto.EsActivo));

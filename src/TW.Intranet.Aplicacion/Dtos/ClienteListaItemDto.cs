@@ -13,5 +13,8 @@ public record ClienteListaItemDto(
     string  Estado,
     string? SedeNombre,
     string? SedeRegion,
-    int     CantidadContactos
+    int     CantidadContactos,
+    // Reunión 02-oct: el listado muestra el contacto principal (reemplaza a condición fiscal en el front)
+    string? ContactoPrincipal       = null,
+    string? ContactoPrincipalCorreo = null
 );

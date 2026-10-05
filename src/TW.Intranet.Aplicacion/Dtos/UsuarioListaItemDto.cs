@@ -13,5 +13,7 @@ public record UsuarioListaItemDto(
     string?   Telefono,
     string    Estado,
     DateTime? UltimoAcceso,
-    DateTime? FechaCreacion
+    DateTime? FechaCreacion,
+    /// <summary>Anexo telefónico interno.</summary>
+    string?   Anexo = null
 );

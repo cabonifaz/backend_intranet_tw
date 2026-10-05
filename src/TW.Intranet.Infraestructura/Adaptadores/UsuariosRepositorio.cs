@@ -60,6 +60,7 @@ public class UsuariosRepositorio(CadenaConexionBd conexion) : IUsuariosRepositor
                 var forzarCambio     = Booleano(r, "forzar_cambio_contrasena");
                 var enviarCorreo     = Booleano(r, "enviar_credenciales_correo");
                 var dosFactores      = Booleano(r, "autenticacion_2fa");
+                var fechaNacimiento  = Fecha(r, "fecha_nacimiento");
 
                 var detalle = new UsuarioDetalleDto(
                     lista.IdUsuario, lista.Nombre, lista.Apellido, lista.Correo,
@@ -68,7 +69,8 @@ public class UsuariosRepositorio(CadenaConexionBd conexion) : IUsuariosRepositor
                     tipoDocumento, numeroDocumento, cargo,
                     sedeOperativa, idSupervisor,
                     habilitadoInacal, registroInacal, fechaExpiracion, induccionSctr,
-                    forzarCambio, enviarCorreo, dosFactores);
+                    forzarCambio, enviarCorreo, dosFactores,
+                    lista.Anexo, fechaNacimiento);
 
                 return new RespuestaDto<UsuarioDetalleDto>(2, mensaje, detalle);
             }, ct);
@@ -116,6 +118,10 @@ public class UsuariosRepositorio(CadenaConexionBd conexion) : IUsuariosRepositor
                 p.AddWithValue("p_numero_documento",               dto.NumeroDocumento!.Trim());
                 p.AddWithValue("p_correo",                         dto.Correo!);
                 p.AddWithValue("p_telefono",                       Valor(dto.Telefono));
+                p.AddWithValue("p_anexo",                          Valor(dto.Anexo));
+                p.AddWithValue("p_fecha_nacimiento",               string.IsNullOrWhiteSpace(dto.FechaNacimiento)
+                                                                       ? DBNull.Value
+                                                                       : DateTime.Parse(dto.FechaNacimiento, System.Globalization.CultureInfo.InvariantCulture).Date);
                 p.AddWithValue("p_cargo",                          Valor(dto.Cargo));
                 p.AddWithValue("p_area",                           Valor(dto.Area));
                 p.AddWithValue("p_rol_sistema",                    dto.RolSistema!);
@@ -292,7 +298,8 @@ public class UsuariosRepositorio(CadenaConexionBd conexion) : IUsuariosRepositor
         Telefono:        Texto(r, "telefono"),
         Estado:          Texto(r, "estado") ?? "",
         UltimoAcceso:    FechaHora(r, "ultimo_acceso"),
-        FechaCreacion:   FechaHora(r, "fecha_creacion"));
+        FechaCreacion:   FechaHora(r, "fecha_creacion"),
+        Anexo:           Texto(r, "anexo"));
 
     private static SuplenteListaItemDto LeerSuplente(MySqlDataReader r) => new(
         IdAsignacion:     EnteroLargo(r, "id_asignacion"),

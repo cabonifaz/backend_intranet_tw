@@ -1,12 +1,6 @@
--- HU-88 — Crear (p_id_equipo = 0) o editar un equipo del cliente.
---   * Código automático EQ-TW-YYYY-XXXX (único por año).
---   * Bloquea duplicados de (num_serie, marca, modelo) activos.
---   * En edición, serie/marca/modelo quedan inmutables (regla del front).
---   * Marca pre-revisión con usuario + fecha cuando se activa el flag.
+-- Crear / editar equipo del cliente. Clasificación = clase de suministro (equipo/instrumento/pesa).
 DROP PROCEDURE IF EXISTS SP_GuardarEquipoCliente;
-
 DELIMITER $$
-
 CREATE PROCEDURE SP_GuardarEquipoCliente(
     IN p_id_equipo               BIGINT,
     IN p_num_serie               VARCHAR(80)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
@@ -53,7 +47,6 @@ proc: BEGIN
                CONCAT('[MySQL ', @err_code, '] ', @err_msg) AS Mensaje;
     END;
 
-    -- ── Validaciones mínimas ────────────────────────────────────────────────
     IF p_num_serie IS NULL OR TRIM(p_num_serie) = '' THEN
         SELECT 1 AS IdTipoMensaje, 'El número de serie es obligatorio.' AS Mensaje;
         LEAVE proc;
@@ -66,9 +59,9 @@ proc: BEGIN
 
     IF NOT EXISTS (
         SELECT 1 FROM tabla_maestra
-        WHERE IdMaestro = 81 AND IdEmpresa = 1 AND String2 = p_clasificacion
+        WHERE IdMaestro = 71 AND IdEmpresa = 1 AND String2 = p_clasificacion AND String2 <> 'servicio'
     ) THEN
-        SELECT 1 AS IdTipoMensaje, 'La clasificación seleccionada no es válida.' AS Mensaje;
+        SELECT 1 AS IdTipoMensaje, 'La clasificación debe ser Equipo, Instrumento o Pesa.' AS Mensaje;
         LEAVE proc;
     END IF;
 
@@ -79,13 +72,27 @@ proc: BEGIN
         LEAVE proc;
     END IF;
 
+    -- Marca y modelo se toman del suministro cuando no se envían (reunión 02-oct).
+    -- En edición se conservan los ya registrados (son inmutables).
+    IF p_id_equipo <> 0 THEN
+        SELECT marca, modelo INTO p_marca, p_modelo FROM equipo_cliente WHERE id_equipo = p_id_equipo;
+    ELSEIF IFNULL(p_id_suministro, 0) <> 0 THEN
+        SELECT COALESCE(NULLIF(TRIM(p_marca), ''), marca), COALESCE(NULLIF(TRIM(p_modelo), ''), modelo)
+          INTO p_marca, p_modelo
+        FROM suministros WHERE id_suministro = p_id_suministro;
+    END IF;
+
+    IF IFNULL(TRIM(p_marca), '') = '' OR IFNULL(TRIM(p_modelo), '') = '' THEN
+        SELECT 1 AS IdTipoMensaje, 'Seleccione un suministro con marca y modelo, o indíquelos.' AS Mensaje;
+        LEAVE proc;
+    END IF;
+
     SET v_estado = CASE
                        WHEN p_guardar_como_borrador = 1 THEN 'borrador'
                        WHEN IFNULL(p_es_activo, 1) = 1  THEN 'activo'
                        ELSE 'inactivo'
                    END;
 
-    -- Duplicado (serie + marca + modelo) activo
     IF v_estado <> 'borrador' AND EXISTS (
         SELECT 1 FROM equipo_cliente
         WHERE num_serie = p_num_serie
@@ -104,7 +111,6 @@ proc: BEGIN
     START TRANSACTION;
 
     IF p_id_equipo = 0 THEN
-        -- ── Crear ─────────────────────────────────────────────────────────────
         SET v_anio = DATE_FORMAT(NOW(), '%Y');
         SELECT IFNULL(MAX(CAST(SUBSTRING_INDEX(codigo_tw, '-', -1) AS UNSIGNED)), 0) + 1
           INTO v_correlativo
@@ -150,7 +156,6 @@ proc: BEGIN
         );
         SET v_id = LAST_INSERT_ID();
     ELSE
-        -- ── Editar — serie/marca/modelo quedan inmutables ────────────────────
         SELECT es_pre_revisado INTO v_pre_rev_antes
           FROM equipo_cliente WHERE id_equipo = p_id_equipo;
 
@@ -202,5 +207,4 @@ proc: BEGIN
            IF(p_id_equipo = 0, 'Equipo registrado correctamente.', 'Equipo actualizado correctamente.') AS Mensaje;
     SELECT v_id AS id_equipo;
 END$$
-
 DELIMITER ;

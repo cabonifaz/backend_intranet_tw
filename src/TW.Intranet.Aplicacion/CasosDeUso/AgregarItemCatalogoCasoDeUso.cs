@@ -9,7 +9,7 @@ namespace TW.Intranet.Aplicacion.CasosDeUso;
 /// <summary>
 /// Agrega un valor a un catálogo de tabla_maestra desde el front
 /// (modales "Nuevo Tipo / Subtipo / Marca / Modelo" de Suministros, HU-86,
-/// y "Nueva forma de pago" de la Propuesta, HU-07).
+/// "Nueva forma de pago" de la Propuesta, HU-07, y "Nueva área" de Usuarios).
 /// </summary>
 public class AgregarItemCatalogoCasoDeUso(ICatalogosRepositorio repositorio)
 {
@@ -24,6 +24,7 @@ public class AgregarItemCatalogoCasoDeUso(ICatalogosRepositorio repositorio)
         "MARCA_SUMINISTRO",
         "MODELO_SUMINISTRO",
         "CONDICION_PAGO",       // HU-07: botón "Nuevo" en Forma de Pago
+        "AREA_USUARIO",         // Reunión 02-oct: TW crea áreas nuevas (restringir por rol en el front)
     };
 
     public async Task<RespuestaDto<CatalogoItemDto>> EjecutarAsync(

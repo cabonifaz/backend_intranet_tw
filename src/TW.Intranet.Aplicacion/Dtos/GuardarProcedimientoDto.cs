@@ -10,10 +10,7 @@ public class GuardarProcedimientoDto
     public int     Version             { get; set; } = 1;
     public string? AutorNorma          { get; set; }
     public string? NormaBase           { get; set; }
-    public string? TipoProcedimiento   { get; set; }
     public string? Descripcion         { get; set; }
-    public string? Alcance             { get; set; }
-    public string? AprobadoPor         { get; set; }
     public bool    EsFormatoDigitalIso { get; set; }
     public string? UrlPdfAprobado      { get; set; }
     public bool    EsActivo            { get; set; } = true;

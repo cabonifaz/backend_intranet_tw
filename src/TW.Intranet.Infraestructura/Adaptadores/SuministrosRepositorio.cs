@@ -14,7 +14,7 @@ public class SuministrosRepositorio(CadenaConexionBd conexion)
     private const string NivelCorporativo = "corporativo_alto";
 
     public Task<RespuestaDto<SuministrosPaginadoDto>> ObtenerSuministrosAsync(
-        string? busqueda, string? clase, string? tipo, string? estado, bool soloEnPropuestas,
+        string? busqueda, string? clase, string? tipo, string? estado, bool soloEnPropuestas, bool excluirServicios,
         int pagina, int porPagina, CancellationToken ct)
         => EjecutarAsync("SP_ObtenerSuministros",
             p =>
@@ -24,6 +24,7 @@ public class SuministrosRepositorio(CadenaConexionBd conexion)
                 p.AddWithValue("p_tipo",               Valor(tipo));
                 p.AddWithValue("p_estado",             Valor(estado));
                 p.AddWithValue("p_solo_en_propuestas", Bit(soloEnPropuestas));
+                p.AddWithValue("p_excluir_servicios",  Bit(excluirServicios));
                 p.AddWithValue("p_pagina",             pagina);
                 p.AddWithValue("p_por_pagina",         porPagina);
             },
@@ -63,12 +64,8 @@ public class SuministrosRepositorio(CadenaConexionBd conexion)
                     DescripcionAuto:        Texto(r, "descripcion_auto") ?? "",
                     DescripcionManual:      Texto(r, "descripcion_manual") ?? "",
                     Alcance:                Texto(r, "alcance") ?? "",
-                    Unidad:                 Texto(r, "unidad") ?? "",
-                    Casillero:              Texto(r, "casillero") ?? "",
-                    CodigoUnspsc:           Texto(r, "codigo_unspsc") ?? "",
                     PrecioMinReferencia:    DecimalNulo(r, "precio_min_referencia"),
                     Escalas:                escalas,
-                    AplicaComercial:        Booleano(r, "aplica_comercial"),
                     AplicaServicio:         Booleano(r, "aplica_servicio"),
                     AplicaMetrologia:       Booleano(r, "aplica_metrologia"),
                     IdPrimerProcedimiento:  Texto(r, "id_primer_procedimiento"),
@@ -101,18 +98,14 @@ public class SuministrosRepositorio(CadenaConexionBd conexion)
                 p.AddWithValue("p_descripcion_auto",         dto.DescripcionAuto!.Trim());
                 p.AddWithValue("p_descripcion_manual",       Valor(dto.DescripcionManual));
                 p.AddWithValue("p_alcance",                  Valor(dto.Alcance));
-                p.AddWithValue("p_unidad",                   dto.Unidad!.Trim());
                 p.AddWithValue("p_cta_contable",             Valor(dto.CtaContable));
                 p.AddWithValue("p_procedencia",              Valor(dto.Procedencia));
-                p.AddWithValue("p_casillero",                Valor(dto.Casillero));
                 p.AddWithValue("p_activo",                   Bit(dto.EsActivoEnCatalogo));
                 p.AddWithValue("p_usar_en_propuestas",       Bit(dto.UsarEnPropuestas));
-                p.AddWithValue("p_codigo_unspsc",            Valor(dto.CodigoUnspsc));
                 p.AddWithValue("p_precio_min_referencia",    Valor(dto.PrecioMinReferencia));
                 p.AddWithValue("p_precio_nivel_estandar",    Valor(Precio(NivelEstandar)));
                 p.AddWithValue("p_precio_nivel_volumen",     Valor(Precio(NivelVolumen)));
                 p.AddWithValue("p_precio_nivel_corporativo", Valor(Precio(NivelCorporativo)));
-                p.AddWithValue("p_aplica_comercial",         Bit(dto.AplicaComercial));
                 p.AddWithValue("p_aplica_servicio",          Bit(dto.AplicaServicio));
                 p.AddWithValue("p_aplica_metrologia",        Bit(dto.AplicaMetrologia));
                 p.AddWithValue("p_id_primer_procedimiento",  Valor(dto.IdPrimerProcedimiento));

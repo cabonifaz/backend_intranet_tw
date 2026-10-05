@@ -16,6 +16,7 @@ BEGIN
         tm_rol.String1      AS rol_sistema_label,
         u.area,
         u.telefono,
+        u.anexo,
         'Activo'            AS estado,
         u.ultimo_login      AS ultimo_acceso,
         u.creado_en         AS fecha_creacion

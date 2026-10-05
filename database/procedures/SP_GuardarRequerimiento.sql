@@ -1,11 +1,6 @@
--- ============================================================
--- SP_GuardarRequerimiento
--- Crea o actualiza un requerimiento y registra en historial.
--- ============================================================
+-- Crear / editar requerimiento. Número: RQ-0003-2026 (correlativo-año).
 DROP PROCEDURE IF EXISTS SP_GuardarRequerimiento;
-
-DELIMITER //
-
+DELIMITER $$
 CREATE PROCEDURE SP_GuardarRequerimiento(
     IN p_id_requerimiento BIGINT,
     IN p_id_cliente       BIGINT,
@@ -45,7 +40,6 @@ BEGIN
                CONCAT('[MySQL ', @err_code, '] ', @err_msg) AS Mensaje;
     END;
 
-    -- Obtener nombre del responsable
     SELECT CONCAT(nombre, ' ', apellido) INTO v_responsable
     FROM usuario WHERE id_usuario = p_id_usuario LIMIT 1;
 
@@ -71,7 +65,7 @@ BEGIN
         );
 
         SET v_new_id = LAST_INSERT_ID();
-        SET v_numero = CONCAT('RQ-', YEAR(NOW()), '-', LPAD(v_new_id, 4, '0'));
+        SET v_numero = CONCAT('RQ-', LPAD(v_new_id, 4, '0'), '-', YEAR(NOW()));
 
         UPDATE requerimiento SET numero = v_numero
         WHERE id_requerimiento = v_new_id;
@@ -89,7 +83,6 @@ BEGIN
         SELECT v_new_id AS id_requerimiento;
 
     ELSE
-        -- Validar estado actual: no se puede editar si está anulado o cerrado
         SELECT estado INTO v_estado_actual
         FROM   requerimiento
         WHERE  id_requerimiento = p_id_requerimiento AND SoftDelete = 0
@@ -100,7 +93,6 @@ BEGIN
         ELSEIF v_estado_actual IN ('anulado', 'cerrado') THEN
             SELECT 1 AS IdTipoMensaje, 'No se puede editar un requerimiento anulado o cerrado.' AS Mensaje;
         ELSE
-        -- Capturar valores actuales antes del update
         SELECT descripcion, id_prioridad, fecha_necesidad, id_origen, id_area, id_contacto, id_sede
         INTO   v_old_desc, v_old_prio, v_old_fecha, v_old_origen, v_old_area, v_old_contacto, v_old_sede
         FROM   requerimiento
@@ -122,7 +114,6 @@ BEGIN
             modificado_por   = p_id_usuario
         WHERE id_requerimiento = p_id_requerimiento AND SoftDelete = 0;
 
-        -- Detectar cambios usando subconsultas (evita NOT FOUND de SELECT INTO)
         IF v_old_prio != p_id_prioridad THEN
             SET v_cambios = CONCAT(v_cambios, 'Prioridad: ',
                 IFNULL((SELECT String1 FROM tabla_maestra WHERE IdMaestro = 65 AND Num1 = v_old_prio    AND IdEmpresa = 1 LIMIT 1), '—'),
@@ -188,6 +179,5 @@ BEGIN
         SELECT p_id_requerimiento AS id_requerimiento;
         END IF;
     END IF;
-END //
-
+END$$
 DELIMITER ;

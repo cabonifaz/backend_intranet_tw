@@ -34,5 +34,9 @@ public record UsuarioDetalleDto(
     // 04 Seguridad
     bool      ForzarCambioContrasena,
     bool      EnviarCredencialesCorreo,
-    bool      Autenticacion2fa
+    bool      Autenticacion2fa,
+
+    // Contacto interno (reunión 02-oct)
+    string?   Anexo,
+    string?   FechaNacimiento
 );

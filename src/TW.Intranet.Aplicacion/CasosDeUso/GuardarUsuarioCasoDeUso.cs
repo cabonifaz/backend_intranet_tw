@@ -37,6 +37,15 @@ public class GuardarUsuarioCasoDeUso(IUsuariosRepositorio repositorio, IHasherCo
             fechaExpiracion = fecha.Date;
         }
 
+        if (!string.IsNullOrWhiteSpace(dto.FechaNacimiento)
+            && (!DateTime.TryParse(dto.FechaNacimiento, CultureInfo.InvariantCulture, DateTimeStyles.None, out var nac)
+                || nac.Date >= DateTime.Today || nac.Year < 1900))
+            return new RespuestaDto<long>(1, "La fecha de nacimiento no es válida.");
+
+        dto.Anexo = string.IsNullOrWhiteSpace(dto.Anexo) ? null : dto.Anexo.Trim();
+        if (dto.Anexo is not null && (dto.Anexo.Length > 10 || !dto.Anexo.All(char.IsDigit)))
+            return new RespuestaDto<long>(1, "El anexo debe tener solo números (máximo 10 dígitos).");
+
         // ── Contraseña: se guarda solo el hash ─────────────────────────────
         string? passwordHash = string.IsNullOrWhiteSpace(dto.ContrasenaTemporal)
             ? null

@@ -5,7 +5,7 @@ namespace TW.Intranet.Aplicacion.Puertos;
 public interface ISuministrosRepositorio
 {
     Task<RespuestaDto<SuministrosPaginadoDto>> ObtenerSuministrosAsync(
-        string? busqueda, string? clase, string? tipo, string? estado, bool soloEnPropuestas,
+        string? busqueda, string? clase, string? tipo, string? estado, bool soloEnPropuestas, bool excluirServicios,
         int pagina, int porPagina, CancellationToken ct);
 
     Task<RespuestaDto<SuministroDetalleDto>> ObtenerSuministroPorIdAsync(

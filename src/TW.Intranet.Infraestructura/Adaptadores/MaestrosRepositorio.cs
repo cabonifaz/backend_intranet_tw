@@ -55,7 +55,9 @@ public class MaestrosRepositorio(CadenaConexionBd conexion) : IMaestrosRepositor
                     Estado:                 reader.GetString("estado"),
                     SedeNombre:             reader.IsDBNull(reader.GetOrdinal("sede_nombre"))  ? null : reader.GetString("sede_nombre"),
                     SedeRegion:             reader.IsDBNull(reader.GetOrdinal("sede_region"))  ? null : reader.GetString("sede_region"),
-                    CantidadContactos:      reader.GetInt32("cantidad_contactos")
+                    CantidadContactos:      reader.GetInt32("cantidad_contactos"),
+                    ContactoPrincipal:       reader.IsDBNull(reader.GetOrdinal("contacto_principal"))        ? null : reader.GetString("contacto_principal"),
+                    ContactoPrincipalCorreo: reader.IsDBNull(reader.GetOrdinal("contacto_principal_correo")) ? null : reader.GetString("contacto_principal_correo")
                 ));
             }
 

@@ -25,16 +25,12 @@ public record SuministroDetalleDto(
     string DescripcionAuto,
     string DescripcionManual,
 
-    // Alcance y logística
+    // Alcance
     string Alcance,
-    string Unidad,
-    string Casillero,
 
     // Panel cotización
-    string                CodigoUnspsc,
     decimal?              PrecioMinReferencia,
     List<EscalaTarifaDto> Escalas,
-    bool                  AplicaComercial,
     bool                  AplicaServicio,
     bool                  AplicaMetrologia,
 

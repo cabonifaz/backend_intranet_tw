@@ -36,11 +36,12 @@ public class SuministrosController(
         [FromQuery] string? tipo,
         [FromQuery] string? estado,
         [FromQuery] bool soloEnPropuestas = false,
+        [FromQuery] bool excluirServicios = false,
         [FromQuery] int pagina = 1,
         [FromQuery] int porPagina = 10,
         CancellationToken ct = default)
         => Responder(await obtenerSuministros.EjecutarAsync(
-            busqueda, clase, tipo, estado, soloEnPropuestas, pagina, porPagina, ct));
+            busqueda, clase, tipo, estado, soloEnPropuestas, excluirServicios, pagina, porPagina, ct));
 
     /// <summary>Ficha completa del suministro.</summary>
     [HttpGet("suministros/{id:long}")]

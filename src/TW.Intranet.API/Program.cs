@@ -230,6 +230,15 @@ builder.Services.AddScoped<ObtenerPropuestaPorIdCasoDeUso>();
 builder.Services.AddScoped<GuardarPropuestaCasoDeUso>();
 builder.Services.AddScoped<ObtenerKpisPropuestasCasoDeUso>();
 
+// ── INYECCIÓN DE DEPENDENCIAS — Ubigeo, áreas del cliente y formatos (reunión 02-oct) ──
+builder.Services.AddScoped<IMaestrosComplementariosRepositorio, MaestrosComplementariosRepositorio>();
+builder.Services.AddScoped<ObtenerUbigeoCasoDeUso>();
+builder.Services.AddScoped<ObtenerAreasClienteCasoDeUso>();
+builder.Services.AddScoped<GuardarAreaClienteCasoDeUso>();
+builder.Services.AddScoped<CambiarEstadoAreaClienteCasoDeUso>();
+builder.Services.AddScoped<ObtenerFormatosVentanaCasoDeUso>();
+builder.Services.AddScoped<GuardarFormatoVentanaCasoDeUso>();
+
 // ─────────────────────────────────────────────────────────────────────────────
 var app = builder.Build();
 

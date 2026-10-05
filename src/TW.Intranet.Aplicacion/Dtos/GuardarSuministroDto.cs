@@ -7,24 +7,23 @@ public class GuardarSuministroDto
     public string? Clase              { get; set; }
     public string? Tipo               { get; set; }
     public string? Subtipo            { get; set; }
-    /// <summary>Vacío si Clase = "servicio".</summary>
+    /// <summary>Opcional. Vacío si Clase = "servicio".</summary>
     public string? Marca              { get; set; }
-    /// <summary>Vacío si Clase = "servicio".</summary>
+    /// <summary>Opcional. Vacío si Clase = "servicio".</summary>
     public string? Modelo             { get; set; }
     public string? DescripcionAuto    { get; set; }
     public string? DescripcionManual  { get; set; }
+    /// <summary>No aplica a servicios (se guarda vacío).</summary>
     public string? Alcance            { get; set; }
-    public string? Unidad             { get; set; }
     public string? CtaContable        { get; set; }
+    /// <summary>Texto libre (ej. "China"). No aplica a servicios.</summary>
     public string? Procedencia        { get; set; }
-    public string? Casillero          { get; set; }
     public bool    EsActivoEnCatalogo { get; set; } = true;
 
     public bool                   UsarEnPropuestas    { get; set; }
-    public string?                CodigoUnspsc        { get; set; }
     public decimal?               PrecioMinReferencia { get; set; }
     public List<EscalaTarifaDto>? Escalas             { get; set; }
-    public bool                   AplicaComercial     { get; set; }
+    /// <summary>Áreas de ejecución: solo para servicios.</summary>
     public bool                   AplicaServicio      { get; set; }
     public bool                   AplicaMetrologia    { get; set; }
 

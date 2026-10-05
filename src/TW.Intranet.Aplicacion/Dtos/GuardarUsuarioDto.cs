@@ -10,11 +10,15 @@ public class GuardarUsuarioDto
     public string?   NumeroDocumento { get; set; }
     public string?   Correo          { get; set; }
     public string?   Telefono        { get; set; }
+    /// <summary>Anexo telefónico interno (solo números, hasta 10). Centrales: 569-9750 / 569-9751.</summary>
+    public string?   Anexo           { get; set; }
+    /// <summary>Fecha de nacimiento (yyyy-MM-dd). Uso interno (RR. HH.).</summary>
+    public string?   FechaNacimiento { get; set; }
     public string?   Cargo           { get; set; }
     /// <summary>Código de AREA_USUARIO (ej. "comercial").</summary>
     public string?   Area            { get; set; }
     public string?   RolSistema      { get; set; }
-    /// <summary>Código de SEDE_OPERATIVA_TW (ej. "lima_central").</summary>
+    /// <summary>Código de SEDE_OPERATIVA_TW. Si no se envía: "lima_central".</summary>
     public string?   SedeOperativa   { get; set; }
     public long?     IdSupervisorDirecto { get; set; }
 

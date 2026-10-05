@@ -1,7 +1,8 @@
 -- HU-83 — Crear (p_id_usuario = 0) o editar un usuario
 --   p_password_hash: NULL = no cambia la contraseña (solo en edición)
 --   p_area:           código de AREA_USUARIO (79)
---   p_sede_operativa: código de SEDE_OPERATIVA_TW (69)
+--   p_sede_operativa: código de SEDE_OPERATIVA_TW (69); si no se envía, 'lima_central'
+--   p_anexo / p_fecha_nacimiento: datos de contacto interno (reunión 02-oct)
 DROP PROCEDURE IF EXISTS SP_GuardarUsuario;
 
 DELIMITER $$
@@ -14,6 +15,8 @@ CREATE PROCEDURE SP_GuardarUsuario(
     IN p_numero_documento               VARCHAR(15)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_correo                         VARCHAR(150) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_telefono                       VARCHAR(30)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_anexo                          VARCHAR(10)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_fecha_nacimiento               DATE,
     IN p_cargo                          VARCHAR(150) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_area                           VARCHAR(60)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_rol_sistema                    VARCHAR(80)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
@@ -100,14 +103,15 @@ proc: BEGIN
     IF p_id_usuario = 0 THEN
         INSERT INTO usuario (
             nombre, apellido, tipo_documento, numero_documento, correo,
-            telefono, cargo, area, rol_sistema, sede_operativa,
+            telefono, anexo, fecha_nacimiento, cargo, area, rol_sistema, sede_operativa,
             id_supervisor, habilitado_firma_inacal, numero_registro_inacal,
             fecha_expiracion_certificacion, requiere_induccion_sctr,
             password_hash, forzar_cambio_contrasena, enviar_credenciales_correo,
             autenticacion_2fa, canal_acceso, estado, creado_en, creado_por
         ) VALUES (
             p_nombre, p_apellido, p_tipo_documento, p_numero_documento, p_correo,
-            p_telefono, p_cargo, NULLIF(p_area, ''), p_rol_sistema, NULLIF(p_sede_operativa, ''),
+            p_telefono, NULLIF(p_anexo, ''), p_fecha_nacimiento, p_cargo, NULLIF(p_area, ''), p_rol_sistema,
+            COALESCE(NULLIF(p_sede_operativa, ''), 'lima_central'),
             p_id_supervisor, IFNULL(p_habilitado_firma_inacal, 0), p_numero_registro_inacal,
             p_fecha_expiracion_certificacion, IFNULL(p_requiere_induccion_sctr, 0),
             p_password_hash, IFNULL(p_forzar_cambio_contrasena, 0), IFNULL(p_enviar_credenciales_correo, 1),
@@ -124,10 +128,12 @@ proc: BEGIN
             numero_documento               = p_numero_documento,
             correo                         = p_correo,
             telefono                       = p_telefono,
+            anexo                          = NULLIF(p_anexo, ''),
+            fecha_nacimiento               = p_fecha_nacimiento,
             cargo                          = p_cargo,
             area                           = NULLIF(p_area, ''),
             rol_sistema                    = p_rol_sistema,
-            sede_operativa                 = NULLIF(p_sede_operativa, ''),
+            sede_operativa                 = COALESCE(NULLIF(p_sede_operativa, ''), sede_operativa, 'lima_central'),
             id_supervisor                  = p_id_supervisor,
             habilitado_firma_inacal        = IFNULL(p_habilitado_firma_inacal, 0),
             numero_registro_inacal         = p_numero_registro_inacal,

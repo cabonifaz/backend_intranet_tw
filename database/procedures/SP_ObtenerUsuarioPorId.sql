@@ -26,6 +26,7 @@ BEGIN
         COALESCE(tm_rol.String1, u.rol_sistema) AS rol_sistema_label,
         u.area,
         u.telefono,
+        u.anexo,
         CASE u.estado
             WHEN 'activo'     THEN 'Activo'
             WHEN 'inactivo'   THEN 'Inactivo'
@@ -38,6 +39,7 @@ BEGIN
             u.tipo_documento,
             u.numero_documento,
             u.cargo,
+            u.fecha_nacimiento,
             u.sede_operativa,
             u.id_supervisor,
             u.habilitado_firma_inacal,

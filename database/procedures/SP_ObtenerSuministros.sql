@@ -1,4 +1,4 @@
--- HU-86 — Listado maestro paginado de suministros
+-- HU-86 (p_excluir_servicios: selector de Equipos del cliente) — Listado maestro paginado de suministros
 DROP PROCEDURE IF EXISTS SP_ObtenerSuministros;
 
 DELIMITER $$
@@ -10,7 +10,8 @@ CREATE PROCEDURE SP_ObtenerSuministros(
     IN p_estado             VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_solo_en_propuestas TINYINT,
     IN p_pagina             INT,
-    IN p_por_pagina         INT
+    IN p_por_pagina         INT,
+    IN p_excluir_servicios  TINYINT
 )
 BEGIN
     DECLARE v_por_pagina INT;
@@ -55,6 +56,7 @@ BEGIN
       AND (p_tipo   IS NULL OR p_tipo   = '' OR ci.tipo  = p_tipo)
       AND (p_estado IS NULL OR p_estado = '' OR ci.estado = LOWER(p_estado))
       AND (IFNULL(p_solo_en_propuestas, 0) = 0 OR ci.usar_en_propuestas = 1)
+      AND (IFNULL(p_excluir_servicios, 0) = 0 OR ci.clase <> 'servicio')
       AND (
           p_busqueda IS NULL OR p_busqueda = ''
           OR ci.descripcion        LIKE CONCAT('%', p_busqueda, '%')
@@ -75,6 +77,7 @@ BEGIN
       AND (p_tipo   IS NULL OR p_tipo   = '' OR ci.tipo  = p_tipo)
       AND (p_estado IS NULL OR p_estado = '' OR ci.estado = LOWER(p_estado))
       AND (IFNULL(p_solo_en_propuestas, 0) = 0 OR ci.usar_en_propuestas = 1)
+      AND (IFNULL(p_excluir_servicios, 0) = 0 OR ci.clase <> 'servicio')
       AND (
           p_busqueda IS NULL OR p_busqueda = ''
           OR ci.descripcion        LIKE CONCAT('%', p_busqueda, '%')
