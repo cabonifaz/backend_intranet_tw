@@ -51,6 +51,8 @@ BEGIN
             IFNULL(ec.escala_graduacion, '')          AS escala_graduacion,
             IFNULL(ec.puntos_calibracion, '')         AS puntos_calibracion,
             IFNULL(ec.rango_operativo_real, '')       AS rango_operativo_real,
+            IFNULL(ec.material, '')                   AS material,
+            IFNULL(ec.valor_nominal, '')              AS valor_nominal,
             IFNULL(ec.observaciones, '')              AS observaciones,
 
             ec.estado_operativo,

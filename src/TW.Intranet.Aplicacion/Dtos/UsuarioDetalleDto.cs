@@ -38,5 +38,6 @@ public record UsuarioDetalleDto(
 
     // Contacto interno (reunión 02-oct)
     string?   Anexo,
-    string?   FechaNacimiento
+    string?   FechaNacimiento,
+    string?   Troncal
 );

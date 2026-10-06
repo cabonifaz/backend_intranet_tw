@@ -6,6 +6,8 @@ namespace TW.Intranet.Aplicacion.CasosDeUso;
 
 public class GuardarUsuarioCasoDeUso(IUsuariosRepositorio repositorio, IHasherContrasena hasher)
 {
+    private static readonly string[] Troncales = ["5699750", "5699751"];
+
     public async Task<RespuestaDto<long>> EjecutarAsync(
         GuardarUsuarioDto dto, long idEjecutor, CancellationToken ct = default)
     {
@@ -42,9 +44,25 @@ public class GuardarUsuarioCasoDeUso(IUsuariosRepositorio repositorio, IHasherCo
                 || nac.Date >= DateTime.Today || nac.Year < 1900))
             return new RespuestaDto<long>(1, "La fecha de nacimiento no es válida.");
 
-        dto.Anexo = string.IsNullOrWhiteSpace(dto.Anexo) ? null : dto.Anexo.Trim();
-        if (dto.Anexo is not null && (dto.Anexo.Length > 10 || !dto.Anexo.All(char.IsDigit)))
-            return new RespuestaDto<long>(1, "El anexo debe tener solo números (máximo 10 dígitos).");
+        dto.Anexo   = string.IsNullOrWhiteSpace(dto.Anexo)   ? null : dto.Anexo.Trim().Replace("-", "").Replace(" ", "");
+        dto.Troncal = string.IsNullOrWhiteSpace(dto.Troncal) ? null : dto.Troncal.Trim().Replace("-", "");
+
+        // El front envía el anexo completo: troncal (7) + interno (3), ej. "5699750207".
+        if (dto.Anexo is { Length: 10 } && Troncales.Any(t => dto.Anexo.StartsWith(t)))
+        {
+            dto.Troncal = dto.Anexo[..7];
+            dto.Anexo   = dto.Anexo[7..];
+        }
+        if (dto.Anexo is not null && (dto.Anexo.Length != 3 || !dto.Anexo.All(char.IsDigit)))
+            return new RespuestaDto<long>(1, "El anexo debe tener 3 dígitos.");
+        if (dto.Anexo is not null && dto.Troncal is null)
+            return new RespuestaDto<long>(1, "Seleccione la troncal del anexo (569-9750 o 569-9751).");
+        if (dto.Anexo is null)
+            dto.Troncal = null;
+
+        // La sede está oculta en el front (Lima por defecto); se acepta el alias "lima".
+        if (string.Equals(dto.SedeOperativa?.Trim(), "lima", StringComparison.OrdinalIgnoreCase))
+            dto.SedeOperativa = "lima_central";
 
         // ── Contraseña: se guarda solo el hash ─────────────────────────────
         string? passwordHash = string.IsNullOrWhiteSpace(dto.ContrasenaTemporal)

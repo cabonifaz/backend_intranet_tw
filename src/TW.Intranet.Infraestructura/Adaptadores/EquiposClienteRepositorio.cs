@@ -66,6 +66,8 @@ public class EquiposClienteRepositorio(CadenaConexionBd conexion)
                     EscalaGraduacion:       Texto(r, "escala_graduacion") ?? "",
                     PuntosCalibracion:      Texto(r, "puntos_calibracion") ?? "",
                     RangoOperativoReal:     Texto(r, "rango_operativo_real") ?? "",
+                    Material:               Texto(r, "material") ?? "",
+                    ValorNominal:           Texto(r, "valor_nominal") ?? "",
                     Observaciones:          Texto(r, "observaciones") ?? "",
                     EstadoOperativo:        Texto(r, "estado_operativo") ?? "",
                     Fotos:                  [],
@@ -89,8 +91,8 @@ public class EquiposClienteRepositorio(CadenaConexionBd conexion)
                 p.AddWithValue("p_id_sede",               dto.IdSede);
                 p.AddWithValue("p_codigo_cliente",        Valor(dto.CodigoCliente));
                 p.AddWithValue("p_clasificacion",         dto.Clasificacion!);
-                p.AddWithValue("p_marca",                 dto.Marca!.Trim());
-                p.AddWithValue("p_modelo",                dto.Modelo!.Trim());
+                p.AddWithValue("p_marca",                 Valor(dto.Marca?.Trim()));
+                p.AddWithValue("p_modelo",                Valor(dto.Modelo?.Trim()));
                 p.AddWithValue("p_ubicacion_especifica",  Valor(dto.UbicacionEspecifica));
                 p.AddWithValue("p_es_pre_revisado",       Bit(dto.EsPreRevisado));
                 p.AddWithValue("p_bloqueado_servicios",   Bit(dto.BloqueadoParaServicios));
@@ -103,6 +105,8 @@ public class EquiposClienteRepositorio(CadenaConexionBd conexion)
                 p.AddWithValue("p_escala_graduacion",     Valor(dto.EscalaGraduacion));
                 p.AddWithValue("p_puntos_calibracion",    Valor(dto.PuntosCalibracion));
                 p.AddWithValue("p_rango_operativo_real",  Valor(dto.RangoOperativoReal));
+                p.AddWithValue("p_material",              Valor(dto.Material));
+                p.AddWithValue("p_valor_nominal",         Valor(dto.ValorNominal));
                 p.AddWithValue("p_observaciones",         Valor(dto.Observaciones));
                 p.AddWithValue("p_estado_operativo",      Valor(dto.EstadoOperativo));
                 p.AddWithValue("p_es_activo",             Bit(dto.EsActivo));

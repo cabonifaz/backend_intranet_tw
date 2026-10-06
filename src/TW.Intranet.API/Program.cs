@@ -239,6 +239,12 @@ builder.Services.AddScoped<CambiarEstadoAreaClienteCasoDeUso>();
 builder.Services.AddScoped<ObtenerFormatosVentanaCasoDeUso>();
 builder.Services.AddScoped<GuardarFormatoVentanaCasoDeUso>();
 
+// ── INYECCIÓN DE DEPENDENCIAS — Roles por niveles y permisos por área (reunión 02-oct) ──
+builder.Services.AddScoped<IPermisosRepositorio, PermisosRepositorio>();
+builder.Services.AddScoped<ObtenerMisPermisosCasoDeUso>();
+builder.Services.AddScoped<ObtenerPermisosAreaRolCasoDeUso>();
+builder.Services.AddScoped<GuardarPermisoCasoDeUso>();
+
 // ─────────────────────────────────────────────────────────────────────────────
 var app = builder.Build();
 

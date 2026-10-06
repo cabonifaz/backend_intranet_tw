@@ -9,6 +9,7 @@ CREATE PROCEDURE SP_AgregarItemCatalogo(
     IN p_descripcion VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_string1     VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_string2     VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_string3     VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_id_usuario  BIGINT
 )
 proc: BEGIN
@@ -34,6 +35,14 @@ proc: BEGIN
         LEAVE proc;
     END IF;
 
+    -- TIPO_SUMINISTRO: String3 = clase a la que pertenece el tipo (obligatoria)
+    IF p_descripcion = 'TIPO_SUMINISTRO' AND NOT EXISTS (
+        SELECT 1 FROM tabla_maestra WHERE IdMaestro = 71 AND IdEmpresa = 1 AND String2 = p_string3
+    ) THEN
+        SELECT 1 AS IdTipoMensaje, 'Indique la clase (servicio, equipo, instrumento o pesa) del nuevo tipo.' AS Mensaje;
+        LEAVE proc;
+    END IF;
+
     IF EXISTS (
         SELECT 1 FROM tabla_maestra
         WHERE IdMaestro = v_id_maestro AND IdEmpresa = 1 AND eliminado_en IS NULL
@@ -50,13 +59,13 @@ proc: BEGIN
     WHERE IdMaestro = v_id_maestro AND IdEmpresa = 1
     FOR UPDATE;
 
-    INSERT INTO tabla_maestra (IdEmpresa, IdMaestro, Descripcion, Num1, String1, String2, creado_en, creado_por)
-    VALUES (1, v_id_maestro, p_descripcion, v_num1, p_string1, p_string2, NOW(), p_id_usuario);
+    INSERT INTO tabla_maestra (IdEmpresa, IdMaestro, Descripcion, Num1, String1, String2, String3, creado_en, creado_por)
+    VALUES (1, v_id_maestro, p_descripcion, v_num1, p_string1, p_string2, NULLIF(p_string3, ''), NOW(), p_id_usuario);
 
     COMMIT;
 
     SELECT 2 AS IdTipoMensaje, CONCAT('"', p_string1, '" agregado correctamente.') AS Mensaje;
-    SELECT v_num1 AS id, p_string1 AS nombre, p_string2 AS codigo;
+    SELECT v_num1 AS id, p_string1 AS nombre, p_string2 AS codigo, NULLIF(p_string3, '') AS string3;
 END$$
 
 DELIMITER ;

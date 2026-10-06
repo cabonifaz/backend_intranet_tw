@@ -70,7 +70,7 @@ public class UsuariosRepositorio(CadenaConexionBd conexion) : IUsuariosRepositor
                     sedeOperativa, idSupervisor,
                     habilitadoInacal, registroInacal, fechaExpiracion, induccionSctr,
                     forzarCambio, enviarCorreo, dosFactores,
-                    lista.Anexo, fechaNacimiento);
+                    lista.Anexo, fechaNacimiento, lista.Troncal);
 
                 return new RespuestaDto<UsuarioDetalleDto>(2, mensaje, detalle);
             }, ct);
@@ -119,6 +119,7 @@ public class UsuariosRepositorio(CadenaConexionBd conexion) : IUsuariosRepositor
                 p.AddWithValue("p_correo",                         dto.Correo!);
                 p.AddWithValue("p_telefono",                       Valor(dto.Telefono));
                 p.AddWithValue("p_anexo",                          Valor(dto.Anexo));
+                p.AddWithValue("p_troncal",                        Valor(dto.Troncal));
                 p.AddWithValue("p_fecha_nacimiento",               string.IsNullOrWhiteSpace(dto.FechaNacimiento)
                                                                        ? DBNull.Value
                                                                        : DateTime.Parse(dto.FechaNacimiento, System.Globalization.CultureInfo.InvariantCulture).Date);
@@ -287,6 +288,10 @@ public class UsuariosRepositorio(CadenaConexionBd conexion) : IUsuariosRepositor
         }
     }
 
+    /// <summary>Anexo tal como lo usa el front: troncal + interno (ej. "5699750207").</summary>
+    private static string? AnexoCompleto(string? troncal, string? interno)
+        => string.IsNullOrWhiteSpace(interno) ? null : $"{troncal}{interno}";
+
     private static UsuarioListaItemDto LeerUsuarioLista(MySqlDataReader r) => new(
         IdUsuario:       EnteroLargo(r, "id_usuario"),
         Nombre:          Texto(r, "nombre") ?? "",
@@ -299,7 +304,8 @@ public class UsuariosRepositorio(CadenaConexionBd conexion) : IUsuariosRepositor
         Estado:          Texto(r, "estado") ?? "",
         UltimoAcceso:    FechaHora(r, "ultimo_acceso"),
         FechaCreacion:   FechaHora(r, "fecha_creacion"),
-        Anexo:           Texto(r, "anexo"));
+        Anexo:           AnexoCompleto(Texto(r, "troncal"), Texto(r, "anexo")),
+        Troncal:         Texto(r, "troncal"));
 
     private static SuplenteListaItemDto LeerSuplente(MySqlDataReader r) => new(
         IdAsignacion:     EnteroLargo(r, "id_asignacion"),

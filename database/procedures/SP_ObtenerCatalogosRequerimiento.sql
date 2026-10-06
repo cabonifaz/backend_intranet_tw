@@ -34,7 +34,7 @@ BEGIN
     -- 5. Motivos de anulación (IdMaestro = 66)
     SELECT Num1 AS id, String1 AS nombre
     FROM tabla_maestra
-    WHERE IdMaestro = 66 AND IdEmpresa = 1 AND eliminado_en IS NULL
+    WHERE IdMaestro = 66 AND IdEmpresa = 1 AND Descripcion = 'MOTIVO_ANULACION' AND eliminado_en IS NULL
     ORDER BY Num1;
 
     -- 6. Estados de requerimiento (IdMaestro = 67)

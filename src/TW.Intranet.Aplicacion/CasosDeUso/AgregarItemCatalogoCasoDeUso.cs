@@ -44,7 +44,26 @@ public class AgregarItemCatalogoCasoDeUso(ICatalogosRepositorio repositorio)
         if (string.IsNullOrWhiteSpace(codigo))
             return new RespuestaDto<CatalogoItemDto>(1, "No se pudo generar un código válido para ese nombre.");
 
-        return await repositorio.AgregarItemAsync(descripcion.ToUpperInvariant(), etiqueta, codigo, idUsuario, ct);
+        var catalogo = descripcion.ToUpperInvariant();
+        var string3  = string.IsNullOrWhiteSpace(dto.String3) ? null : dto.String3.Trim().ToLowerInvariant();
+        // TIPO_SUMINISTRO: String3 = clase del tipo. Si no se envía, el tipo queda visible para todas las clases.
+        return await repositorio.AgregarItemAsync(catalogo, etiqueta, codigo, string3, idUsuario, ct);
+    }
+
+    /// <summary>Cambia el nombre visible de un valor (el código no cambia). Mismos catálogos editables.</summary>
+    public async Task<RespuestaDto<CatalogoItemDto>> EditarAsync(
+        string descripcion, string codigo, EditarItemCatalogoDto dto, long idUsuario, CancellationToken ct = default)
+    {
+        if (!CatalogosEditables.Contains(descripcion))
+            return new RespuestaDto<CatalogoItemDto>(1, $"El catálogo '{descripcion}' no se puede editar desde la aplicación.");
+
+        var etiqueta = dto.String1?.Trim();
+        if (string.IsNullOrWhiteSpace(etiqueta))
+            return new RespuestaDto<CatalogoItemDto>(1, "El nombre es obligatorio.");
+        if (etiqueta.Length > 100)
+            return new RespuestaDto<CatalogoItemDto>(1, "El nombre no puede superar los 100 caracteres.");
+
+        return await repositorio.EditarItemAsync(descripcion.ToUpperInvariant(), codigo.Trim(), etiqueta, idUsuario, ct);
     }
 
     /// <summary>Misma regla que el front: minúsculas, espacios → "_", sin símbolos ("Rice Lake" → "rice_lake").</summary>

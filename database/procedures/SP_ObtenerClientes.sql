@@ -38,7 +38,10 @@ BEGIN
          ORDER BY cc.es_contacto_principal DESC, cc.id_contacto ASC LIMIT 1) AS contacto_principal,
         (SELECT cc.correo FROM contacto_cliente cc
          WHERE cc.id_cliente = c.id_cliente AND cc.SoftDelete = 0 AND cc.estado = 'Activo'
-         ORDER BY cc.es_contacto_principal DESC, cc.id_contacto ASC LIMIT 1) AS contacto_principal_correo
+         ORDER BY cc.es_contacto_principal DESC, cc.id_contacto ASC LIMIT 1) AS contacto_principal_correo,
+        (SELECT COALESCE(NULLIF(cc.telefono_movil, ''), cc.telefono_anexo) FROM contacto_cliente cc
+         WHERE cc.id_cliente = c.id_cliente AND cc.SoftDelete = 0 AND cc.estado = 'Activo'
+         ORDER BY cc.es_contacto_principal DESC, cc.id_contacto ASC LIMIT 1) AS contacto_principal_telefono
     FROM cliente c
     WHERE c.SoftDelete = 0
       AND (p_estado IS NULL OR p_estado = '' OR c.estado = p_estado)

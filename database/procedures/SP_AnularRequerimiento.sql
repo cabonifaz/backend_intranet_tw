@@ -5,7 +5,7 @@
 -- Reglas de permiso:
 --   comercial  → solo puede anular si es responsable y
 --                estado IN ('nuevo', 'en_proceso')
---   jefe_comercial / admin → cualquier estado activo
+--   administrador / supervisor → cualquier estado activo (jefe_comercial/admin: tokens anteriores)
 -- ============================================================
 DROP PROCEDURE IF EXISTS SP_AnularRequerimiento;
 
@@ -59,7 +59,7 @@ BEGIN
             SELECT 1 AS IdTipoMensaje, 'El usuario ejecutor no existe en el sistema.' AS Mensaje;
 
         -- Validación RBAC: comercial solo puede anular sus RQs en estado nuevo/en_proceso
-        ELSEIF p_rol NOT IN ('jefe_comercial', 'admin')
+        ELSEIF p_rol NOT IN ('administrador', 'supervisor', 'jefe_comercial', 'admin')
                AND (
                    v_estado_rq NOT IN ('nuevo', 'en_proceso')
                    OR NOT EXISTS (
@@ -76,7 +76,7 @@ BEGIN
         ELSE
             SELECT String1 INTO v_motivo_txt
             FROM tabla_maestra
-            WHERE IdMaestro = 66 AND Num1 = p_id_motivo AND IdEmpresa = 1 LIMIT 1;
+            WHERE IdMaestro = 66 AND Descripcion = 'MOTIVO_ANULACION' AND Num1 = p_id_motivo AND IdEmpresa = 1 LIMIT 1;
 
             -- Anular
             UPDATE requerimiento SET

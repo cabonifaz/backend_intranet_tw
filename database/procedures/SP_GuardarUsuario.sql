@@ -2,7 +2,9 @@
 --   p_password_hash: NULL = no cambia la contraseña (solo en edición)
 --   p_area:           código de AREA_USUARIO (79)
 --   p_sede_operativa: código de SEDE_OPERATIVA_TW (69); si no se envía, 'lima_central'
---   p_anexo / p_fecha_nacimiento: datos de contacto interno (reunión 02-oct)
+--   p_anexo / p_troncal / p_fecha_nacimiento: contacto interno (reunión 02-oct)
+--   p_rol_sistema: nivel (administrador | supervisor | usuario | visor)
+--   p_id_supervisor: se ignora; el supervisor se calcula solo (SP_RecalcularSupervisores)
 DROP PROCEDURE IF EXISTS SP_GuardarUsuario;
 
 DELIMITER $$
@@ -16,6 +18,7 @@ CREATE PROCEDURE SP_GuardarUsuario(
     IN p_correo                         VARCHAR(150) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_telefono                       VARCHAR(30)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_anexo                          VARCHAR(10)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_troncal                        VARCHAR(10)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_fecha_nacimiento               DATE,
     IN p_cargo                          VARCHAR(150) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_area                           VARCHAR(60)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
@@ -65,6 +68,13 @@ proc: BEGIN
         LEAVE proc;
     END IF;
 
+    IF IFNULL(p_troncal, '') <> '' AND NOT EXISTS (
+        SELECT 1 FROM tabla_maestra WHERE IdMaestro = 84 AND IdEmpresa = 1 AND String2 = p_troncal
+    ) THEN
+        SELECT 1 AS IdTipoMensaje, 'La troncal seleccionada no es válida.' AS Mensaje;
+        LEAVE proc;
+    END IF;
+
     IF p_area IS NOT NULL AND p_area <> '' AND NOT EXISTS (
         SELECT 1 FROM tabla_maestra
         WHERE IdMaestro = 79 AND IdEmpresa = 1 AND String2 = p_area
@@ -103,14 +113,14 @@ proc: BEGIN
     IF p_id_usuario = 0 THEN
         INSERT INTO usuario (
             nombre, apellido, tipo_documento, numero_documento, correo,
-            telefono, anexo, fecha_nacimiento, cargo, area, rol_sistema, sede_operativa,
+            telefono, anexo, troncal, fecha_nacimiento, cargo, area, rol_sistema, sede_operativa,
             id_supervisor, habilitado_firma_inacal, numero_registro_inacal,
             fecha_expiracion_certificacion, requiere_induccion_sctr,
             password_hash, forzar_cambio_contrasena, enviar_credenciales_correo,
             autenticacion_2fa, canal_acceso, estado, creado_en, creado_por
         ) VALUES (
             p_nombre, p_apellido, p_tipo_documento, p_numero_documento, p_correo,
-            p_telefono, NULLIF(p_anexo, ''), p_fecha_nacimiento, p_cargo, NULLIF(p_area, ''), p_rol_sistema,
+            p_telefono, NULLIF(p_anexo, ''), NULLIF(p_troncal, ''), p_fecha_nacimiento, p_cargo, NULLIF(p_area, ''), p_rol_sistema,
             COALESCE(NULLIF(p_sede_operativa, ''), 'lima_central'),
             p_id_supervisor, IFNULL(p_habilitado_firma_inacal, 0), p_numero_registro_inacal,
             p_fecha_expiracion_certificacion, IFNULL(p_requiere_induccion_sctr, 0),
@@ -129,6 +139,7 @@ proc: BEGIN
             correo                         = p_correo,
             telefono                       = p_telefono,
             anexo                          = NULLIF(p_anexo, ''),
+            troncal                        = NULLIF(p_troncal, ''),
             fecha_nacimiento               = p_fecha_nacimiento,
             cargo                          = p_cargo,
             area                           = NULLIF(p_area, ''),
@@ -155,6 +166,9 @@ proc: BEGIN
     END IF;
 
     COMMIT;
+
+    -- Supervisor automático: nivel superior más cercano de la misma área
+    CALL SP_RecalcularSupervisores();
 
     SELECT 2 AS IdTipoMensaje,
            IF(p_id_usuario = 0, 'Usuario registrado correctamente.', 'Usuario actualizado correctamente.') AS Mensaje;

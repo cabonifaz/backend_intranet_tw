@@ -8,8 +8,11 @@ public class GuardarEquipoClienteDto
     public long    IdCliente      { get; set; }
     public long    IdSede         { get; set; }
     public string? CodigoCliente  { get; set; }
+    /// <summary>equipo | instrumento | pesa. Define qué campos de la sección 2 se guardan.</summary>
     public string? Clasificacion  { get; set; }
+    /// <summary>Opcional: si no se envía se toma del suministro (o "Genérico"). En edición no cambia.</summary>
     public string? Marca          { get; set; }
+    /// <summary>Opcional: igual que Marca.</summary>
     public string? Modelo         { get; set; }
 
     public string? UbicacionEspecifica    { get; set; }
@@ -25,6 +28,10 @@ public class GuardarEquipoClienteDto
     public string? EscalaGraduacion   { get; set; }
     public string? PuntosCalibracion  { get; set; }
     public string? RangoOperativoReal { get; set; }
+    /// <summary>Solo pesas.</summary>
+    public string? Material           { get; set; }
+    /// <summary>Solo pesas (ej. "20 kg").</summary>
+    public string? ValorNominal       { get; set; }
     public string? Observaciones      { get; set; }
 
     public string? EstadoOperativo { get; set; }

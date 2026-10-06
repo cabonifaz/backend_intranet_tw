@@ -36,4 +36,22 @@ public class CatalogosController(AgregarItemCatalogoCasoDeUso agregarItem) : Con
             _ => StatusCode(500, r),
         };
     }
+
+    /// <summary>
+    /// Renombra un valor de un catálogo editable (ej. un área). Body: { "string1": "Calidad" }.
+    /// El código no cambia porque otros registros lo referencian.
+    /// </summary>
+    [HttpPut("catalogos/{descripcion}/{codigo}")]
+    [HttpPatch("catalogos/{descripcion}/{codigo}")]
+    public async Task<IActionResult> EditarItem(
+        string descripcion, string codigo, [FromBody] EditarItemCatalogoDto dto, CancellationToken ct = default)
+    {
+        var r = await agregarItem.EditarAsync(descripcion, codigo, dto, IdUsuarioActual, ct);
+        return r.IdTipoMensaje switch
+        {
+            2 => Ok(r),
+            1 => BadRequest(r),
+            _ => StatusCode(500, r),
+        };
+    }
 }

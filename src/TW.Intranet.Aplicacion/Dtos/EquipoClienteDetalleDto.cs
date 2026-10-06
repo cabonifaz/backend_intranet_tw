@@ -42,6 +42,8 @@ public record EquipoClienteDetalleDto(
     string EscalaGraduacion,
     string PuntosCalibracion,
     string RangoOperativoReal,
+    string Material,
+    string ValorNominal,
     string Observaciones,
 
     // 03 — Estado operativo

@@ -65,6 +65,16 @@ proc: BEGIN
         LEAVE proc;
     END IF;
 
+    -- El tipo debe pertenecer a la clase (TIPO_SUMINISTRO.String3). El subtipo es texto libre.
+    IF EXISTS (
+        SELECT 1 FROM tabla_maestra
+        WHERE IdMaestro = 72 AND IdEmpresa = 1 AND String2 = p_tipo
+          AND String3 IS NOT NULL AND String3 <> '' AND String3 <> p_clase
+    ) THEN
+        SELECT 1 AS IdTipoMensaje, 'El tipo seleccionado no corresponde a la clase.' AS Mensaje;
+        LEAVE proc;
+    END IF;
+
     IF p_id_suministro <> 0 AND NOT EXISTS (
         SELECT 1 FROM suministros WHERE id_suministro = p_id_suministro AND eliminado_en IS NULL
     ) THEN

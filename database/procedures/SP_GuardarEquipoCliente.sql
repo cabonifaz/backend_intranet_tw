@@ -22,6 +22,8 @@ CREATE PROCEDURE SP_GuardarEquipoCliente(
     IN p_escala_graduacion       VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_puntos_calibracion      VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_rango_operativo_real    VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_material               VARCHAR(80)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_valor_nominal          VARCHAR(40)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_observaciones           TEXT         CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_estado_operativo        VARCHAR(40)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_es_activo               TINYINT,
@@ -73,18 +75,33 @@ proc: BEGIN
     END IF;
 
     -- Marca y modelo se toman del suministro cuando no se envían (reunión 02-oct).
+    -- Si el suministro no los tiene (son opcionales), se registra "Genérico".
     -- En edición se conservan los ya registrados (son inmutables).
     IF p_id_equipo <> 0 THEN
         SELECT marca, modelo INTO p_marca, p_modelo FROM equipo_cliente WHERE id_equipo = p_id_equipo;
     ELSEIF IFNULL(p_id_suministro, 0) <> 0 THEN
-        SELECT COALESCE(NULLIF(TRIM(p_marca), ''), marca), COALESCE(NULLIF(TRIM(p_modelo), ''), modelo)
+        SELECT COALESCE(NULLIF(TRIM(p_marca), ''),  NULLIF(TRIM(marca), ''),  'Genérico'),
+               COALESCE(NULLIF(TRIM(p_modelo), ''), NULLIF(TRIM(modelo), ''), 'Genérico')
           INTO p_marca, p_modelo
         FROM suministros WHERE id_suministro = p_id_suministro;
     END IF;
 
     IF IFNULL(TRIM(p_marca), '') = '' OR IFNULL(TRIM(p_modelo), '') = '' THEN
-        SELECT 1 AS IdTipoMensaje, 'Seleccione un suministro con marca y modelo, o indíquelos.' AS Mensaje;
+        SELECT 1 AS IdTipoMensaje, 'Seleccione el suministro del equipo.' AS Mensaje;
         LEAVE proc;
+    END IF;
+
+    -- Campos según la clasificación (reunión 02-oct). Fijos para todos: suministro, serie,
+    -- códigos, clase de exactitud, d y e. Equipo: + alcance. Instrumento: + alcance, escala,
+    -- puntos de calibración y rango de uso. Pesa: + material y valor nominal.
+    IF p_clasificacion = 'equipo' THEN
+        SET p_escala_graduacion = NULL, p_puntos_calibracion = NULL, p_rango_operativo_real = NULL,
+            p_material = NULL, p_valor_nominal = NULL;
+    ELSEIF p_clasificacion = 'instrumento' THEN
+        SET p_material = NULL, p_valor_nominal = NULL;
+    ELSEIF p_clasificacion = 'pesa' THEN
+        SET p_alcance_maximo = NULL, p_escala_graduacion = NULL, p_puntos_calibracion = NULL,
+            p_rango_operativo_real = NULL;
     END IF;
 
     SET v_estado = CASE
@@ -125,7 +142,7 @@ proc: BEGIN
             bloqueado_para_servicios,
             id_suministro, division_minima, division_verif, division_verif_igual,
             clase_exactitud, alcance_maximo, escala_graduacion, puntos_calibracion,
-            rango_operativo_real, observaciones,
+            rango_operativo_real, material, valor_nominal, observaciones,
             estado_operativo, es_activo, estado,
             usuario_registro, pc_registro,
             SoftDelete, UsuCre, FchCre
@@ -146,6 +163,8 @@ proc: BEGIN
             NULLIF(p_escala_graduacion, ''),
             NULLIF(p_puntos_calibracion, ''),
             NULLIF(p_rango_operativo_real, ''),
+            NULLIF(p_material, ''),
+            NULLIF(p_valor_nominal, ''),
             NULLIF(p_observaciones, ''),
             IFNULL(p_estado_operativo, 'oficina_tw'),
             IF(v_estado = 'activo', 1, 0),
@@ -190,6 +209,8 @@ proc: BEGIN
             escala_graduacion        = NULLIF(p_escala_graduacion, ''),
             puntos_calibracion       = NULLIF(p_puntos_calibracion, ''),
             rango_operativo_real     = NULLIF(p_rango_operativo_real, ''),
+            material                 = NULLIF(p_material, ''),
+            valor_nominal            = NULLIF(p_valor_nominal, ''),
             observaciones            = NULLIF(p_observaciones, ''),
             estado_operativo         = IFNULL(p_estado_operativo, estado_operativo),
             es_activo                = IF(v_estado = 'activo', 1, 0),
