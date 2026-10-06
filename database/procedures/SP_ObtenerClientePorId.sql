@@ -42,7 +42,9 @@ BEGIN
             c.ssoma_notas,
             c.id_categoria,
             cc.nombre AS nombre_categoria,
-            c.estado
+            c.estado,
+            (SELECT GROUP_CONCAT(ca.area ORDER BY ca.area SEPARATOR ',')
+             FROM cliente_area ca WHERE ca.id_cliente = c.id_cliente) AS areas
         FROM cliente c
         LEFT JOIN categoria_cliente cc
             ON cc.id_categoria = c.id_categoria AND cc.SoftDelete = 0

@@ -24,5 +24,7 @@ public record GuardarClienteDto(
     bool     SsomaInduccionSsoma,
     bool     SsomaExamenMedico,
     [StringLength(1000)] string?  SsomaNotas,
-    int?     IdCategoria
+    int?     IdCategoria,
+    /// <summary>Códigos de AREA_USUARIO asignados al cliente. Null = no cambiar.</summary>
+    List<string>? Areas = null
 );

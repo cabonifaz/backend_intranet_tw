@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MySqlConnector;
 using TW.Intranet.Aplicacion.Dtos;
 using TW.Intranet.Aplicacion.Puertos;
@@ -133,7 +134,8 @@ public class MaestrosRepositorio(CadenaConexionBd conexion) : IMaestrosRepositor
                 SsomaNotas:             nullable("ssoma_notas")        ? null : reader.GetString("ssoma_notas"),
                 IdCategoria:            reader.IsDBNull(reader.GetOrdinal("id_categoria"))     ? null : reader.GetInt32("id_categoria"),
                 NombreCategoria:        reader.IsDBNull(reader.GetOrdinal("nombre_categoria")) ? null : reader.GetString("nombre_categoria"),
-                Estado:                 reader.GetString("estado")
+                Estado:                 reader.GetString("estado"),
+                Areas:                  nullable("areas") ? [] : reader.GetString("areas").Split(',', StringSplitOptions.RemoveEmptyEntries).ToList()
             );
 
             return new RespuestaDto<ClienteDetalleDto>(2, mensaje, detalle);
@@ -179,6 +181,7 @@ public class MaestrosRepositorio(CadenaConexionBd conexion) : IMaestrosRepositor
             cmd.Parameters.AddWithValue("p_ssoma_notas",             dto.SsomaNotas       ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("p_id_categoria",            dto.IdCategoria      ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("p_usu_cre",                 usuCre);
+            cmd.Parameters.AddWithValue("p_areas",                   dto.Areas is null ? (object)DBNull.Value : JsonSerializer.Serialize(dto.Areas));
 
             await using var reader = await cmd.ExecuteReaderAsync(ct);
 
@@ -435,7 +438,9 @@ public class MaestrosRepositorio(CadenaConexionBd conexion) : IMaestrosRepositor
                     AutorizadoAprobarCotizaciones:  reader.GetBoolean("autorizado_aprobar_cotizaciones"),
                     RecibeAlertasCalibracion:       reader.GetBoolean("recibe_alertas_calibracion"),
                     AutorizadoRecepcionTecnica:     reader.GetBoolean("autorizado_recepcion_tecnica"),
-                    Estado:                         reader.GetString("estado")
+                    Estado:                         reader.GetString("estado"),
+                    Sedes:                          n("sedes") ? [] : LeerSedes(reader.GetString("sedes")),
+                    EsPrincipalEmpresa:             reader.GetBoolean("es_principal_empresa")
                 ));
             }
 
@@ -469,11 +474,13 @@ public class MaestrosRepositorio(CadenaConexionBd conexion) : IMaestrosRepositor
             cmd.Parameters.AddWithValue("p_correo",                          dto.Correo                        ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("p_telefono_movil",                  dto.TelefonoMovil                 ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("p_telefono_anexo",                  dto.TelefonoAnexo                 ?? (object)DBNull.Value);
-            cmd.Parameters.AddWithValue("p_es_contacto_principal",           dto.EsContactoPrincipal           ? 1 : 0);
+            cmd.Parameters.AddWithValue("p_es_contacto_principal",           (dto.EsPrincipalEmpresa ?? dto.EsContactoPrincipal) ? 1 : 0);
             cmd.Parameters.AddWithValue("p_autorizado_aprobar_cotizaciones", dto.AutorizadoAprobarCotizaciones ? 1 : 0);
             cmd.Parameters.AddWithValue("p_recibe_alertas_calibracion",      dto.RecibeAlertasCalibracion      ? 1 : 0);
             cmd.Parameters.AddWithValue("p_autorizado_recepcion_tecnica",    dto.AutorizadoRecepcionTecnica    ? 1 : 0);
             cmd.Parameters.AddWithValue("p_usu_cre",                         usuCre);
+            cmd.Parameters.AddWithValue("p_sedes",                           dto.Sedes is null ? (object)DBNull.Value
+                : JsonSerializer.Serialize(dto.Sedes.Select(x => new { idSede = x.IdSede, esPrincipalSede = x.EsPrincipalSede })));
 
             await using var reader = await cmd.ExecuteReaderAsync(ct);
 
@@ -690,4 +697,10 @@ public class MaestrosRepositorio(CadenaConexionBd conexion) : IMaestrosRepositor
             return new RespuestaDto<object>(3, ex.Message);
         }
     }
+
+    private static readonly JsonSerializerOptions JsonOpciones = new() { PropertyNameCaseInsensitive = true };
+
+    /// <summary>Lee el JSON de sedes del contacto: [{ idSede, nombreSede, esPrincipalSede }].</summary>
+    private static List<ContactoSedeDto> LeerSedes(string json)
+        => JsonSerializer.Deserialize<List<ContactoSedeDto>>(json, JsonOpciones) ?? [];
 }

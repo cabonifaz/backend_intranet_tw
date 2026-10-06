@@ -4,21 +4,12 @@ namespace TW.Intranet.Aplicacion.Dtos;
 /// <summary>Opción de ubigeo. Código INEI: 2 dígitos (departamento), 4 (provincia) o 6 (distrito).</summary>
 public record UbigeoItemDto(string Codigo, string Nombre);
 
-// ── Áreas del cliente (por empresa): "ubicación específica" del equipo ─────────
-public record AreaClienteDto(long IdArea, long IdCliente, string Nombre, string Estado, int Equipos);
+// ── Áreas asignadas al cliente (catálogo AREA_USUARIO): "ubicación" de los equipos ──
+/// <summary>Área asignada al cliente. Codigo = String2 de AREA_USUARIO (lo que se guarda en el equipo).</summary>
+public record AreaClienteDto(string Codigo, string Nombre);
 
-/// <summary>Body de POST /api/maestros/clientes/{idCliente}/areas. IdArea = 0 para crear.</summary>
-public class GuardarAreaClienteDto
-{
-    public long    IdArea { get; set; }
-    public string? Nombre { get; set; }
-}
-
-/// <summary>Body de PATCH /api/maestros/areas-cliente/{idArea}/estado. Estado: "Activo" | "Inactivo".</summary>
-public class CambiarEstadoAreaClienteDto
-{
-    public string? Estado { get; set; }
-}
+// ── Próximo código de una ficha en modo "nuevo" (referencial) ──────────────────
+public record SiguienteCodigoDto(string Entidad, string Codigo);
 
 // ── Códigos de formato por ventana (calidad / procedimientos acreditados) ──────
 /// <summary>

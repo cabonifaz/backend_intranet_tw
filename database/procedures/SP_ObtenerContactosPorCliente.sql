@@ -31,6 +31,14 @@ BEGIN
         telefono_movil,
         telefono_anexo,
         es_contacto_principal,
+        es_contacto_principal AS es_principal_empresa,
+        (SELECT JSON_ARRAYAGG(JSON_OBJECT(
+                    'idSede',          cs.id_sede,
+                    'nombreSede',      s.nombre,
+                    'esPrincipalSede', IF(cs.es_principal_sede = 1, CAST('true' AS JSON), CAST('false' AS JSON))))
+         FROM contacto_sede cs
+         JOIN sede_cliente s ON s.id_sede = cs.id_sede
+         WHERE cs.id_contacto = contacto_cliente.id_contacto) AS sedes,
         autorizado_aprobar_cotizaciones,
         recibe_alertas_calibracion,
         autorizado_recepcion_tecnica,

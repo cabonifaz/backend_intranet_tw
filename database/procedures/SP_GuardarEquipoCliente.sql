@@ -166,7 +166,7 @@ proc: BEGIN
             NULLIF(p_material, ''),
             NULLIF(p_valor_nominal, ''),
             NULLIF(p_observaciones, ''),
-            IFNULL(p_estado_operativo, 'oficina_tw'),
+            'operativo_planta',   -- estado automático (reunión 02-oct): lo cambian CIE / evaluación / OS
             IF(v_estado = 'activo', 1, 0),
             v_estado,
             v_usuario_login,
@@ -212,7 +212,6 @@ proc: BEGIN
             material                 = NULLIF(p_material, ''),
             valor_nominal            = NULLIF(p_valor_nominal, ''),
             observaciones            = NULLIF(p_observaciones, ''),
-            estado_operativo         = IFNULL(p_estado_operativo, estado_operativo),
             es_activo                = IF(v_estado = 'activo', 1, 0),
             estado                   = v_estado,
             UsuMod                   = v_usuario_login,

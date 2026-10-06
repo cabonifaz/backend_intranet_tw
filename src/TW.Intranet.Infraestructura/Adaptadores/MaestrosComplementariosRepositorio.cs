@@ -26,53 +26,35 @@ public class MaestrosComplementariosRepositorio(CadenaConexionBd conexion)
                 return new RespuestaDto<List<UbigeoItemDto>>(2, mensaje, items);
             }, ct);
 
-    // ── Áreas del cliente ─────────────────────────────────────────────────────
-    public Task<RespuestaDto<List<AreaClienteDto>>> ObtenerAreasClienteAsync(long idCliente, bool soloActivas, CancellationToken ct)
+    // ── Áreas asignadas al cliente ────────────────────────────────────────────
+    public Task<RespuestaDto<List<AreaClienteDto>>> ObtenerAreasClienteAsync(long idCliente, CancellationToken ct)
         => EjecutarAsync("SP_ObtenerAreasCliente",
             p =>
             {
                 p.AddWithValue("p_id_cliente",   idCliente);
-                p.AddWithValue("p_solo_activas", Bit(soloActivas));
+                p.AddWithValue("p_solo_activas", 1);
             },
             async (r, mensaje) =>
             {
                 await r.NextResultAsync(ct);
                 var items = new List<AreaClienteDto>();
                 while (await r.ReadAsync(ct))
-                    items.Add(new AreaClienteDto(
-                        EnteroLargo(r, "id_area"), EnteroLargo(r, "id_cliente"),
-                        Texto(r, "nombre") ?? "", Texto(r, "estado") ?? "", (int)EnteroLargo(r, "equipos")));
+                    items.Add(new AreaClienteDto(Texto(r, "codigo") ?? "", Texto(r, "nombre") ?? ""));
                 return new RespuestaDto<List<AreaClienteDto>>(2, mensaje, items);
             }, ct);
 
-    public Task<RespuestaDto<AreaClienteDto>> GuardarAreaClienteAsync(
-        long idCliente, GuardarAreaClienteDto dto, long idUsuario, CancellationToken ct)
-        => EjecutarAsync("SP_GuardarAreaCliente",
-            p =>
-            {
-                p.AddWithValue("p_id_area",    dto.IdArea);
-                p.AddWithValue("p_id_cliente", idCliente);
-                p.AddWithValue("p_nombre",     dto.Nombre ?? "");
-                p.AddWithValue("p_id_usuario", idUsuario);
-            },
+    // ── Próximo código de ficha (referencial) ─────────────────────────────────
+    public Task<RespuestaDto<SiguienteCodigoDto>> ObtenerSiguienteCodigoAsync(string entidad, CancellationToken ct)
+        => EjecutarAsync("SP_ObtenerSiguienteCodigo",
+            p => p.AddWithValue("p_entidad", entidad),
             async (r, mensaje) =>
             {
                 await r.NextResultAsync(ct);
                 if (!await r.ReadAsync(ct))
-                    return new RespuestaDto<AreaClienteDto>(2, mensaje);
-                return new RespuestaDto<AreaClienteDto>(2, mensaje,
-                    new AreaClienteDto(EnteroLargo(r, "id_area"), idCliente, Texto(r, "nombre") ?? "", "Activo", 0));
+                    return new RespuestaDto<SiguienteCodigoDto>(3, "El procedimiento no devolvió el código.");
+                return new RespuestaDto<SiguienteCodigoDto>(2, mensaje,
+                    new SiguienteCodigoDto(Texto(r, "entidad") ?? entidad, Texto(r, "codigo") ?? ""));
             }, ct);
-
-    public Task<RespuestaDto<bool>> CambiarEstadoAreaClienteAsync(long idArea, string estado, long idUsuario, CancellationToken ct)
-        => EjecutarAsync("SP_CambiarEstadoAreaCliente",
-            p =>
-            {
-                p.AddWithValue("p_id_area",    idArea);
-                p.AddWithValue("p_estado",     estado);
-                p.AddWithValue("p_id_usuario", idUsuario);
-            },
-            (_, mensaje) => Task.FromResult(new RespuestaDto<bool>(2, mensaje, true)), ct);
 
     // ── Códigos de formato por ventana ────────────────────────────────────────
     public Task<RespuestaDto<List<FormatoVentanaDto>>> ObtenerFormatosVentanaAsync(string? clave, CancellationToken ct)

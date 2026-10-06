@@ -18,37 +18,25 @@ public class ObtenerUbigeoCasoDeUso(IMaestrosComplementariosRepositorio reposito
     }
 }
 
-// ── Áreas del cliente ────────────────────────────────────────────────────────
+// ── Áreas asignadas al cliente ───────────────────────────────────────────────
 public class ObtenerAreasClienteCasoDeUso(IMaestrosComplementariosRepositorio repositorio)
 {
-    public Task<RespuestaDto<List<AreaClienteDto>>> EjecutarAsync(long idCliente, bool soloActivas, CancellationToken ct = default)
-        => repositorio.ObtenerAreasClienteAsync(idCliente, soloActivas, ct);
+    public Task<RespuestaDto<List<AreaClienteDto>>> EjecutarAsync(long idCliente, CancellationToken ct = default)
+        => repositorio.ObtenerAreasClienteAsync(idCliente, ct);
 }
 
-public class GuardarAreaClienteCasoDeUso(IMaestrosComplementariosRepositorio repositorio)
+// ── Próximo código de ficha (modo "nuevo") ──────────────────────────────────
+public class ObtenerSiguienteCodigoCasoDeUso(IMaestrosComplementariosRepositorio repositorio)
 {
-    public Task<RespuestaDto<AreaClienteDto>> EjecutarAsync(
-        long idCliente, GuardarAreaClienteDto dto, long idUsuario, CancellationToken ct = default)
+    private static readonly string[] Entidades = ["requerimiento", "propuesta", "suministro", "equipo_cliente"];
+
+    public Task<RespuestaDto<SiguienteCodigoDto>> EjecutarAsync(string entidad, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(dto.Nombre))
-            return Task.FromResult(new RespuestaDto<AreaClienteDto>(1, "El nombre del área es obligatorio."));
-        if (dto.Nombre.Trim().Length > 150)
-            return Task.FromResult(new RespuestaDto<AreaClienteDto>(1, "El nombre no puede superar los 150 caracteres."));
-
-        return repositorio.GuardarAreaClienteAsync(idCliente, dto, idUsuario, ct);
-    }
-}
-
-public class CambiarEstadoAreaClienteCasoDeUso(IMaestrosComplementariosRepositorio repositorio)
-{
-    public Task<RespuestaDto<bool>> EjecutarAsync(
-        long idArea, CambiarEstadoAreaClienteDto dto, long idUsuario, CancellationToken ct = default)
-    {
-        var estado = dto.Estado?.Trim().ToLowerInvariant();
-        if (estado is not ("activo" or "inactivo"))
-            return Task.FromResult(new RespuestaDto<bool>(1, "Estado no válido. Use Activo o Inactivo."));
-
-        return repositorio.CambiarEstadoAreaClienteAsync(idArea, estado, idUsuario, ct);
+        var e = entidad?.Trim().ToLowerInvariant() ?? "";
+        if (!Entidades.Contains(e))
+            return Task.FromResult(new RespuestaDto<SiguienteCodigoDto>(1,
+                $"Entidad no válida. Use: {string.Join(", ", Entidades)}."));
+        return repositorio.ObtenerSiguienteCodigoAsync(e, ct);
     }
 }
 

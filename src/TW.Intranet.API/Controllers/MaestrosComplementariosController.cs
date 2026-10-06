@@ -6,15 +6,14 @@ using TW.Intranet.Aplicacion.Dtos;
 
 namespace TW.Intranet.API.Controllers;
 
-/// <summary>Correcciones de la reunión 02-oct: ubigeo, áreas del cliente y códigos de formato.</summary>
+/// <summary>Correcciones de la reunión 02-oct: ubigeo, áreas del cliente, códigos de formato y próximo código de ficha.</summary>
 [ApiController]
 [Route("api/maestros")]
 [Authorize]
 public class MaestrosComplementariosController(
     ObtenerUbigeoCasoDeUso             obtenerUbigeo,
     ObtenerAreasClienteCasoDeUso       obtenerAreas,
-    GuardarAreaClienteCasoDeUso        guardarArea,
-    CambiarEstadoAreaClienteCasoDeUso  cambiarEstadoArea,
+    ObtenerSiguienteCodigoCasoDeUso    obtenerSiguienteCodigo,
     ObtenerFormatosVentanaCasoDeUso    obtenerFormatos,
     GuardarFormatoVentanaCasoDeUso     guardarFormato) : ControllerBase
 {
@@ -43,18 +42,16 @@ public class MaestrosComplementariosController(
     public async Task<IActionResult> Distritos([FromQuery] string? departamento, [FromQuery] string? provincia, CancellationToken ct = default)
         => Responder(await obtenerUbigeo.EjecutarAsync("distritos", departamento, provincia, ct));
 
-    // ── Áreas del cliente (ubicación específica de los equipos) ──────────────
+    // ── Áreas asignadas al cliente (dropdown "Ubicación" de equipos): [{ codigo, nombre }] ──
     [HttpGet("clientes/{idCliente:long}/areas")]
-    public async Task<IActionResult> Areas(long idCliente, [FromQuery] bool soloActivas = true, CancellationToken ct = default)
-        => Responder(await obtenerAreas.EjecutarAsync(idCliente, soloActivas, ct));
+    public async Task<IActionResult> Areas(long idCliente, CancellationToken ct = default)
+        => Responder(await obtenerAreas.EjecutarAsync(idCliente, ct));
 
-    [HttpPost("clientes/{idCliente:long}/areas")]
-    public async Task<IActionResult> GuardarArea(long idCliente, [FromBody] GuardarAreaClienteDto dto, CancellationToken ct = default)
-        => Responder(await guardarArea.EjecutarAsync(idCliente, dto, IdUsuarioActual, ct));
-
-    [HttpPatch("areas-cliente/{idArea:long}/estado")]
-    public async Task<IActionResult> CambiarEstadoArea(long idArea, [FromBody] CambiarEstadoAreaClienteDto dto, CancellationToken ct = default)
-        => Responder(await cambiarEstadoArea.EjecutarAsync(idArea, dto, IdUsuarioActual, ct));
+    // ── Próximo código de la ficha en modo "nuevo" (referencial) ─────────────
+    /// <summary>entidad: requerimiento | propuesta | suministro | equipo_cliente → { entidad, codigo }.</summary>
+    [HttpGet("siguiente-codigo/{entidad}")]
+    public async Task<IActionResult> SiguienteCodigo(string entidad, CancellationToken ct = default)
+        => Responder(await obtenerSiguienteCodigo.EjecutarAsync(entidad, ct));
 
     // ── Códigos de formato por ventana ───────────────────────────────────────
     [HttpGet("formatos-ventana")]
