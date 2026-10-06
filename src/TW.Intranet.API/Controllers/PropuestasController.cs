@@ -6,7 +6,7 @@ using TW.Intranet.Aplicacion.Dtos;
 
 namespace TW.Intranet.API.Controllers;
 
-/// <summary>HU-07 / HU-08 / HU-09 — Propuestas comerciales.</summary>
+/// <summary>HU-07 / HU-08 / HU-09 / HU-10 — Propuestas comerciales.</summary>
 [ApiController]
 [Route("api/crm/propuestas")]
 [Authorize]
@@ -16,7 +16,8 @@ public class PropuestasController(
     ObtenerPropuestaPorIdCasoDeUso      obtenerPropuestaPorId,
     GuardarPropuestaCasoDeUso           guardarPropuesta,
     ObtenerKpisPropuestasCasoDeUso      obtenerKpis,
-    ObtenerDetallePropuestaCasoDeUso    obtenerDetalle) : ControllerBase
+    ObtenerDetallePropuestaCasoDeUso    obtenerDetalle,
+    CrearNuevaVersionPropuestaCasoDeUso crearNuevaVersion) : ControllerBase
 {
     private long IdUsuarioActual =>
         long.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub"), out var id)
@@ -70,4 +71,14 @@ public class PropuestasController(
     [HttpPost]
     public async Task<IActionResult> GuardarPropuesta([FromBody] GuardarPropuestaDto dto, CancellationToken ct = default)
         => Responder(await guardarPropuesta.EjecutarAsync(dto, IdUsuarioActual, ct));
+
+    /// <summary>
+    /// HU-10 — Crea la siguiente versión (borrador) de la propuesta {id}, que debe ser la última
+    /// y ya no estar en borrador. Requiere motivo y descripción de cambios; copia los bloques
+    /// marcados. Si {id} aún no se había enviado al cliente (pendiente de VB o aprobada) queda anulada.
+    /// Devuelve el id de la nueva versión para abrir el editor.
+    /// </summary>
+    [HttpPost("{id:long}/nueva-version")]
+    public async Task<IActionResult> CrearNuevaVersion(long id, [FromBody] CrearNuevaVersionPropuestaDto dto, CancellationToken ct = default)
+        => Responder(await crearNuevaVersion.EjecutarAsync(id, dto, IdUsuarioActual, ct));
 }

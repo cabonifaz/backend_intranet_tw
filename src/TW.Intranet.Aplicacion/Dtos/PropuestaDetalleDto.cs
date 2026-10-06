@@ -65,6 +65,13 @@ public class PropuestaDetalleDto
     public DateTime? FechaEnvio       { get; set; }
     public string?   FechaExpiracion  { get; set; }
 
+    // HU-10 — versión y última edición
+    public int?      IdMotivoNuevaVersion { get; set; }
+    public string?   MotivoNuevaVersion   { get; set; }
+    public string?   DescripcionCambios   { get; set; }
+    public DateTime? UltimaEdicionEn      { get; set; }
+    public string?   UltimaEdicionPor     { get; set; }
+
     public List<PropuestaItemDto>      Items      { get; set; } = new();
     public List<PropuestaTextoDto>     Textos     { get; set; } = new();
     public List<PropuestaFormaPagoDto> FormasPago { get; set; } = new();

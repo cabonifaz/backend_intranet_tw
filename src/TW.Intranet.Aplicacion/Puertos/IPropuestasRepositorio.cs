@@ -20,6 +20,10 @@ public interface IPropuestasRepositorio
     Task<RespuestaDto<PropuestaContextoDto>> ObtenerContextoPropuestaAsync(
         long idPropuesta, CancellationToken ct);
 
+    /// <summary>HU-10 — Crea la siguiente versión (borrador) copiando los bloques elegidos.</summary>
+    Task<RespuestaDto<NuevaVersionPropuestaResultadoDto>> CrearNuevaVersionAsync(
+        long idPropuestaOrigen, CrearNuevaVersionPropuestaDto dto, long idUsuario, CancellationToken ct);
+
     Task<RespuestaDto<GuardarPropuestaResultadoDto>> GuardarPropuestaAsync(
         GuardarPropuestaDto dto, long idUsuario, CancellationToken ct);
 }

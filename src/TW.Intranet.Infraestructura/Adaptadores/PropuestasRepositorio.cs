@@ -176,6 +176,11 @@ public class PropuestasRepositorio(CadenaConexionBd conexion)
                     FechaCreacion         = FechaHora(r, "fecha_creacion"),
                     FechaEnvio            = FechaHora(r, "fecha_envio"),
                     FechaExpiracion       = Fecha(r, "fecha_expiracion"),
+                    IdMotivoNuevaVersion  = EnteroNulo(r, "id_motivo_nueva_version"),
+                    MotivoNuevaVersion    = Texto(r, "motivo_nueva_version"),
+                    DescripcionCambios    = Texto(r, "descripcion_cambios"),
+                    UltimaEdicionEn       = FechaHora(r, "ultima_edicion_en"),
+                    UltimaEdicionPor      = Texto(r, "ultima_edicion_por"),
                 };
                 d.EsEditable = d.Estado == "borrador";
 
@@ -420,6 +425,36 @@ public class PropuestasRepositorio(CadenaConexionBd conexion)
                     });
 
                 return new RespuestaDto<PropuestaContextoDto>(2, mensaje, c);
+            }, ct);
+
+    // ── HU-10: nueva versión ────────────────────────────────────────────────
+    public Task<RespuestaDto<NuevaVersionPropuestaResultadoDto>> CrearNuevaVersionAsync(
+        long idPropuestaOrigen, CrearNuevaVersionPropuestaDto dto, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_CrearNuevaVersionPropuesta",
+            p =>
+            {
+                p.AddWithValue("p_id_propuesta_origen",  idPropuestaOrigen);
+                p.AddWithValue("p_id_motivo",            dto.IdMotivoNuevaVersion);
+                p.AddWithValue("p_descripcion_cambios",  dto.DescripcionCambios.Trim());
+                p.AddWithValue("p_copiar_configuracion", Bit(dto.Copiar.Configuracion));
+                p.AddWithValue("p_copiar_detalle",       Bit(dto.Copiar.DetalleDescriptivo));
+                p.AddWithValue("p_copiar_condiciones",   Bit(dto.Copiar.Condiciones));
+                p.AddWithValue("p_copiar_items",         Bit(dto.Copiar.Items));
+                p.AddWithValue("p_copiar_forma_pago",    Bit(dto.Copiar.FormaPago));
+                p.AddWithValue("p_copiar_equipos",       Bit(dto.Copiar.Equipos));
+                p.AddWithValue("p_id_usuario",           idUsuario);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<NuevaVersionPropuestaResultadoDto>(3, "El procedimiento no devolvió el resultado.");
+
+                return new RespuestaDto<NuevaVersionPropuestaResultadoDto>(2, mensaje, new NuevaVersionPropuestaResultadoDto(
+                    EnteroLargo(r, "id_propuesta"),
+                    Texto(r, "numero") ?? "",
+                    Entero(r, "version"),
+                    Booleano(r, "version_anterior_anulada")));
             }, ct);
 
     private static List<string> LeerListaJson(string? json)

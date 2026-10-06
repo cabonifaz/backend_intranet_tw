@@ -1,4 +1,5 @@
 -- HU-07 — Propuesta completa: cabecera, ítems, textos, formas de pago y equipos
+-- HU-10 — + motivo/descripción de la versión y última edición (fecha y usuario)
 DROP PROCEDURE IF EXISTS SP_ObtenerPropuestaPorId;
 
 DELIMITER $$
@@ -34,7 +35,11 @@ BEGIN
             p.igv_monto, p.total,
             p.subtotal_opcionales, p.descuento_opcionales, p.total_opcionales,
             CONCAT(uc.nombre, ' ', uc.apellido)       AS nombre_creador,
-            p.fecha_creacion, p.fecha_envio, p.fecha_expiracion
+            p.fecha_creacion, p.fecha_envio, p.fecha_expiracion,
+            -- HU-10: versión y última edición
+            p.id_motivo_nueva_version, tm_mot.String1 AS motivo_nueva_version, p.descripcion_cambios,
+            COALESCE(p.modificado_en, p.creado_en)    AS ultima_edicion_en,
+            CONCAT(um.nombre, ' ', um.apellido)       AS ultima_edicion_por
         FROM propuesta_comercial p
         JOIN requerimiento r          ON r.id_requerimiento = p.id_requerimiento
         JOIN cliente c                ON c.id_cliente       = p.id_cliente
@@ -43,6 +48,8 @@ BEGIN
         LEFT JOIN usuario ur          ON ur.id_usuario      = p.id_responsable
         LEFT JOIN usuario uc          ON uc.id_usuario      = p.id_creador
         LEFT JOIN tabla_maestra tm_mon ON tm_mon.IdMaestro = 1 AND tm_mon.IdEmpresa = 1 AND tm_mon.Num1 = p.id_moneda
+        LEFT JOIN tabla_maestra tm_mot ON tm_mot.IdMaestro = 11 AND tm_mot.IdEmpresa = 1 AND tm_mot.Num1 = p.id_motivo_nueva_version
+        LEFT JOIN usuario um          ON um.id_usuario      = COALESCE(p.modificado_por, p.creado_por)
         WHERE p.id_propuesta = p_id_propuesta;
 
         -- 3. Ítems (principales y opcionales)

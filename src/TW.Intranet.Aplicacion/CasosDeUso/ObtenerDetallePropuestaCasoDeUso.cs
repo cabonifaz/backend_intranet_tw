@@ -24,8 +24,11 @@ public class ObtenerDetallePropuestaCasoDeUso(IPropuestasRepositorio repositorio
     private const int PasoSeguimiento = 4;
     private const int PasoAceptacion  = 5;
 
-    /// <summary>Estados desde los que se puede generar una nueva versión (la versión queda congelada).</summary>
-    private static readonly string[] EstadosParaNuevaVersion = ["enviado", "rechazado", "vencido"];
+    /// <summary>
+    /// Estados desde los que se puede generar una nueva versión (HU-10, igual que SP_CrearNuevaVersionPropuesta).
+    /// pendiente_vb / aprobado: la versión actual se anula. enviado / rechazado / vencido: queda como historial.
+    /// </summary>
+    private static readonly string[] EstadosParaNuevaVersion = ["pendiente_vb", "aprobado", "enviado", "rechazado", "vencido"];
 
     public async Task<RespuestaDto<PropuestaDetalleModalDto>> EjecutarAsync(long idPropuesta, CancellationToken ct = default)
     {
