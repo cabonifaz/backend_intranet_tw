@@ -16,6 +16,10 @@ public interface IPropuestasRepositorio
     Task<RespuestaDto<PropuestaDetalleDto>> ObtenerPropuestaPorIdAsync(
         long idPropuesta, CancellationToken ct);
 
+    /// <summary>HU-09 — Workflow, SLA, documentos, versiones y actividad del detalle.</summary>
+    Task<RespuestaDto<PropuestaContextoDto>> ObtenerContextoPropuestaAsync(
+        long idPropuesta, CancellationToken ct);
+
     Task<RespuestaDto<GuardarPropuestaResultadoDto>> GuardarPropuestaAsync(
         GuardarPropuestaDto dto, long idUsuario, CancellationToken ct);
 }

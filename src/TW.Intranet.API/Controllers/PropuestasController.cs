@@ -6,7 +6,7 @@ using TW.Intranet.Aplicacion.Dtos;
 
 namespace TW.Intranet.API.Controllers;
 
-/// <summary>HU-07 — Creación de Propuesta Comercial.</summary>
+/// <summary>HU-07 / HU-08 / HU-09 — Propuestas comerciales.</summary>
 [ApiController]
 [Route("api/crm/propuestas")]
 [Authorize]
@@ -15,7 +15,8 @@ public class PropuestasController(
     ObtenerPropuestasCasoDeUso          obtenerPropuestas,
     ObtenerPropuestaPorIdCasoDeUso      obtenerPropuestaPorId,
     GuardarPropuestaCasoDeUso           guardarPropuesta,
-    ObtenerKpisPropuestasCasoDeUso      obtenerKpis) : ControllerBase
+    ObtenerKpisPropuestasCasoDeUso      obtenerKpis,
+    ObtenerDetallePropuestaCasoDeUso    obtenerDetalle) : ControllerBase
 {
     private long IdUsuarioActual =>
         long.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub"), out var id)
@@ -52,6 +53,15 @@ public class PropuestasController(
     [HttpGet("{id:long}")]
     public async Task<IActionResult> ObtenerPropuestaPorId(long id, CancellationToken ct = default)
         => Responder(await obtenerPropuestaPorId.EjecutarAsync(id, ct), noEncontradoComo404: true);
+
+    /// <summary>
+    /// HU-09 — Modal "Detalle de Propuesta": la propuesta completa más workflow de aprobación,
+    /// SLA de la etapa, documentos vinculados (RQ, expediente, OC, adjuntos), versiones,
+    /// actividad y la acción principal (editar | nueva_version | ninguna).
+    /// </summary>
+    [HttpGet("{id:long}/detalle")]
+    public async Task<IActionResult> ObtenerDetalle(long id, CancellationToken ct = default)
+        => Responder(await obtenerDetalle.EjecutarAsync(id, ct), noEncontradoComo404: true);
 
     /// <summary>
     /// Guarda la propuesta completa (borrador). IdPropuesta = 0 crea;

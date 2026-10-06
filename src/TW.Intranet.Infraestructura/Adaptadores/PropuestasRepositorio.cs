@@ -351,6 +351,77 @@ public class PropuestasRepositorio(CadenaConexionBd conexion)
             }, ct);
     }
 
+    // ── HU-09: contexto del detalle ──────────────────────────────────────────
+    public Task<RespuestaDto<PropuestaContextoDto>> ObtenerContextoPropuestaAsync(long idPropuesta, CancellationToken ct)
+        => EjecutarAsync("SP_ObtenerContextoPropuesta",
+            p => p.AddWithValue("p_id_propuesta", idPropuesta),
+            async (r, mensaje) =>
+            {
+                // Situación
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<PropuestaContextoDto>(1, "Propuesta no encontrada.");
+
+                var c = new PropuestaContextoDto
+                {
+                    Estado              = Texto(r, "estado") ?? "",
+                    FechaPdf            = FechaHora(r, "fecha_pdf"),
+                    FechaEnvio          = FechaHora(r, "fecha_envio"),
+                    FechaExpiracion     = FechaHora(r, "fecha_expiracion"),
+                    EsUltimaVersion     = Booleano(r, "es_ultima_version"),
+                    TieneOc             = Booleano(r, "tiene_oc"),
+                    SlaTipo             = Texto(r, "sla_tipo"),
+                    SlaVenceEn          = FechaHora(r, "sla_vence_en"),
+                    NumeroContratoMarco = Texto(r, "numero_contrato_marco"),
+                    Ahora               = FechaHora(r, "ahora") ?? DateTime.Now,
+                };
+
+                // Documentos vinculados
+                await r.NextResultAsync(ct);
+                while (await r.ReadAsync(ct))
+                    c.Documentos.Add(new DocumentoVinculadoDto
+                    {
+                        Tipo        = Texto(r, "tipo") ?? "",
+                        IdEntidad   = EnteroLargoNulo(r, "id_entidad"),
+                        Codigo      = Texto(r, "codigo"),
+                        Descripcion = Texto(r, "descripcion"),
+                        Estado      = Texto(r, "estado"),
+                        Url         = Texto(r, "url"),
+                        Fecha       = FechaHora(r, "fecha"),
+                    });
+
+                // Versiones
+                await r.NextResultAsync(ct);
+                while (await r.ReadAsync(ct))
+                    c.Versiones.Add(new VersionPropuestaDto
+                    {
+                        IdPropuesta        = EnteroLargo(r, "id_propuesta"),
+                        Version            = Entero(r, "version"),
+                        Estado             = Texto(r, "estado") ?? "",
+                        Total              = DecimalNulo(r, "total") ?? 0,
+                        FechaCreacion      = FechaHora(r, "fecha_creacion"),
+                        FechaEnvio         = FechaHora(r, "fecha_envio"),
+                        NombreCreador      = Texto(r, "nombre_creador"),
+                        MotivoNuevaVersion = Texto(r, "motivo_nueva_version"),
+                    });
+
+                // Actividad
+                await r.NextResultAsync(ct);
+                while (await r.ReadAsync(ct))
+                    c.Actividad.Add(new ActividadPropuestaDto
+                    {
+                        IdAuditoria    = EnteroLargo(r, "id_auditoria"),
+                        Accion         = Texto(r, "accion") ?? "",
+                        EstadoAnterior = Texto(r, "estado_anterior"),
+                        EstadoNuevo    = Texto(r, "estado_nuevo"),
+                        Descripcion    = Texto(r, "descripcion"),
+                        RegistradoEn   = FechaHora(r, "registrado_en"),
+                        NombreUsuario  = Texto(r, "nombre_usuario"),
+                    });
+
+                return new RespuestaDto<PropuestaContextoDto>(2, mensaje, c);
+            }, ct);
+
     private static List<string> LeerListaJson(string? json)
     {
         if (string.IsNullOrWhiteSpace(json)) return new();
