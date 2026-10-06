@@ -181,7 +181,8 @@ public class MaestrosRepositorio(CadenaConexionBd conexion) : IMaestrosRepositor
             cmd.Parameters.AddWithValue("p_ssoma_notas",             dto.SsomaNotas       ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("p_id_categoria",            dto.IdCategoria      ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("p_usu_cre",                 usuCre);
-            cmd.Parameters.AddWithValue("p_areas",                   dto.Areas is null ? (object)DBNull.Value : JsonSerializer.Serialize(dto.Areas));
+            // p_areas eliminado — las áreas del cliente se manejan por su propio CRUD
+            // (SP_GuardarAreaCliente), fuera de SP_GuardarCliente (migración 37).
 
             await using var reader = await cmd.ExecuteReaderAsync(ct);
 

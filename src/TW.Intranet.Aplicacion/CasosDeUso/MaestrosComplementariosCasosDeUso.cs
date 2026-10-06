@@ -18,11 +18,44 @@ public class ObtenerUbigeoCasoDeUso(IMaestrosComplementariosRepositorio reposito
     }
 }
 
-// ── Áreas asignadas al cliente ───────────────────────────────────────────────
+// ── Áreas por cliente (nombres libres, no catálogo global) ──────────────────
 public class ObtenerAreasClienteCasoDeUso(IMaestrosComplementariosRepositorio repositorio)
 {
-    public Task<RespuestaDto<List<AreaClienteDto>>> EjecutarAsync(long idCliente, CancellationToken ct = default)
-        => repositorio.ObtenerAreasClienteAsync(idCliente, ct);
+    public Task<RespuestaDto<List<AreaClienteDto>>> EjecutarAsync(
+        long idCliente, bool soloActivas, CancellationToken ct = default)
+        => repositorio.ObtenerAreasClienteAsync(idCliente, soloActivas, ct);
+}
+
+public class GuardarAreaClienteCasoDeUso(IMaestrosComplementariosRepositorio repositorio)
+{
+    public Task<RespuestaDto<AreaClienteDto?>> EjecutarAsync(
+        long idCliente, GuardarAreaClienteDto dto, long idUsuario, CancellationToken ct = default)
+    {
+        if (idCliente <= 0)
+            return Task.FromResult(new RespuestaDto<AreaClienteDto?>(1, "Cliente no válido."));
+        var nombre = dto.Nombre?.Trim() ?? "";
+        if (nombre.Length < 2)
+            return Task.FromResult(new RespuestaDto<AreaClienteDto?>(1, "El nombre del área debe tener al menos 2 caracteres."));
+        if (nombre.Length > 150)
+            return Task.FromResult(new RespuestaDto<AreaClienteDto?>(1, "El nombre del área no puede superar los 150 caracteres."));
+        return repositorio.GuardarAreaClienteAsync(idCliente, dto, idUsuario, ct);
+    }
+}
+
+public class CambiarEstadoAreaClienteCasoDeUso(IMaestrosComplementariosRepositorio repositorio)
+{
+    public Task<RespuestaDto<bool>> EjecutarAsync(
+        long idArea, CambiarEstadoAreaClienteDto dto, long idUsuario, CancellationToken ct = default)
+    {
+        if (idArea <= 0)
+            return Task.FromResult(new RespuestaDto<bool>(1, "Área no válida."));
+        var estado = dto.Estado?.Trim();
+        if (string.IsNullOrEmpty(estado) ||
+            !(estado.Equals("Activo", StringComparison.OrdinalIgnoreCase) ||
+              estado.Equals("Inactivo", StringComparison.OrdinalIgnoreCase)))
+            return Task.FromResult(new RespuestaDto<bool>(1, "El estado debe ser \"Activo\" o \"Inactivo\"."));
+        return repositorio.CambiarEstadoAreaClienteAsync(idArea, dto, idUsuario, ct);
+    }
 }
 
 // ── Próximo código de ficha (modo "nuevo") ──────────────────────────────────

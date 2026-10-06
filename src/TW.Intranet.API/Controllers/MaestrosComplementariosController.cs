@@ -13,6 +13,8 @@ namespace TW.Intranet.API.Controllers;
 public class MaestrosComplementariosController(
     ObtenerUbigeoCasoDeUso             obtenerUbigeo,
     ObtenerAreasClienteCasoDeUso       obtenerAreas,
+    GuardarAreaClienteCasoDeUso        guardarArea,
+    CambiarEstadoAreaClienteCasoDeUso  cambiarEstadoArea,
     ObtenerSiguienteCodigoCasoDeUso    obtenerSiguienteCodigo,
     ObtenerFormatosVentanaCasoDeUso    obtenerFormatos,
     GuardarFormatoVentanaCasoDeUso     guardarFormato) : ControllerBase
@@ -42,10 +44,18 @@ public class MaestrosComplementariosController(
     public async Task<IActionResult> Distritos([FromQuery] string? departamento, [FromQuery] string? provincia, CancellationToken ct = default)
         => Responder(await obtenerUbigeo.EjecutarAsync("distritos", departamento, provincia, ct));
 
-    // ── Áreas asignadas al cliente (dropdown "Ubicación" de equipos): [{ codigo, nombre }] ──
+    // ── Áreas por cliente (nombres libres, estado activo/inactivo) ───────────
     [HttpGet("clientes/{idCliente:long}/areas")]
-    public async Task<IActionResult> Areas(long idCliente, CancellationToken ct = default)
-        => Responder(await obtenerAreas.EjecutarAsync(idCliente, ct));
+    public async Task<IActionResult> Areas(long idCliente, [FromQuery] bool soloActivas = true, CancellationToken ct = default)
+        => Responder(await obtenerAreas.EjecutarAsync(idCliente, soloActivas, ct));
+
+    [HttpPost("clientes/{idCliente:long}/areas")]
+    public async Task<IActionResult> GuardarArea(long idCliente, [FromBody] GuardarAreaClienteDto dto, CancellationToken ct = default)
+        => Responder(await guardarArea.EjecutarAsync(idCliente, dto, IdUsuarioActual, ct));
+
+    [HttpPatch("areas-cliente/{idArea:long}/estado")]
+    public async Task<IActionResult> CambiarEstadoArea(long idArea, [FromBody] CambiarEstadoAreaClienteDto dto, CancellationToken ct = default)
+        => Responder(await cambiarEstadoArea.EjecutarAsync(idArea, dto, IdUsuarioActual, ct));
 
     // ── Próximo código de la ficha en modo "nuevo" (referencial) ─────────────
     /// <summary>entidad: requerimiento | propuesta | suministro | equipo_cliente → { entidad, codigo }.</summary>

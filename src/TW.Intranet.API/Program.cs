@@ -235,6 +235,8 @@ builder.Services.AddScoped<ObtenerDetallePropuestaCasoDeUso>();
 builder.Services.AddScoped<IMaestrosComplementariosRepositorio, MaestrosComplementariosRepositorio>();
 builder.Services.AddScoped<ObtenerUbigeoCasoDeUso>();
 builder.Services.AddScoped<ObtenerAreasClienteCasoDeUso>();
+builder.Services.AddScoped<GuardarAreaClienteCasoDeUso>();
+builder.Services.AddScoped<CambiarEstadoAreaClienteCasoDeUso>();
 builder.Services.AddScoped<ObtenerSiguienteCodigoCasoDeUso>();
 builder.Services.AddScoped<ObtenerFormatosVentanaCasoDeUso>();
 builder.Services.AddScoped<GuardarFormatoVentanaCasoDeUso>();

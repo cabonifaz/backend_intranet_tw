@@ -1,7 +1,11 @@
 -- Crear (p_id_area = 0) o renombrar un área del cliente.
---   Normaliza espacios ("Área   4" → "Área 4") y evita duplicados en la misma empresa
---   (la comparación ignora mayúsculas y tildes: "AREA 4" = "Área 4").
---   Al renombrar, actualiza la ubicación de los equipos del cliente que la usaban.
+--   Normaliza espacios ("Área   4" → "Área 4") y evita duplicados en el
+--   mismo cliente (la comparación ignora mayúsculas y tildes gracias al
+--   collation utf8mb4_0900_ai_ci de la columna).
+--   Al renombrar, actualiza en cascada la ubicación específica de los
+--   equipos del cliente que usaban el nombre anterior.
+--   Lo repuso la migración 37 tras la decisión de volver al modelo de
+--   áreas por cliente (nombres libres, no catálogo global).
 DROP PROCEDURE IF EXISTS SP_GuardarAreaCliente;
 
 DELIMITER $$
@@ -38,6 +42,7 @@ proc: BEGIN
         LEAVE proc;
     END IF;
 
+    -- En modo renombrar: validar que el área exista y traer su nombre actual
     IF p_id_area <> 0 THEN
         SELECT nombre INTO v_nombre_ant FROM area_cliente
         WHERE id_area = p_id_area AND id_cliente = p_id_cliente AND SoftDelete = 0;
@@ -47,8 +52,11 @@ proc: BEGIN
         END IF;
     END IF;
 
+    -- Duplicado dentro del mismo cliente
     SELECT nombre INTO v_existente FROM area_cliente
-    WHERE id_cliente = p_id_cliente AND nombre = v_nombre
+    WHERE id_cliente = p_id_cliente
+      AND nombre = v_nombre
+      AND SoftDelete = 0
       AND (p_id_area = 0 OR id_area <> p_id_area)
     LIMIT 1;
 
@@ -61,17 +69,26 @@ proc: BEGIN
 
     START TRANSACTION;
     IF p_id_area = 0 THEN
-        INSERT INTO area_cliente (id_cliente, nombre, UsuCre, FchCre) VALUES (p_id_cliente, v_nombre, v_usu, NOW());
+        INSERT INTO area_cliente (id_cliente, nombre, UsuCre, FchCre)
+        VALUES (p_id_cliente, v_nombre, v_usu, NOW());
         SET v_id = LAST_INSERT_ID();
     ELSE
-        UPDATE area_cliente SET nombre = v_nombre, UsuMod = v_usu, FchMod = NOW() WHERE id_area = p_id_area;
-        UPDATE equipo_cliente SET ubicacion_especifica = v_nombre
-        WHERE id_cliente = p_id_cliente AND ubicacion_especifica = v_nombre_ant;
+        UPDATE area_cliente
+        SET nombre = v_nombre, UsuMod = v_usu, FchMod = NOW()
+        WHERE id_area = p_id_area;
+
+        -- Cascada: equipos del cliente que usaban el nombre anterior
+        UPDATE equipo_cliente
+        SET ubicacion_especifica = v_nombre
+        WHERE id_cliente = p_id_cliente
+          AND ubicacion_especifica = v_nombre_ant;
+
         SET v_id = p_id_area;
     END IF;
     COMMIT;
 
-    SELECT 2 AS IdTipoMensaje, IF(p_id_area = 0, 'Área registrada correctamente.', 'Área actualizada correctamente.') AS Mensaje;
+    SELECT 2 AS IdTipoMensaje,
+           IF(p_id_area = 0, 'Área registrada correctamente.', 'Área actualizada correctamente.') AS Mensaje;
     SELECT v_id AS id_area, v_nombre AS nombre;
 END$$
 

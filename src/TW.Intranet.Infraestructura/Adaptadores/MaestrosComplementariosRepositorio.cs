@@ -26,22 +26,61 @@ public class MaestrosComplementariosRepositorio(CadenaConexionBd conexion)
                 return new RespuestaDto<List<UbigeoItemDto>>(2, mensaje, items);
             }, ct);
 
-    // ── Áreas asignadas al cliente ────────────────────────────────────────────
-    public Task<RespuestaDto<List<AreaClienteDto>>> ObtenerAreasClienteAsync(long idCliente, CancellationToken ct)
+    // ── Áreas por cliente (nombres libres) ────────────────────────────────────
+    public Task<RespuestaDto<List<AreaClienteDto>>> ObtenerAreasClienteAsync(
+        long idCliente, bool soloActivas, CancellationToken ct)
         => EjecutarAsync("SP_ObtenerAreasCliente",
             p =>
             {
                 p.AddWithValue("p_id_cliente",   idCliente);
-                p.AddWithValue("p_solo_activas", 1);
+                p.AddWithValue("p_solo_activas", soloActivas ? 1 : 0);
             },
             async (r, mensaje) =>
             {
                 await r.NextResultAsync(ct);
                 var items = new List<AreaClienteDto>();
                 while (await r.ReadAsync(ct))
-                    items.Add(new AreaClienteDto(Texto(r, "codigo") ?? "", Texto(r, "nombre") ?? ""));
+                    items.Add(new AreaClienteDto(
+                        EnteroLargo(r, "id_area"),
+                        EnteroLargo(r, "id_cliente"),
+                        Texto(r, "nombre") ?? "",
+                        Texto(r, "estado") ?? "Activo",
+                        Entero(r, "equipos")));
                 return new RespuestaDto<List<AreaClienteDto>>(2, mensaje, items);
             }, ct);
+
+    public Task<RespuestaDto<AreaClienteDto?>> GuardarAreaClienteAsync(
+        long idCliente, GuardarAreaClienteDto dto, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_GuardarAreaCliente",
+            p =>
+            {
+                p.AddWithValue("p_id_area",    dto.IdArea);
+                p.AddWithValue("p_id_cliente", idCliente);
+                p.AddWithValue("p_nombre",     Valor(dto.Nombre));
+                p.AddWithValue("p_id_usuario", idUsuario);
+            },
+            async (r, mensaje) =>
+            {
+                // Segundo resultset: { id_area, nombre }
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<AreaClienteDto?>(3, "El procedimiento no devolvió el área guardada.");
+                var idArea = EnteroLargo(r, "id_area");
+                var nombre = Texto(r, "nombre") ?? "";
+                return new RespuestaDto<AreaClienteDto?>(2, mensaje,
+                    new AreaClienteDto(idArea, idCliente, nombre, "Activo", 0));
+            }, ct);
+
+    public Task<RespuestaDto<bool>> CambiarEstadoAreaClienteAsync(
+        long idArea, CambiarEstadoAreaClienteDto dto, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_CambiarEstadoAreaCliente",
+            p =>
+            {
+                p.AddWithValue("p_id_area",    idArea);
+                p.AddWithValue("p_estado",     Valor(dto.Estado));
+                p.AddWithValue("p_id_usuario", idUsuario);
+            },
+            (_, mensaje) => Task.FromResult(new RespuestaDto<bool>(2, mensaje, true)), ct);
 
     // ── Próximo código de ficha (referencial) ─────────────────────────────────
     public Task<RespuestaDto<SiguienteCodigoDto>> ObtenerSiguienteCodigoAsync(string entidad, CancellationToken ct)

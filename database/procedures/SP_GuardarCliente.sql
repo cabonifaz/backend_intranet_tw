@@ -30,20 +30,15 @@ CREATE PROCEDURE SP_GuardarCliente(
     IN p_ssoma_examen_medico     TINYINT(1),
     IN p_ssoma_notas             TEXT          CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_id_categoria            INT,
-    IN p_usu_cre                 VARCHAR(100)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
-    IN p_areas                   JSON
+    IN p_usu_cre                 VARCHAR(100)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci
 )
 BEGIN
-    -- p_areas: ["comercial","metrologia"] (códigos de AREA_USUARIO). NULL = no cambiar las áreas.
+    -- Las áreas del cliente ahora se manejan por su propio CRUD (SP_GuardarAreaCliente),
+    -- fuera de este SP (decisión migración 37). El SP ya no recibe p_areas ni llama a
+    -- SP_SincronizarAreasCliente.
     DECLARE v_id BIGINT;
 
-    IF p_areas IS NOT NULL AND EXISTS (
-        SELECT 1 FROM JSON_TABLE(p_areas, '$[*]' COLUMNS (area VARCHAR(60) PATH '$')) j
-        WHERE NOT EXISTS (SELECT 1 FROM tabla_maestra t
-                          WHERE t.IdMaestro = 79 AND t.IdEmpresa = 1 AND t.String2 = j.area)
-    ) THEN
-        SELECT 1 AS IdTipoMensaje, 'Una de las áreas seleccionadas no es válida.' AS Mensaje;
-    ELSEIF EXISTS (
+    IF EXISTS (
         SELECT 1 FROM cliente
         WHERE ruc = p_ruc
           AND SoftDelete = 0
@@ -70,7 +65,6 @@ BEGIN
         );
 
         SET v_id = LAST_INSERT_ID();
-        CALL SP_SincronizarAreasCliente(v_id, p_areas, p_usu_cre);
 
         SELECT 2 AS IdTipoMensaje, 'Cliente registrado correctamente.' AS Mensaje;
         SELECT v_id AS id_cliente;
@@ -100,8 +94,6 @@ BEGIN
             UsuMod                  = p_usu_cre,
             FchMod                  = NOW()
         WHERE id_cliente = p_id_cliente AND SoftDelete = 0;
-
-        CALL SP_SincronizarAreasCliente(p_id_cliente, p_areas, p_usu_cre);
 
         SELECT 2 AS IdTipoMensaje, 'Cliente actualizado correctamente.' AS Mensaje;
         SELECT p_id_cliente AS id_cliente;

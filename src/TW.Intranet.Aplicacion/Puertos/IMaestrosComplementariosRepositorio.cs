@@ -7,7 +7,9 @@ public interface IMaestrosComplementariosRepositorio
 {
     Task<RespuestaDto<List<UbigeoItemDto>>> ObtenerUbigeoAsync(string nivel, string? departamento, string? provincia, CancellationToken ct);
 
-    Task<RespuestaDto<List<AreaClienteDto>>> ObtenerAreasClienteAsync(long idCliente, CancellationToken ct);
+    Task<RespuestaDto<List<AreaClienteDto>>> ObtenerAreasClienteAsync(long idCliente, bool soloActivas, CancellationToken ct);
+    Task<RespuestaDto<AreaClienteDto?>>      GuardarAreaClienteAsync(long idCliente, GuardarAreaClienteDto dto, long idUsuario, CancellationToken ct);
+    Task<RespuestaDto<bool>>                 CambiarEstadoAreaClienteAsync(long idArea, CambiarEstadoAreaClienteDto dto, long idUsuario, CancellationToken ct);
 
     Task<RespuestaDto<SiguienteCodigoDto>> ObtenerSiguienteCodigoAsync(string entidad, CancellationToken ct);
 
