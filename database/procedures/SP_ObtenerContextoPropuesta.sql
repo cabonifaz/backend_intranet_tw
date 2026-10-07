@@ -6,7 +6,7 @@
 --   4. Versiones (todas las de la misma numeración)
 --   5. Actividad (auditoria_evento de esta versión, más reciente primero)
 --   SLA: en 'pendiente_vb' se mide contra el VB pendiente (o CONFIG_SLA si aún
---   no hay registro); en 'enviado' contra la fecha de expiración (vigencia).
+--   no hay registro), en 'enviado' contra la fecha de expiración (vigencia).
 DROP PROCEDURE IF EXISTS SP_ObtenerContextoPropuesta;
 
 DELIMITER $$
