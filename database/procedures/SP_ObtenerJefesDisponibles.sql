@@ -17,6 +17,7 @@ BEGIN
         u.area,
         u.telefono,
         u.anexo,
+        u.troncal,
         'Activo'            AS estado,
         u.ultimo_login      AS ultimo_acceso,
         u.creado_en         AS fecha_creacion
