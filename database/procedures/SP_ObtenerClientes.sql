@@ -33,15 +33,21 @@ BEGIN
         (SELECT COUNT(*) FROM contacto_cliente cc
          WHERE cc.id_cliente = c.id_cliente AND cc.SoftDelete = 0
            AND cc.estado = 'Activo') AS cantidad_contactos,
+        -- Solo devuelve datos del contacto si realmente hay uno marcado como
+        -- principal de la empresa (es_contacto_principal = 1). Si ningun
+        -- contacto esta marcado, la columna queda NULL y la UI muestra "—".
         (SELECT cc.nombres FROM contacto_cliente cc
          WHERE cc.id_cliente = c.id_cliente AND cc.SoftDelete = 0 AND cc.estado = 'Activo'
-         ORDER BY cc.es_contacto_principal DESC, cc.id_contacto ASC LIMIT 1) AS contacto_principal,
+           AND cc.es_contacto_principal = 1
+         LIMIT 1) AS contacto_principal,
         (SELECT cc.correo FROM contacto_cliente cc
          WHERE cc.id_cliente = c.id_cliente AND cc.SoftDelete = 0 AND cc.estado = 'Activo'
-         ORDER BY cc.es_contacto_principal DESC, cc.id_contacto ASC LIMIT 1) AS contacto_principal_correo,
+           AND cc.es_contacto_principal = 1
+         LIMIT 1) AS contacto_principal_correo,
         (SELECT COALESCE(NULLIF(cc.telefono_movil, ''), cc.telefono_anexo) FROM contacto_cliente cc
          WHERE cc.id_cliente = c.id_cliente AND cc.SoftDelete = 0 AND cc.estado = 'Activo'
-         ORDER BY cc.es_contacto_principal DESC, cc.id_contacto ASC LIMIT 1) AS contacto_principal_telefono
+           AND cc.es_contacto_principal = 1
+         LIMIT 1) AS contacto_principal_telefono
     FROM cliente c
     WHERE c.SoftDelete = 0
       AND (p_estado IS NULL OR p_estado = '' OR c.estado = p_estado)
