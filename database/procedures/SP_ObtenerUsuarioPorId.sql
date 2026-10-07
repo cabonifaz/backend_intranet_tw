@@ -27,6 +27,7 @@ BEGIN
         u.area,
         u.telefono,
         u.anexo,
+        u.troncal,
         CASE u.estado
             WHEN 'activo'     THEN 'Activo'
             WHEN 'inactivo'   THEN 'Inactivo'
