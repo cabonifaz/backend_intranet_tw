@@ -24,6 +24,11 @@ public interface IPropuestasRepositorio
     Task<RespuestaDto<NuevaVersionPropuestaResultadoDto>> CrearNuevaVersionAsync(
         long idPropuestaOrigen, CrearNuevaVersionPropuestaDto dto, long idUsuario, CancellationToken ct);
 
+    /// <summary>HU-11 — Aplica, previsualiza o quita el descuento global (tipo: porcentaje | monto | ninguno).</summary>
+    Task<RespuestaDto<DescuentoPropuestaResultadoDto>> AplicarDescuentoAsync(
+        long idPropuesta, string tipo, decimal valor, int? idMotivo, bool soloPrevisualizar,
+        long idUsuario, CancellationToken ct);
+
     Task<RespuestaDto<GuardarPropuestaResultadoDto>> GuardarPropuestaAsync(
         GuardarPropuestaDto dto, long idUsuario, CancellationToken ct);
 }

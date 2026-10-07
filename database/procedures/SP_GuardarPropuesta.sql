@@ -4,6 +4,11 @@
 --   p_id_propuesta > 0  → actualizar (solo si está en 'borrador')
 --   Ítems, textos, formas de pago y equipos llegan como arreglos JSON y se
 --   reemplazan completos. Los totales los recalcula el SP (no se confía en el front).
+--   HU-11 — Descuento global: solo lo cambia quien tiene la acción
+--   propuesta_aplicar_descuento (Jefe Comercial = supervisor del área comercial,
+--   o administrador). Para el resto se conserva el descuento ya guardado
+--   (o el de la versión base) y se ignoran p_descuento_pct, p_descuento_monto
+--   y p_id_motivo_descuento. Todo descuento mayor a 0 exige motivo.
 DROP PROCEDURE IF EXISTS SP_GuardarPropuesta;
 
 DELIMITER $$
@@ -71,6 +76,8 @@ proc: BEGIN
     DECLARE v_pagos_suma    DECIMAL(7,2) DEFAULT 0;
     DECLARE v_n             INT DEFAULT 0;
     DECLARE v_es_nueva      TINYINT DEFAULT 0;
+    DECLARE v_puede_desc    TINYINT DEFAULT 0;
+    DECLARE v_id_desc_src   BIGINT DEFAULT 0;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -198,6 +205,40 @@ proc: BEGIN
             es_espaciado    TINYINT       PATH '$.es_espaciado'
          )) AS j
     WHERE IFNULL(j.es_espaciado, 0) = 0;
+
+    -- ── HU-11: descuento global solo con permiso ────────────────────────
+    SET v_puede_desc = FN_PermisoAccion(p_id_usuario, 'propuesta_aplicar_descuento');
+    IF v_puede_desc = 0 THEN
+        -- Sin permiso: se conserva el descuento de la propuesta (o de la versión base)
+        SET v_id_desc_src = IF(IFNULL(p_id_propuesta, 0) > 0, p_id_propuesta, IFNULL(p_id_propuesta_base, 0));
+        SET p_descuento_pct = NULL;
+        SET p_descuento_monto = 0;
+        SET p_id_motivo_descuento = NULL;
+        IF v_id_desc_src > 0 THEN
+            SELECT descuento_pct,
+                   IF(IFNULL(descuento_pct, 0) > 0, NULL, descuento_monto),
+                   id_motivo_descuento
+              INTO p_descuento_pct, p_descuento_monto, p_id_motivo_descuento
+            FROM propuesta_comercial
+            WHERE id_propuesta = v_id_desc_src;
+        END IF;
+    ELSEIF (IFNULL(p_descuento_pct, 0) > 0 OR IFNULL(p_descuento_monto, 0) > 0)
+           AND p_id_motivo_descuento IS NULL THEN
+        -- Con permiso pero sin motivo: se reutiliza el motivo ya guardado, si existe
+        IF IFNULL(p_id_propuesta, 0) > 0 THEN
+            SELECT id_motivo_descuento INTO p_id_motivo_descuento
+            FROM propuesta_comercial WHERE id_propuesta = p_id_propuesta;
+        END IF;
+        IF p_id_motivo_descuento IS NULL THEN
+            SELECT 1 AS IdTipoMensaje, 'Seleccione el motivo del descuento.' AS Mensaje;
+            LEAVE proc;
+        END IF;
+    END IF;
+
+    IF IFNULL(p_descuento_pct, 0) > 100 THEN
+        SELECT 1 AS IdTipoMensaje, 'El porcentaje de descuento no puede ser mayor a 100.' AS Mensaje;
+        LEAVE proc;
+    END IF;
 
     SET v_desc = IF(IFNULL(p_descuento_pct, 0) > 0,
                     ROUND(v_sub * p_descuento_pct / 100, 2),

@@ -54,6 +54,7 @@ public class PropuestaDetalleDto
     public decimal? DescuentoPct        { get; set; }
     public decimal  DescuentoMonto      { get; set; }
     public int?     IdMotivoDescuento   { get; set; }
+    public string?  MotivoDescuento     { get; set; }   // HU-11
     public decimal  IgvMonto            { get; set; }
     public decimal  Total               { get; set; }
     public decimal  SubtotalOpcionales  { get; set; }

@@ -7,7 +7,7 @@ using TW.Intranet.Aplicacion.Dtos;
 
 namespace TW.Intranet.API.Controllers;
 
-/// <summary>HU-07 / HU-08 / HU-09 / HU-10 — Propuestas comerciales.</summary>
+/// <summary>HU-07 / HU-08 / HU-09 / HU-10 / HU-11 — Propuestas comerciales.</summary>
 [ApiController]
 [Route("api/crm/propuestas")]
 [Authorize]
@@ -18,7 +18,10 @@ public class PropuestasController(
     GuardarPropuestaCasoDeUso           guardarPropuesta,
     ObtenerKpisPropuestasCasoDeUso      obtenerKpis,
     ObtenerDetallePropuestaCasoDeUso    obtenerDetalle,
-    CrearNuevaVersionPropuestaCasoDeUso crearNuevaVersion) : ControllerBase
+    CrearNuevaVersionPropuestaCasoDeUso crearNuevaVersion,
+    PrevisualizarDescuentoPropuestaCasoDeUso previsualizarDescuento,
+    AplicarDescuentoPropuestaCasoDeUso       aplicarDescuento,
+    QuitarDescuentoPropuestaCasoDeUso        quitarDescuento) : ControllerBase
 {
     private long IdUsuarioActual =>
         long.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub"), out var id)
@@ -89,4 +92,30 @@ public class PropuestasController(
     [HttpPost("{id:long}/nueva-version")]
     public async Task<IActionResult> CrearNuevaVersion(long id, [FromBody] CrearNuevaVersionPropuestaDto dto, CancellationToken ct = default)
         => Responder(await crearNuevaVersion.EjecutarAsync(id, dto, IdUsuarioActual, ct));
+
+    // ── HU-11: descuento global ─────────────────────────────────────────────
+
+    /// <summary>
+    /// Calcula, sin guardar, los nuevos montos (descuento, subtotal, IGV y total) para el modal.
+    /// Misma fórmula que al guardar. El motivo es opcional aquí.
+    /// </summary>
+    [RequierePermiso("propuesta_aplicar_descuento")]
+    [HttpPost("{id:long}/descuento/previsualizar")]
+    public async Task<IActionResult> PrevisualizarDescuento(long id, [FromBody] AplicarDescuentoPropuestaDto dto, CancellationToken ct = default)
+        => Responder(await previsualizarDescuento.EjecutarAsync(id, dto, IdUsuarioActual, ct));
+
+    /// <summary>
+    /// Aplica el descuento global (porcentaje o monto fijo) con motivo obligatorio.
+    /// Solo propuestas en borrador. Requiere propuesta_aplicar_descuento (Jefe Comercial o administrador).
+    /// </summary>
+    [RequierePermiso("propuesta_aplicar_descuento")]
+    [HttpPut("{id:long}/descuento")]
+    public async Task<IActionResult> AplicarDescuento(long id, [FromBody] AplicarDescuentoPropuestaDto dto, CancellationToken ct = default)
+        => Responder(await aplicarDescuento.EjecutarAsync(id, dto, IdUsuarioActual, ct));
+
+    /// <summary>Quita el descuento global. Solo propuestas en borrador.</summary>
+    [RequierePermiso("propuesta_aplicar_descuento")]
+    [HttpDelete("{id:long}/descuento")]
+    public async Task<IActionResult> QuitarDescuento(long id, CancellationToken ct = default)
+        => Responder(await quitarDescuento.EjecutarAsync(id, IdUsuarioActual, ct));
 }

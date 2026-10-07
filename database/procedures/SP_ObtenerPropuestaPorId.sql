@@ -1,5 +1,6 @@
 -- HU-07 — Propuesta completa: cabecera, ítems, textos, formas de pago y equipos
 -- HU-10 — + motivo/descripción de la versión y última edición (fecha y usuario)
+-- HU-11 — + etiqueta del motivo del descuento
 DROP PROCEDURE IF EXISTS SP_ObtenerPropuestaPorId;
 
 DELIMITER $$
@@ -31,7 +32,7 @@ BEGIN
             p.tipo_cambio, p.garantia_meses, p.mostrar_garantia,
             p.plazo_entrega_dias, p.plazo_entrega_unidad, p.plazo_entrega_condicion,
             p.vigencia_dias, p.aplica_igv, p.precios_incluyen_igv, p.igv_pct,
-            p.subtotal, p.descuento_pct, p.descuento_monto, p.id_motivo_descuento,
+            p.subtotal, p.descuento_pct, p.descuento_monto, p.id_motivo_descuento, tm_mdesc.String1 AS motivo_descuento,
             p.igv_monto, p.total,
             p.subtotal_opcionales, p.descuento_opcionales, p.total_opcionales,
             CONCAT(uc.nombre, ' ', uc.apellido)       AS nombre_creador,
@@ -49,6 +50,7 @@ BEGIN
         LEFT JOIN usuario uc          ON uc.id_usuario      = p.id_creador
         LEFT JOIN tabla_maestra tm_mon ON tm_mon.IdMaestro = 1 AND tm_mon.IdEmpresa = 1 AND tm_mon.Num1 = p.id_moneda
         LEFT JOIN tabla_maestra tm_mot ON tm_mot.IdMaestro = 11 AND tm_mot.IdEmpresa = 1 AND tm_mot.Num1 = p.id_motivo_nueva_version
+        LEFT JOIN tabla_maestra tm_mdesc ON tm_mdesc.IdMaestro = 8 AND tm_mdesc.IdEmpresa = 1 AND tm_mdesc.Num1 = p.id_motivo_descuento
         LEFT JOIN usuario um          ON um.id_usuario      = COALESCE(p.modificado_por, p.creado_por)
         WHERE p.id_propuesta = p_id_propuesta;
 

@@ -167,6 +167,7 @@ public class PropuestasRepositorio(CadenaConexionBd conexion)
                     DescuentoPct          = DecimalNulo(r, "descuento_pct"),
                     DescuentoMonto        = DecimalNulo(r, "descuento_monto") ?? 0,
                     IdMotivoDescuento     = EnteroNulo(r, "id_motivo_descuento"),
+                    MotivoDescuento       = Texto(r, "motivo_descuento"),
                     IgvMonto              = DecimalNulo(r, "igv_monto") ?? 0,
                     Total                 = DecimalNulo(r, "total") ?? 0,
                     SubtotalOpcionales    = DecimalNulo(r, "subtotal_opcionales") ?? 0,
@@ -455,6 +456,46 @@ public class PropuestasRepositorio(CadenaConexionBd conexion)
                     Texto(r, "numero") ?? "",
                     Entero(r, "version"),
                     Booleano(r, "version_anterior_anulada")));
+            }, ct);
+
+    // ── HU-11: descuento global ──────────────────────────────────────────────
+    public Task<RespuestaDto<DescuentoPropuestaResultadoDto>> AplicarDescuentoAsync(
+        long idPropuesta, string tipo, decimal valor, int? idMotivo, bool soloPrevisualizar,
+        long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_AplicarDescuentoPropuesta",
+            p =>
+            {
+                p.AddWithValue("p_id_propuesta",       idPropuesta);
+                p.AddWithValue("p_tipo",               tipo);
+                p.AddWithValue("p_valor",              valor);
+                p.AddWithValue("p_id_motivo",          Valor(idMotivo));
+                p.AddWithValue("p_solo_previsualizar", Bit(soloPrevisualizar));
+                p.AddWithValue("p_id_usuario",         idUsuario);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<DescuentoPropuestaResultadoDto>(3, "El procedimiento no devolvió el resultado.");
+
+                return new RespuestaDto<DescuentoPropuestaResultadoDto>(2, mensaje, new DescuentoPropuestaResultadoDto
+                {
+                    SubtotalActual     = DecimalNulo(r, "subtotal_actual") ?? 0,
+                    DescuentoActual    = DecimalNulo(r, "descuento_actual") ?? 0,
+                    PorcentajeActual   = DecimalNulo(r, "porcentaje_actual"),
+                    IgvActual          = DecimalNulo(r, "igv_actual") ?? 0,
+                    TotalActual        = DecimalNulo(r, "total_actual") ?? 0,
+                    Tipo               = Texto(r, "tipo") ?? tipo,
+                    Porcentaje         = DecimalNulo(r, "porcentaje"),
+                    DescuentoNuevo     = DecimalNulo(r, "descuento_nuevo") ?? 0,
+                    SubtotalNuevo      = DecimalNulo(r, "subtotal_nuevo") ?? 0,
+                    IgvNuevo           = DecimalNulo(r, "igv_nuevo") ?? 0,
+                    TotalNuevo         = DecimalNulo(r, "total_nuevo") ?? 0,
+                    IgvPct             = DecimalNulo(r, "igv_pct") ?? 0,
+                    IdMotivoDescuento  = EnteroNulo(r, "id_motivo_descuento"),
+                    MotivoDescuento    = Texto(r, "motivo_descuento"),
+                    Guardado           = Booleano(r, "guardado"),
+                });
             }, ct);
 
     private static List<string> LeerListaJson(string? json)
