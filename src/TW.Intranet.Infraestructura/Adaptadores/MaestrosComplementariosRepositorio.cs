@@ -82,6 +82,35 @@ public class MaestrosComplementariosRepositorio(CadenaConexionBd conexion)
             },
             (_, mensaje) => Task.FromResult(new RespuestaDto<bool>(2, mensaje, true)), ct);
 
+    // ── Requisitos SSOMA asignados al cliente ─────────────────────────────────
+    public Task<RespuestaDto<List<RequisitoSsomaClienteDto>>> ObtenerRequisitosDelClienteAsync(long idCliente, CancellationToken ct)
+        => EjecutarAsync("SP_ObtenerRequisitosDelCliente",
+            p => p.AddWithValue("p_id_cliente", idCliente),
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                var items = new List<RequisitoSsomaClienteDto>();
+                while (await r.ReadAsync(ct))
+                    items.Add(new RequisitoSsomaClienteDto(
+                        Texto(r, "codigo") ?? "",
+                        Texto(r, "nombre") ?? ""));
+                return new RespuestaDto<List<RequisitoSsomaClienteDto>>(2, mensaje, items);
+            }, ct);
+
+    public Task<RespuestaDto<bool>> SincronizarRequisitosClienteAsync(
+        long idCliente, SincronizarRequisitosSsomaDto dto, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_SincronizarRequisitosCliente",
+            p =>
+            {
+                p.AddWithValue("p_id_cliente", idCliente);
+                // Si Codigos es null → NULL en SQL (no cambia); si [] → JSON '[]' (borra todos).
+                p.AddWithValue("p_requisitos", dto.Codigos is null
+                    ? (object)DBNull.Value
+                    : System.Text.Json.JsonSerializer.Serialize(dto.Codigos));
+                p.AddWithValue("p_id_usuario", idUsuario);
+            },
+            (_, mensaje) => Task.FromResult(new RespuestaDto<bool>(2, mensaje, true)), ct);
+
     // ── Próximo código de ficha (referencial) ─────────────────────────────────
     public Task<RespuestaDto<SiguienteCodigoDto>> ObtenerSiguienteCodigoAsync(string entidad, CancellationToken ct)
         => EjecutarAsync("SP_ObtenerSiguienteCodigo",

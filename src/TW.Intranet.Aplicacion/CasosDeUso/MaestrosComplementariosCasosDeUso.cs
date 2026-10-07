@@ -58,6 +58,29 @@ public class CambiarEstadoAreaClienteCasoDeUso(IMaestrosComplementariosRepositor
     }
 }
 
+// ── Requisitos SSOMA asignados al cliente ────────────────────────────────────
+public class ObtenerRequisitosDelClienteCasoDeUso(IMaestrosComplementariosRepositorio repositorio)
+{
+    public Task<RespuestaDto<List<RequisitoSsomaClienteDto>>> EjecutarAsync(long idCliente, CancellationToken ct = default)
+    {
+        if (idCliente <= 0)
+            return Task.FromResult(new RespuestaDto<List<RequisitoSsomaClienteDto>>(1, "Cliente no válido."));
+        return repositorio.ObtenerRequisitosDelClienteAsync(idCliente, ct);
+    }
+}
+
+public class SincronizarRequisitosClienteCasoDeUso(IMaestrosComplementariosRepositorio repositorio)
+{
+    public Task<RespuestaDto<bool>> EjecutarAsync(
+        long idCliente, SincronizarRequisitosSsomaDto dto, long idUsuario, CancellationToken ct = default)
+    {
+        if (idCliente <= 0)
+            return Task.FromResult(new RespuestaDto<bool>(1, "Cliente no válido."));
+        // dto.Codigos puede ser null (no cambiar) o lista (reemplazar — vacío borra todos).
+        return repositorio.SincronizarRequisitosClienteAsync(idCliente, dto, idUsuario, ct);
+    }
+}
+
 // ── Próximo código de ficha (modo "nuevo") ──────────────────────────────────
 public class ObtenerSiguienteCodigoCasoDeUso(IMaestrosComplementariosRepositorio repositorio)
 {

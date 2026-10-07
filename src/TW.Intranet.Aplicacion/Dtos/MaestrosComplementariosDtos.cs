@@ -26,6 +26,20 @@ public class CambiarEstadoAreaClienteDto
     public string? Estado { get; set; }
 }
 
+// ── Requisitos SSOMA asignados al cliente ────────────────────────────────────
+/// <summary>Requisito SSOMA aplicable al cliente. codigo = String2 del catálogo REQUISITO_SSOMA.</summary>
+public record RequisitoSsomaClienteDto(string Codigo, string Nombre);
+
+/// <summary>
+/// Body de PUT /api/maestros/clientes/{idCliente}/requisitos-ssoma.
+/// Reemplaza la lista completa de requisitos aplicables al cliente (delete + insert).
+/// </summary>
+public class SincronizarRequisitosSsomaDto
+{
+    /// <summary>Códigos (String2 del catálogo REQUISITO_SSOMA). Lista vacía = quita todos los requisitos.</summary>
+    public List<string>? Codigos { get; set; }
+}
+
 // ── Próximo código de una ficha en modo "nuevo" (referencial) ──────────────────
 public record SiguienteCodigoDto(string Entidad, string Codigo);
 

@@ -11,13 +11,15 @@ namespace TW.Intranet.API.Controllers;
 [Route("api/maestros")]
 [Authorize]
 public class MaestrosComplementariosController(
-    ObtenerUbigeoCasoDeUso             obtenerUbigeo,
-    ObtenerAreasClienteCasoDeUso       obtenerAreas,
-    GuardarAreaClienteCasoDeUso        guardarArea,
-    CambiarEstadoAreaClienteCasoDeUso  cambiarEstadoArea,
-    ObtenerSiguienteCodigoCasoDeUso    obtenerSiguienteCodigo,
-    ObtenerFormatosVentanaCasoDeUso    obtenerFormatos,
-    GuardarFormatoVentanaCasoDeUso     guardarFormato) : ControllerBase
+    ObtenerUbigeoCasoDeUso                 obtenerUbigeo,
+    ObtenerAreasClienteCasoDeUso           obtenerAreas,
+    GuardarAreaClienteCasoDeUso            guardarArea,
+    CambiarEstadoAreaClienteCasoDeUso      cambiarEstadoArea,
+    ObtenerSiguienteCodigoCasoDeUso        obtenerSiguienteCodigo,
+    ObtenerFormatosVentanaCasoDeUso        obtenerFormatos,
+    GuardarFormatoVentanaCasoDeUso         guardarFormato,
+    ObtenerRequisitosDelClienteCasoDeUso   obtenerRequisitosCliente,
+    SincronizarRequisitosClienteCasoDeUso  sincronizarRequisitosCliente) : ControllerBase
 {
     private long IdUsuarioActual =>
         long.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub"), out var id)
@@ -56,6 +58,15 @@ public class MaestrosComplementariosController(
     [HttpPatch("areas-cliente/{idArea:long}/estado")]
     public async Task<IActionResult> CambiarEstadoArea(long idArea, [FromBody] CambiarEstadoAreaClienteDto dto, CancellationToken ct = default)
         => Responder(await cambiarEstadoArea.EjecutarAsync(idArea, dto, IdUsuarioActual, ct));
+
+    // ── Requisitos SSOMA asignados al cliente ────────────────────────────────
+    [HttpGet("clientes/{idCliente:long}/requisitos-ssoma")]
+    public async Task<IActionResult> RequisitosDelCliente(long idCliente, CancellationToken ct = default)
+        => Responder(await obtenerRequisitosCliente.EjecutarAsync(idCliente, ct));
+
+    [HttpPut("clientes/{idCliente:long}/requisitos-ssoma")]
+    public async Task<IActionResult> SincronizarRequisitosCliente(long idCliente, [FromBody] SincronizarRequisitosSsomaDto dto, CancellationToken ct = default)
+        => Responder(await sincronizarRequisitosCliente.EjecutarAsync(idCliente, dto, IdUsuarioActual, ct));
 
     // ── Próximo código de la ficha en modo "nuevo" (referencial) ─────────────
     /// <summary>entidad: requerimiento | propuesta | suministro | equipo_cliente → { entidad, codigo }.</summary>

@@ -13,6 +13,10 @@ public interface IMaestrosComplementariosRepositorio
 
     Task<RespuestaDto<SiguienteCodigoDto>> ObtenerSiguienteCodigoAsync(string entidad, CancellationToken ct);
 
+    // Requisitos SSOMA asignados a un cliente
+    Task<RespuestaDto<List<RequisitoSsomaClienteDto>>> ObtenerRequisitosDelClienteAsync(long idCliente, CancellationToken ct);
+    Task<RespuestaDto<bool>>                           SincronizarRequisitosClienteAsync(long idCliente, SincronizarRequisitosSsomaDto dto, long idUsuario, CancellationToken ct);
+
     Task<RespuestaDto<List<FormatoVentanaDto>>> ObtenerFormatosVentanaAsync(string? clave, CancellationToken ct);
     Task<RespuestaDto<bool>>                    GuardarFormatoVentanaAsync(string clave, GuardarFormatoVentanaDto dto, long idUsuario, CancellationToken ct);
 }
