@@ -56,6 +56,8 @@ public class EquiposClienteRepositorio(CadenaConexionBd conexion)
                     UsuarioPreRevisor:      Texto(r, "usuario_pre_revisor") ?? "",
                     FechaPreRevision:       FechaHora(r, "fecha_pre_revision"),
                     BloqueadoParaServicios: Booleano(r, "bloqueado_para_servicios"),
+                    UsuarioBloqueo:         Texto(r, "usuario_bloqueo") ?? "",
+                    FechaBloqueo:           FechaHora(r, "fecha_bloqueo"),
                     IdSuministro:           EnteroLargoNulo(r, "id_suministro"),
                     SuministroLabel:        Texto(r, "suministro_label") ?? "",
                     DivisionMinima:         Texto(r, "division_minima") ?? "",

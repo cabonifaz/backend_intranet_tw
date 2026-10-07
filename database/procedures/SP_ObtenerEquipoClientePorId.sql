@@ -37,6 +37,8 @@ BEGIN
             IFNULL(ec.usuario_pre_revisor, '')        AS usuario_pre_revisor,
             ec.fecha_pre_revision,
             ec.bloqueado_para_servicios,
+            IFNULL(ec.usuario_bloqueo, '')            AS usuario_bloqueo,
+            ec.fecha_bloqueo,
 
             ec.id_suministro,
             IFNULL(

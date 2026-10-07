@@ -1,4 +1,10 @@
 -- Crear / editar equipo del cliente. Clasificación = clase de suministro (equipo/instrumento/pesa).
+-- Flujo revisado → bloqueado (ticket #4299, reunión 02-oct):
+--   Revisado: lo marca Servicio Técnico o Metrología, después de un servicio (no al registrar).
+--   Bloqueado: lo marca un supervisor o administrador de Metrología, solo si el equipo está revisado.
+--   Con el equipo bloqueado, d, e, clase y alcance solo los cambia Metrología.
+--   N.° de serie y código TW no se modifican nunca. El código del cliente sí.
+--   Administradores de Gerencia o TI pueden hacer todo lo anterior.
 DROP PROCEDURE IF EXISTS SP_GuardarEquipoCliente;
 DELIMITER $$
 CREATE PROCEDURE SP_GuardarEquipoCliente(
@@ -38,6 +44,16 @@ proc: BEGIN
     DECLARE v_correlativo    INT;
     DECLARE v_usuario_login  VARCHAR(150) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_pre_rev_antes  TINYINT;
+    DECLARE v_bloq_antes     TINYINT;
+    DECLARE v_d_antes        VARCHAR(40)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_e_antes        VARCHAR(40)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_clase_antes    VARCHAR(10)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_alc_antes      VARCHAR(60)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_rol            VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_area           VARCHAR(40)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_admin_general  TINYINT DEFAULT 0;
+    DECLARE v_puede_revisar  TINYINT DEFAULT 0;
+    DECLARE v_puede_bloquear TINYINT DEFAULT 0;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -102,6 +118,55 @@ proc: BEGIN
     ELSEIF p_clasificacion = 'pesa' THEN
         SET p_alcance_maximo = NULL, p_escala_graduacion = NULL, p_puntos_calibracion = NULL,
             p_rango_operativo_real = NULL;
+    END IF;
+
+    -- ── Flujo revisado → bloqueado (#4299) ─────────────────────────────────
+    SELECT rol_sistema, IFNULL(area, '') INTO v_rol, v_area FROM usuario WHERE id_usuario = p_id_usuario;
+    SET v_admin_general  = (v_rol = 'administrador' AND v_area IN ('gerencia', 'ti'));
+    SET v_puede_revisar  = v_admin_general OR (v_area IN ('servicio_tecnico', 'metrologia') AND v_rol IN ('administrador', 'supervisor', 'usuario'));
+    SET v_puede_bloquear = v_admin_general OR (v_area = 'metrologia' AND v_rol IN ('administrador', 'supervisor'));
+
+    IF p_id_equipo = 0 THEN
+        -- Al registrar no se revisa ni se bloquea: eso ocurre después de un servicio.
+        SET p_es_pre_revisado = 0, p_bloqueado_servicios = 0;
+    ELSE
+        SELECT IFNULL(es_pre_revisado, 0), IFNULL(bloqueado_para_servicios, 0),
+               division_minima, division_verif, clase_exactitud, alcance_maximo
+          INTO v_pre_rev_antes, v_bloq_antes, v_d_antes, v_e_antes, v_clase_antes, v_alc_antes
+          FROM equipo_cliente WHERE id_equipo = p_id_equipo;
+
+        SET p_es_pre_revisado     = IFNULL(p_es_pre_revisado, 0);
+        SET p_bloqueado_servicios = IFNULL(p_bloqueado_servicios, 0);
+
+        IF p_es_pre_revisado <> v_pre_rev_antes AND NOT v_puede_revisar THEN
+            SELECT 1 AS IdTipoMensaje, 'Solo Servicio Técnico o Metrología pueden marcar o quitar la revisión del equipo.' AS Mensaje;
+            LEAVE proc;
+        END IF;
+
+        IF p_bloqueado_servicios <> v_bloq_antes AND NOT v_puede_bloquear THEN
+            SELECT 1 AS IdTipoMensaje, 'Solo un supervisor o administrador de Metrología puede bloquear o desbloquear los datos para certificación.' AS Mensaje;
+            LEAVE proc;
+        END IF;
+
+        IF v_bloq_antes = 1 AND p_bloqueado_servicios = 1 AND p_es_pre_revisado = 0 THEN
+            SELECT 1 AS IdTipoMensaje, 'El equipo está bloqueado para certificación: Metrología debe desbloquearlo antes de quitar la revisión.' AS Mensaje;
+            LEAVE proc;
+        END IF;
+
+        IF p_bloqueado_servicios = 1 AND p_es_pre_revisado = 0 THEN
+            SELECT 1 AS IdTipoMensaje, 'Para bloquear los datos, el equipo debe estar revisado (placa verificada).' AS Mensaje;
+            LEAVE proc;
+        END IF;
+
+        IF v_bloq_antes = 1 AND p_bloqueado_servicios = 1 AND NOT v_puede_bloquear AND (
+               NOT (v_d_antes     <=> NULLIF(p_division_minima, ''))
+            OR NOT (v_e_antes     <=> NULLIF(p_division_verif, ''))
+            OR NOT (v_clase_antes <=> NULLIF(p_clase_exactitud, ''))
+            OR NOT (v_alc_antes   <=> NULLIF(p_alcance_maximo, ''))
+        ) THEN
+            SELECT 1 AS IdTipoMensaje, 'El equipo está bloqueado para certificación: d, e, clase de exactitud y alcance solo los puede cambiar Metrología.' AS Mensaje;
+            LEAVE proc;
+        END IF;
     END IF;
 
     SET v_estado = CASE
@@ -175,9 +240,6 @@ proc: BEGIN
         );
         SET v_id = LAST_INSERT_ID();
     ELSE
-        SELECT es_pre_revisado INTO v_pre_rev_antes
-          FROM equipo_cliente WHERE id_equipo = p_id_equipo;
-
         UPDATE equipo_cliente SET
             id_cliente               = p_id_cliente,
             id_sede                  = p_id_sede,
@@ -200,6 +262,20 @@ proc: BEGIN
                                            ELSE fecha_pre_revision
                                        END,
             bloqueado_para_servicios = IFNULL(p_bloqueado_servicios, 0),
+            usuario_bloqueo          = CASE
+                                           WHEN IFNULL(p_bloqueado_servicios, 0) = 1 AND IFNULL(v_bloq_antes, 0) = 0
+                                                THEN v_usuario_login
+                                           WHEN IFNULL(p_bloqueado_servicios, 0) = 0
+                                                THEN NULL
+                                           ELSE usuario_bloqueo
+                                       END,
+            fecha_bloqueo            = CASE
+                                           WHEN IFNULL(p_bloqueado_servicios, 0) = 1 AND IFNULL(v_bloq_antes, 0) = 0
+                                                THEN NOW()
+                                           WHEN IFNULL(p_bloqueado_servicios, 0) = 0
+                                                THEN NULL
+                                           ELSE fecha_bloqueo
+                                       END,
             id_suministro            = IF(p_id_suministro = 0, NULL, p_id_suministro),
             division_minima          = NULLIF(p_division_minima, ''),
             division_verif           = NULLIF(p_division_verif, ''),

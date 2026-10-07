@@ -250,6 +250,12 @@ builder.Services.AddScoped<ObtenerMisPermisosCasoDeUso>();
 builder.Services.AddScoped<ObtenerPermisosAreaRolCasoDeUso>();
 builder.Services.AddScoped<GuardarPermisoCasoDeUso>();
 
+// ── INYECCIÓN DE DEPENDENCIAS — Directorio interno (#4303) y duplicados (#4290) ──
+builder.Services.AddScoped<IDirectorioRepositorio, DirectorioRepositorio>();
+builder.Services.AddScoped<ObtenerDirectorioCasoDeUso>();
+builder.Services.AddScoped<ObtenerCumpleanosCasoDeUso>();
+builder.Services.AddScoped<VerificarDuplicadosCasoDeUso>();
+
 // ─────────────────────────────────────────────────────────────────────────────
 var app = builder.Build();
 
