@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TW.Intranet.API.Seguridad;
 using TW.Intranet.Aplicacion.CasosDeUso;
 using TW.Intranet.Aplicacion.Dtos;
 
@@ -47,11 +48,13 @@ public class TextosBaseController(
         => Responder(await obtenerTextoBasePorId.EjecutarAsync(id, ct), noEncontradoComo404: true);
 
     /// <summary>Crea (IdTextoBase = 0) o edita. Al editar se guarda la versión anterior.</summary>
+    [RequierePermiso("texto_base_guardar")]
     [HttpPost("textos-base")]
     public async Task<IActionResult> GuardarTextoBase([FromBody] GuardarTextoBaseDto dto, CancellationToken ct = default)
         => Responder(await guardarTextoBase.EjecutarAsync(dto, IdUsuarioActual, ct));
 
     /// <summary>Activa o desactiva (no elimina) un texto base.</summary>
+    [RequierePermiso("texto_base_cambiar_estado")]
     [HttpPatch("textos-base/{id:long}/estado")]
     public async Task<IActionResult> CambiarEstadoTextoBase(
         long id, [FromBody] CambiarEstadoTextoBaseDto dto, CancellationToken ct = default)

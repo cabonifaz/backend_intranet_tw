@@ -23,6 +23,23 @@ public class PermisosRepositorio(CadenaConexionBd conexion)
             },
             (r, mensaje) => LeerPermisosAsync(r, mensaje, ct), ct);
 
+    public Task<RespuestaDto<List<AccionPermitidaDto>>> ObtenerAccionesUsuarioAsync(long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_ObtenerAccionesUsuario",
+            p => p.AddWithValue("p_id_usuario", idUsuario),
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                var items = new List<AccionPermitidaDto>();
+                while (await r.ReadAsync(ct))
+                    items.Add(new AccionPermitidaDto(
+                        Texto(r, "accion") ?? "",
+                        Texto(r, "accion_label") ?? "",
+                        Texto(r, "modulo") ?? "",
+                        Texto(r, "nivel_requerido") ?? "",
+                        Booleano(r, "permitido")));
+                return new RespuestaDto<List<AccionPermitidaDto>>(2, mensaje, items);
+            }, ct);
+
     public Task<RespuestaDto<bool>> GuardarPermisoAsync(GuardarPermisoDto dto, long idUsuario, CancellationToken ct)
         => EjecutarAsync("SP_GuardarPermisoAreaRol",
             p =>

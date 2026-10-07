@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TW.Intranet.API.Seguridad;
 using TW.Intranet.Aplicacion.CasosDeUso;
 using TW.Intranet.Aplicacion.Dtos;
 
@@ -49,11 +50,13 @@ public class EquiposController(
         => Responder(await obtenerEquipoPorId.EjecutarAsync(id, ct), noEncontradoComo404: true);
 
     /// <summary>Crea (IdEquipo = 0) o edita un equipo del cliente.</summary>
+    [RequierePermiso("equipo_guardar")]
     [HttpPost("equipos-cliente")]
     public async Task<IActionResult> GuardarEquipo([FromBody] GuardarEquipoClienteDto dto, CancellationToken ct = default)
         => Responder(await guardarEquipo.EjecutarAsync(dto, IdUsuarioActual, ct));
 
     /// <summary>Activa o desactiva (no elimina) un equipo del cliente.</summary>
+    [RequierePermiso("equipo_cambiar_estado")]
     [HttpPatch("equipos-cliente/{id:long}/estado")]
     public async Task<IActionResult> CambiarEstadoEquipo(
         long id, [FromBody] CambiarEstadoEquipoClienteDto dto, CancellationToken ct = default)

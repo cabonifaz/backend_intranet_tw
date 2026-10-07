@@ -2,10 +2,10 @@
 -- SP_AnularRequerimiento
 -- Cambia el estado de un requerimiento a 'anulado' y registra
 -- el motivo y justificación en el historial.
--- Reglas de permiso:
---   comercial  → solo puede anular si es responsable y
---                estado IN ('nuevo', 'en_proceso')
---   administrador / supervisor → cualquier estado activo (jefe_comercial/admin: tokens anteriores)
+-- Reglas de permiso (#4301, configurables en ACCION_SISTEMA y permiso_area_rol):
+--   rq_anular_con_propuesta (jefe comercial) → cualquier RQ activo
+--   rq_anular (comercial) → solo los RQ propios, en estado nuevo / en_proceso y sin propuesta
+--   p_rol se mantiene por compatibilidad, ya no se usa
 -- ============================================================
 DROP PROCEDURE IF EXISTS SP_AnularRequerimiento;
 
@@ -58,10 +58,25 @@ BEGIN
         IF v_responsable IS NULL THEN
             SELECT 1 AS IdTipoMensaje, 'El usuario ejecutor no existe en el sistema.' AS Mensaje;
 
-        -- Validación RBAC: comercial solo puede anular sus RQs en estado nuevo/en_proceso
-        ELSEIF p_rol NOT IN ('administrador', 'supervisor', 'jefe_comercial', 'admin')
+        -- Validación de permisos por acción (#4301)
+        ELSEIF FN_PermisoAccion(p_id_usuario, 'rq_anular_con_propuesta') = 0
+               AND FN_PermisoAccion(p_id_usuario, 'rq_anular') = 0
+        THEN
+            SELECT 1 AS IdTipoMensaje, 'No tiene permiso para anular requerimientos.' AS Mensaje;
+
+        ELSEIF FN_PermisoAccion(p_id_usuario, 'rq_anular_con_propuesta') = 0
                AND (
                    v_estado_rq NOT IN ('nuevo', 'en_proceso')
+                   OR EXISTS (SELECT 1 FROM propuesta_comercial pc
+                              WHERE pc.id_requerimiento = p_id_requerimiento AND pc.eliminado_en IS NULL)
+               )
+        THEN
+            SELECT 1 AS IdTipoMensaje,
+                   'Este requerimiento ya tiene una propuesta: solo el jefe comercial puede anularlo.' AS Mensaje;
+
+        ELSEIF FN_PermisoAccion(p_id_usuario, 'rq_anular_con_propuesta') = 0
+               AND (
+                   FN_PermisoAccion(p_id_usuario, 'rq_anular') = 0
                    OR NOT EXISTS (
                        SELECT 1 FROM requerimiento
                        WHERE id_requerimiento = p_id_requerimiento
@@ -71,7 +86,7 @@ BEGIN
                )
         THEN
             SELECT 1 AS IdTipoMensaje,
-                   'No tienes permiso para anular este requerimiento en su estado actual.' AS Mensaje;
+                   'Solo puedes anular tus propios requerimientos.' AS Mensaje;
 
         ELSE
             SELECT String1 INTO v_motivo_txt

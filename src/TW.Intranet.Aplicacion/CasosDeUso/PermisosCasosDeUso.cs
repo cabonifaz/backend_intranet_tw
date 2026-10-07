@@ -44,3 +44,12 @@ public class GuardarPermisoCasoDeUso(IPermisosRepositorio repositorio)
         return repositorio.GuardarPermisoAsync(dto, idUsuario, ct);
     }
 }
+
+/// <summary>Acciones que puede ejecutar el usuario que inició sesión (botones del front y validación del back).</summary>
+public class ObtenerMisAccionesCasoDeUso(IPermisosRepositorio repositorio)
+{
+    public Task<RespuestaDto<List<AccionPermitidaDto>>> EjecutarAsync(long idUsuario, CancellationToken ct = default)
+        => idUsuario <= 0
+            ? Task.FromResult(new RespuestaDto<List<AccionPermitidaDto>>(1, "Sesión no válida."))
+            : repositorio.ObtenerAccionesUsuarioAsync(idUsuario, ct);
+}

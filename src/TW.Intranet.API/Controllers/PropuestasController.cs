@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TW.Intranet.API.Seguridad;
 using TW.Intranet.Aplicacion.CasosDeUso;
 using TW.Intranet.Aplicacion.Dtos;
 
@@ -32,6 +33,7 @@ public class PropuestasController(
         };
 
     /// <summary>Datos heredados del requerimiento + propuesta existente (aviso de nueva versión).</summary>
+    [RequierePermiso("propuesta_guardar")]
     [HttpGet("nueva")]
     public async Task<IActionResult> ObtenerDatosNueva([FromQuery] long idRequerimiento, CancellationToken ct = default)
         => Responder(await obtenerDatosNueva.EjecutarAsync(idRequerimiento, ct), noEncontradoComo404: true);
@@ -41,16 +43,19 @@ public class PropuestasController(
     /// grupoEstado (todas | borrador | por_vb | en_seguimiento | aceptada | rechazada | cerrada),
     /// busqueda, anio, idComercial, soloUltimaVersion (true por defecto), pagina, porPagina.
     /// </summary>
+    [RequierePermiso("propuesta_ver")]
     [HttpGet]
     public async Task<IActionResult> ObtenerPropuestas([FromQuery] FiltrosPropuestasDto filtros, CancellationToken ct = default)
         => Responder(await obtenerPropuestas.EjecutarAsync(filtros, ct));
 
     /// <summary>Tarjetas resumen de la bandeja (HU-08). Filtros opcionales: anio, idComercial.</summary>
+    [RequierePermiso("propuesta_ver")]
     [HttpGet("kpis")]
     public async Task<IActionResult> ObtenerKpis([FromQuery] int? anio, [FromQuery] long? idComercial, CancellationToken ct = default)
         => Responder(await obtenerKpis.EjecutarAsync(anio, idComercial, ct));
 
     /// <summary>Propuesta completa: cabecera, ítems, textos, formas de pago y equipos.</summary>
+    [RequierePermiso("propuesta_ver")]
     [HttpGet("{id:long}")]
     public async Task<IActionResult> ObtenerPropuestaPorId(long id, CancellationToken ct = default)
         => Responder(await obtenerPropuestaPorId.EjecutarAsync(id, ct), noEncontradoComo404: true);
@@ -60,6 +65,7 @@ public class PropuestasController(
     /// SLA de la etapa, documentos vinculados (RQ, expediente, OC, adjuntos), versiones,
     /// actividad y la acción principal (editar | nueva_version | ninguna).
     /// </summary>
+    [RequierePermiso("propuesta_ver")]
     [HttpGet("{id:long}/detalle")]
     public async Task<IActionResult> ObtenerDetalle(long id, CancellationToken ct = default)
         => Responder(await obtenerDetalle.EjecutarAsync(id, ct), noEncontradoComo404: true);
@@ -68,6 +74,7 @@ public class PropuestasController(
     /// Guarda la propuesta completa (borrador). IdPropuesta = 0 crea;
     /// con IdPropuestaBase crea una nueva versión. Devuelve los totales recalculados.
     /// </summary>
+    [RequierePermiso("propuesta_guardar")]
     [HttpPost]
     public async Task<IActionResult> GuardarPropuesta([FromBody] GuardarPropuestaDto dto, CancellationToken ct = default)
         => Responder(await guardarPropuesta.EjecutarAsync(dto, IdUsuarioActual, ct));
@@ -78,6 +85,7 @@ public class PropuestasController(
     /// marcados. Si {id} aún no se había enviado al cliente (pendiente de VB o aprobada) queda anulada.
     /// Devuelve el id de la nueva versión para abrir el editor.
     /// </summary>
+    [RequierePermiso("propuesta_nueva_version")]
     [HttpPost("{id:long}/nueva-version")]
     public async Task<IActionResult> CrearNuevaVersion(long id, [FromBody] CrearNuevaVersionPropuestaDto dto, CancellationToken ct = default)
         => Responder(await crearNuevaVersion.EjecutarAsync(id, dto, IdUsuarioActual, ct));

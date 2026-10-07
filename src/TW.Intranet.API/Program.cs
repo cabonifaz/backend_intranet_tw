@@ -31,7 +31,11 @@ builder.Services.AddCors(options =>
 });
 
 // ── CONTROLLERS ───────────────────────────────────────────────────────────────
-builder.Services.AddControllers();
+// Permisos por rol + área en cada endpoint marcado con [RequierePermiso] (#4301).
+// Se apaga con la variable de entorno Permisos__ValidarEnBack=false.
+builder.Services.AddMemoryCache();
+builder.Services.AddScoped<TW.Intranet.API.Seguridad.PermisosFilter>();
+builder.Services.AddControllers(o => o.Filters.AddService<TW.Intranet.API.Seguridad.PermisosFilter>());
 
 // ── OPENAPI / SWAGGER ─────────────────────────────────────────────────────────
 builder.Services.AddOpenApi(options =>
@@ -249,6 +253,7 @@ builder.Services.AddScoped<IPermisosRepositorio, PermisosRepositorio>();
 builder.Services.AddScoped<ObtenerMisPermisosCasoDeUso>();
 builder.Services.AddScoped<ObtenerPermisosAreaRolCasoDeUso>();
 builder.Services.AddScoped<GuardarPermisoCasoDeUso>();
+builder.Services.AddScoped<ObtenerMisAccionesCasoDeUso>();
 
 // ── INYECCIÓN DE DEPENDENCIAS — Directorio interno (#4303) y duplicados (#4290) ──
 builder.Services.AddScoped<IDirectorioRepositorio, DirectorioRepositorio>();

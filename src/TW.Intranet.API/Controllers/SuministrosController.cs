@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TW.Intranet.API.Seguridad;
 using TW.Intranet.Aplicacion.CasosDeUso;
 using TW.Intranet.Aplicacion.Dtos;
 
@@ -49,11 +50,13 @@ public class SuministrosController(
         => Responder(await obtenerSuministroPorId.EjecutarAsync(id, ct), noEncontradoComo404: true);
 
     /// <summary>Crea (IdSuministro = 0) o edita un suministro.</summary>
+    [RequierePermiso("suministro_guardar")]
     [HttpPost("suministros")]
     public async Task<IActionResult> GuardarSuministro([FromBody] GuardarSuministroDto dto, CancellationToken ct = default)
         => Responder(await guardarSuministro.EjecutarAsync(dto, IdUsuarioActual, ct));
 
     /// <summary>Activa o desactiva (no elimina) un suministro.</summary>
+    [RequierePermiso("suministro_cambiar_estado")]
     [HttpPatch("suministros/{id:long}/estado")]
     public async Task<IActionResult> CambiarEstadoSuministro(
         long id, [FromBody] CambiarEstadoSuministroDto dto, CancellationToken ct = default)

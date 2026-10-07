@@ -1,10 +1,10 @@
 -- Crear / editar equipo del cliente. Clasificación = clase de suministro (equipo/instrumento/pesa).
 -- Flujo revisado → bloqueado (ticket #4299, reunión 02-oct):
---   Revisado: lo marca Servicio Técnico o Metrología, después de un servicio (no al registrar).
---   Bloqueado: lo marca un supervisor o administrador de Metrología, solo si el equipo está revisado.
---   Con el equipo bloqueado, d, e, clase y alcance solo los cambia Metrología.
---   N.° de serie y código TW no se modifican nunca. El código del cliente sí.
---   Administradores de Gerencia o TI pueden hacer todo lo anterior.
+--   Revisado: acción equipo_revisar (por defecto Servicio Técnico y Metrología). No al registrar.
+--   Bloqueado: acción equipo_bloquear (por defecto supervisor o administrador de Metrología),
+--   solo si el equipo está revisado. Con el equipo bloqueado, d, e, clase y alcance solo los
+--   cambia quien tiene equipo_bloquear. N.° de serie y código TW no se modifican nunca.
+--   Estado operativo: NULL al registrar, lo cambian CIE / evaluación / OS-OM (#4300).
 DROP PROCEDURE IF EXISTS SP_GuardarEquipoCliente;
 DELIMITER $$
 CREATE PROCEDURE SP_GuardarEquipoCliente(
@@ -49,9 +49,6 @@ proc: BEGIN
     DECLARE v_e_antes        VARCHAR(40)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_clase_antes    VARCHAR(10)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_alc_antes      VARCHAR(60)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
-    DECLARE v_rol            VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
-    DECLARE v_area           VARCHAR(40)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
-    DECLARE v_admin_general  TINYINT DEFAULT 0;
     DECLARE v_puede_revisar  TINYINT DEFAULT 0;
     DECLARE v_puede_bloquear TINYINT DEFAULT 0;
 
@@ -121,10 +118,9 @@ proc: BEGIN
     END IF;
 
     -- ── Flujo revisado → bloqueado (#4299) ─────────────────────────────────
-    SELECT rol_sistema, IFNULL(area, '') INTO v_rol, v_area FROM usuario WHERE id_usuario = p_id_usuario;
-    SET v_admin_general  = (v_rol = 'administrador' AND v_area IN ('gerencia', 'ti'));
-    SET v_puede_revisar  = v_admin_general OR (v_area IN ('servicio_tecnico', 'metrologia') AND v_rol IN ('administrador', 'supervisor', 'usuario'));
-    SET v_puede_bloquear = v_admin_general OR (v_area = 'metrologia' AND v_rol IN ('administrador', 'supervisor'));
+    -- Quién puede revisar o bloquear se configura en la BD (acciones equipo_revisar / equipo_bloquear)
+    SET v_puede_revisar  = FN_PermisoAccion(p_id_usuario, 'equipo_revisar');
+    SET v_puede_bloquear = FN_PermisoAccion(p_id_usuario, 'equipo_bloquear');
 
     IF p_id_equipo = 0 THEN
         -- Al registrar no se revisa ni se bloquea: eso ocurre después de un servicio.
@@ -139,12 +135,12 @@ proc: BEGIN
         SET p_bloqueado_servicios = IFNULL(p_bloqueado_servicios, 0);
 
         IF p_es_pre_revisado <> v_pre_rev_antes AND NOT v_puede_revisar THEN
-            SELECT 1 AS IdTipoMensaje, 'Solo Servicio Técnico o Metrología pueden marcar o quitar la revisión del equipo.' AS Mensaje;
+            SELECT 1 AS IdTipoMensaje, 'No tiene permiso para marcar o quitar la revisión del equipo.' AS Mensaje;
             LEAVE proc;
         END IF;
 
         IF p_bloqueado_servicios <> v_bloq_antes AND NOT v_puede_bloquear THEN
-            SELECT 1 AS IdTipoMensaje, 'Solo un supervisor o administrador de Metrología puede bloquear o desbloquear los datos para certificación.' AS Mensaje;
+            SELECT 1 AS IdTipoMensaje, 'No tiene permiso para bloquear o desbloquear los datos del equipo para certificación.' AS Mensaje;
             LEAVE proc;
         END IF;
 
@@ -164,7 +160,7 @@ proc: BEGIN
             OR NOT (v_clase_antes <=> NULLIF(p_clase_exactitud, ''))
             OR NOT (v_alc_antes   <=> NULLIF(p_alcance_maximo, ''))
         ) THEN
-            SELECT 1 AS IdTipoMensaje, 'El equipo está bloqueado para certificación: d, e, clase de exactitud y alcance solo los puede cambiar Metrología.' AS Mensaje;
+            SELECT 1 AS IdTipoMensaje, 'El equipo está bloqueado para certificación: d, e, clase de exactitud y alcance solo los puede cambiar Metrología (quien bloquea).' AS Mensaje;
             LEAVE proc;
         END IF;
     END IF;
@@ -231,7 +227,7 @@ proc: BEGIN
             NULLIF(p_material, ''),
             NULLIF(p_valor_nominal, ''),
             NULLIF(p_observaciones, ''),
-            'operativo_planta',   -- estado automático (reunión 02-oct): lo cambian CIE / evaluación / OS
+            NULL,                 -- estado operativo automático (#4300): lo cambian CIE / evaluación / OS-OM
             IF(v_estado = 'activo', 1, 0),
             v_estado,
             v_usuario_login,

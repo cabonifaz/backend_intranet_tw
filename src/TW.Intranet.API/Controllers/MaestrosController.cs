@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TW.Intranet.API.Seguridad;
 using TW.Intranet.Aplicacion.CasosDeUso;
 using TW.Intranet.Aplicacion.Dtos;
 
@@ -67,6 +68,7 @@ public class MaestrosController(
     }
 
     /// <summary>Crea o actualiza un cliente. IdCliente = 0 para nuevo registro.</summary>
+    [RequierePermiso("cliente_guardar")]
     [HttpPost("clientes")]
     public async Task<IActionResult> GuardarCliente(
         [FromBody] GuardarClienteDto dto,
@@ -119,6 +121,7 @@ public class MaestrosController(
     }
 
     /// <summary>Crea o actualiza una sede. IdSede = 0 para nueva sede.</summary>
+    [RequierePermiso("cliente_guardar")]
     [HttpPost("sedes")]
     public async Task<IActionResult> GuardarSede(
         [FromBody] GuardarSedeDto dto, CancellationToken ct)
@@ -138,6 +141,7 @@ public class MaestrosController(
     }
 
     /// <summary>Activa o desactiva una sede.</summary>
+    [RequierePermiso("cliente_cambiar_estado")]
     [HttpPatch("sedes/{id:long}/estado")]
     public async Task<IActionResult> CambiarEstadoSede(
         long id, [FromBody] CambiarEstadoSedeDto dto, CancellationToken ct)
@@ -173,6 +177,7 @@ public class MaestrosController(
     }
 
     /// <summary>Crea o actualiza un contacto. IdContacto = 0 para nuevo.</summary>
+    [RequierePermiso("cliente_guardar")]
     [HttpPost("contactos")]
     public async Task<IActionResult> GuardarContacto(
         [FromBody] GuardarContactoDto dto, CancellationToken ct)
@@ -192,6 +197,7 @@ public class MaestrosController(
     }
 
     /// <summary>Activa o desactiva un contacto.</summary>
+    [RequierePermiso("cliente_cambiar_estado")]
     [HttpPatch("contactos/{id:long}/estado")]
     public async Task<IActionResult> CambiarEstadoContacto(
         long id, [FromBody] CambiarEstadoContactoDto dto, CancellationToken ct)
@@ -211,6 +217,7 @@ public class MaestrosController(
     }
 
     /// <summary>Activa o desactiva un cliente.</summary>
+    [RequierePermiso("cliente_cambiar_estado")]
     [HttpPatch("clientes/{id:long}/estado")]
     public async Task<IActionResult> CambiarEstadoCliente(
         long id,
@@ -248,6 +255,7 @@ public class MaestrosController(
     }
 
     /// <summary>Crea o actualiza una categoría de cliente. IdCategoria = 0 para nueva.</summary>
+    [RequierePermiso("categoria_guardar")]
     [HttpPost("categorias")]
     public async Task<IActionResult> GuardarCategoria(
         [FromBody] GuardarCategoriaDto dto,
@@ -268,6 +276,7 @@ public class MaestrosController(
     }
 
     /// <summary>Activa o desactiva una categoría de cliente.</summary>
+    [RequierePermiso("categoria_guardar")]
     [HttpPatch("categorias/{id:int}/estado")]
     public async Task<IActionResult> CambiarEstadoCategoria(
         int id,

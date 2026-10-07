@@ -20,3 +20,11 @@ public class GuardarPermisoDto
     public string? Modulo { get; set; }
     public string? Acceso { get; set; }
 }
+
+/// <summary>Acción del sistema y si el usuario puede ejecutarla (ticket #4301).</summary>
+public record AccionPermitidaDto(
+    string Accion,
+    string AccionLabel,
+    string Modulo,
+    string NivelRequerido,
+    bool   Permitido);

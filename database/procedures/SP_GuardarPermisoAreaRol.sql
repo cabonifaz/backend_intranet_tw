@@ -1,6 +1,6 @@
 -- Define una excepción de acceso para ÁREA + ROL + MÓDULO.
 --   p_acceso: ninguno | ver | editar | supervisar | administrar.
---   Vacío o NULL → elimina la excepción (vuelve a la regla general).
+--   Vacío o NULL → elimina la fila (el área + rol queda sin acceso a ese módulo).
 DROP PROCEDURE IF EXISTS SP_GuardarPermisoAreaRol;
 
 DELIMITER $$
@@ -36,7 +36,7 @@ proc: BEGIN
 
     IF IFNULL(p_acceso, '') = '' THEN
         DELETE FROM permiso_area_rol WHERE area = p_area AND rol = p_rol AND modulo = p_modulo;
-        SELECT 2 AS IdTipoMensaje, 'Se restableció el acceso por defecto.' AS Mensaje;
+        SELECT 2 AS IdTipoMensaje, 'Se quitó el acceso a ese módulo.' AS Mensaje;
     ELSE
         INSERT INTO permiso_area_rol (area, rol, modulo, acceso, UsuMod, FchMod)
         VALUES (p_area, p_rol, p_modulo, p_acceso, v_usu, NOW())

@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TW.Intranet.API.Seguridad;
 using TW.Intranet.Aplicacion.CasosDeUso;
 using TW.Intranet.Aplicacion.Dtos;
 
@@ -63,11 +64,13 @@ public class ProcedimientosController(
         => Responder(await obtenerProcedimientoPorId.EjecutarAsync(id, ct), noEncontradoComo404: true);
 
     /// <summary>Crea (IdProcedimiento = 0) o edita. Al editar sube la versión y guarda el historial.</summary>
+    [RequierePermiso("procedimiento_guardar")]
     [HttpPost("procedimientos")]
     public async Task<IActionResult> GuardarProcedimiento([FromBody] GuardarProcedimientoDto dto, CancellationToken ct = default)
         => Responder(await guardarProcedimiento.EjecutarAsync(dto, IdUsuarioActual, IpCliente, ct));
 
     /// <summary>Activa o desactiva (no elimina) un procedimiento.</summary>
+    [RequierePermiso("procedimiento_cambiar_estado")]
     [HttpPatch("procedimientos/{id:long}/estado")]
     public async Task<IActionResult> CambiarEstadoProcedimiento(
         long id, [FromBody] CambiarEstadoProcedimientoDto dto, CancellationToken ct = default)
