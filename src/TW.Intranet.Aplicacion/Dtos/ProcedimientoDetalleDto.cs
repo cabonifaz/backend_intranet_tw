@@ -18,11 +18,19 @@ public record ProcedimientoDetalleDto(
     bool      EsActivo,
 
     // 02 Documento aprobado
+    // UrlPdfAprobado: endpoint para ver el PDF (GET, requiere token) o "" si aún no se cargó
     string    UrlPdfAprobado,
 
     // Trazabilidad
     string    UsuarioRegistro,
     string    PcRegistro,
     DateTime? FechaModificacion,
-    int       TotalEdiciones
+    int       TotalEdiciones,
+
+    // PDF aprobado cargado (carga real, restringida a la encargada de calidad)
+    bool      TienePdf          = false,
+    string?   PdfNombreArchivo  = null,
+    long?     PdfTamanoBytes    = null,
+    DateTime? PdfSubidoEn       = null,
+    string?   PdfSubidoPor      = null
 );

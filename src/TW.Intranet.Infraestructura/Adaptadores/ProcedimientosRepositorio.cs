@@ -46,11 +46,16 @@ public class ProcedimientosRepositorio(CadenaConexionBd conexion)
                     l.IdProcedimiento, l.Codigo, l.Anio, l.Version, l.EsFormatoDigitalIso,
                     l.NormaBase, l.AutorNorma, l.Descripcion, l.Estado, l.FechaRegistro,
                     EsActivo:          Booleano(r, "es_activo"),
-                    UrlPdfAprobado:    Texto(r, "url_pdf_aprobado") ?? "",
+                    UrlPdfAprobado:    Booleano(r, "tiene_pdf") ? UrlPdf(l.IdProcedimiento) : "",
                     UsuarioRegistro:   Texto(r, "usuario_registro") ?? "",
                     PcRegistro:        Texto(r, "pc_registro") ?? "",
                     FechaModificacion: FechaHora(r, "fecha_modificacion"),
-                    TotalEdiciones:    Entero(r, "total_ediciones"));
+                    TotalEdiciones:    Entero(r, "total_ediciones"),
+                    TienePdf:          Booleano(r, "tiene_pdf"),
+                    PdfNombreArchivo:  Texto(r, "pdf_nombre_original"),
+                    PdfTamanoBytes:    EnteroLargoNulo(r, "pdf_tamano_bytes"),
+                    PdfSubidoEn:       FechaHora(r, "pdf_subido_en"),
+                    PdfSubidoPor:      Texto(r, "pdf_subido_por"));
 
                 return new RespuestaDto<ProcedimientoDetalleDto>(2, mensaje, detalle);
             }, ct);
@@ -103,6 +108,69 @@ public class ProcedimientosRepositorio(CadenaConexionBd conexion)
                 p.AddWithValue("p_id_usuario",       idUsuario);
             },
             (_, mensaje) => Task.FromResult(new RespuestaDto<object>(2, mensaje)), ct);
+
+    // ── Carga real del PDF aprobado ──────────────────────────────────────────
+    public Task<RespuestaDto<PermisoPdfProcedimientoDto>> ValidarCargaPdfAsync(
+        long idProcedimiento, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_ValidarCargaPdfProcedimiento",
+            p =>
+            {
+                p.AddWithValue("p_id_procedimiento", idProcedimiento);
+                p.AddWithValue("p_id_usuario",       idUsuario);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<PermisoPdfProcedimientoDto>(3, "El procedimiento no devolvió el permiso.");
+
+                return new RespuestaDto<PermisoPdfProcedimientoDto>(2, mensaje,
+                    new PermisoPdfProcedimientoDto(Booleano(r, "puede_subir_pdf"), Texto(r, "motivo")));
+            }, ct);
+
+    public Task<RespuestaDto<PdfProcedimientoDto>> RegistrarPdfAsync(
+        long idProcedimiento, string ruta, string nombreOriginal, long tamanoBytes, string hashSha256,
+        long idUsuario, string? pcRegistro, CancellationToken ct)
+        => EjecutarAsync("SP_RegistrarPdfProcedimiento",
+            p =>
+            {
+                p.AddWithValue("p_id_procedimiento", idProcedimiento);
+                p.AddWithValue("p_ruta",             ruta);
+                p.AddWithValue("p_nombre_original",  nombreOriginal);
+                p.AddWithValue("p_tamano_bytes",     tamanoBytes);
+                p.AddWithValue("p_hash_sha256",      hashSha256);
+                p.AddWithValue("p_id_usuario",       idUsuario);
+                p.AddWithValue("p_pc_registro",      Valor(pcRegistro));
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<PdfProcedimientoDto>(3, "El procedimiento no devolvió el resultado.");
+
+                return new RespuestaDto<PdfProcedimientoDto>(2, mensaje, new PdfProcedimientoDto(
+                    NombreArchivo: Texto(r, "pdf_nombre_original") ?? nombreOriginal,
+                    TamanoBytes:   EnteroLargoNulo(r, "pdf_tamano_bytes") ?? tamanoBytes,
+                    SubidoEn:      FechaHora(r, "pdf_subido_en"),
+                    SubidoPor:     Texto(r, "pdf_subido_por"),
+                    UrlPdf:        UrlPdf(idProcedimiento)));
+            }, ct);
+
+    public Task<RespuestaDto<RutaPdfProcedimientoDto>> ObtenerRutaPdfAsync(long idProcedimiento, CancellationToken ct)
+        => EjecutarAsync("SP_ObtenerPdfProcedimiento",
+            p => p.AddWithValue("p_id_procedimiento", idProcedimiento),
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<RutaPdfProcedimientoDto>(1, "El procedimiento aún no tiene un PDF aprobado cargado.");
+
+                return new RespuestaDto<RutaPdfProcedimientoDto>(2, mensaje,
+                    new RutaPdfProcedimientoDto(Texto(r, "ruta") ?? "", Texto(r, "nombre_archivo") ?? "procedimiento.pdf"));
+            }, ct);
+
+    /// <summary>Endpoint (relativo a la API) para ver el PDF aprobado.</summary>
+    private static string UrlPdf(long idProcedimiento) => $"/api/maestros/procedimientos/{idProcedimiento}/pdf";
 
     private static ProcedimientoListaItemDto LeerListaItem(MySqlDataReader r) => new(
         IdProcedimiento:     EnteroLargo(r, "id_procedimiento"),

@@ -69,6 +69,17 @@ var configuracionJwt = new ConfiguracionJwt(
 builder.Services.AddSingleton(new CadenaConexionBd(cadenaConexion));
 builder.Services.AddSingleton(configuracionJwt);
 
+// ── ALMACENAMIENTO DE ARCHIVOS (PDF de procedimientos, adjuntos) ──────────────
+// Railway: volumen persistente montado en /data y variable Almacenamiento__RutaBase=/data/archivos.
+// Local: si no se configura, carpeta "almacenamiento" junto a la API (ignorada por git).
+var rutaAlmacenamientoConfigurada = cfg["Almacenamiento:RutaBase"];
+var configuracionAlmacenamiento = new ConfiguracionAlmacenamiento(
+    string.IsNullOrWhiteSpace(rutaAlmacenamientoConfigurada)
+        ? Path.Combine(builder.Environment.ContentRootPath, "almacenamiento")
+        : rutaAlmacenamientoConfigurada);
+builder.Services.AddSingleton(configuracionAlmacenamiento);
+builder.Services.AddSingleton<IAlmacenArchivos, AlmacenArchivosLocal>();
+
 // ── AUTENTICACIÓN JWT ─────────────────────────────────────────────────────────
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -214,6 +225,9 @@ builder.Services.AddScoped<ObtenerProcedimientoPorIdCasoDeUso>();
 builder.Services.AddScoped<ObtenerProcedimientosOpcionesCasoDeUso>();
 builder.Services.AddScoped<GuardarProcedimientoCasoDeUso>();
 builder.Services.AddScoped<CambiarEstadoProcedimientoCasoDeUso>();
+builder.Services.AddScoped<ObtenerPermisoPdfProcedimientoCasoDeUso>();
+builder.Services.AddScoped<SubirPdfProcedimientoCasoDeUso>();
+builder.Services.AddScoped<ObtenerPdfProcedimientoCasoDeUso>();
 
 // ── INYECCIÓN DE DEPENDENCIAS — Catálogos editables (HU-86) ──────────────────
 builder.Services.AddScoped<ICatalogosRepositorio, CatalogosRepositorio>();
@@ -263,6 +277,13 @@ builder.Services.AddScoped<VerificarDuplicadosCasoDeUso>();
 
 // ─────────────────────────────────────────────────────────────────────────────
 var app = builder.Build();
+
+if (string.IsNullOrWhiteSpace(rutaAlmacenamientoConfigurada) && !app.Environment.IsDevelopment())
+    app.Logger.LogWarning(
+        "Almacenamiento:RutaBase no está configurado. Los archivos se guardan en {Ruta}, que NO persiste entre deploys. " +
+        "Configure un volumen y la variable Almacenamiento__RutaBase.", configuracionAlmacenamiento.RutaBase);
+else
+    app.Logger.LogInformation("Almacenamiento de archivos en {Ruta}", configuracionAlmacenamiento.RutaBase);
 
 if (!app.Environment.IsProduction())
 {

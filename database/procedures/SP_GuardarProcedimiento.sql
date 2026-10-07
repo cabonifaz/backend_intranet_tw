@@ -3,6 +3,9 @@
 --   * Al editar (si hubo cambios): copia la versión anterior al historial
 --     y la versión sube automáticamente (o toma la indicada si es mayor).
 --   * Auditoría con los campos modificados.
+--   * p_url_pdf_aprobado se IGNORA (se mantiene por compatibilidad).
+--     El PDF aprobado solo se carga con POST /procedimientos/{id}/pdf
+--     (SP_RegistrarPdfProcedimiento), con la acción procedimiento_pdf_cargar.
 DROP PROCEDURE IF EXISTS SP_GuardarProcedimiento;
 
 DELIMITER $$
@@ -80,7 +83,7 @@ proc: BEGIN
         ) VALUES (
             p_codigo, p_anio, GREATEST(IFNULL(p_version, 1), 1), p_autor_norma, p_norma_base,
             p_descripcion, IFNULL(p_es_formato_digital_iso, 0),
-            NULLIF(p_url_pdf_aprobado, ''),
+            NULL,
             v_estado, 0, p_id_usuario, p_pc_registro,
             0, v_usu, NOW()
         );
@@ -106,7 +109,6 @@ proc: BEGIN
                IF(NOT (norma_base             <=> p_norma_base),                      'Norma base', NULL),
                IF(NOT (descripcion            <=> p_descripcion),                     'Descripción', NULL),
                IF(NOT (es_formato_digital_iso <=> IFNULL(p_es_formato_digital_iso, 0)), 'Formato digital', NULL),
-               IF(NOT (url_pdf_aprobado       <=> NULLIF(p_url_pdf_aprobado, '')),    'PDF aprobado', NULL),
                IF(NOT (estado                 <=> v_estado),                          'Estado', NULL),
                IF(IFNULL(p_version, version) > version,                               'Versión', NULL)
            )
@@ -147,7 +149,6 @@ proc: BEGIN
         norma_base             = p_norma_base,
         descripcion            = p_descripcion,
         es_formato_digital_iso = IFNULL(p_es_formato_digital_iso, 0),
-        url_pdf_aprobado       = NULLIF(p_url_pdf_aprobado, ''),
         estado                 = v_estado,
         total_ediciones        = total_ediciones + 1,
         UsuMod                 = v_usu,

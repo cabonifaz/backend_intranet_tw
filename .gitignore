@@ -10,6 +10,9 @@
 appsettings.Local.json
 appsettings.*.Local.json
 
+# Archivos subidos en desarrollo local (en Railway viven en el volumen /data)
+almacenamiento/
+
 # User-specific files
 *.rsuser
 *.suo
