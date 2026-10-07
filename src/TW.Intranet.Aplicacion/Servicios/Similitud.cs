@@ -20,7 +20,7 @@ public static class Similitud
         if (a == b) return 100;
 
         var lev = (int)Math.Round(100.0 * (1 - (double)Levenshtein(a, b) / Math.Max(a.Length, b.Length)));
-        var puntaje = Math.Max(lev, PuntajePorPalabras(a, b));
+        var puntaje = Math.Max(Math.Max(lev, PuntajePorPalabras(a, b)), PuntajePorInclusion(a, b));
 
         // "Área 4" y "Área 5" son cosas distintas: si los números no coinciden, no son parecidos.
         return Numeros(a) == Numeros(b) ? puntaje : Math.Min(puntaje, 50);
@@ -30,6 +30,9 @@ public static class Similitud
     public const int UmbralDuplicado = 85;
     /// <summary>70 a 84: parecido (se muestra como referencia).</summary>
     public const int UmbralParecido  = 70;
+
+    private static readonly HashSet<string> PalabrasVacias =
+        ["de", "del", "la", "las", "el", "los", "y", "e", "o", "u", "a", "en", "con", "para", "por", "sin", "al"];
 
     private static string Numeros(string t) => string.Join(' ', t.Split(' ').Where(p => p.Any(char.IsDigit)));
 
@@ -62,6 +65,26 @@ public static class Similitud
             else return 0;
         }
         return (int)Math.Round(100 * total / pa.Length);
+    }
+
+    // Uno de los textos está contenido en el otro, palabra por palabra y en orden:
+    // "Mettler" ⊂ "Mettler Toledo", "Controlador" ⊂ "Controlador de temperatura".
+    // Puntaje 75 a 95 según qué parte del texto largo cubre el corto.
+    private static int PuntajePorInclusion(string a, string b)
+    {
+        var corta = a.Split(' '); var larga = b.Split(' ');
+        if (corta.Length > larga.Length) (corta, larga) = (larga, corta);
+        if (corta.Length == larga.Length) return 0;
+
+        // "de", "la", "para"... solas no identifican nada.
+        if (corta.All(p => p.Length < 3 || PalabrasVacias.Contains(p))) return 0;
+
+        int j = 0;
+        foreach (var palabra in larga)
+            if (j < corta.Length && (palabra == corta[j] || (corta[j].Length >= 3 && palabra.StartsWith(corta[j])))) j++;
+        if (j < corta.Length) return 0;
+
+        return (int)Math.Round(75 + 20.0 * corta.Length / larga.Length);
     }
 
     // "ctrl" es abreviatura de "controlador": misma primera letra y sus letras aparecen en orden.
