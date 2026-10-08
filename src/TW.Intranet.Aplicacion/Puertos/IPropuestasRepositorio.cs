@@ -29,6 +29,15 @@ public interface IPropuestasRepositorio
         long idPropuesta, string tipo, decimal valor, int? idMotivo, bool soloPrevisualizar,
         long idUsuario, CancellationToken ct);
 
+    /// <summary>HU-12 — Prepara (soloPreparar) o realiza el envío a visto bueno.</summary>
+    Task<RespuestaDto<VistoBuenoPropuestaDto>> EnviarVistoBuenoAsync(
+        long idPropuesta, string? comentario, bool soloPreparar, long idUsuario, CancellationToken ct);
+
+    /// <summary>HU-12 — Prepara (soloPreparar) o realiza la anulación.</summary>
+    Task<RespuestaDto<AnulacionPropuestaDto>> AnularPropuestaAsync(
+        long idPropuesta, int? idMotivo, string? justificacion, bool confirmacion, bool soloPreparar,
+        long idUsuario, CancellationToken ct);
+
     Task<RespuestaDto<GuardarPropuestaResultadoDto>> GuardarPropuestaAsync(
         GuardarPropuestaDto dto, long idUsuario, CancellationToken ct);
 }

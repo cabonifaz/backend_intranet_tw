@@ -498,6 +498,112 @@ public class PropuestasRepositorio(CadenaConexionBd conexion)
                 });
             }, ct);
 
+    // ── HU-12: envío a visto bueno ───────────────────────────────────────────
+    public Task<RespuestaDto<VistoBuenoPropuestaDto>> EnviarVistoBuenoAsync(
+        long idPropuesta, string? comentario, bool soloPreparar, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_EnviarVistoBuenoPropuesta",
+            p =>
+            {
+                p.AddWithValue("p_id_propuesta",  idPropuesta);
+                p.AddWithValue("p_comentario",    Valor(comentario));
+                p.AddWithValue("p_solo_preparar", Bit(soloPreparar));
+                p.AddWithValue("p_id_usuario",    idUsuario);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<VistoBuenoPropuestaDto>(3, "El procedimiento no devolvió el resultado.");
+
+                var vb = new VistoBuenoPropuestaDto
+                {
+                    IdPropuesta                = EnteroLargo(r, "id_propuesta"),
+                    Numero                     = Texto(r, "numero") ?? "",
+                    Version                    = Entero(r, "version"),
+                    Estado                     = Texto(r, "estado") ?? "",
+                    Cliente                    = Texto(r, "cliente"),
+                    NumeroRequerimiento        = Texto(r, "numero_requerimiento"),
+                    Total                      = DecimalNulo(r, "total") ?? 0,
+                    MonedaSimbolo              = Texto(r, "moneda_simbolo"),
+                    IdAprobador                = EnteroLargoNulo(r, "id_aprobador"),
+                    NombreAprobador            = Texto(r, "nombre_aprobador"),
+                    CargoAprobador             = Texto(r, "cargo_aprobador"),
+                    EsSuplente                 = Booleano(r, "es_suplente"),
+                    IdJefeDirecto              = EnteroLargoNulo(r, "id_jefe_directo"),
+                    NombreJefeDirecto          = Texto(r, "nombre_jefe_directo"),
+                    SlaHoras                   = Entero(r, "sla_horas"),
+                    FechaLimite                = FechaHora(r, "fecha_limite"),
+                    RequiereAprobacionEspecial = Booleano(r, "requiere_aprobacion_especial"),
+                    MotivoAlerta               = Texto(r, "motivo_alerta"),
+                    DescuentoPct               = DecimalNulo(r, "descuento_pct") ?? 0,
+                    UmbralDescuentoPct         = DecimalNulo(r, "umbral_descuento_pct") ?? 0,
+                    PuedeEnviar                = Booleano(r, "puede_enviar"),
+                    IdVistoBueno               = EnteroLargoNulo(r, "id_visto_bueno"),
+                };
+
+                await r.NextResultAsync(ct);
+                while (await r.ReadAsync(ct))
+                    vb.Validaciones.Add(new ValidacionVistoBuenoDto
+                    {
+                        Codigo      = Texto(r, "codigo") ?? "",
+                        Etiqueta    = Texto(r, "etiqueta") ?? "",
+                        Cumple      = Booleano(r, "cumple"),
+                        Obligatoria = Booleano(r, "obligatoria"),
+                        Detalle     = Texto(r, "detalle"),
+                    });
+
+                return new RespuestaDto<VistoBuenoPropuestaDto>(2, mensaje, vb);
+            }, ct);
+
+    // ── HU-12: anulación ─────────────────────────────────────────────────────
+    public Task<RespuestaDto<AnulacionPropuestaDto>> AnularPropuestaAsync(
+        long idPropuesta, int? idMotivo, string? justificacion, bool confirmacion, bool soloPreparar,
+        long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_AnularPropuesta",
+            p =>
+            {
+                p.AddWithValue("p_id_propuesta",  idPropuesta);
+                p.AddWithValue("p_id_motivo",     Valor(idMotivo));
+                p.AddWithValue("p_justificacion", Valor(justificacion));
+                p.AddWithValue("p_confirmacion",  Bit(confirmacion));
+                p.AddWithValue("p_solo_preparar", Bit(soloPreparar));
+                p.AddWithValue("p_id_usuario",    idUsuario);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<AnulacionPropuestaDto>(3, "El procedimiento no devolvió el resultado.");
+
+                var a = new AnulacionPropuestaDto
+                {
+                    IdPropuesta            = EnteroLargo(r, "id_propuesta"),
+                    Numero                 = Texto(r, "numero") ?? "",
+                    Version                = Entero(r, "version"),
+                    Estado                 = Texto(r, "estado") ?? "",
+                    Cliente                = Texto(r, "cliente"),
+                    NumeroRequerimiento    = Texto(r, "numero_requerimiento"),
+                    NumeroExpediente       = Texto(r, "numero_expediente"),
+                    TieneVbPendiente       = Booleano(r, "tiene_vb_pendiente"),
+                    PuedeAnular            = Booleano(r, "puede_anular"),
+                    MotivoBloqueo          = Texto(r, "motivo_bloqueo"),
+                    Impacto                = Texto(r, "impacto"),
+                    MotivoAnulacion        = Texto(r, "motivo_anulacion"),
+                    JustificacionAnulacion = Texto(r, "justificacion_anulacion"),
+                    FechaAnulacion         = FechaHora(r, "fecha_anulacion"),
+                };
+
+                if (soloPreparar && await r.NextResultAsync(ct))
+                    while (await r.ReadAsync(ct))
+                        a.Motivos.Add(new OpcionMotivoDto
+                        {
+                            Id     = Entero(r, "id"),
+                            Nombre = Texto(r, "nombre") ?? "",
+                        });
+
+                return new RespuestaDto<AnulacionPropuestaDto>(2, mensaje, a);
+            }, ct);
+
     private static List<string> LeerListaJson(string? json)
     {
         if (string.IsNullOrWhiteSpace(json)) return new();

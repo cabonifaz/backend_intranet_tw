@@ -7,7 +7,7 @@ using TW.Intranet.Aplicacion.Dtos;
 
 namespace TW.Intranet.API.Controllers;
 
-/// <summary>HU-07 / HU-08 / HU-09 / HU-10 / HU-11 — Propuestas comerciales.</summary>
+/// <summary>HU-07 / HU-08 / HU-09 / HU-10 / HU-11 / HU-12 — Propuestas comerciales.</summary>
 [ApiController]
 [Route("api/crm/propuestas")]
 [Authorize]
@@ -21,7 +21,11 @@ public class PropuestasController(
     CrearNuevaVersionPropuestaCasoDeUso crearNuevaVersion,
     PrevisualizarDescuentoPropuestaCasoDeUso previsualizarDescuento,
     AplicarDescuentoPropuestaCasoDeUso       aplicarDescuento,
-    QuitarDescuentoPropuestaCasoDeUso        quitarDescuento) : ControllerBase
+    QuitarDescuentoPropuestaCasoDeUso        quitarDescuento,
+    PrepararVistoBuenoPropuestaCasoDeUso     prepararVistoBueno,
+    EnviarVistoBuenoPropuestaCasoDeUso       enviarVistoBueno,
+    PrepararAnulacionPropuestaCasoDeUso      prepararAnulacion,
+    AnularPropuestaCasoDeUso                 anularPropuesta) : ControllerBase
 {
     private long IdUsuarioActual =>
         long.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub"), out var id)
@@ -118,4 +122,41 @@ public class PropuestasController(
     [HttpDelete("{id:long}/descuento")]
     public async Task<IActionResult> QuitarDescuento(long id, CancellationToken ct = default)
         => Responder(await quitarDescuento.EjecutarAsync(id, IdUsuarioActual, ct));
+
+    // ── HU-12: envío a visto bueno ──────────────────────────────────────────
+
+    /// <summary>
+    /// Datos del modal "Enviar a Visto Bueno": validaciones del sistema, aprobador (jefe directo
+    /// o su suplente vigente), SLA con fecha límite y alerta de aprobación especial. No cambia nada.
+    /// </summary>
+    [RequierePermiso("propuesta_enviar_vb")]
+    [HttpGet("{id:long}/visto-bueno/preparar")]
+    public async Task<IActionResult> PrepararVistoBueno(long id, CancellationToken ct = default)
+        => Responder(await prepararVistoBueno.EjecutarAsync(id, IdUsuarioActual, ct));
+
+    /// <summary>
+    /// Envía la propuesta (borrador, última versión) a visto bueno: pasa a pendiente_vb, crea el
+    /// registro de VB con su SLA y notifica al aprobador. Comentario obligatorio si requiere aprobación especial.
+    /// </summary>
+    [RequierePermiso("propuesta_enviar_vb")]
+    [HttpPost("{id:long}/visto-bueno")]
+    public async Task<IActionResult> EnviarVistoBueno(long id, [FromBody] EnviarVistoBuenoPropuestaDto? dto, CancellationToken ct = default)
+        => Responder(await enviarVistoBueno.EjecutarAsync(id, dto, IdUsuarioActual, ct));
+
+    // ── HU-12: anulación ────────────────────────────────────────────────────
+
+    /// <summary>Datos del modal "Anular Propuesta": impacto, si se puede anular y motivos.</summary>
+    [RequierePermiso("propuesta_anular")]
+    [HttpGet("{id:long}/anulacion/preparar")]
+    public async Task<IActionResult> PrepararAnulacion(long id, CancellationToken ct = default)
+        => Responder(await prepararAnulacion.EjecutarAsync(id, IdUsuarioActual, ct));
+
+    /// <summary>
+    /// Anula la propuesta (última versión, sin OC vinculada). Exige motivo, justificación de
+    /// al menos 20 caracteres y confirmacionCritica = true. Cancela el VB pendiente.
+    /// </summary>
+    [RequierePermiso("propuesta_anular")]
+    [HttpPost("{id:long}/anular")]
+    public async Task<IActionResult> Anular(long id, [FromBody] AnularPropuestaDto dto, CancellationToken ct = default)
+        => Responder(await anularPropuesta.EjecutarAsync(id, dto, IdUsuarioActual, ct));
 }

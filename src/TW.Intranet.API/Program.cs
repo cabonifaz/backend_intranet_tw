@@ -240,7 +240,7 @@ builder.Services.AddScoped<ObtenerEquipoClientePorIdCasoDeUso>();
 builder.Services.AddScoped<GuardarEquipoClienteCasoDeUso>();
 builder.Services.AddScoped<CambiarEstadoEquipoClienteCasoDeUso>();
 
-// ── INYECCIÓN DE DEPENDENCIAS — Propuestas (HU-07 / HU-08 / HU-09 / HU-10 / HU-11) ───────────────────
+// ── INYECCIÓN DE DEPENDENCIAS — Propuestas (HU-07 / HU-08 / HU-09 / HU-10 / HU-11 / HU-12) ───────────────────
 builder.Services.AddScoped<IPropuestasRepositorio, PropuestasRepositorio>();
 builder.Services.AddScoped<ObtenerDatosNuevaPropuestaCasoDeUso>();
 builder.Services.AddScoped<ObtenerPropuestasCasoDeUso>();
@@ -252,6 +252,10 @@ builder.Services.AddScoped<CrearNuevaVersionPropuestaCasoDeUso>();
 builder.Services.AddScoped<PrevisualizarDescuentoPropuestaCasoDeUso>();
 builder.Services.AddScoped<AplicarDescuentoPropuestaCasoDeUso>();
 builder.Services.AddScoped<QuitarDescuentoPropuestaCasoDeUso>();
+builder.Services.AddScoped<PrepararVistoBuenoPropuestaCasoDeUso>();
+builder.Services.AddScoped<EnviarVistoBuenoPropuestaCasoDeUso>();
+builder.Services.AddScoped<PrepararAnulacionPropuestaCasoDeUso>();
+builder.Services.AddScoped<AnularPropuestaCasoDeUso>();
 
 // ── INYECCIÓN DE DEPENDENCIAS — Ubigeo, áreas del cliente y formatos (reunión 02-oct) ──
 builder.Services.AddScoped<IMaestrosComplementariosRepositorio, MaestrosComplementariosRepositorio>();
