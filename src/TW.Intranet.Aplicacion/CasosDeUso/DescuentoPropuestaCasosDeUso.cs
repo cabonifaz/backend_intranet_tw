@@ -67,14 +67,19 @@ internal static class DescuentoValidacion
             return "Indique el descuento a aplicar.";
 
         var tipo = Tipo(dto);
-        if (tipo is not ("porcentaje" or "monto"))
+        // En previsualización se admite 'ninguno' para leer el estado actual sin simular descuento.
+        var tiposValidos = exigirMotivo ? new[] { "porcentaje", "monto" } : new[] { "porcentaje", "monto", "ninguno" };
+        if (!tiposValidos.Contains(tipo))
             return "Seleccione el tipo de descuento (porcentaje o monto fijo).";
-        if (dto.Valor <= 0)
-            return tipo == "porcentaje" ? "Ingrese un porcentaje mayor a 0." : "Ingrese un monto mayor a 0.";
-        if (tipo == "porcentaje" && dto.Valor > 100)
-            return "El porcentaje no puede ser mayor a 100.";
-        if (decimal.Round(dto.Valor, 2) != dto.Valor)
-            return "El descuento admite como máximo 2 decimales.";
+        if (tipo != "ninguno")
+        {
+            if (dto.Valor <= 0)
+                return tipo == "porcentaje" ? "Ingrese un porcentaje mayor a 0." : "Ingrese un monto mayor a 0.";
+            if (tipo == "porcentaje" && dto.Valor > 100)
+                return "El porcentaje no puede ser mayor a 100.";
+            if (decimal.Round(dto.Valor, 2) != dto.Valor)
+                return "El descuento admite como máximo 2 decimales.";
+        }
         if (exigirMotivo && (dto.IdMotivoDescuento is null || dto.IdMotivoDescuento <= 0))
             return "Seleccione el motivo del descuento.";
 
