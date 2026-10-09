@@ -1,7 +1,8 @@
 -- Bandeja de Visto Bueno (HU-13).
 -- Muestra el último VB de cada propuesta cuyo comercial tiene como jefe directo al usuario,
 -- o cuyo jefe tiene al usuario como suplente vigente (HU-84). Con la acción propuesta_vb_todas
--- (administradores de Gerencia y TI) se ven todas.
+-- (administradores de Gerencia y TI) se ven todas. HU-16: el VB reasignado lo ve también el nuevo aprobador,
+-- y solo él (o propuesta_vb_todas) puede resolverlo.
 -- SLA en horas hábiles (FN_HorasHabiles). Pendientes: en_plazo, proximo o vencido.
 -- Resueltos: cumplido o fuera_de_plazo.
 -- Filtros: comercial, estado del VB (pendiente, aprobado, devuelto, rechazado), moneda,
@@ -42,7 +43,7 @@ BEGIN
         SELECT
             vb.id_vb, vb.id_propuesta, vb.estado AS estado_vb, vb.sla_horas,
             vb.fecha_solicitud, vb.fecha_respuesta, vb.resuelto_por, vb.comentario AS comentario_solicitud,
-            vb.comentario_respuesta,
+            vb.comentario_respuesta, vb.id_vb_origen,
             p.numero, p.version, p.id_requerimiento, p.id_cliente, p.referencia, p.total, p.id_moneda,
             p.descuento_pct, p.estado AS estado_propuesta,
             a.id_usuario AS id_comercial, CONCAT(a.nombre, ' ', a.apellido) AS comercial,
@@ -63,7 +64,8 @@ BEGIN
     ),
     alcance AS (
         SELECT b.*,
-               (v_todas = 1 OR b.id_jefe = p_id_usuario OR b.id_suplente_vigente = p_id_usuario) AS en_alcance,
+               (v_todas = 1 OR b.id_jefe = p_id_usuario OR b.id_suplente_vigente = p_id_usuario
+                OR (b.id_vb_origen IS NOT NULL AND FN_AprobadorVistoBueno(b.id_vb) = p_id_usuario)) AS en_alcance,
                FN_HorasHabiles(b.fecha_solicitud, COALESCE(b.fecha_respuesta, NOW()))            AS horas_transcurridas,
                FN_SumarHorasHabiles(b.fecha_solicitud, b.sla_horas)                               AS vence_en
         FROM base b
@@ -95,7 +97,7 @@ BEGIN
         SELECT
             vb.id_vb, vb.id_propuesta, vb.estado AS estado_vb, vb.sla_horas,
             vb.fecha_solicitud, vb.fecha_respuesta, vb.resuelto_por, vb.comentario AS comentario_solicitud,
-            vb.comentario_respuesta,
+            vb.comentario_respuesta, vb.id_vb_origen,
             p.numero, p.version, p.id_requerimiento, p.id_cliente, p.referencia, p.total, p.id_moneda,
             p.descuento_pct, p.estado AS estado_propuesta,
             a.id_usuario AS id_comercial, CONCAT(a.nombre, ' ', a.apellido) AS comercial,
@@ -116,7 +118,8 @@ BEGIN
     ),
     alcance AS (
         SELECT b.*,
-               (v_todas = 1 OR b.id_jefe = p_id_usuario OR b.id_suplente_vigente = p_id_usuario) AS en_alcance,
+               (v_todas = 1 OR b.id_jefe = p_id_usuario OR b.id_suplente_vigente = p_id_usuario
+                OR (b.id_vb_origen IS NOT NULL AND FN_AprobadorVistoBueno(b.id_vb) = p_id_usuario)) AS en_alcance,
                FN_HorasHabiles(b.fecha_solicitud, COALESCE(b.fecha_respuesta, NOW()))            AS horas_transcurridas,
                FN_SumarHorasHabiles(b.fecha_solicitud, b.sla_horas)                               AS vence_en
         FROM base b
@@ -142,19 +145,20 @@ BEGIN
         b.total, b.id_moneda, m.String3            AS moneda, m.String2 AS moneda_simbolo,
         b.descuento_pct,
         b.id_comercial, b.comercial,
-        CASE WHEN b.estado_vb = 'pendiente' THEN COALESCE(b.id_suplente_vigente, b.id_jefe)
+        CASE WHEN b.estado_vb = 'pendiente' THEN FN_AprobadorVistoBueno(b.id_vb)
              ELSE b.resuelto_por END               AS id_aprobador,
         (SELECT CONCAT(u.nombre, ' ', u.apellido) FROM usuario u
-         WHERE u.id_usuario = CASE WHEN b.estado_vb = 'pendiente' THEN COALESCE(b.id_suplente_vigente, b.id_jefe)
+         WHERE u.id_usuario = CASE WHEN b.estado_vb = 'pendiente' THEN FN_AprobadorVistoBueno(b.id_vb)
                                    ELSE b.resuelto_por END) AS aprobador,
-        (b.estado_vb = 'pendiente' AND b.id_suplente_vigente IS NOT NULL) AS aprobador_es_suplente,
+        (b.estado_vb = 'pendiente' AND b.id_vb_origen IS NULL AND b.id_suplente_vigente IS NOT NULL) AS aprobador_es_suplente,
+        (b.id_vb_origen IS NOT NULL)               AS reasignado,
         b.estado_vb, b.fecha_solicitud, b.fecha_respuesta, b.vence_en,
         b.sla_horas, b.horas_transcurridas,
         GREATEST(b.sla_horas - b.horas_transcurridas, 0) AS horas_restantes,
         b.sla_estado,
         b.comentario_solicitud, b.comentario_respuesta,
         (b.estado_vb = 'pendiente' AND v_resolver = 1
-         AND (v_todas = 1 OR b.id_jefe = p_id_usuario OR b.id_suplente_vigente = p_id_usuario)) AS puede_resolver
+         AND FN_PuedeResolverVistoBueno(b.id_vb, p_id_usuario) = 1) AS puede_resolver
     FROM bandeja b
     JOIN cliente c        ON c.id_cliente = b.id_cliente
     LEFT JOIN requerimiento r ON r.id_requerimiento = b.id_requerimiento
@@ -174,7 +178,7 @@ BEGIN
         SELECT
             vb.id_vb, vb.id_propuesta, vb.estado AS estado_vb, vb.sla_horas,
             vb.fecha_solicitud, vb.fecha_respuesta, vb.resuelto_por, vb.comentario AS comentario_solicitud,
-            vb.comentario_respuesta,
+            vb.comentario_respuesta, vb.id_vb_origen,
             p.numero, p.version, p.id_requerimiento, p.id_cliente, p.referencia, p.total, p.id_moneda,
             p.descuento_pct, p.estado AS estado_propuesta,
             a.id_usuario AS id_comercial, CONCAT(a.nombre, ' ', a.apellido) AS comercial,
@@ -195,7 +199,8 @@ BEGIN
     ),
     alcance AS (
         SELECT b.*,
-               (v_todas = 1 OR b.id_jefe = p_id_usuario OR b.id_suplente_vigente = p_id_usuario) AS en_alcance,
+               (v_todas = 1 OR b.id_jefe = p_id_usuario OR b.id_suplente_vigente = p_id_usuario
+                OR (b.id_vb_origen IS NOT NULL AND FN_AprobadorVistoBueno(b.id_vb) = p_id_usuario)) AS en_alcance,
                FN_HorasHabiles(b.fecha_solicitud, COALESCE(b.fecha_respuesta, NOW()))            AS horas_transcurridas,
                FN_SumarHorasHabiles(b.fecha_solicitud, b.sla_horas)                               AS vence_en
         FROM base b
@@ -225,7 +230,7 @@ BEGIN
         SELECT
             vb.id_vb, vb.id_propuesta, vb.estado AS estado_vb, vb.sla_horas,
             vb.fecha_solicitud, vb.fecha_respuesta, vb.resuelto_por, vb.comentario AS comentario_solicitud,
-            vb.comentario_respuesta,
+            vb.comentario_respuesta, vb.id_vb_origen,
             p.numero, p.version, p.id_requerimiento, p.id_cliente, p.referencia, p.total, p.id_moneda,
             p.descuento_pct, p.estado AS estado_propuesta,
             a.id_usuario AS id_comercial, CONCAT(a.nombre, ' ', a.apellido) AS comercial,
@@ -246,7 +251,8 @@ BEGIN
     ),
     alcance AS (
         SELECT b.*,
-               (v_todas = 1 OR b.id_jefe = p_id_usuario OR b.id_suplente_vigente = p_id_usuario) AS en_alcance,
+               (v_todas = 1 OR b.id_jefe = p_id_usuario OR b.id_suplente_vigente = p_id_usuario
+                OR (b.id_vb_origen IS NOT NULL AND FN_AprobadorVistoBueno(b.id_vb) = p_id_usuario)) AS en_alcance,
                FN_HorasHabiles(b.fecha_solicitud, COALESCE(b.fecha_respuesta, NOW()))            AS horas_transcurridas,
                FN_SumarHorasHabiles(b.fecha_solicitud, b.sla_horas)                               AS vence_en
         FROM base b
@@ -272,7 +278,7 @@ BEGIN
         SELECT
             vb.id_vb, vb.id_propuesta, vb.estado AS estado_vb, vb.sla_horas,
             vb.fecha_solicitud, vb.fecha_respuesta, vb.resuelto_por, vb.comentario AS comentario_solicitud,
-            vb.comentario_respuesta,
+            vb.comentario_respuesta, vb.id_vb_origen,
             p.numero, p.version, p.id_requerimiento, p.id_cliente, p.referencia, p.total, p.id_moneda,
             p.descuento_pct, p.estado AS estado_propuesta,
             a.id_usuario AS id_comercial, CONCAT(a.nombre, ' ', a.apellido) AS comercial,
@@ -293,7 +299,8 @@ BEGIN
     ),
     alcance AS (
         SELECT b.*,
-               (v_todas = 1 OR b.id_jefe = p_id_usuario OR b.id_suplente_vigente = p_id_usuario) AS en_alcance,
+               (v_todas = 1 OR b.id_jefe = p_id_usuario OR b.id_suplente_vigente = p_id_usuario
+                OR (b.id_vb_origen IS NOT NULL AND FN_AprobadorVistoBueno(b.id_vb) = p_id_usuario)) AS en_alcance,
                FN_HorasHabiles(b.fecha_solicitud, COALESCE(b.fecha_respuesta, NOW()))            AS horas_transcurridas,
                FN_SumarHorasHabiles(b.fecha_solicitud, b.sla_horas)                               AS vence_en
         FROM base b

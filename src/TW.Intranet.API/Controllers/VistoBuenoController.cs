@@ -7,7 +7,7 @@ using TW.Intranet.Aplicacion.Dtos;
 
 namespace TW.Intranet.API.Controllers;
 
-/// <summary>HU-13 Bandeja de Visto Bueno · HU-14 Revisión y comparación · HU-15 Emisión de decisiones.</summary>
+/// <summary>HU-13 Bandeja de Visto Bueno · HU-14 Revisión y comparación · HU-15 Decisiones · HU-16 Reasignación.</summary>
 [ApiController]
 [Authorize]
 public class VistoBuenoController(
@@ -18,7 +18,10 @@ public class VistoBuenoController(
     ObtenerCostoSuministroCasoDeUso         obtenerCosto,
     GuardarCostoSuministroCasoDeUso         guardarCosto,
     PrepararDecisionVistoBuenoCasoDeUso     prepararDecision,
-    ObtenerCorreccionPropuestaCasoDeUso     obtenerCorreccion) : ControllerBase
+    ObtenerCorreccionPropuestaCasoDeUso     obtenerCorreccion,
+    PrepararReasignacionVistoBuenoCasoDeUso prepararReasignacion,
+    ObtenerCandidatosReasignacionVbCasoDeUso obtenerCandidatos,
+    ReasignarVistoBuenoCasoDeUso            reasignar) : ControllerBase
 {
     private long IdUsuarioActual =>
         long.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub"), out var id) ? id : 0;
@@ -90,4 +93,28 @@ public class VistoBuenoController(
     [HttpGet("api/crm/propuestas/{id:long}/correccion")]
     public async Task<IActionResult> Correccion(long id, CancellationToken ct = default)
         => Responder(await obtenerCorreccion.EjecutarAsync(id, ct));
+
+    /// <summary>
+    /// HU-16 — Modal "Reasignar Aprobador": aprobador actual y fecha de asignación, SLA
+    /// (transcurrido y restante en horas hábiles), si el usuario puede reasignar y motivos.
+    /// </summary>
+    [RequierePermiso("propuesta_vb_reasignar")]
+    [HttpGet("api/crm/propuestas/{id:long}/visto-bueno/reasignacion")]
+    public async Task<IActionResult> PrepararReasignacion(long id, CancellationToken ct = default)
+        => Responder(await prepararReasignacion.EjecutarAsync(id, IdUsuarioActual, ct));
+
+    /// <summary>HU-16 — Buscador de nuevos aprobadores válidos (?buscar=texto, máx. 20).</summary>
+    [RequierePermiso("propuesta_vb_reasignar")]
+    [HttpGet("api/crm/propuestas/{id:long}/visto-bueno/candidatos")]
+    public async Task<IActionResult> Candidatos(long id, [FromQuery] string? buscar, CancellationToken ct = default)
+        => Responder(await obtenerCandidatos.EjecutarAsync(id, buscar, ct));
+
+    /// <summary>
+    /// HU-16 — Reasigna el VB pendiente: { idNuevoAprobador, idMotivo, comentario?, reiniciarSla }.
+    /// El VB actual queda 'reasignado' y se crea uno nuevo para el nuevo aprobador.
+    /// </summary>
+    [RequierePermiso("propuesta_vb_reasignar")]
+    [HttpPost("api/crm/propuestas/{id:long}/visto-bueno/reasignar")]
+    public async Task<IActionResult> Reasignar(long id, [FromBody] ReasignarVistoBuenoDto dto, CancellationToken ct = default)
+        => Responder(await reasignar.EjecutarAsync(id, dto, IdUsuarioActual, ct));
 }

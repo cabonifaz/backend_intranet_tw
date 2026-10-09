@@ -60,6 +60,7 @@ public class VistoBuenoRepositorio(CadenaConexionBd conexion)
                         IdAprobador         = EnteroLargoNulo(r, "id_aprobador"),
                         Aprobador           = Texto(r, "aprobador"),
                         AprobadorEsSuplente = Booleano(r, "aprobador_es_suplente"),
+                        Reasignado          = Booleano(r, "reasignado"),
                         EstadoVb            = Texto(r, "estado_vb") ?? "",
                         FechaSolicitud      = FechaHora(r, "fecha_solicitud"),
                         FechaRespuesta      = FechaHora(r, "fecha_respuesta"),
@@ -205,6 +206,89 @@ public class VistoBuenoRepositorio(CadenaConexionBd conexion)
 
                 return new RespuestaDto<CorreccionPropuestaDto?>(2, mensaje,
                     new CorreccionPropuestaDto(id, estado, obs, limite, vencida, solEn, solPor, idResp, resp, atendidaEn, areas));
+            }, ct);
+
+    // ── HU-16 Reasignación ────────────────────────────────────────────────────
+    public Task<RespuestaDto<ReasignacionVistoBuenoDto>> PrepararReasignacionAsync(long idPropuesta, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_PrepararReasignacionVistoBueno",
+            p =>
+            {
+                p.AddWithValue("p_id_propuesta", idPropuesta);
+                p.AddWithValue("p_id_usuario",   idUsuario);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<ReasignacionVistoBuenoDto>(3, "El procedimiento no devolvió el resultado.");
+
+                var idProp     = EnteroLargo(r, "id_propuesta");
+                var numero     = Texto(r, "numero") ?? "";
+                var version    = Entero(r, "version");
+                var idVb       = EnteroLargo(r, "id_visto_bueno");
+                var idAprob    = EnteroLargoNulo(r, "id_aprobador");
+                var aprobador  = Texto(r, "nombre_aprobador");
+                var cargo      = Texto(r, "cargo_aprobador");
+                var asignacion = FechaHora(r, "fecha_asignacion");
+                var reasignado = Booleano(r, "reasignado");
+                var solicitud  = FechaHora(r, "fecha_solicitud");
+                var sla        = Ent(r, "sla_horas");
+                var transc     = Dec(r, "horas_transcurridas");
+                var restantes  = Dec(r, "horas_restantes");
+                var vence      = FechaHora(r, "vence_en");
+                var idCom      = EnteroLargoNulo(r, "id_comercial");
+                var comercial  = Texto(r, "nombre_comercial");
+                var puede      = Booleano(r, "puede_reasignar");
+                var bloqueo    = Texto(r, "motivo_bloqueo");
+
+                var motivos = new List<OpcionCatalogoVbDto>();
+                await r.NextResultAsync(ct);
+                while (await r.ReadAsync(ct))
+                    motivos.Add(new OpcionCatalogoVbDto(Entero(r, "id"), Texto(r, "nombre") ?? ""));
+
+                return new RespuestaDto<ReasignacionVistoBuenoDto>(2, mensaje, new ReasignacionVistoBuenoDto(
+                    idProp, numero, version, idVb, idAprob, aprobador, cargo, asignacion, reasignado, solicitud,
+                    sla, transc, restantes, vence, idCom, comercial, puede, bloqueo, motivos));
+            }, ct);
+
+    public Task<RespuestaDto<List<CandidatoAprobadorDto>>> ObtenerCandidatosReasignacionAsync(long idPropuesta, string? buscar, CancellationToken ct)
+        => EjecutarAsync("SP_ObtenerCandidatosReasignacionVb",
+            p =>
+            {
+                p.AddWithValue("p_id_propuesta", idPropuesta);
+                p.AddWithValue("p_buscar",       Valor(buscar));
+            },
+            async (r, mensaje) =>
+            {
+                var lista = new List<CandidatoAprobadorDto>();
+                await r.NextResultAsync(ct);
+                while (await r.ReadAsync(ct))
+                    lista.Add(new CandidatoAprobadorDto(
+                        EnteroLargo(r, "id_usuario"), Texto(r, "nombre") ?? "", Texto(r, "cargo"),
+                        Texto(r, "area"), Texto(r, "rol_sistema"), Texto(r, "correo")));
+                return new RespuestaDto<List<CandidatoAprobadorDto>>(2, mensaje, lista);
+            }, ct);
+
+    public Task<RespuestaDto<ResultadoReasignacionVbDto>> ReasignarAsync(long idPropuesta, ReasignarVistoBuenoDto dto, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_ReasignarVistoBueno",
+            p =>
+            {
+                p.AddWithValue("p_id_propuesta",       idPropuesta);
+                p.AddWithValue("p_id_nuevo_aprobador", dto.IdNuevoAprobador);
+                p.AddWithValue("p_id_motivo",          Valor(dto.IdMotivo));
+                p.AddWithValue("p_comentario",         Valor(dto.Comentario));
+                p.AddWithValue("p_reiniciar_sla",      Bit(dto.ReiniciarSla));
+                p.AddWithValue("p_id_usuario",         idUsuario);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<ResultadoReasignacionVbDto>(3, "El procedimiento no devolvió el resultado.");
+                return new RespuestaDto<ResultadoReasignacionVbDto>(2, mensaje, new ResultadoReasignacionVbDto(
+                    EnteroLargo(r, "id_propuesta"), EnteroLargo(r, "id_visto_bueno"), EnteroLargo(r, "id_aprobador"),
+                    Texto(r, "nombre_aprobador") ?? "", FechaHora(r, "fecha_solicitud"), FechaHora(r, "vence_en"),
+                    Booleano(r, "sla_reiniciado")));
             }, ct);
 
     // ── HU-14 Validaciones ────────────────────────────────────────────────────

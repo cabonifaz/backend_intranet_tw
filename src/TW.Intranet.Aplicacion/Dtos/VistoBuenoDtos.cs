@@ -40,6 +40,8 @@ public record ItemBandejaVistoBuenoDto
     /// <summary>Pendiente: quien debe aprobar ahora (jefe o su suplente vigente). Resuelto: quien resolvió.</summary>
     public string?   Aprobador            { get; init; }
     public bool      AprobadorEsSuplente  { get; init; }
+    /// <summary>HU-16 — el VB fue reasignado a otro aprobador.</summary>
+    public bool      Reasignado           { get; init; }
     /// <summary>pendiente | aprobado | devuelto | rechazado</summary>
     public string    EstadoVb             { get; init; } = "";
     public DateTime? FechaSolicitud       { get; init; }
@@ -269,3 +271,46 @@ public record CostoSuministroDto(
     string?   CostoActualizadoPor);
 
 public record GuardarCostoSuministroDto(decimal? PrecioCosto);
+
+// ══════════════════════ HU-16 — Reasignación de aprobador ══════════════════════
+
+/// <summary>GET /api/crm/propuestas/{id}/visto-bueno/reasignacion</summary>
+public record ReasignacionVistoBuenoDto(
+    long      IdPropuesta,
+    string    Numero,
+    int       Version,
+    long      IdVistoBueno,
+    long?     IdAprobador,
+    string?   NombreAprobador,
+    string?   CargoAprobador,
+    DateTime? FechaAsignacion,
+    bool      Reasignado,
+    DateTime? FechaSolicitud,
+    int       SlaHoras,
+    decimal   HorasTranscurridas,
+    decimal   HorasRestantes,
+    DateTime? VenceEn,
+    long?     IdComercial,
+    string?   NombreComercial,
+    bool      PuedeReasignar,
+    string?   MotivoBloqueo,
+    List<OpcionCatalogoVbDto> Motivos);
+
+/// <summary>GET /api/crm/propuestas/{id}/visto-bueno/candidatos?buscar=</summary>
+public record CandidatoAprobadorDto(long IdUsuario, string Nombre, string? Cargo, string? Area, string? RolSistema, string? Correo);
+
+/// <summary>POST /api/crm/propuestas/{id}/visto-bueno/reasignar</summary>
+public record ReasignarVistoBuenoDto(
+    long    IdNuevoAprobador,
+    int?    IdMotivo,
+    string? Comentario,
+    bool    ReiniciarSla = false);
+
+public record ResultadoReasignacionVbDto(
+    long      IdPropuesta,
+    long      IdVistoBueno,
+    long      IdAprobador,
+    string    NombreAprobador,
+    DateTime? FechaSolicitud,
+    DateTime? VenceEn,
+    bool      SlaReiniciado);

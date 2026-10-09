@@ -92,6 +92,44 @@ public class ObtenerCorreccionPropuestaCasoDeUso(IVistoBuenoRepositorio reposito
             : repositorio.ObtenerCorreccionAsync(idPropuesta, ct);
 }
 
+// ══════════════════════ HU-16 — Reasignación de aprobador ══════════════════════
+
+public class PrepararReasignacionVistoBuenoCasoDeUso(IVistoBuenoRepositorio repositorio)
+{
+    public Task<RespuestaDto<ReasignacionVistoBuenoDto>> EjecutarAsync(long idPropuesta, long idUsuario, CancellationToken ct = default)
+        => idPropuesta <= 0
+            ? Task.FromResult(new RespuestaDto<ReasignacionVistoBuenoDto>(1, "Indique la propuesta."))
+            : repositorio.PrepararReasignacionAsync(idPropuesta, idUsuario, ct);
+}
+
+public class ObtenerCandidatosReasignacionVbCasoDeUso(IVistoBuenoRepositorio repositorio)
+{
+    public Task<RespuestaDto<List<CandidatoAprobadorDto>>> EjecutarAsync(long idPropuesta, string? buscar, CancellationToken ct = default)
+        => idPropuesta <= 0
+            ? Task.FromResult(new RespuestaDto<List<CandidatoAprobadorDto>>(1, "Indique la propuesta."))
+            : repositorio.ObtenerCandidatosReasignacionAsync(idPropuesta, buscar?.Trim(), ct);
+}
+
+public class ReasignarVistoBuenoCasoDeUso(IVistoBuenoRepositorio repositorio)
+{
+    private const int MaxComentario = 1000;
+
+    public Task<RespuestaDto<ResultadoReasignacionVbDto>> EjecutarAsync(
+        long idPropuesta, ReasignarVistoBuenoDto? dto, long idUsuario, CancellationToken ct = default)
+    {
+        if (idPropuesta <= 0)
+            return Task.FromResult(new RespuestaDto<ResultadoReasignacionVbDto>(1, "Indique la propuesta."));
+        if (dto is null || dto.IdNuevoAprobador <= 0)
+            return Task.FromResult(new RespuestaDto<ResultadoReasignacionVbDto>(1, "Seleccione el nuevo aprobador."));
+        if (dto.IdMotivo is null or <= 0)
+            return Task.FromResult(new RespuestaDto<ResultadoReasignacionVbDto>(1, "Seleccione el motivo de la reasignación."));
+        if ((dto.Comentario?.Trim().Length ?? 0) > MaxComentario)
+            return Task.FromResult(new RespuestaDto<ResultadoReasignacionVbDto>(1, $"El comentario no puede superar los {MaxComentario} caracteres."));
+
+        return repositorio.ReasignarAsync(idPropuesta, dto with { Comentario = dto.Comentario?.Trim() }, idUsuario, ct);
+    }
+}
+
 // ══════════════════════ HU-14 — Validaciones previas ══════════════════════
 
 public class ObtenerValidacionesVistoBuenoCasoDeUso(IVistoBuenoRepositorio repositorio)

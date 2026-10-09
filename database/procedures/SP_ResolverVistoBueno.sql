@@ -3,7 +3,7 @@
 --             corregir → VB 'devuelto',  propuesta vuelve a 'borrador' (comentario obligatorio)
 --             rechazar → VB 'rechazado', propuesta 'rechazado', queda cerrada (comentario obligatorio)
 -- Puede resolver: el jefe directo del comercial, su suplente vigente (HU-84), o quien tenga la
--- acción propuesta_vb_todas. Además se exige la acción propuesta_vb_resolver.
+-- acción propuesta_vb_todas. HU-16: si el VB fue reasignado, solo el nuevo aprobador (FN_PuedeResolverVistoBueno). Además se exige la acción propuesta_vb_resolver.
 -- Notifica al comercial y deja historial y auditoría.
 -- HU-15 — Emisión de decisiones:
 --   aprobar  → exige confirmar todas las VALIDACION_APROBACION_VB obligatorias
@@ -154,10 +154,9 @@ proc: BEGIN
     ORDER BY us.fecha_inicio DESC LIMIT 1;
 
     IF FN_PermisoAccion(p_id_usuario, 'propuesta_vb_resolver') = 0
-       OR NOT (p_id_usuario = v_jefe OR p_id_usuario = v_suplente
-               OR FN_PermisoAccion(p_id_usuario, 'propuesta_vb_todas') = 1) THEN
+       OR FN_PuedeResolverVistoBueno(v_id_vb, p_id_usuario) = 0 THEN
         SELECT 1 AS IdTipoMensaje,
-               'Solo el jefe directo del comercial (o su suplente vigente) puede resolver este visto bueno.' AS Mensaje;
+               'Solo el aprobador asignado (jefe directo, su suplente vigente o a quien se reasignó) puede resolver este visto bueno.' AS Mensaje;
         LEAVE proc;
     END IF;
 

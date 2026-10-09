@@ -48,9 +48,8 @@ proc: BEGIN
     IF v_id_vb IS NULL OR v_estado_p <> 'pendiente_vb' THEN
         SET v_puede = 0, v_bloqueo = 'La propuesta no tiene un visto bueno pendiente.';
     ELSEIF FN_PermisoAccion(p_id_usuario, 'propuesta_vb_resolver') = 0
-        OR NOT (p_id_usuario = v_jefe OR p_id_usuario = v_suplente
-                OR FN_PermisoAccion(p_id_usuario, 'propuesta_vb_todas') = 1) THEN
-        SET v_puede = 0, v_bloqueo = 'Solo el jefe directo del comercial (o su suplente vigente) puede resolver este visto bueno.';
+        OR FN_PuedeResolverVistoBueno(v_id_vb, p_id_usuario) = 0 THEN
+        SET v_puede = 0, v_bloqueo = 'Solo el aprobador asignado (jefe directo, su suplente vigente o a quien se reasignó) puede resolver este visto bueno.';
     ELSEIF p_id_usuario = v_autor AND FN_PermisoAccion(p_id_usuario, 'propuesta_vb_todas') = 0 THEN
         SET v_puede = 0, v_bloqueo = 'No puede dar visto bueno a una propuesta propia.';
     END IF;
