@@ -58,16 +58,16 @@ proc: BEGIN
         CASE
             WHEN p.estado = 'pendiente_vb' THEN
                 COALESCE(
-                    (SELECT DATE_ADD(vb.fecha_solicitud, INTERVAL vb.sla_horas HOUR)
+                    (SELECT FN_SumarHorasHabiles(vb.fecha_solicitud, vb.sla_horas)
                      FROM visto_bueno vb
                      WHERE vb.id_propuesta = p.id_propuesta AND vb.estado = 'pendiente'
                        AND vb.eliminado_en IS NULL
                      ORDER BY vb.fecha_solicitud DESC LIMIT 1),
-                    DATE_ADD(COALESCE(p.modificado_en, p.fecha_creacion), INTERVAL
-                        (SELECT CAST(tm.Num2 AS SIGNED) FROM tabla_maestra tm
+                    FN_SumarHorasHabiles(COALESCE(p.modificado_en, p.fecha_creacion),
+                        (SELECT tm.Num2 FROM tabla_maestra tm
                          WHERE tm.IdMaestro = 49 AND tm.IdEmpresa = 1
                            AND tm.String1 = 'propuesta' AND tm.String2 = 'pendiente_vb'
-                         LIMIT 1) HOUR))
+                         LIMIT 1)))
             WHEN p.estado = 'enviado' AND p.fecha_expiracion IS NOT NULL THEN
                 TIMESTAMP(p.fecha_expiracion, '23:59:59')
             ELSE NULL

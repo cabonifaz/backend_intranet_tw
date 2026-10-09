@@ -291,6 +291,15 @@ builder.Services.AddScoped<ObtenerDirectorioCasoDeUso>();
 builder.Services.AddScoped<ObtenerCumpleanosCasoDeUso>();
 builder.Services.AddScoped<VerificarDuplicadosCasoDeUso>();
 
+// ── INYECCIÓN DE DEPENDENCIAS — Visto bueno (HU-13 / HU-14) ──────────────────
+builder.Services.AddScoped<IVistoBuenoRepositorio, VistoBuenoRepositorio>();
+builder.Services.AddScoped<ObtenerBandejaVistoBuenoCasoDeUso>();
+builder.Services.AddScoped<ResolverVistoBuenoCasoDeUso>();
+builder.Services.AddScoped<ObtenerValidacionesVistoBuenoCasoDeUso>();
+builder.Services.AddScoped<CompararVersionesPropuestaCasoDeUso>();
+builder.Services.AddScoped<ObtenerCostoSuministroCasoDeUso>();
+builder.Services.AddScoped<GuardarCostoSuministroCasoDeUso>();
+
 // ─────────────────────────────────────────────────────────────────────────────
 var app = builder.Build();
 

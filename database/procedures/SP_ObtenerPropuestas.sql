@@ -1,8 +1,9 @@
 -- HU-07 / HU-08 — Bandeja de propuestas (listado paginado)
 --   Filtros: requerimiento, estado (BD), grupo de estado (pestañas del front),
 --   año, comercial, búsqueda y "solo versión actual" (por defecto sí).
---   Grupos: borrador | por_vb | en_seguimiento | aceptada | rechazada | cerrada | todas
---   ("por_enviar" y "por_consolidar" dependen del flujo de VB — HU-12, pendiente).
+--   Grupos: borrador | por_vb | por_enviar | en_seguimiento | aceptada | rechazada | cerrada | todas
+--   Estado 'aprobado' = visto bueno aprobado, falta enviar al cliente (grupo por_enviar).
+--   Aceptada = la propuesta tiene orden de compra (HU-13).
 DROP PROCEDURE IF EXISTS SP_ObtenerPropuestas;
 
 DELIMITER $$
@@ -45,15 +46,23 @@ BEGIN
         CASE p.estado
             WHEN 'borrador'     THEN 'borrador'
             WHEN 'pendiente_vb' THEN 'por_vb'
-            WHEN 'enviado'      THEN 'en_seguimiento'
-            WHEN 'aprobado'     THEN 'aceptada'
+            WHEN 'enviado'      THEN IF(EXISTS (SELECT 1 FROM orden_compra oc
+                        WHERE oc.eliminado_en IS NULL AND oc.estado <> 'anulada'
+                          AND (oc.id_propuesta = p.id_propuesta
+                               OR oc.id_oc IN (SELECT op.id_oc FROM oc_propuesta op
+                                               WHERE op.id_propuesta = p.id_propuesta AND op.eliminado_en IS NULL))), 'aceptada', 'en_seguimiento')
+            WHEN 'aprobado'     THEN IF(EXISTS (SELECT 1 FROM orden_compra oc
+                        WHERE oc.eliminado_en IS NULL AND oc.estado <> 'anulada'
+                          AND (oc.id_propuesta = p.id_propuesta
+                               OR oc.id_oc IN (SELECT op.id_oc FROM oc_propuesta op
+                                               WHERE op.id_propuesta = p.id_propuesta AND op.eliminado_en IS NULL))), 'aceptada', 'por_enviar')
             WHEN 'rechazado'    THEN 'rechazada'
             ELSE 'cerrada'
         END                                     AS estado_grupo,
         CASE p.estado
             WHEN 'borrador'  THEN 'editar'
             WHEN 'enviado'   THEN 'nueva_version'
-            WHEN 'aprobado'  THEN 'nueva_version'
+            WHEN 'aprobado'  THEN 'enviar'
             WHEN 'rechazado' THEN 'nueva_version'
             ELSE 'ver_detalle'
         END                                     AS accion,
@@ -73,8 +82,21 @@ BEGIN
       AND (p_grupo_estado IS NULL OR p_grupo_estado = '' OR p_grupo_estado = 'todas'
            OR (p_grupo_estado = 'borrador'       AND p.estado = 'borrador')
            OR (p_grupo_estado = 'por_vb'         AND p.estado = 'pendiente_vb')
-           OR (p_grupo_estado = 'en_seguimiento' AND p.estado = 'enviado')
-           OR (p_grupo_estado = 'aceptada'       AND p.estado = 'aprobado')
+           OR (p_grupo_estado = 'por_enviar'     AND p.estado = 'aprobado' AND NOT EXISTS (SELECT 1 FROM orden_compra oc
+                        WHERE oc.eliminado_en IS NULL AND oc.estado <> 'anulada'
+                          AND (oc.id_propuesta = p.id_propuesta
+                               OR oc.id_oc IN (SELECT op.id_oc FROM oc_propuesta op
+                                               WHERE op.id_propuesta = p.id_propuesta AND op.eliminado_en IS NULL))))
+           OR (p_grupo_estado = 'en_seguimiento' AND p.estado = 'enviado'  AND NOT EXISTS (SELECT 1 FROM orden_compra oc
+                        WHERE oc.eliminado_en IS NULL AND oc.estado <> 'anulada'
+                          AND (oc.id_propuesta = p.id_propuesta
+                               OR oc.id_oc IN (SELECT op.id_oc FROM oc_propuesta op
+                                               WHERE op.id_propuesta = p.id_propuesta AND op.eliminado_en IS NULL))))
+           OR (p_grupo_estado = 'aceptada'       AND p.estado IN ('aprobado', 'enviado') AND EXISTS (SELECT 1 FROM orden_compra oc
+                        WHERE oc.eliminado_en IS NULL AND oc.estado <> 'anulada'
+                          AND (oc.id_propuesta = p.id_propuesta
+                               OR oc.id_oc IN (SELECT op.id_oc FROM oc_propuesta op
+                                               WHERE op.id_propuesta = p.id_propuesta AND op.eliminado_en IS NULL))))
            OR (p_grupo_estado = 'rechazada'      AND p.estado = 'rechazado')
            OR (p_grupo_estado = 'cerrada'        AND p.estado IN ('anulado', 'vencido')))
       AND (p_anio IS NULL OR p_anio = 0 OR YEAR(p.fecha_creacion) = p_anio)
@@ -104,8 +126,21 @@ BEGIN
       AND (p_grupo_estado IS NULL OR p_grupo_estado = '' OR p_grupo_estado = 'todas'
            OR (p_grupo_estado = 'borrador'       AND p.estado = 'borrador')
            OR (p_grupo_estado = 'por_vb'         AND p.estado = 'pendiente_vb')
-           OR (p_grupo_estado = 'en_seguimiento' AND p.estado = 'enviado')
-           OR (p_grupo_estado = 'aceptada'       AND p.estado = 'aprobado')
+           OR (p_grupo_estado = 'por_enviar'     AND p.estado = 'aprobado' AND NOT EXISTS (SELECT 1 FROM orden_compra oc
+                        WHERE oc.eliminado_en IS NULL AND oc.estado <> 'anulada'
+                          AND (oc.id_propuesta = p.id_propuesta
+                               OR oc.id_oc IN (SELECT op.id_oc FROM oc_propuesta op
+                                               WHERE op.id_propuesta = p.id_propuesta AND op.eliminado_en IS NULL))))
+           OR (p_grupo_estado = 'en_seguimiento' AND p.estado = 'enviado'  AND NOT EXISTS (SELECT 1 FROM orden_compra oc
+                        WHERE oc.eliminado_en IS NULL AND oc.estado <> 'anulada'
+                          AND (oc.id_propuesta = p.id_propuesta
+                               OR oc.id_oc IN (SELECT op.id_oc FROM oc_propuesta op
+                                               WHERE op.id_propuesta = p.id_propuesta AND op.eliminado_en IS NULL))))
+           OR (p_grupo_estado = 'aceptada'       AND p.estado IN ('aprobado', 'enviado') AND EXISTS (SELECT 1 FROM orden_compra oc
+                        WHERE oc.eliminado_en IS NULL AND oc.estado <> 'anulada'
+                          AND (oc.id_propuesta = p.id_propuesta
+                               OR oc.id_oc IN (SELECT op.id_oc FROM oc_propuesta op
+                                               WHERE op.id_propuesta = p.id_propuesta AND op.eliminado_en IS NULL))))
            OR (p_grupo_estado = 'rechazada'      AND p.estado = 'rechazado')
            OR (p_grupo_estado = 'cerrada'        AND p.estado IN ('anulado', 'vencido')))
       AND (p_anio IS NULL OR p_anio = 0 OR YEAR(p.fecha_creacion) = p_anio)
