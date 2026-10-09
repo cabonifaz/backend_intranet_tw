@@ -25,7 +25,8 @@ public class PropuestasController(
     PrepararVistoBuenoPropuestaCasoDeUso     prepararVistoBueno,
     EnviarVistoBuenoPropuestaCasoDeUso       enviarVistoBueno,
     PrepararAnulacionPropuestaCasoDeUso      prepararAnulacion,
-    AnularPropuestaCasoDeUso                 anularPropuesta) : ControllerBase
+    AnularPropuestaCasoDeUso                 anularPropuesta,
+    GenerarPdfPropuestaCasoDeUso             generarPdf) : ControllerBase
 {
     private long IdUsuarioActual =>
         long.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub"), out var id)
@@ -159,4 +160,20 @@ public class PropuestasController(
     [HttpPost("{id:long}/anular")]
     public async Task<IActionResult> Anular(long id, [FromBody] AnularPropuestaDto dto, CancellationToken ct = default)
         => Responder(await anularPropuesta.EjecutarAsync(id, dto, IdUsuarioActual, ct));
+
+    // ── Vista Previa / Descarga PDF ─────────────────────────────────────────
+
+    /// <summary>
+    /// Genera el PDF comercial de la propuesta (vista previa + descarga).
+    /// Reutiliza el detalle completo y lo renderiza con QuestPDF.
+    /// </summary>
+    [HttpGet("{id:long}/pdf")]
+    public async Task<IActionResult> ObtenerPdf(long id, CancellationToken ct = default)
+    {
+        var r = await generarPdf.EjecutarAsync(id, ct);
+        if (r.IdTipoMensaje != 2 || r.Datos is null)
+            return r.IdTipoMensaje == 1 ? BadRequest(new RespuestaDto<object>(1, r.Mensaje))
+                                        : StatusCode(500, new RespuestaDto<object>(3, r.Mensaje));
+        return File(r.Datos, "application/pdf", $"propuesta-{id}.pdf");
+    }
 }

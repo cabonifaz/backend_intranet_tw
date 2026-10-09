@@ -1,11 +1,18 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using QuestPDF.Infrastructure;
 using Scalar.AspNetCore;
 using TW.Intranet.Aplicacion.CasosDeUso;
 using TW.Intranet.Aplicacion.Puertos;
 using TW.Intranet.Infraestructura.Adaptadores;
 using TW.Intranet.Infraestructura.Configuracion;
+
+// QuestPDF: licencia Community (gratuita hasta USD 1M revenue/año).
+QuestPDF.Settings.License = LicenseType.Community;
+// Permite usar fuentes del sistema (Helvetica, Arial, etc.). Sin esto, QuestPDF 2026.9+
+// solo acepta la fuente embebida "Lato" y falla con "font not available".
+QuestPDF.Settings.UseEnvironmentFonts = true;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -256,6 +263,8 @@ builder.Services.AddScoped<PrepararVistoBuenoPropuestaCasoDeUso>();
 builder.Services.AddScoped<EnviarVistoBuenoPropuestaCasoDeUso>();
 builder.Services.AddScoped<PrepararAnulacionPropuestaCasoDeUso>();
 builder.Services.AddScoped<AnularPropuestaCasoDeUso>();
+builder.Services.AddScoped<IPropuestaPdfGenerador, PropuestaPdfGeneradorQuestPdf>();
+builder.Services.AddScoped<GenerarPdfPropuestaCasoDeUso>();
 
 // ── INYECCIÓN DE DEPENDENCIAS — Ubigeo, áreas del cliente y formatos (reunión 02-oct) ──
 builder.Services.AddScoped<IMaestrosComplementariosRepositorio, MaestrosComplementariosRepositorio>();
