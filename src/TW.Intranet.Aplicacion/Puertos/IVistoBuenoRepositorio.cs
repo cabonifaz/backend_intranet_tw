@@ -6,7 +6,9 @@ namespace TW.Intranet.Aplicacion.Puertos;
 public interface IVistoBuenoRepositorio
 {
     Task<RespuestaDto<BandejaVistoBuenoDto>>      ObtenerBandejaAsync(FiltrosBandejaVistoBuenoDto f, long idUsuario, CancellationToken ct);
-    Task<RespuestaDto<ResultadoResolverVistoBuenoDto>> ResolverAsync(long idPropuesta, string accion, string? comentario, long idUsuario, CancellationToken ct);
+    Task<RespuestaDto<ResultadoResolverVistoBuenoDto>> ResolverAsync(long idPropuesta, ResolverVistoBuenoDto dto, long idUsuario, CancellationToken ct);
+    Task<RespuestaDto<DecisionVistoBuenoDto>>     PrepararDecisionAsync(long idPropuesta, long idUsuario, CancellationToken ct);
+    Task<RespuestaDto<CorreccionPropuestaDto?>>   ObtenerCorreccionAsync(long idPropuesta, CancellationToken ct);
     Task<RespuestaDto<(List<ValidacionPreviaDto> Validaciones, ResumenEconomicoVbDto Resumen)>> ObtenerValidacionesAsync(long idPropuesta, long idUsuario, CancellationToken ct);
     Task<RespuestaDto<DatosComparacionDto>>       ObtenerDatosComparacionAsync(long idBase, long idDestino, CancellationToken ct);
     Task<RespuestaDto<CostoSuministroDto>>        ObtenerCostoSuministroAsync(long idSuministro, CancellationToken ct);

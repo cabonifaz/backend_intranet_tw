@@ -10,6 +10,7 @@
 --   Aprobación especial: descuento global sobre el subtotal mayor al parámetro
 --     DESCUENTO_APROBACION_ESPECIAL. Aproxima el margen hasta que existan costos.
 --     Si aplica, el comentario es obligatorio al enviar.
+--   HU-15: al enviar, la corrección pendiente (propuesta_correccion) pasa a atendida.
 --   Resultados: 1 header · 2 resumen · 3 validaciones
 DROP PROCEDURE IF EXISTS SP_EnviarVistoBuenoPropuesta;
 
@@ -202,6 +203,11 @@ proc: BEGIN
         INSERT INTO visto_bueno (id_propuesta, id_aprobador, estado, comentario, sla_horas, fecha_solicitud, creado_por)
         VALUES (p_id_propuesta, v_aprobador, 'pendiente', NULLIF(TRIM(p_comentario), ''), v_sla, NOW(), p_id_usuario);
         SET v_id_vb = LAST_INSERT_ID();
+
+        -- HU-15: si venía de una solicitud de corrección, queda atendida
+        UPDATE propuesta_correccion
+           SET estado = 'atendida', atendida_en = NOW()
+         WHERE id_propuesta = p_id_propuesta AND estado = 'pendiente';
 
         -- Canal 5 = Notificación en la plataforma (CANAL_COMUNICACION)
         INSERT INTO notificacion (id_usuario_destino, id_canal, titulo, cuerpo, entidad_tipo, id_entidad, fecha_creacion, creado_por)

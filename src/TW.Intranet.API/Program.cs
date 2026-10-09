@@ -295,6 +295,8 @@ builder.Services.AddScoped<VerificarDuplicadosCasoDeUso>();
 builder.Services.AddScoped<IVistoBuenoRepositorio, VistoBuenoRepositorio>();
 builder.Services.AddScoped<ObtenerBandejaVistoBuenoCasoDeUso>();
 builder.Services.AddScoped<ResolverVistoBuenoCasoDeUso>();
+builder.Services.AddScoped<PrepararDecisionVistoBuenoCasoDeUso>();
+builder.Services.AddScoped<ObtenerCorreccionPropuestaCasoDeUso>();
 builder.Services.AddScoped<ObtenerValidacionesVistoBuenoCasoDeUso>();
 builder.Services.AddScoped<CompararVersionesPropuestaCasoDeUso>();
 builder.Services.AddScoped<ObtenerCostoSuministroCasoDeUso>();

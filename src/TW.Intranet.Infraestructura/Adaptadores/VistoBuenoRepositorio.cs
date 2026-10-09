@@ -1,3 +1,4 @@
+using System.Text.Json;
 using TW.Intranet.Aplicacion.Dtos;
 using TW.Intranet.Aplicacion.Puertos;
 using TW.Intranet.Infraestructura.Configuracion;
@@ -101,16 +102,20 @@ public class VistoBuenoRepositorio(CadenaConexionBd conexion)
                     new BandejaVistoBuenoDto(kpis, items, total, f.Pagina, f.PorPagina, comerciales, monedas, politicas));
             }, ct);
 
-    // ── Resolver ──────────────────────────────────────────────────────────────
+    // ── Resolver (HU-13 / HU-15) ──────────────────────────────────────────────
     public Task<RespuestaDto<ResultadoResolverVistoBuenoDto>> ResolverAsync(
-        long idPropuesta, string accion, string? comentario, long idUsuario, CancellationToken ct)
+        long idPropuesta, ResolverVistoBuenoDto dto, long idUsuario, CancellationToken ct)
         => EjecutarAsync("SP_ResolverVistoBueno",
             p =>
             {
-                p.AddWithValue("p_id_propuesta", idPropuesta);
-                p.AddWithValue("p_accion",       accion);
-                p.AddWithValue("p_comentario",   Valor(comentario));
-                p.AddWithValue("p_id_usuario",   idUsuario);
+                p.AddWithValue("p_id_propuesta",      idPropuesta);
+                p.AddWithValue("p_accion",            dto.Accion);
+                p.AddWithValue("p_comentario",        Valor(dto.Comentario));
+                p.AddWithValue("p_validaciones",      JsonSerializer.Serialize(dto.ValidacionesConfirmadas ?? []));
+                p.AddWithValue("p_id_motivo_rechazo", Valor(dto.IdMotivoRechazo));
+                p.AddWithValue("p_areas",             JsonSerializer.Serialize(dto.Areas ?? []));
+                p.AddWithValue("p_fecha_limite",      Valor(dto.FechaLimite));
+                p.AddWithValue("p_id_usuario",        idUsuario);
             },
             async (r, mensaje) =>
             {
@@ -119,7 +124,87 @@ public class VistoBuenoRepositorio(CadenaConexionBd conexion)
                     return new RespuestaDto<ResultadoResolverVistoBuenoDto>(3, "El procedimiento no devolvió el resultado.");
                 return new RespuestaDto<ResultadoResolverVistoBuenoDto>(2, mensaje,
                     new ResultadoResolverVistoBuenoDto(EnteroLargo(r, "id_propuesta"),
-                                                       Texto(r, "estado") ?? "", Texto(r, "estado_vb") ?? ""));
+                                                       Texto(r, "estado") ?? "", Texto(r, "estado_vb") ?? "",
+                                                       EnteroLargoNulo(r, "id_correccion"),
+                                                       FechaHora(r, "fecha_limite")));
+            }, ct);
+
+    // ── HU-15 Modales de decisión ─────────────────────────────────────────────
+    public Task<RespuestaDto<DecisionVistoBuenoDto>> PrepararDecisionAsync(long idPropuesta, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_PrepararDecisionVistoBueno",
+            p =>
+            {
+                p.AddWithValue("p_id_propuesta", idPropuesta);
+                p.AddWithValue("p_id_usuario",   idUsuario);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<DecisionVistoBuenoDto>(3, "El procedimiento no devolvió el resultado.");
+
+                var idProp      = EnteroLargo(r, "id_propuesta");
+                var numero      = Texto(r, "numero") ?? "";
+                var version     = Entero(r, "version");
+                var estado      = Texto(r, "estado") ?? "";
+                var total       = DecimalNulo(r, "total") ?? 0;
+                var simbolo     = Texto(r, "moneda_simbolo");
+                var codigo      = Texto(r, "moneda_codigo");
+                var cliente     = Texto(r, "cliente");
+                var idComercial = EnteroLargoNulo(r, "id_comercial");
+                var comercial   = Texto(r, "nombre_comercial");
+                var idVb        = EnteroLargoNulo(r, "id_visto_bueno");
+                var puede       = Booleano(r, "puede_resolver");
+                var bloqueo     = Texto(r, "motivo_bloqueo");
+                var sugerida    = FechaHora(r, "fecha_limite_sugerida");
+
+                var validaciones = new List<ValidacionRequeridaDto>();
+                await r.NextResultAsync(ct);
+                while (await r.ReadAsync(ct))
+                    validaciones.Add(new ValidacionRequeridaDto(Texto(r, "codigo") ?? "", Texto(r, "texto") ?? "", Booleano(r, "obligatoria")));
+
+                var motivos = new List<OpcionCatalogoVbDto>();
+                await r.NextResultAsync(ct);
+                while (await r.ReadAsync(ct))
+                    motivos.Add(new OpcionCatalogoVbDto(Entero(r, "id"), Texto(r, "nombre") ?? ""));
+
+                var areas = new List<AreaCorreccionDto>();
+                await r.NextResultAsync(ct);
+                while (await r.ReadAsync(ct))
+                    areas.Add(new AreaCorreccionDto(Texto(r, "codigo") ?? "", Texto(r, "etiqueta") ?? ""));
+
+                return new RespuestaDto<DecisionVistoBuenoDto>(2, mensaje, new DecisionVistoBuenoDto(
+                    idProp, numero, version, estado, total, simbolo, codigo, cliente, idComercial, comercial,
+                    idVb, puede, bloqueo, sugerida, validaciones, motivos, areas));
+            }, ct);
+
+    public Task<RespuestaDto<CorreccionPropuestaDto?>> ObtenerCorreccionAsync(long idPropuesta, CancellationToken ct)
+        => EjecutarAsync("SP_ObtenerCorreccionPropuesta",
+            p => p.AddWithValue("p_id_propuesta", idPropuesta),
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<CorreccionPropuestaDto?>(2, "La propuesta no tiene solicitudes de corrección.", null);
+
+                var id          = EnteroLargo(r, "id_correccion");
+                var estado      = Texto(r, "estado") ?? "";
+                var obs         = Texto(r, "observaciones") ?? "";
+                var limite      = FechaHora(r, "fecha_limite");
+                var vencida     = Booleano(r, "vencida");
+                var solEn       = FechaHora(r, "solicitado_en");
+                var solPor      = Texto(r, "solicitado_por");
+                var idResp      = EnteroLargoNulo(r, "id_responsable");
+                var resp        = Texto(r, "nombre_responsable");
+                var atendidaEn  = FechaHora(r, "atendida_en");
+
+                var areas = new List<AreaCorreccionDto>();
+                await r.NextResultAsync(ct);
+                while (await r.ReadAsync(ct))
+                    areas.Add(new AreaCorreccionDto(Texto(r, "codigo") ?? "", Texto(r, "etiqueta") ?? ""));
+
+                return new RespuestaDto<CorreccionPropuestaDto?>(2, mensaje,
+                    new CorreccionPropuestaDto(id, estado, obs, limite, vencida, solEn, solPor, idResp, resp, atendidaEn, areas));
             }, ct);
 
     // ── HU-14 Validaciones ────────────────────────────────────────────────────

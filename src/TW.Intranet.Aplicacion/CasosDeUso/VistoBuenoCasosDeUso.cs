@@ -47,8 +47,49 @@ public class ResolverVistoBuenoCasoDeUso(IVistoBuenoRepositorio repositorio)
             return Task.FromResult(new RespuestaDto<ResultadoResolverVistoBuenoDto>(1,
                 accion == "corregir" ? "Indique qué debe corregir el comercial (mínimo 10 caracteres)."
                                      : "Indique el motivo del rechazo (mínimo 10 caracteres)."));
-        return repositorio.ResolverAsync(idPropuesta, accion, dto.Comentario?.Trim(), idUsuario, ct);
+
+        // HU-15 — requisitos de cada decisión (el SP vuelve a validarlos contra los catálogos)
+        if (accion == "rechazar" && (dto.IdMotivoRechazo is null or <= 0))
+            return Task.FromResult(new RespuestaDto<ResultadoResolverVistoBuenoDto>(1, "Seleccione el motivo del rechazo."));
+        if (accion == "corregir")
+        {
+            if (dto.Areas is null || dto.Areas.Count(a => !string.IsNullOrWhiteSpace(a)) == 0)
+                return Task.FromResult(new RespuestaDto<ResultadoResolverVistoBuenoDto>(1, "Seleccione al menos un área a corregir."));
+            if (dto.FechaLimite is null)
+                return Task.FromResult(new RespuestaDto<ResultadoResolverVistoBuenoDto>(1, "Indique la fecha y hora límite de corrección."));
+        }
+
+        var normalizado = dto with
+        {
+            Accion                  = accion,
+            Comentario              = dto.Comentario?.Trim(),
+            ValidacionesConfirmadas = Limpiar(dto.ValidacionesConfirmadas),
+            Areas                   = Limpiar(dto.Areas),
+        };
+        return repositorio.ResolverAsync(idPropuesta, normalizado, idUsuario, ct);
     }
+
+    private static List<string> Limpiar(List<string>? valores)
+        => (valores ?? []).Where(v => !string.IsNullOrWhiteSpace(v))
+                          .Select(v => v.Trim().ToLowerInvariant()).Distinct().ToList();
+}
+
+/// <summary>HU-15 — Datos de los modales Aprobar / Rechazar / Solicitar Corrección.</summary>
+public class PrepararDecisionVistoBuenoCasoDeUso(IVistoBuenoRepositorio repositorio)
+{
+    public Task<RespuestaDto<DecisionVistoBuenoDto>> EjecutarAsync(long idPropuesta, long idUsuario, CancellationToken ct = default)
+        => idPropuesta <= 0
+            ? Task.FromResult(new RespuestaDto<DecisionVistoBuenoDto>(1, "Indique la propuesta."))
+            : repositorio.PrepararDecisionAsync(idPropuesta, idUsuario, ct);
+}
+
+/// <summary>HU-15 — Última solicitud de corrección de la propuesta.</summary>
+public class ObtenerCorreccionPropuestaCasoDeUso(IVistoBuenoRepositorio repositorio)
+{
+    public Task<RespuestaDto<CorreccionPropuestaDto?>> EjecutarAsync(long idPropuesta, CancellationToken ct = default)
+        => idPropuesta <= 0
+            ? Task.FromResult(new RespuestaDto<CorreccionPropuestaDto?>(1, "Indique la propuesta."))
+            : repositorio.ObtenerCorreccionAsync(idPropuesta, ct);
 }
 
 // ══════════════════════ HU-14 — Validaciones previas ══════════════════════

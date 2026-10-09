@@ -5,6 +5,12 @@
 -- Puede resolver: el jefe directo del comercial, su suplente vigente (HU-84), o quien tenga la
 -- acción propuesta_vb_todas. Además se exige la acción propuesta_vb_resolver.
 -- Notifica al comercial y deja historial y auditoría.
+-- HU-15 — Emisión de decisiones:
+--   aprobar  → exige confirmar todas las VALIDACION_APROBACION_VB obligatorias
+--              (p_validaciones = JSON con los códigos marcados), comentario opcional.
+--   rechazar → exige motivo (MOTIVO_RECHAZO, IdMaestro 10) y justificación.
+--   corregir → exige áreas (AREA_CORRECCION_PROPUESTA, JSON de códigos), observaciones
+--              y fecha límite futura. Crea propuesta_correccion (responsable = comercial).
 DROP PROCEDURE IF EXISTS SP_ResolverVistoBueno;
 
 DELIMITER $$
@@ -13,6 +19,10 @@ CREATE PROCEDURE SP_ResolverVistoBueno(
     IN p_id_propuesta BIGINT,
     IN p_accion       VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_comentario   TEXT        CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_validaciones TEXT        CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_id_motivo_rechazo INT,
+    IN p_areas        TEXT        CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_fecha_limite DATETIME,
     IN p_id_usuario   BIGINT
 )
 proc: BEGIN
@@ -31,6 +41,12 @@ proc: BEGIN
     DECLARE v_horas        DECIMAL(10,2);
     DECLARE v_sla          INT;
     DECLARE v_fecha_sol    DATETIME;
+    DECLARE v_faltan       INT DEFAULT 0;
+    DECLARE v_motivo_label VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_areas_label  VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_areas_total  INT DEFAULT 0;
+    DECLARE v_areas_ok     INT DEFAULT 0;
+    DECLARE v_id_corr      BIGINT DEFAULT NULL;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -52,6 +68,60 @@ proc: BEGIN
                IF(p_accion = 'corregir', 'Indique qué debe corregir el comercial (mínimo 10 caracteres).',
                                          'Indique el motivo del rechazo (mínimo 10 caracteres).') AS Mensaje;
         LEAVE proc;
+    END IF;
+
+    -- ── HU-15: requisitos de cada decisión ──────────────────────────────
+    SET p_validaciones = IF(TRIM(IFNULL(p_validaciones, '')) = '', '[]', p_validaciones);
+    SET p_areas        = IF(TRIM(IFNULL(p_areas, '')) = '', '[]', p_areas);
+
+    IF JSON_VALID(p_validaciones) = 0 OR JSON_VALID(p_areas) = 0 THEN
+        SELECT 1 AS IdTipoMensaje, 'Las validaciones y las áreas deben enviarse como lista.' AS Mensaje;
+        LEAVE proc;
+    END IF;
+
+    IF p_accion = 'aprobar' THEN
+        SELECT COUNT(*), GROUP_CONCAT(String1 ORDER BY Num1 SEPARATOR ' ')
+          INTO v_faltan, v_areas_label
+        FROM tabla_maestra
+        WHERE Descripcion = 'VALIDACION_APROBACION_VB' AND eliminado_en IS NULL AND IFNULL(Num2, 1) = 1
+          AND JSON_CONTAINS(p_validaciones, JSON_QUOTE(String2)) = 0;
+
+        IF v_faltan > 0 THEN
+            SELECT 1 AS IdTipoMensaje, CONCAT('Confirme las validaciones requeridas: ', v_areas_label) AS Mensaje;
+            LEAVE proc;
+        END IF;
+        SET v_areas_label = NULL;
+    END IF;
+
+    IF p_accion = 'rechazar' THEN
+        SELECT String1 INTO v_motivo_label
+        FROM tabla_maestra
+        WHERE IdMaestro = 10 AND IdEmpresa = 1 AND Num1 = p_id_motivo_rechazo AND eliminado_en IS NULL
+        LIMIT 1;
+
+        IF v_motivo_label IS NULL THEN
+            SELECT 1 AS IdTipoMensaje, 'Seleccione el motivo del rechazo.' AS Mensaje;
+            LEAVE proc;
+        END IF;
+    END IF;
+
+    IF p_accion = 'corregir' THEN
+        SELECT COUNT(*), COUNT(tm.String2),
+               GROUP_CONCAT(tm.String1 ORDER BY tm.Num1 SEPARATOR ', ')
+          INTO v_areas_total, v_areas_ok, v_areas_label
+        FROM JSON_TABLE(p_areas, '$[*]' COLUMNS (codigo VARCHAR(40) PATH '$')) a
+        LEFT JOIN tabla_maestra tm ON tm.Descripcion = 'AREA_CORRECCION_PROPUESTA'
+                                  AND tm.String2 = a.codigo AND tm.eliminado_en IS NULL;
+
+        IF v_areas_total = 0 OR v_areas_ok < v_areas_total THEN
+            SELECT 1 AS IdTipoMensaje, 'Seleccione al menos un área válida a corregir.' AS Mensaje;
+            LEAVE proc;
+        END IF;
+
+        IF p_fecha_limite IS NULL OR p_fecha_limite <= NOW() THEN
+            SELECT 1 AS IdTipoMensaje, 'Indique una fecha y hora límite de corrección posterior a la actual.' AS Mensaje;
+            LEAVE proc;
+        END IF;
     END IF;
 
     SELECT p.estado, p.numero, p.version, p.id_requerimiento, COALESCE(p.id_responsable, p.id_creador)
@@ -106,8 +176,22 @@ proc: BEGIN
 
     UPDATE visto_bueno
        SET estado = v_estado_vb, fecha_respuesta = NOW(), resuelto_por = p_id_usuario,
-           comentario_respuesta = p_comentario, modificado_por = p_id_usuario
+           comentario_respuesta = p_comentario, modificado_por = p_id_usuario,
+           id_motivo_rechazo = IF(p_accion = 'rechazar', p_id_motivo_rechazo, NULL),
+           validaciones_confirmadas = IF(p_accion = 'aprobar', CAST(p_validaciones AS JSON), NULL)
      WHERE id_vb = v_id_vb;
+
+    IF p_accion = 'corregir' THEN
+        UPDATE propuesta_correccion
+           SET estado = 'cancelada'
+         WHERE id_propuesta = p_id_propuesta AND estado = 'pendiente';
+
+        INSERT INTO propuesta_correccion (id_propuesta, id_vb, areas, observaciones, id_responsable,
+                                          fecha_limite, estado, solicitado_por, creado_en)
+        VALUES (p_id_propuesta, v_id_vb, CAST(p_areas AS JSON), p_comentario, v_autor,
+                p_fecha_limite, 'pendiente', p_id_usuario, NOW());
+        SET v_id_corr = LAST_INSERT_ID();
+    END IF;
 
     UPDATE propuesta_comercial
        SET estado = v_estado_nuevo, modificado_en = NOW(), modificado_por = p_id_usuario
@@ -119,8 +203,9 @@ proc: BEGIN
             CONCAT('Propuesta ', v_etiqueta, ': ', v_numero, ' v', v_version),
             CONCAT(v_usu_nombre, ' ',
                    CASE p_accion WHEN 'aprobar'  THEN 'aprobó la propuesta. Ya puede enviarla al cliente.'
-                                 WHEN 'corregir' THEN 'solicitó correcciones: '
-                                 ELSE 'rechazó la propuesta: ' END,
+                                 WHEN 'corregir' THEN CONCAT('solicitó correcciones en ', v_areas_label,
+                                                             ' (límite ', DATE_FORMAT(p_fecha_limite, '%d/%m/%Y %H:%i'), '): ')
+                                 ELSE CONCAT('rechazó la propuesta (', v_motivo_label, '): ') END,
                    IFNULL(IF(p_accion = 'aprobar', NULL, p_comentario), '')),
             'propuesta', p_id_propuesta, NOW(), p_id_usuario);
 
@@ -139,12 +224,19 @@ proc: BEGIN
             p_id_usuario, NOW(),
             JSON_OBJECT('id_vb', v_id_vb, 'es_suplente', p_id_usuario = v_suplente,
                         'horas_habiles', v_horas, 'sla_horas', v_sla, 'dentro_sla', v_horas <= v_sla,
-                        'comentario', p_comentario));
+                        'comentario', p_comentario,
+                        'validaciones', IF(p_accion = 'aprobar', CAST(p_validaciones AS JSON), NULL),
+                        'id_motivo_rechazo', IF(p_accion = 'rechazar', p_id_motivo_rechazo, NULL),
+                        'motivo_rechazo', v_motivo_label,
+                        'id_correccion', v_id_corr,
+                        'areas', IF(p_accion = 'corregir', CAST(p_areas AS JSON), NULL),
+                        'fecha_limite', p_fecha_limite));
 
     COMMIT;
 
     SELECT 2 AS IdTipoMensaje, CONCAT('Propuesta ', v_etiqueta, '.') AS Mensaje;
-    SELECT p_id_propuesta AS id_propuesta, v_estado_nuevo AS estado, v_estado_vb AS estado_vb;
+    SELECT p_id_propuesta AS id_propuesta, v_estado_nuevo AS estado, v_estado_vb AS estado_vb,
+           v_id_corr AS id_correccion, IF(p_accion = 'corregir', p_fecha_limite, NULL) AS fecha_limite;
 END$$
 
 DELIMITER ;

@@ -77,9 +77,67 @@ public record BandejaVistoBuenoDto(
     PoliticasVistoBuenoDto         Politicas);
 
 /// <summary>Accion: aprobar | corregir | rechazar. Comentario obligatorio (mín. 10) para corregir y rechazar.</summary>
-public record ResolverVistoBuenoDto(string Accion, string? Comentario);
+/// <summary>
+/// HU-13 / HU-15 — Decisión sobre el VB. Accion: aprobar | corregir | rechazar.
+///   aprobar  → ValidacionesConfirmadas (códigos de VALIDACION_APROBACION_VB), Comentario opcional.
+///   rechazar → IdMotivoRechazo (MOTIVO_RECHAZO) y Comentario = justificación.
+///   corregir → Areas (códigos de AREA_CORRECCION_PROPUESTA), Comentario = observaciones y FechaLimite.
+/// </summary>
+public record ResolverVistoBuenoDto(
+    string        Accion,
+    string?       Comentario,
+    List<string>? ValidacionesConfirmadas = null,
+    int?          IdMotivoRechazo         = null,
+    List<string>? Areas                   = null,
+    DateTime?     FechaLimite             = null);
 
-public record ResultadoResolverVistoBuenoDto(long IdPropuesta, string Estado, string EstadoVb);
+/// <param name="IdCorreccion">Solo al solicitar corrección.</param>
+public record ResultadoResolverVistoBuenoDto(
+    long      IdPropuesta,
+    string    Estado,
+    string    EstadoVb,
+    long?     IdCorreccion = null,
+    DateTime? FechaLimite  = null);
+
+// ══════════════════════ HU-15 — Modales de decisión ══════════════════════
+
+/// <summary>GET /api/crm/propuestas/{id}/visto-bueno/decision</summary>
+public record DecisionVistoBuenoDto(
+    long      IdPropuesta,
+    string    Numero,
+    int       Version,
+    string    Estado,
+    decimal   Total,
+    string?   MonedaSimbolo,
+    string?   MonedaCodigo,
+    string?   Cliente,
+    long?     IdComercial,
+    string?   NombreComercial,
+    long?     IdVistoBueno,
+    bool      PuedeResolver,
+    string?   MotivoBloqueo,
+    DateTime? FechaLimiteSugerida,
+    List<ValidacionRequeridaDto> ValidacionesRequeridas,
+    List<OpcionCatalogoVbDto>    MotivosRechazo,
+    List<AreaCorreccionDto>      AreasCorreccion);
+
+public record ValidacionRequeridaDto(string Codigo, string Texto, bool Obligatoria);
+public record OpcionCatalogoVbDto(int Id, string Nombre);
+public record AreaCorreccionDto(string Codigo, string Etiqueta);
+
+/// <summary>GET /api/crm/propuestas/{id}/correccion — última solicitud de corrección (null si nunca tuvo).</summary>
+public record CorreccionPropuestaDto(
+    long      IdCorreccion,
+    string    Estado,
+    string    Observaciones,
+    DateTime? FechaLimite,
+    bool      Vencida,
+    DateTime? SolicitadoEn,
+    string?   SolicitadoPor,
+    long?     IdResponsable,
+    string?   NombreResponsable,
+    DateTime? AtendidaEn,
+    List<AreaCorreccionDto> Areas);
 
 // ══════════════════════ HU-14 — Validaciones previas ══════════════════════
 
