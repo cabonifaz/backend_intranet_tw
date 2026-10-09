@@ -29,6 +29,11 @@ public interface IPropuestasRepositorio
         long idPropuesta, string tipo, decimal valor, int? idMotivo, bool soloPrevisualizar,
         long idUsuario, CancellationToken ct);
 
+    /// <summary>Migración 48 — Aplica/previsualiza/quita el descuento del bloque de Opcionales.</summary>
+    Task<RespuestaDto<DescuentoPropuestaResultadoDto>> AplicarDescuentoOpcionalesAsync(
+        long idPropuesta, string tipo, decimal valor, int? idMotivo, bool soloPrevisualizar,
+        long idUsuario, CancellationToken ct);
+
     /// <summary>HU-12 — Prepara (soloPreparar) o realiza el envío a visto bueno.</summary>
     Task<RespuestaDto<VistoBuenoPropuestaDto>> EnviarVistoBuenoAsync(
         long idPropuesta, string? comentario, bool soloPreparar, long idUsuario, CancellationToken ct);

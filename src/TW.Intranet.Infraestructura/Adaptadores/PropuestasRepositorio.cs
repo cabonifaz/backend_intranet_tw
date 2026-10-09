@@ -498,6 +498,49 @@ public class PropuestasRepositorio(CadenaConexionBd conexion)
                 });
             }, ct);
 
+    // ── Migración 48: descuento específico de Opcionales ─────────────────────
+    // Mismo shape de retorno que AplicarDescuentoAsync. El SP paralelo opera
+    // sobre descuento_opcionales / descuento_opcionales_pct / id_motivo_descuento_opcionales
+    // y recalcula total_opcionales (sin IGV, los opcionales no suman al facturable).
+    public Task<RespuestaDto<DescuentoPropuestaResultadoDto>> AplicarDescuentoOpcionalesAsync(
+        long idPropuesta, string tipo, decimal valor, int? idMotivo, bool soloPrevisualizar,
+        long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_AplicarDescuentoOpcionalesPropuesta",
+            p =>
+            {
+                p.AddWithValue("p_id_propuesta",       idPropuesta);
+                p.AddWithValue("p_tipo",               tipo);
+                p.AddWithValue("p_valor",              valor);
+                p.AddWithValue("p_id_motivo",          Valor(idMotivo));
+                p.AddWithValue("p_solo_previsualizar", Bit(soloPrevisualizar));
+                p.AddWithValue("p_id_usuario",         idUsuario);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<DescuentoPropuestaResultadoDto>(3, "El procedimiento no devolvió el resultado.");
+
+                return new RespuestaDto<DescuentoPropuestaResultadoDto>(2, mensaje, new DescuentoPropuestaResultadoDto
+                {
+                    SubtotalActual     = DecimalNulo(r, "subtotal_actual") ?? 0,
+                    DescuentoActual    = DecimalNulo(r, "descuento_actual") ?? 0,
+                    PorcentajeActual   = DecimalNulo(r, "porcentaje_actual"),
+                    IgvActual          = DecimalNulo(r, "igv_actual") ?? 0,
+                    TotalActual        = DecimalNulo(r, "total_actual") ?? 0,
+                    Tipo               = Texto(r, "tipo") ?? tipo,
+                    Porcentaje         = DecimalNulo(r, "porcentaje"),
+                    DescuentoNuevo     = DecimalNulo(r, "descuento_nuevo") ?? 0,
+                    SubtotalNuevo      = DecimalNulo(r, "subtotal_nuevo") ?? 0,
+                    IgvNuevo           = DecimalNulo(r, "igv_nuevo") ?? 0,
+                    TotalNuevo         = DecimalNulo(r, "total_nuevo") ?? 0,
+                    IgvPct             = DecimalNulo(r, "igv_pct") ?? 0,
+                    IdMotivoDescuento  = EnteroNulo(r, "id_motivo_descuento"),
+                    MotivoDescuento    = Texto(r, "motivo_descuento"),
+                    Guardado           = Booleano(r, "guardado"),
+                });
+            }, ct);
+
     // ── HU-12: envío a visto bueno ───────────────────────────────────────────
     public Task<RespuestaDto<VistoBuenoPropuestaDto>> EnviarVistoBuenoAsync(
         long idPropuesta, string? comentario, bool soloPreparar, long idUsuario, CancellationToken ct)

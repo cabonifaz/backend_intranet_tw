@@ -55,6 +55,58 @@ public class QuitarDescuentoPropuestaCasoDeUso(IPropuestasRepositorio repositori
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Migración 48 — Casos de uso paralelos para el bloque de Opcionales.
+// Comparten el mismo DTO y la misma validación de forma que el descuento principal,
+// pero apuntan a SP_AplicarDescuentoOpcionalesPropuesta.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// <summary>Previsualizar descuento específico de Opcionales (sin guardar).</summary>
+public class PrevisualizarDescuentoOpcionalesCasoDeUso(IPropuestasRepositorio repositorio)
+{
+    public async Task<RespuestaDto<DescuentoPropuestaResultadoDto>> EjecutarAsync(
+        long idPropuesta, AplicarDescuentoPropuestaDto dto, long idUsuario, CancellationToken ct = default)
+    {
+        var error = DescuentoValidacion.Validar(idPropuesta, dto, exigirMotivo: false);
+        if (error is not null)
+            return new RespuestaDto<DescuentoPropuestaResultadoDto>(1, error);
+
+        return await repositorio.AplicarDescuentoOpcionalesAsync(
+            idPropuesta, DescuentoValidacion.Tipo(dto), dto.Valor, dto.IdMotivoDescuento,
+            soloPrevisualizar: true, idUsuario, ct);
+    }
+}
+
+/// <summary>Aplicar y guardar el descuento específico de Opcionales.</summary>
+public class AplicarDescuentoOpcionalesCasoDeUso(IPropuestasRepositorio repositorio)
+{
+    public async Task<RespuestaDto<DescuentoPropuestaResultadoDto>> EjecutarAsync(
+        long idPropuesta, AplicarDescuentoPropuestaDto dto, long idUsuario, CancellationToken ct = default)
+    {
+        var error = DescuentoValidacion.Validar(idPropuesta, dto, exigirMotivo: true);
+        if (error is not null)
+            return new RespuestaDto<DescuentoPropuestaResultadoDto>(1, error);
+
+        return await repositorio.AplicarDescuentoOpcionalesAsync(
+            idPropuesta, DescuentoValidacion.Tipo(dto), dto.Valor, dto.IdMotivoDescuento,
+            soloPrevisualizar: false, idUsuario, ct);
+    }
+}
+
+/// <summary>Quitar el descuento específico de Opcionales.</summary>
+public class QuitarDescuentoOpcionalesCasoDeUso(IPropuestasRepositorio repositorio)
+{
+    public async Task<RespuestaDto<DescuentoPropuestaResultadoDto>> EjecutarAsync(
+        long idPropuesta, long idUsuario, CancellationToken ct = default)
+    {
+        if (idPropuesta <= 0)
+            return new RespuestaDto<DescuentoPropuestaResultadoDto>(1, "Indique la propuesta.");
+
+        return await repositorio.AplicarDescuentoOpcionalesAsync(
+            idPropuesta, "ninguno", 0, null, soloPrevisualizar: false, idUsuario, ct);
+    }
+}
+
 internal static class DescuentoValidacion
 {
     public static string Tipo(AplicarDescuentoPropuestaDto dto) => (dto.Tipo ?? "").Trim().ToLowerInvariant();

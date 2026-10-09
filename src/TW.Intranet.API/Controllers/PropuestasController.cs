@@ -22,6 +22,9 @@ public class PropuestasController(
     PrevisualizarDescuentoPropuestaCasoDeUso previsualizarDescuento,
     AplicarDescuentoPropuestaCasoDeUso       aplicarDescuento,
     QuitarDescuentoPropuestaCasoDeUso        quitarDescuento,
+    PrevisualizarDescuentoOpcionalesCasoDeUso previsualizarDescuentoOpcionales,
+    AplicarDescuentoOpcionalesCasoDeUso       aplicarDescuentoOpcionales,
+    QuitarDescuentoOpcionalesCasoDeUso        quitarDescuentoOpcionales,
     PrepararVistoBuenoPropuestaCasoDeUso     prepararVistoBueno,
     EnviarVistoBuenoPropuestaCasoDeUso       enviarVistoBueno,
     PrepararAnulacionPropuestaCasoDeUso      prepararAnulacion,
@@ -123,6 +126,26 @@ public class PropuestasController(
     [HttpDelete("{id:long}/descuento")]
     public async Task<IActionResult> QuitarDescuento(long id, CancellationToken ct = default)
         => Responder(await quitarDescuento.EjecutarAsync(id, IdUsuarioActual, ct));
+
+    // ── Migración 48: descuento específico de Opcionales ────────────────────
+
+    /// <summary>Previsualiza (sin guardar) el descuento del bloque Opcionales.</summary>
+    [RequierePermiso("propuesta_aplicar_descuento")]
+    [HttpPost("{id:long}/descuento-opcionales/previsualizar")]
+    public async Task<IActionResult> PrevisualizarDescuentoOpcionales(long id, [FromBody] AplicarDescuentoPropuestaDto dto, CancellationToken ct = default)
+        => Responder(await previsualizarDescuentoOpcionales.EjecutarAsync(id, dto, IdUsuarioActual, ct));
+
+    /// <summary>Aplica (porcentaje o monto fijo, con motivo) el descuento del bloque Opcionales. Solo borrador.</summary>
+    [RequierePermiso("propuesta_aplicar_descuento")]
+    [HttpPut("{id:long}/descuento-opcionales")]
+    public async Task<IActionResult> AplicarDescuentoOpcionales(long id, [FromBody] AplicarDescuentoPropuestaDto dto, CancellationToken ct = default)
+        => Responder(await aplicarDescuentoOpcionales.EjecutarAsync(id, dto, IdUsuarioActual, ct));
+
+    /// <summary>Quita el descuento del bloque Opcionales. Solo borrador.</summary>
+    [RequierePermiso("propuesta_aplicar_descuento")]
+    [HttpDelete("{id:long}/descuento-opcionales")]
+    public async Task<IActionResult> QuitarDescuentoOpcionales(long id, CancellationToken ct = default)
+        => Responder(await quitarDescuentoOpcionales.EjecutarAsync(id, IdUsuarioActual, ct));
 
     // ── HU-12: envío a visto bueno ──────────────────────────────────────────
 
