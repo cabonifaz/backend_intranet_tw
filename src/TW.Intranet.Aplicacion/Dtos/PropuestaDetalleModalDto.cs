@@ -24,7 +24,7 @@ public class PropuestaDetalleModalDto
 }
 
 /// <summary>
-/// Workflow de aprobación: borrador → preparacion → visto_bueno → envio → seguimiento → aceptacion.
+/// Workflow de aprobación: borrador → visto_bueno → envio → seguimiento → aceptacion.
 /// Cada paso trae Estado = completado | actual | pendiente, o el estado terminal
 /// (rechazado | anulado | vencido) en el paso donde se detuvo.
 /// </summary>

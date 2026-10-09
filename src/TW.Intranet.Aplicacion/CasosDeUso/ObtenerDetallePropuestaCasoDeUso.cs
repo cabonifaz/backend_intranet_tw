@@ -13,16 +13,17 @@ public class ObtenerDetallePropuestaCasoDeUso(IPropuestasRepositorio repositorio
     private static readonly (string Codigo, string Etiqueta)[] PasosWorkflow =
     [
         ("borrador",    "Borrador"),
-        ("preparacion", "Preparación"),
         ("visto_bueno", "Visto Bueno"),
         ("envio",       "Envío"),
         ("seguimiento", "Seguimiento"),
         ("aceptacion",  "Aceptación"),
     ];
 
-    private const int PasoPreparacion = 1;
-    private const int PasoSeguimiento = 4;
-    private const int PasoAceptacion  = 5;
+    private const int PasoBorrador    = 0;
+    private const int PasoVistoBueno  = 1;
+    private const int PasoEnvio       = 2;
+    private const int PasoSeguimiento = 3;
+    private const int PasoAceptacion  = 4;
 
     /// <summary>
     /// Estados desde los que se puede generar una nueva versión (HU-10, igual que SP_CrearNuevaVersionPropuesta).
@@ -70,16 +71,15 @@ public class ObtenerDetallePropuestaCasoDeUso(IPropuestasRepositorio repositorio
         else
             switch (c.Estado)
             {
-                case "borrador":     indice = c.FechaPdf is null ? 0 : PasoPreparacion; break;
-                case "pendiente_vb": indice = 2; break;
-                case "aprobado":     indice = 3; break;
+                case "borrador":     indice = PasoBorrador;    break;
+                case "pendiente_vb": indice = PasoVistoBueno;  break;
+                case "aprobado":     indice = PasoEnvio;       break;
                 case "enviado":      indice = PasoSeguimiento; break;
                 default:
                     // rechazado | anulado | vencido: se marca el paso donde se detuvo
                     terminal = c.Estado;
                     indice   = c.FechaEnvio is not null ? PasoSeguimiento
-                             : c.FechaPdf  is not null ? PasoPreparacion
-                             : 0;
+                             : PasoBorrador;
                     break;
             }
 
