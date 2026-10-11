@@ -2,10 +2,11 @@
 --   p_solo_preparar = 1 devuelve lo que muestra el modal sin cambiar nada:
 --     validaciones, destinatario, SLA, fecha límite y alerta de aprobación especial.
 --   p_solo_preparar = 0 envía: la propuesta pasa a 'pendiente_vb', se crea el
---     registro en visto_bueno, una notificación al aprobador y la auditoría.
+--     registro en visto_bueno, una notificación al equipo aprobador y la auditoría.
 --   Solo la última versión y en 'borrador'.
---   Destinatario: jefe directo (usuario.id_supervisor) del comercial responsable
---     o, si ese jefe tiene un suplente vigente (usuario_suplente), el suplente.
+--   Equipo aprobador: supervisores y administradores activos del área del comercial autor
+--     (bandeja compartida por área + rol). Si no hay nadie, el envío se bloquea con
+--     mensaje de error, pero esa validación NO se muestra en el modal (es implícita).
 --   SLA: CONFIG_SLA propuesta / pendiente_vb (Num2 = horas).
 --   Aprobación especial: descuento global sobre el subtotal mayor al parámetro
 --     DESCUENTO_APROBACION_ESPECIAL. Aproxima el margen hasta que existan costos.
@@ -33,14 +34,11 @@ proc: BEGIN
     DECLARE v_subtotal      DECIMAL(14,2);
     DECLARE v_descuento     DECIMAL(14,2);
     DECLARE v_total         DECIMAL(14,2);
-    DECLARE v_fecha_pdf     DATETIME;
-    DECLARE v_jefe          BIGINT;
-    DECLARE v_suplente      BIGINT;
-    DECLARE v_aprobador     BIGINT;
+    DECLARE v_aprobador     TINYINT DEFAULT 0;
+    DECLARE v_area_autor    VARCHAR(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_sla           INT;
     DECLARE v_desc_pct      DECIMAL(7,2) DEFAULT 0;
     DECLARE v_umbral        DECIMAL(7,2);
-    DECLARE v_exigir_pdf    TINYINT;
     DECLARE v_exigir_eq     TINYINT;
     DECLARE v_requiere_esp  TINYINT DEFAULT 0;
     DECLARE v_puede         TINYINT DEFAULT 0;
@@ -64,9 +62,9 @@ proc: BEGIN
 
     -- ── Propuesta ───────────────────────────────────────────────────────
     SELECT estado, numero, version, id_cliente, id_contacto, id_requerimiento,
-           COALESCE(id_responsable, id_creador), subtotal, descuento_monto, total, fecha_pdf
+           COALESCE(id_responsable, id_creador), subtotal, descuento_monto, total
       INTO v_estado, v_numero, v_version, v_id_cliente, v_id_contacto, v_id_rq,
-           v_autor, v_subtotal, v_descuento, v_total, v_fecha_pdf
+           v_autor, v_subtotal, v_descuento, v_total
     FROM propuesta_comercial
     WHERE id_propuesta = p_id_propuesta AND eliminado_en IS NULL;
 
@@ -89,9 +87,8 @@ proc: BEGIN
 
     -- ── Parámetros ──────────────────────────────────────────────────────
     SELECT IFNULL(MAX(CASE WHEN String2 = 'DESCUENTO_APROBACION_ESPECIAL' THEN Num2 END), 10),
-           IFNULL(MAX(CASE WHEN String2 = 'VB_EXIGIR_PDF'                  THEN Num2 END), 0),
            IFNULL(MAX(CASE WHEN String2 = 'VB_EXIGIR_EQUIPOS'              THEN Num2 END), 1)
-      INTO v_umbral, v_exigir_pdf, v_exigir_eq
+      INTO v_umbral, v_exigir_eq
     FROM tabla_maestra
     WHERE Descripcion = 'PARAMETRO_PROPUESTA' AND eliminado_en IS NULL;
 
@@ -100,24 +97,18 @@ proc: BEGIN
     WHERE IdMaestro = 49 AND IdEmpresa = 1 AND String1 = 'propuesta' AND String2 = 'pendiente_vb'
       AND eliminado_en IS NULL;
 
-    -- ── Destinatario: jefe directo o su suplente vigente ────────────────
-    SELECT u.id_supervisor INTO v_jefe
+    -- ── Equipo aprobador: supervisores + administradores del área del autor ─
+    -- Modelo nuevo (bandeja compartida por área + rol): no hay aprobador individual.
+    -- Se guarda el área del comercial autor (para informar al UI) y un flag que
+    -- indica si existe al menos un supervisor o administrador activo en esa área.
+    SELECT area INTO v_area_autor FROM usuario WHERE id_usuario = v_autor;
+
+    SELECT (COUNT(*) > 0) INTO v_aprobador
     FROM usuario u
-    JOIN usuario j ON j.id_usuario = u.id_supervisor AND j.eliminado_en IS NULL AND j.estado = 'activo'
-    WHERE u.id_usuario = v_autor;
-
-    IF v_jefe IS NOT NULL THEN
-        SELECT us.id_suplente INTO v_suplente
-        FROM usuario_suplente us
-        JOIN usuario s ON s.id_usuario = us.id_suplente AND s.eliminado_en IS NULL AND s.estado = 'activo'
-        WHERE us.id_titular = v_jefe AND us.SoftDelete = 0 AND us.activo = 1
-          AND us.fecha_inicio <= CURDATE()
-          AND (us.fecha_fin IS NULL OR us.fecha_fin >= CURDATE())
-        ORDER BY us.fecha_inicio DESC
-        LIMIT 1;
-    END IF;
-
-    SET v_aprobador = COALESCE(v_suplente, v_jefe);
+    WHERE u.eliminado_en IS NULL AND u.estado = 'activo'
+      AND u.rol_sistema IN ('supervisor', 'administrador')
+      AND u.area        = v_area_autor
+      AND u.id_usuario <> v_autor;
 
     -- ── Aprobación especial (aproximación por descuento) ────────────────
     IF IFNULL(v_subtotal, 0) > 0 THEN
@@ -156,13 +147,7 @@ proc: BEGIN
         1, 'Agregue al menos una condición comercial.'),
     (6, 'equipos_asociados', 'Equipos asociados',
         EXISTS (SELECT 1 FROM propuesta_equipo e WHERE e.id_propuesta = p_id_propuesta),
-        v_exigir_eq, 'Asocie al menos un equipo del cliente.'),
-    (7, 'pdf_generado', 'PDF generado',
-        v_fecha_pdf IS NOT NULL,
-        v_exigir_pdf, 'Genere la vista previa en PDF de la propuesta.'),
-    (8, 'jefe_directo', 'Aprobador asignado',
-        v_aprobador IS NOT NULL,
-        1, 'El comercial responsable no tiene jefe directo activo en su ficha de usuario.');
+        v_exigir_eq, 'Asocie al menos un equipo del cliente.');
 
     SELECT IF(COUNT(*) = 0, 1, 0),
            GROUP_CONCAT(etiqueta ORDER BY orden SEPARATOR ', ')
@@ -191,6 +176,16 @@ proc: BEGIN
             LEAVE proc;
         END IF;
 
+        -- Chequeo implícito (no se muestra en el modal): debe existir al menos un
+        -- supervisor o administrador activo en el área del comercial autor para que
+        -- alguien pueda recibir el VB en su bandeja.
+        IF IFNULL(v_aprobador, 0) = 0 THEN
+            DROP TEMPORARY TABLE IF EXISTS tmp_vb_validaciones;
+            SELECT 1 AS IdTipoMensaje,
+                   'No hay supervisores o administradores activos en el área del comercial responsable que puedan recibir el visto bueno.' AS Mensaje;
+            LEAVE proc;
+        END IF;
+
         SELECT CONCAT(nombre, ' ', apellido) INTO v_usu_nombre FROM usuario WHERE id_usuario = p_id_usuario;
         SELECT numero INTO v_numero_rq FROM requerimiento WHERE id_requerimiento = v_id_rq;
 
@@ -200,8 +195,10 @@ proc: BEGIN
            SET estado = 'pendiente_vb', modificado_en = NOW(), modificado_por = p_id_usuario
          WHERE id_propuesta = p_id_propuesta;
 
+        -- id_aprobador queda NULL: no hay aprobador individual asignado.
+        -- Se llenará con `resuelto_por` cuando alguien del equipo del área resuelva el VB.
         INSERT INTO visto_bueno (id_propuesta, id_aprobador, estado, comentario, sla_horas, fecha_solicitud, creado_por)
-        VALUES (p_id_propuesta, v_aprobador, 'pendiente', NULLIF(TRIM(p_comentario), ''), v_sla, NOW(), p_id_usuario);
+        VALUES (p_id_propuesta, NULL, 'pendiente', NULLIF(TRIM(p_comentario), ''), v_sla, NOW(), p_id_usuario);
         SET v_id_vb = LAST_INSERT_ID();
 
         -- HU-15: si venía de una solicitud de corrección, queda atendida
@@ -209,14 +206,21 @@ proc: BEGIN
            SET estado = 'atendida', atendida_en = NOW()
          WHERE id_propuesta = p_id_propuesta AND estado = 'pendiente';
 
-        -- Canal 5 = Notificación en la plataforma (CANAL_COMUNICACION)
+        -- Canal 5 = Notificación en la plataforma. Notificamos a TODOS los supervisores
+        -- y administradores activos del área del comercial autor (equipo aprobador).
         INSERT INTO notificacion (id_usuario_destino, id_canal, titulo, cuerpo, entidad_tipo, id_entidad, fecha_creacion, creado_por)
-        VALUES (v_aprobador, 5,
-                CONCAT('Visto bueno pendiente: ', v_numero, ' v', v_version),
-                CONCAT(v_usu_nombre, ' envió la propuesta ', v_numero, ' v', v_version,
-                       ' para su visto bueno. Plazo: ', v_sla, ' horas.',
-                       IF(v_requiere_esp = 1, ' Requiere aprobación especial.', '')),
-                'propuesta', p_id_propuesta, NOW(), p_id_usuario);
+        SELECT u.id_usuario, 5,
+               CONCAT('Visto bueno pendiente: ', v_numero, ' v', v_version),
+               CONCAT(v_usu_nombre, ' envió la propuesta ', v_numero, ' v', v_version,
+                      ' para visto bueno. Plazo: ', v_sla, ' horas.',
+                      IF(v_requiere_esp = 1, ' Requiere aprobación especial.', '')),
+               'propuesta', p_id_propuesta, NOW(), p_id_usuario
+        FROM usuario u
+        JOIN usuario a ON a.id_usuario = v_autor
+        WHERE u.eliminado_en IS NULL AND u.estado = 'activo'
+          AND u.rol_sistema IN ('supervisor', 'administrador')
+          AND u.area        = a.area
+          AND u.id_usuario <> v_autor;
 
         INSERT INTO historial_requerimiento (id_requerimiento, tipo, tipo_label, icono, descripcion, usuario, fecha, creado_en, creado_por)
         VALUES (v_id_rq, 'propuesta', 'Propuesta enviada a VB', 'task_alt',
@@ -225,13 +229,9 @@ proc: BEGIN
 
         INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion, id_usuario, registrado_en, metadata)
         VALUES ('propuesta', p_id_propuesta, 'envio_vb', 'borrador', 'pendiente_vb',
-                CONCAT('Enviada a visto bueno de ', IFNULL((SELECT CONCAT(nombre, ' ', apellido) FROM usuario WHERE id_usuario = v_aprobador), '-'),
-                       IF(v_suplente IS NOT NULL, ' (suplente del jefe directo)', ''), '.'),
+                CONCAT('Propuesta ', v_numero, ' v', v_version, ' enviada a visto bueno del equipo del área.'),
                 p_id_usuario, NOW(),
                 JSON_OBJECT('id_vb',                  v_id_vb,
-                            'id_aprobador',           v_aprobador,
-                            'id_jefe_directo',        v_jefe,
-                            'es_suplente',            v_suplente IS NOT NULL,
                             'sla_horas',              v_sla,
                             'aprobacion_especial',    v_requiere_esp = 1,
                             'descuento_pct',          v_desc_pct,
@@ -249,12 +249,7 @@ proc: BEGIN
            c.razon_social                                       AS cliente,
            r.numero                                             AS numero_requerimiento,
            p.total, tm_mon.String2                              AS moneda_simbolo,
-           v_aprobador                                          AS id_aprobador,
-           CONCAT(ua.nombre, ' ', ua.apellido)                  AS nombre_aprobador,
-           ua.cargo                                             AS cargo_aprobador,
-           (v_suplente IS NOT NULL)                             AS es_suplente,
-           v_jefe                                               AS id_jefe_directo,
-           CONCAT(uj.nombre, ' ', uj.apellido)                  AS nombre_jefe_directo,
+           v_area_autor                                         AS area_equipo_aprobador,
            v_sla                                                AS sla_horas,
            DATE_ADD(NOW(), INTERVAL v_sla HOUR)                 AS fecha_limite,
            v_requiere_esp                                       AS requiere_aprobacion_especial,
@@ -269,8 +264,6 @@ proc: BEGIN
     JOIN cliente c                 ON c.id_cliente = p.id_cliente
     LEFT JOIN requerimiento r      ON r.id_requerimiento = p.id_requerimiento
     LEFT JOIN tabla_maestra tm_mon ON tm_mon.IdMaestro = 1 AND tm_mon.IdEmpresa = 1 AND tm_mon.Num1 = p.id_moneda
-    LEFT JOIN usuario ua           ON ua.id_usuario = v_aprobador
-    LEFT JOIN usuario uj           ON uj.id_usuario = v_jefe
     WHERE p.id_propuesta = p_id_propuesta;
 
     SELECT codigo, etiqueta, cumple, obligatoria, detalle

@@ -107,7 +107,6 @@ public class ActividadPropuestaDto
 public class PropuestaContextoDto
 {
     public string    Estado              { get; set; } = "";
-    public DateTime? FechaPdf            { get; set; }
     public DateTime? FechaEnvio          { get; set; }
     public DateTime? FechaExpiracion     { get; set; }
     public bool      EsUltimaVersion     { get; set; }

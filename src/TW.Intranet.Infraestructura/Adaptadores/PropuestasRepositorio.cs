@@ -371,7 +371,6 @@ public class PropuestasRepositorio(CadenaConexionBd conexion)
                 var c = new PropuestaContextoDto
                 {
                     Estado              = Texto(r, "estado") ?? "",
-                    FechaPdf            = FechaHora(r, "fecha_pdf"),
                     FechaEnvio          = FechaHora(r, "fecha_envio"),
                     FechaExpiracion     = FechaHora(r, "fecha_expiracion"),
                     EsUltimaVersion     = Booleano(r, "es_ultima_version"),
@@ -568,12 +567,7 @@ public class PropuestasRepositorio(CadenaConexionBd conexion)
                     NumeroRequerimiento        = Texto(r, "numero_requerimiento"),
                     Total                      = DecimalNulo(r, "total") ?? 0,
                     MonedaSimbolo              = Texto(r, "moneda_simbolo"),
-                    IdAprobador                = EnteroLargoNulo(r, "id_aprobador"),
-                    NombreAprobador            = Texto(r, "nombre_aprobador"),
-                    CargoAprobador             = Texto(r, "cargo_aprobador"),
-                    EsSuplente                 = Booleano(r, "es_suplente"),
-                    IdJefeDirecto              = EnteroLargoNulo(r, "id_jefe_directo"),
-                    NombreJefeDirecto          = Texto(r, "nombre_jefe_directo"),
+                    AreaEquipoAprobador        = Texto(r, "area_equipo_aprobador"),
                     SlaHoras                   = Entero(r, "sla_horas"),
                     FechaLimite                = FechaHora(r, "fecha_limite"),
                     RequiereAprobacionEspecial = Booleano(r, "requiere_aprobacion_especial"),

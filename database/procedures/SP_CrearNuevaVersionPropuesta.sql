@@ -290,6 +290,23 @@ proc: BEGIN
                modificado_en = NOW(), modificado_por = p_id_usuario
          WHERE id_propuesta = p_id_propuesta_origen AND estado = 'pendiente' AND eliminado_en IS NULL;
 
+        -- Si había un VB pendiente, avisar al equipo aprobador del área del autor
+        -- (modelo área + rol): la solicitud que estaban revisando ya no aplica.
+        IF v_estado = 'pendiente_vb' THEN
+            INSERT INTO notificacion (id_usuario_destino, id_canal, titulo, cuerpo, entidad_tipo, id_entidad, fecha_creacion, creado_por)
+            SELECT u.id_usuario, 5,
+                   CONCAT('Visto bueno cancelado: ', v_numero, ' v', v_version_orig),
+                   CONCAT(v_usu_nombre, ' generó una nueva versión (v', v_version, ') y canceló la solicitud de visto bueno de ', v_numero, ' v', v_version_orig, '.'),
+                   'propuesta', p_id_propuesta_origen, NOW(), p_id_usuario
+            FROM usuario u
+            JOIN usuario a ON a.id_usuario = IFNULL((SELECT id_responsable FROM propuesta_comercial WHERE id_propuesta = p_id_propuesta_origen),
+                                                     (SELECT id_creador     FROM propuesta_comercial WHERE id_propuesta = p_id_propuesta_origen))
+            WHERE u.eliminado_en IS NULL AND u.estado = 'activo'
+              AND u.rol_sistema IN ('supervisor', 'administrador')
+              AND u.area        = a.area
+              AND u.id_usuario <> p_id_usuario;
+        END IF;
+
         INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion, id_usuario, registrado_en, metadata)
         VALUES ('propuesta', p_id_propuesta_origen, 'anulacion_por_version', v_estado, 'anulado',
                 CONCAT('Propuesta ', v_numero, ' v', v_version_orig, ' anulada al generarse la v', v_version, '.'),

@@ -37,19 +37,24 @@ proc: BEGIN
     WHERE id_propuesta = p_id_propuesta AND estado = 'pendiente' AND eliminado_en IS NULL
     ORDER BY id_vb DESC LIMIT 1;
 
-    SELECT id_supervisor INTO v_jefe FROM usuario WHERE id_usuario = v_autor;
-    SELECT us.id_suplente INTO v_suplente
-    FROM usuario_suplente us
-    JOIN usuario s ON s.id_usuario = us.id_suplente AND s.eliminado_en IS NULL AND s.estado = 'activo'
-    WHERE us.id_titular = v_jefe AND us.SoftDelete = 0 AND us.activo = 1
-      AND us.fecha_inicio <= CURDATE() AND (us.fecha_fin IS NULL OR us.fecha_fin >= CURDATE())
-    ORDER BY us.fecha_inicio DESC LIMIT 1;
+    -- Modelo nuevo: cualquier supervisor o administrador activo del área del comercial
+    -- autor puede resolver (o Gerencia/TI con propuesta_vb_todas). v_jefe / v_suplente
+    -- quedan en NULL por compatibilidad con el resto del SP.
+    SET v_jefe     = NULL;
+    SET v_suplente = NULL;
 
     IF v_id_vb IS NULL OR v_estado_p <> 'pendiente_vb' THEN
         SET v_puede = 0, v_bloqueo = 'La propuesta no tiene un visto bueno pendiente.';
-    ELSEIF FN_PermisoAccion(p_id_usuario, 'propuesta_vb_resolver') = 0
-        OR FN_PuedeResolverVistoBueno(v_id_vb, p_id_usuario) = 0 THEN
-        SET v_puede = 0, v_bloqueo = 'Solo el aprobador asignado (jefe directo, su suplente vigente o a quien se reasignó) puede resolver este visto bueno.';
+    ELSEIF FN_PermisoAccion(p_id_usuario, 'propuesta_vb_resolver') = 0 THEN
+        SET v_puede = 0, v_bloqueo = 'No tiene permiso para resolver visto bueno.';
+    ELSEIF FN_PermisoAccion(p_id_usuario, 'propuesta_vb_todas') = 0 AND NOT EXISTS (
+        SELECT 1 FROM usuario u
+        JOIN usuario a ON a.id_usuario = v_autor
+        WHERE u.id_usuario = p_id_usuario AND u.eliminado_en IS NULL AND u.estado = 'activo'
+          AND u.rol_sistema IN ('supervisor', 'administrador')
+          AND u.area        = a.area
+    ) THEN
+        SET v_puede = 0, v_bloqueo = 'Solo supervisores o administradores del área del comercial pueden resolver este visto bueno.';
     ELSEIF p_id_usuario = v_autor AND FN_PermisoAccion(p_id_usuario, 'propuesta_vb_todas') = 0 THEN
         SET v_puede = 0, v_bloqueo = 'No puede dar visto bueno a una propuesta propia.';
     END IF;
@@ -86,10 +91,29 @@ proc: BEGIN
     WHERE IdMaestro = 10 AND IdEmpresa = 1 AND eliminado_en IS NULL
     ORDER BY Num1;
 
-    SELECT String2 AS codigo, String1 AS etiqueta
-    FROM tabla_maestra
-    WHERE Descripcion = 'AREA_CORRECCION_PROPUESTA' AND eliminado_en IS NULL
-    ORDER BY Num1;
+    -- Áreas a corregir = secciones del wizard que REALMENTE tiene esta propuesta.
+    -- Fijas (siempre presentes): configuracion, propuesta, forma_pago, listado_equipos.
+    -- Opcionales: solo si están en propuesta_comercial.secciones_activas (JSON array).
+    -- Si secciones_activas es NULL (propuestas viejas), se muestran todas las opcionales.
+    SELECT codigo, etiqueta
+    FROM (
+        SELECT 1 AS orden, 'configuracion'       AS codigo, 'Configuración'       AS etiqueta, 1 AS incluir UNION ALL
+        SELECT 2, 'propuesta',           'Ítems y precios',    1                                              UNION ALL
+        SELECT 3, 'opcionales',          'Opcionales',         IF((SELECT secciones_activas FROM propuesta_comercial WHERE id_propuesta = p_id_propuesta) IS NULL
+                                                                  OR JSON_CONTAINS((SELECT secciones_activas FROM propuesta_comercial WHERE id_propuesta = p_id_propuesta), '"opcionales"'), 1, 0) UNION ALL
+        SELECT 4, 'detalle',             'Detalle',            IF((SELECT secciones_activas FROM propuesta_comercial WHERE id_propuesta = p_id_propuesta) IS NULL
+                                                                  OR JSON_CONTAINS((SELECT secciones_activas FROM propuesta_comercial WHERE id_propuesta = p_id_propuesta), '"detalle"'), 1, 0) UNION ALL
+        SELECT 5, 'recomendaciones',     'Recomendaciones',    IF((SELECT secciones_activas FROM propuesta_comercial WHERE id_propuesta = p_id_propuesta) IS NULL
+                                                                  OR JSON_CONTAINS((SELECT secciones_activas FROM propuesta_comercial WHERE id_propuesta = p_id_propuesta), '"recomendaciones"'), 1, 0) UNION ALL
+        SELECT 6, 'forma_pago',          'Forma de Pago',      1                                              UNION ALL
+        SELECT 7, 'suministros_cliente', 'Suministros Cliente',IF((SELECT secciones_activas FROM propuesta_comercial WHERE id_propuesta = p_id_propuesta) IS NULL
+                                                                  OR JSON_CONTAINS((SELECT secciones_activas FROM propuesta_comercial WHERE id_propuesta = p_id_propuesta), '"suministros_cliente"'), 1, 0) UNION ALL
+        SELECT 8, 'condiciones',         'Condiciones',        IF((SELECT secciones_activas FROM propuesta_comercial WHERE id_propuesta = p_id_propuesta) IS NULL
+                                                                  OR JSON_CONTAINS((SELECT secciones_activas FROM propuesta_comercial WHERE id_propuesta = p_id_propuesta), '"condiciones"'), 1, 0) UNION ALL
+        SELECT 9, 'listado_equipos',     'Listado de Equipos', 1
+    ) areas
+    WHERE incluir = 1
+    ORDER BY orden;
 END$$
 
 DELIMITER ;

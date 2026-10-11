@@ -37,7 +37,6 @@ proc: BEGIN
     -- 2. Situación
     SELECT
         p.estado,
-        p.fecha_pdf,
         p.fecha_envio,
         p.fecha_expiracion,
         NOT EXISTS (SELECT 1 FROM propuesta_comercial x

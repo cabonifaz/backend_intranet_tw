@@ -167,8 +167,9 @@ proc: BEGIN
 
     COMMIT;
 
-    -- Supervisor automático: nivel superior más cercano de la misma área
-    CALL SP_RecalcularSupervisores();
+    -- NOTA: SP_RecalcularSupervisores fue eliminado en el refactor de VB (bandeja compartida
+    -- por área + rol). La columna usuario.id_supervisor ya no se usa para VB — todos los
+    -- supervisores/administradores del área del comercial son el equipo aprobador.
 
     SELECT 2 AS IdTipoMensaje,
            IF(p_id_usuario = 0, 'Usuario registrado correctamente.', 'Usuario actualizado correctamente.') AS Mensaje;

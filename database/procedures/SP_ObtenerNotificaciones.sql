@@ -1,7 +1,9 @@
 -- ============================================================
 -- SP_ObtenerNotificaciones
--- Notificaciones del topbar (data mockeada).
--- Reemplazar con SELECTs reales cuando los módulos estén listos.
+-- Notificaciones del topbar del usuario autenticado.
+-- Trae las 20 más recientes no eliminadas, ordenadas por fecha de creación DESC.
+-- El campo `tiempo` se calcula en runtime en formato humano ("Hace 2m", "Hace 1h", "Hace 3d").
+-- El `tipo_dot` sale del canal (verde/azul/ámbar/rojo/gris según severidad).
 -- ============================================================
 DROP PROCEDURE IF EXISTS SP_ObtenerNotificaciones;
 
@@ -13,57 +15,36 @@ CREATE PROCEDURE SP_ObtenerNotificaciones(
 BEGIN
     SELECT 2 AS IdTipoMensaje, 'Éxito.' AS Mensaje;
 
-    SELECT * FROM (
-        SELECT
-            1                   AS id_notificacion,
-            'SLA_VENCIDO'       AS tipo,
-            'SLA CRÍTICO VENCIDO' AS titulo,
-            'El expediente EXP-2024-012 (Refinería Talara) excedió el tiempo límite. Se requiere repuesto urgente.' AS cuerpo,
-            '#E31B23'           AS tipo_dot,
-            'Hace 2m'           AS tiempo,
-            0                   AS leida,
-            NOW()               AS creado_en
-        UNION ALL
-        SELECT
-            2,
-            'BLOQUEADO',
-            'EXPEDIENTE BLOQUEADO',
-            'EXP-2024-001 (Minera Antamina) ha sido bloqueado en SSOMA por falta de SCTR vigente.',
-            '#D97706',
-            'Hace 15m',
-            0,
-            NOW() - INTERVAL 15 MINUTE
-        UNION ALL
-        SELECT
-            3,
-            'DEMORA',
-            'DEMORA EN RUTA',
-            'El técnico asignado para EXP-2024-005 (Aceros Arequipa) reporta tráfico pesado en la Panamericana.',
-            '#2563EB',
-            'Hace 45m',
-            1,
-            NOW() - INTERVAL 45 MINUTE
-        UNION ALL
-        SELECT
-            4,
-            'FACTURACION',
-            'LISTO PARA FACTURAR',
-            'La conformidad para EXP-2024-008 ha sido aprobada. Expediente listo para emisión de factura.',
-            '#059669',
-            'Hace 2h',
-            1,
-            NOW() - INTERVAL 2 HOUR
-        UNION ALL
-        SELECT
-            5,
-            'SISTEMA',
-            'NUEVO SERVICIO ASIGNADO',
-            'Se ha registrado un requerimiento de Calibración de Balanzas de plataforma de Cerro Verde.',
-            '#6B7280',
-            'Hace 4h',
-            1,
-            NOW() - INTERVAL 4 HOUR
-    ) AS notificaciones;
+    SELECT
+        n.id_notificacion,
+        CASE
+            WHEN n.entidad_tipo IS NOT NULL THEN UPPER(n.entidad_tipo)
+            ELSE 'SISTEMA'
+        END                                             AS tipo,
+        n.titulo,
+        n.cuerpo,
+        CASE n.id_canal
+            WHEN 1 THEN '#E31B23'  -- correo urgente / crítico
+            WHEN 2 THEN '#D97706'  -- SMS / alerta
+            WHEN 3 THEN '#059669'  -- éxito
+            WHEN 4 THEN '#6B7280'  -- sistema / informativo
+            WHEN 5 THEN '#2563EB'  -- plataforma (campana)
+            ELSE        '#6B7280'
+        END                                             AS tipo_dot,
+        CASE
+            WHEN TIMESTAMPDIFF(MINUTE, n.fecha_creacion, NOW()) < 1  THEN 'Ahora'
+            WHEN TIMESTAMPDIFF(MINUTE, n.fecha_creacion, NOW()) < 60 THEN CONCAT('Hace ', TIMESTAMPDIFF(MINUTE, n.fecha_creacion, NOW()), 'm')
+            WHEN TIMESTAMPDIFF(HOUR,   n.fecha_creacion, NOW()) < 24 THEN CONCAT('Hace ', TIMESTAMPDIFF(HOUR,   n.fecha_creacion, NOW()), 'h')
+            WHEN TIMESTAMPDIFF(DAY,    n.fecha_creacion, NOW()) < 7  THEN CONCAT('Hace ', TIMESTAMPDIFF(DAY,    n.fecha_creacion, NOW()), 'd')
+            ELSE DATE_FORMAT(n.fecha_creacion, '%d/%m/%Y')
+        END                                             AS tiempo,
+        n.leido                                          AS leida,
+        n.fecha_creacion                                 AS creado_en
+    FROM notificacion n
+    WHERE n.id_usuario_destino = p_id_usuario
+      AND n.eliminado_en IS NULL
+    ORDER BY n.fecha_creacion DESC
+    LIMIT 20;
 END //
 
 DELIMITER ;

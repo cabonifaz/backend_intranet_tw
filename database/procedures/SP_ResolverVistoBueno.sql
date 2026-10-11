@@ -140,23 +140,41 @@ proc: BEGIN
     ORDER BY id_vb DESC LIMIT 1;
 
     IF v_id_vb IS NULL OR v_estado_p <> 'pendiente_vb' THEN
-        SELECT 1 AS IdTipoMensaje, 'La propuesta no tiene un visto bueno pendiente.' AS Mensaje;
+        -- Mensaje contextual: si la propuesta fue anulada por una nueva versión del
+        -- comercial, se avisa en vez del genérico "no tiene VB pendiente".
+        IF v_estado_p = 'anulado' AND EXISTS (
+            SELECT 1 FROM propuesta_comercial
+            WHERE numero = v_numero AND version > v_version AND eliminado_en IS NULL
+        ) THEN
+            SELECT 1 AS IdTipoMensaje,
+                   CONCAT('El comercial generó una nueva versión de ', v_numero,
+                          ' y canceló esta solicitud de visto bueno. Actualice la bandeja.') AS Mensaje;
+        ELSE
+            SELECT 1 AS IdTipoMensaje, 'La propuesta no tiene un visto bueno pendiente.' AS Mensaje;
+        END IF;
         LEAVE proc;
     END IF;
 
     -- ── ¿Quién puede resolver? ──────────────────────────────────────────
-    SELECT id_supervisor INTO v_jefe FROM usuario WHERE id_usuario = v_autor;
-    SELECT us.id_suplente INTO v_suplente
-    FROM usuario_suplente us
-    JOIN usuario s ON s.id_usuario = us.id_suplente AND s.eliminado_en IS NULL AND s.estado = 'activo'
-    WHERE us.id_titular = v_jefe AND us.SoftDelete = 0 AND us.activo = 1
-      AND us.fecha_inicio <= CURDATE() AND (us.fecha_fin IS NULL OR us.fecha_fin >= CURDATE())
-    ORDER BY us.fecha_inicio DESC LIMIT 1;
+    -- Modelo nuevo: cualquier supervisor o administrador activo del área del comercial
+    -- autor puede resolver el VB. También quien tiene propuesta_vb_todas (Gerencia/TI).
+    SET v_jefe     = NULL;
+    SET v_suplente = NULL;
 
-    IF FN_PermisoAccion(p_id_usuario, 'propuesta_vb_resolver') = 0
-       OR FN_PuedeResolverVistoBueno(v_id_vb, p_id_usuario) = 0 THEN
+    IF FN_PermisoAccion(p_id_usuario, 'propuesta_vb_resolver') = 0 THEN
+        SELECT 1 AS IdTipoMensaje, 'No tiene permiso para resolver visto bueno.' AS Mensaje;
+        LEAVE proc;
+    END IF;
+
+    IF FN_PermisoAccion(p_id_usuario, 'propuesta_vb_todas') = 0 AND NOT EXISTS (
+        SELECT 1 FROM usuario u
+        JOIN usuario a ON a.id_usuario = v_autor
+        WHERE u.id_usuario = p_id_usuario AND u.eliminado_en IS NULL AND u.estado = 'activo'
+          AND u.rol_sistema IN ('supervisor', 'administrador')
+          AND u.area        = a.area
+    ) THEN
         SELECT 1 AS IdTipoMensaje,
-               'Solo el aprobador asignado (jefe directo, su suplente vigente o a quien se reasignó) puede resolver este visto bueno.' AS Mensaje;
+               'Solo supervisores o administradores del área del comercial pueden resolver este visto bueno.' AS Mensaje;
         LEAVE proc;
     END IF;
 

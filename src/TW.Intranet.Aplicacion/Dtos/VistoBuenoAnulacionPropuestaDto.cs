@@ -27,13 +27,9 @@ public class VistoBuenoPropuestaDto
     public decimal  Total                { get; set; }
     public string?  MonedaSimbolo        { get; set; }
 
-    /// <summary>A quién llega el VB: jefe directo del comercial o su suplente vigente.</summary>
-    public long?    IdAprobador          { get; set; }
-    public string?  NombreAprobador      { get; set; }
-    public string?  CargoAprobador       { get; set; }
-    public bool     EsSuplente           { get; set; }
-    public long?    IdJefeDirecto        { get; set; }
-    public string?  NombreJefeDirecto    { get; set; }
+    /// <summary>Área del comercial autor: todos los supervisores y administradores activos de esa
+    /// área reciben el VB en su bandeja compartida (modelo área + rol).</summary>
+    public string?  AreaEquipoAprobador  { get; set; }
 
     public int      SlaHoras             { get; set; }
     public DateTime? FechaLimite         { get; set; }
