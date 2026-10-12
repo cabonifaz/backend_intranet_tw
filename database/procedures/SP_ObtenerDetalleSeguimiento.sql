@@ -11,7 +11,7 @@
 --     (de todas las versiones de la propuesta), del más reciente al más antiguo
 --   4 próximas acciones programadas (pendiente, realizada o cancelada)
 --   5 contactos del cliente (primero el de la propuesta)
---   6 documentos: PDF de cada versión y órdenes de compra
+--   6 documentos: PDF de cada versión, órdenes de compra y adjuntos de los seguimientos (HU-19)
 DROP PROCEDURE IF EXISTS SP_ObtenerDetalleSeguimiento;
 
 DELIMITER $$
@@ -117,7 +117,8 @@ BEGIN
                    IF(p.version = 1, CONCAT('Se creó la propuesta ', p.numero, '.'),
                       IFNULL(p.descripcion_cambios, CONCAT('Se creó la versión ', p.version, ' de la propuesta.'))) AS descripcion,
                    p.version, p.id_creador AS id_usuario, CONCAT(u.nombre, ' ', u.apellido) AS usuario,
-                   NULL AS canal_codigo, NULL AS canal, NULL AS resultado_codigo, NULL AS id_seguimiento
+                   NULL AS canal_codigo, NULL AS canal, NULL AS resultado_codigo, NULL AS id_seguimiento,
+                   NULL AS duracion_minutos, NULL AS asunto, 0 AS adjuntos
             FROM propuesta_comercial p
             LEFT JOIN usuario u ON u.id_usuario = p.id_creador
             WHERE p.numero = v_numero AND p.eliminado_en IS NULL
@@ -127,7 +128,7 @@ BEGIN
             SELECT vb.fecha_solicitud, 'vb_solicitado', 'Enviada a visto bueno',
                    IFNULL(vb.comentario, 'Se solicitó el visto bueno de la propuesta.'),
                    p.version, vb.creado_por, CONCAT(u.nombre, ' ', u.apellido),
-                   NULL, NULL, NULL, NULL
+                   NULL, NULL, NULL, NULL, NULL, NULL, 0
             FROM visto_bueno vb
             JOIN propuesta_comercial p ON p.id_propuesta = vb.id_propuesta
             LEFT JOIN usuario u ON u.id_usuario = vb.creado_por
@@ -145,7 +146,7 @@ BEGIN
                    END,
                    vb.comentario_respuesta,
                    p.version, vb.resuelto_por, CONCAT(u.nombre, ' ', u.apellido),
-                   NULL, NULL, NULL, NULL
+                   NULL, NULL, NULL, NULL, NULL, NULL, 0
             FROM visto_bueno vb
             JOIN propuesta_comercial p ON p.id_propuesta = vb.id_propuesta
             LEFT JOIN usuario u ON u.id_usuario = vb.resuelto_por
@@ -157,7 +158,7 @@ BEGIN
             SELECT p.fecha_envio, 'enviada_cliente', 'Propuesta enviada al cliente',
                    CONCAT('Se envió la versión ', p.version, ' al cliente.'),
                    p.version, COALESCE(p.id_responsable, p.id_creador), CONCAT(u.nombre, ' ', u.apellido),
-                   NULL, NULL, NULL, NULL
+                   NULL, NULL, NULL, NULL, NULL, NULL, 0
             FROM propuesta_comercial p
             LEFT JOIN usuario u ON u.id_usuario = COALESCE(p.id_responsable, p.id_creador)
             WHERE p.numero = v_numero AND p.eliminado_en IS NULL AND p.fecha_envio IS NOT NULL
@@ -175,12 +176,17 @@ BEGIN
                        WHEN 'cerrado_aceptacion' THEN 'Propuesta aceptada por el cliente'
                        WHEN 'cerrado_rechazo'    THEN 'Propuesta rechazada por el cliente'
                        WHEN 'cerrado_sin_venta'  THEN 'Seguimiento cerrado sin venta'
-                       ELSE CONCAT(IFNULL(cn.String1, 'Seguimiento'),
-                                   IF(rs.String1 IS NULL, '', CONCAT(' - ', rs.String1)))
+                       ELSE IF(cn.String2 = 'CORREO' AND s.asunto IS NOT NULL,
+                               CONCAT('Correo: ', s.asunto),
+                               CONCAT(IFNULL(cn.String1, 'Seguimiento'),
+                                      IF(rs.String1 IS NULL, '', CONCAT(' - ', rs.String1))))
                    END,
                    s.notas,
                    p.version, COALESCE(s.creado_por, s.id_responsable), CONCAT(u.nombre, ' ', u.apellido),
-                   cn.String2, cn.String1, rs.String2, s.id_seguimiento
+                   cn.String2, cn.String1, rs.String2, s.id_seguimiento,
+                   s.duracion_minutos, s.asunto,
+                   (SELECT COUNT(*) FROM seguimiento_adjunto a
+                    WHERE a.id_seguimiento = s.id_seguimiento AND a.eliminado_en IS NULL)
             FROM seguimiento_comercial s
             JOIN propuesta_comercial p ON p.id_propuesta = s.id_propuesta
             LEFT JOIN tabla_maestra cn ON cn.IdMaestro = 26 AND cn.IdEmpresa = 1 AND cn.Num1 = s.id_canal
@@ -194,7 +200,7 @@ BEGIN
                    CONCAT('Orden de compra ', oc.numero_oc, ' registrada'),
                    CONCAT('Estado: ', REPLACE(oc.estado, '_', ' ')),
                    p.version, oc.creado_por, CONCAT(u.nombre, ' ', u.apellido),
-                   NULL, NULL, NULL, NULL
+                   NULL, NULL, NULL, NULL, NULL, NULL, 0
             FROM orden_compra oc
             JOIN propuesta_comercial p ON p.numero = v_numero AND p.eliminado_en IS NULL
                                       AND (oc.id_propuesta = p.id_propuesta
@@ -236,6 +242,13 @@ BEGIN
         LEFT JOIN usuario u        ON u.id_usuario = s.id_responsable
         WHERE s.id_propuesta = p_id_propuesta AND s.eliminado_en IS NULL
           AND s.proxima_accion_fecha IS NOT NULL
+          -- Una acción que se mantuvo en seguimientos posteriores se muestra una sola vez (la última copia)
+          AND NOT EXISTS (SELECT 1 FROM seguimiento_comercial s3
+                          WHERE s3.id_propuesta = s.id_propuesta AND s3.eliminado_en IS NULL
+                            AND s3.proxima_accion_fecha = s.proxima_accion_fecha
+                            AND IFNULL(s3.id_tipo_proxima_accion, 0) = IFNULL(s.id_tipo_proxima_accion, 0)
+                            AND (s3.fecha_interaccion > s.fecha_interaccion
+                                 OR (s3.fecha_interaccion = s.fecha_interaccion AND s3.id_seguimiento > s.id_seguimiento)))
         ORDER BY s.proxima_accion_fecha DESC, s.id_seguimiento DESC;
 
         -- 5. Contactos del cliente
@@ -270,6 +283,14 @@ BEGIN
                                            OR oc.id_oc IN (SELECT op.id_oc FROM oc_propuesta op
                                                            WHERE op.id_propuesta = p.id_propuesta AND op.eliminado_en IS NULL))
             WHERE oc.eliminado_en IS NULL
+
+            UNION ALL
+            SELECT 'adjunto_seguimiento', a.nombre_archivo, a.creado_en,
+                   p.version, CONCAT('/api/crm/seguimiento/adjuntos/', a.id_adjunto), NULL
+            FROM seguimiento_adjunto a
+            JOIN seguimiento_comercial s ON s.id_seguimiento = a.id_seguimiento AND s.eliminado_en IS NULL
+            JOIN propuesta_comercial p   ON p.id_propuesta   = s.id_propuesta
+            WHERE p.numero = v_numero AND p.eliminado_en IS NULL AND a.eliminado_en IS NULL
         ) d
         ORDER BY d.fecha DESC;
     END IF;

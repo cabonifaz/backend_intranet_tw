@@ -1,3 +1,4 @@
+using System.Text.Json;
 using TW.Intranet.Aplicacion.Dtos;
 using TW.Intranet.Aplicacion.Puertos;
 using TW.Intranet.Infraestructura.Configuracion;
@@ -5,7 +6,7 @@ using MySqlConnector;
 
 namespace TW.Intranet.Infraestructura.Adaptadores;
 
-/// <summary>HU-17 — Seguimiento comercial de propuestas enviadas.</summary>
+/// <summary>HU-17 / HU-18 / HU-19 — Seguimiento comercial de propuestas enviadas.</summary>
 public class SeguimientoComercialRepositorio(CadenaConexionBd conexion)
     : RepositorioSpBase(conexion), ISeguimientoComercialRepositorio
 {
@@ -204,7 +205,10 @@ public class SeguimientoComercialRepositorio(CadenaConexionBd conexion)
                         Texto(r, "canal_codigo"),
                         Texto(r, "canal"),
                         Texto(r, "resultado_codigo"),
-                        EnteroLargoNulo(r, "id_seguimiento")));
+                        EnteroLargoNulo(r, "id_seguimiento"),
+                        EntNulo(r, "duracion_minutos"),
+                        Texto(r, "asunto"),
+                        Ent(r, "adjuntos")));
 
                 // 4. Próximas acciones
                 await r.NextResultAsync(ct);
@@ -255,6 +259,219 @@ public class SeguimientoComercialRepositorio(CadenaConexionBd conexion)
 
                 return new RespuestaDto<DetalleSeguimientoDto>(2, mensaje,
                     new DetalleSeguimientoDto(cabecera, timeline, acciones, contactos, documentos));
+            },
+            ct);
+
+    // ── HU-19 Registro ────────────────────────────────────────────────────────
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+
+    private static string SerializarDestinatarios(List<DestinatarioSeguimientoDto> lista) =>
+        JsonSerializer.Serialize(lista, Json);
+
+    private static List<DestinatarioSeguimientoDto> LeerDestinatarios(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return [];
+        try { return JsonSerializer.Deserialize<List<DestinatarioSeguimientoDto>>(json, Json) ?? []; }
+        catch (JsonException) { return []; }
+    }
+
+    private static async Task<List<OpcionSeguimientoDto>> LeerOpcionesAsync(MySqlDataReader r, CancellationToken ct)
+    {
+        await r.NextResultAsync(ct);
+        var lista = new List<OpcionSeguimientoDto>();
+        while (await r.ReadAsync(ct))
+            lista.Add(new OpcionSeguimientoDto(Ent(r, "id"), Texto(r, "nombre") ?? "", Texto(r, "codigo")));
+        return lista;
+    }
+
+    public Task<RespuestaDto<PreparacionRegistroSeguimientoDto>> PrepararRegistroAsync(long idPropuesta, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_PrepararRegistroSeguimiento",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario",   idUsuario);
+                p.AddWithValue("p_id_propuesta", idPropuesta);
+            },
+            async (r, mensaje) =>
+            {
+                // 2. Cabecera
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<PreparacionRegistroSeguimientoDto>(3, "No se pudo leer la propuesta.");
+                var cabecera = new CabeceraRegistroSeguimientoDto
+                {
+                    IdPropuesta             = EnteroLargo(r, "id_propuesta"),
+                    Numero                  = Texto(r, "numero") ?? "",
+                    Version                 = Ent(r, "version"),
+                    IdCliente               = EnteroLargo(r, "id_cliente"),
+                    RazonSocial             = Texto(r, "razon_social") ?? "",
+                    Referencia              = Texto(r, "referencia"),
+                    IdContacto              = EnteroLargoNulo(r, "id_contacto"),
+                    Contacto                = Texto(r, "contacto"),
+                    TelefonoContacto        = Texto(r, "telefono_contacto"),
+                    CorreoContacto          = Texto(r, "correo_contacto"),
+                    IdUsuario               = EnteroLargo(r, "id_usuario"),
+                    Usuario                 = Texto(r, "usuario"),
+                    CorreoUsuario           = Texto(r, "correo_usuario"),
+                    CargoUsuario            = Texto(r, "cargo_usuario"),
+                    FechaServidor           = FechaHora(r, "fecha_servidor"),
+                    EstadoSeguimiento       = Texto(r, "estado_seguimiento") ?? "",
+                    ProximaAccionCodigo     = Texto(r, "proxima_accion_codigo"),
+                    ProximaAccion           = Texto(r, "proxima_accion"),
+                    ProximaAccionFecha      = FechaHora(r, "proxima_accion_fecha"),
+                    CanalSugeridoCodigo     = Texto(r, "canal_sugerido_codigo"),
+                    PlantillaSugeridaCodigo = Texto(r, "plantilla_sugerida_codigo"),
+                };
+
+                // 3-4. Tipos de seguimiento y resultados
+                var tipos      = await LeerOpcionesAsync(r, ct);
+                var resultados = await LeerOpcionesAsync(r, ct);
+
+                // 5. Contactos
+                await r.NextResultAsync(ct);
+                var contactos = new List<ContactoRegistroSeguimientoDto>();
+                while (await r.ReadAsync(ct))
+                    contactos.Add(new ContactoRegistroSeguimientoDto(
+                        EnteroLargo(r, "id_contacto"), Texto(r, "nombres") ?? "", Texto(r, "cargo"),
+                        Texto(r, "correo"), Texto(r, "telefono_movil"), Texto(r, "telefono_anexo"),
+                        Ent(r, "es_contacto_propuesta") == 1, Ent(r, "es_contacto_principal") == 1));
+
+                // 6-7. Tipos de tarea y prioridades
+                var tiposTarea  = await LeerOpcionesAsync(r, ct);
+                var prioridades = await LeerOpcionesAsync(r, ct);
+
+                // 8. Responsables
+                await r.NextResultAsync(ct);
+                var responsables = new List<ResponsableSeguimientoDto>();
+                while (await r.ReadAsync(ct))
+                    responsables.Add(new ResponsableSeguimientoDto(
+                        EnteroLargo(r, "id"), Texto(r, "nombre") ?? "", Texto(r, "cargo"), Ent(r, "es_usuario_actual") == 1));
+
+                // 9. Plantillas
+                await r.NextResultAsync(ct);
+                var plantillas = new List<PlantillaCorreoSeguimientoDto>();
+                while (await r.ReadAsync(ct))
+                    plantillas.Add(new PlantillaCorreoSeguimientoDto(
+                        Ent(r, "id_plantilla"), Texto(r, "codigo") ?? "", Texto(r, "nombre") ?? "",
+                        Texto(r, "asunto") ?? "", Texto(r, "cuerpo_html") ?? ""));
+
+                // 10. Borrador
+                await r.NextResultAsync(ct);
+                BorradorCorreoSeguimientoDto? borrador = null;
+                if (await r.ReadAsync(ct))
+                    borrador = new BorradorCorreoSeguimientoDto(
+                        EnteroLargo(r, "id_correo"), EntNulo(r, "id_plantilla"),
+                        LeerDestinatarios(Texto(r, "para")), LeerDestinatarios(Texto(r, "cc")),
+                        Texto(r, "asunto") ?? "", Texto(r, "cuerpo_html") ?? "",
+                        Texto(r, "estado") ?? "", Texto(r, "error"), FechaHora(r, "fecha"));
+
+                return new RespuestaDto<PreparacionRegistroSeguimientoDto>(2, mensaje,
+                    new PreparacionRegistroSeguimientoDto(cabecera, tipos, resultados, contactos, tiposTarea,
+                                                          prioridades, responsables, plantillas, borrador));
+            },
+            ct);
+
+    public Task<RespuestaDto<long>> RegistrarAsync(long idPropuesta, ComandoRegistroSeguimiento c, long idUsuario,
+                                                   bool soloValidar, CancellationToken ct)
+        => EjecutarAsync("SP_RegistrarSeguimiento",
+            p =>
+            {
+                var a = c.ProximaAccion;
+                p.AddWithValue("p_id_usuario",         idUsuario);
+                p.AddWithValue("p_id_propuesta",       idPropuesta);
+                p.AddWithValue("p_id_canal",           Valor(c.IdCanal));
+                p.AddWithValue("p_canal_codigo",       Valor(c.CanalCodigo));
+                p.AddWithValue("p_id_resultado",       Valor(c.IdResultado));
+                p.AddWithValue("p_resultado_codigo",   Valor(c.ResultadoCodigo));
+                p.AddWithValue("p_id_contacto",        Valor(c.IdContacto is > 0 ? c.IdContacto : null));
+                p.AddWithValue("p_fecha_interaccion",  Valor(c.FechaInteraccion));
+                p.AddWithValue("p_duracion_minutos",   Valor(c.DuracionMinutos));
+                p.AddWithValue("p_notas",              Valor(c.Notas));
+                p.AddWithValue("p_asunto",             Valor(c.Asunto));
+                p.AddWithValue("p_programar",          Bit(c.Programar));
+                p.AddWithValue("p_id_tipo_accion",     Valor(c.Programar ? a?.IdTipoAccion : null));
+                p.AddWithValue("p_fecha_accion",       Valor(c.Programar ? a?.Fecha : null));
+                p.AddWithValue("p_id_responsable_acc", Valor(c.Programar ? a?.IdResponsable : null));
+                p.AddWithValue("p_id_prioridad",       Valor(c.Programar ? a?.IdPrioridad : null));
+                p.AddWithValue("p_detalle_accion",     Valor(c.Programar ? a?.Detalle : null));
+                p.AddWithValue("p_id_correo",          Valor(c.IdCorreo));
+                p.AddWithValue("p_proveedor",          Valor(c.Proveedor));
+                p.AddWithValue("p_id_mensaje",         Valor(c.IdMensaje));
+                p.AddWithValue("p_ejecuta_accion",     Bit(c.EjecutaAccion));
+                p.AddWithValue("p_solo_validar",       Bit(soloValidar));
+            },
+            async (r, mensaje) =>
+            {
+                if (soloValidar) return new RespuestaDto<long>(2, mensaje, 0);
+                await r.NextResultAsync(ct);
+                long id = await r.ReadAsync(ct) ? EnteroLargo(r, "id_seguimiento") : 0;
+                return new RespuestaDto<long>(2, mensaje, id);
+            },
+            ct);
+
+    public Task<RespuestaDto<CorreoSeguimientoGuardadoDto>> GuardarCorreoAsync(long idPropuesta, ComandoCorreoSeguimiento c,
+        string estado, string? proveedor, string? error, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_GuardarCorreoSeguimiento",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario",   idUsuario);
+                p.AddWithValue("p_id_propuesta", idPropuesta);
+                p.AddWithValue("p_id_correo",    Valor(c.IdCorreo));
+                p.AddWithValue("p_id_plantilla", Valor(c.IdPlantilla));
+                p.AddWithValue("p_para",         SerializarDestinatarios(c.Para));
+                p.AddWithValue("p_cc",           c.Cc.Count == 0 ? DBNull.Value : SerializarDestinatarios(c.Cc));
+                p.AddWithValue("p_asunto",       c.Asunto);
+                p.AddWithValue("p_cuerpo_html",  c.CuerpoHtml);
+                p.AddWithValue("p_estado",       estado);
+                p.AddWithValue("p_proveedor",    Valor(proveedor));
+                p.AddWithValue("p_error",        Valor(error is { Length: > 500 } ? error[..500] : error));
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<CorreoSeguimientoGuardadoDto>(3, "No se pudo leer el correo guardado.");
+                return new RespuestaDto<CorreoSeguimientoGuardadoDto>(2, mensaje, new CorreoSeguimientoGuardadoDto(
+                    EnteroLargo(r, "id_correo"), Texto(r, "usuario") ?? "", Texto(r, "correo_usuario"), Texto(r, "cargo_usuario")));
+            },
+            ct);
+
+    public Task<RespuestaDto<long>> RegistrarAdjuntoAsync(long idSeguimiento, string nombreArchivo, string ruta, string tipoContenido,
+                                                          long tamanoBytes, long idUsuario, bool soloValidar, CancellationToken ct)
+        => EjecutarAsync("SP_RegistrarAdjuntoSeguimiento",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario",     idUsuario);
+                p.AddWithValue("p_id_seguimiento", idSeguimiento);
+                p.AddWithValue("p_nombre_archivo", nombreArchivo);
+                p.AddWithValue("p_ruta",           ruta);
+                p.AddWithValue("p_tipo_contenido", tipoContenido);
+                p.AddWithValue("p_tamano_bytes",   tamanoBytes);
+                p.AddWithValue("p_solo_validar",   Bit(soloValidar));
+            },
+            async (r, mensaje) =>
+            {
+                if (soloValidar) return new RespuestaDto<long>(2, mensaje, 0);
+                await r.NextResultAsync(ct);
+                long id = await r.ReadAsync(ct) ? EnteroLargo(r, "id_adjunto") : 0;
+                return new RespuestaDto<long>(2, mensaje, id);
+            },
+            ct);
+
+    public Task<RespuestaDto<RutaAdjuntoSeguimientoDto>> ObtenerAdjuntoAsync(long idAdjunto, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_ObtenerAdjuntoSeguimiento",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario", idUsuario);
+                p.AddWithValue("p_id_adjunto", idAdjunto);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<RutaAdjuntoSeguimientoDto>(1, "El adjunto no existe.");
+                return new RespuestaDto<RutaAdjuntoSeguimientoDto>(2, mensaje, new RutaAdjuntoSeguimientoDto(
+                    Texto(r, "ruta") ?? "", Texto(r, "nombre_archivo") ?? "adjunto",
+                    Texto(r, "tipo_contenido") ?? "application/octet-stream"));
             },
             ct);
 }

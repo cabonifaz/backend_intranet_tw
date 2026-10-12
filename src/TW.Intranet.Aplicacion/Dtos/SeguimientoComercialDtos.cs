@@ -176,7 +176,10 @@ public record EventoTimelineSeguimientoDto(
     string?   CanalCodigo,
     string?   Canal,
     string?   ResultadoCodigo,
-    long?     IdSeguimiento);
+    long?     IdSeguimiento,
+    int?      DuracionMinutos = null,
+    string?   Asunto          = null,
+    int       Adjuntos        = 0);
 
 /// <summary>Acción programada. Estado: pendiente | vencida | realizada | cancelada.</summary>
 public record ProximaAccionSeguimientoDto(
@@ -206,7 +209,8 @@ public record ContactoSeguimientoDto(
     bool    AutorizadoAprobarCotizaciones,
     bool    EsContactoPropuesta);
 
-/// <summary>Tipo: propuesta_pdf (Url = endpoint del PDF de esa versión) | orden_compra (Url = archivo, puede ser null).</summary>
+/// <summary>Tipo: propuesta_pdf (Url = endpoint del PDF de esa versión) | orden_compra (Url = archivo, puede ser null) |
+/// adjunto_seguimiento (Url = endpoint de descarga, HU-19).</summary>
 public record DocumentoSeguimientoDto(
     string    Tipo,
     string    Nombre,
@@ -221,3 +225,171 @@ public record DetalleSeguimientoDto(
     List<ProximaAccionSeguimientoDto>   ProximasAcciones,
     List<ContactoSeguimientoDto>        Contactos,
     List<DocumentoSeguimientoDto>       Documentos);
+
+// ══════════════════════ HU-19 — Registro de acciones de seguimiento ══════════════════════
+
+/// <summary>Próxima acción del toggle "Programar próxima acción". Fecha = fecha y hora programadas.</summary>
+public record ProximaAccionEntradaDto
+{
+    public int?      IdTipoAccion  { get; init; }
+    public DateTime? Fecha         { get; init; }
+    public long?     IdResponsable { get; init; }
+    public int?      IdPrioridad   { get; init; }
+    public string?   Detalle       { get; init; }
+}
+
+/// <summary>
+/// Registro general (modal "Registrar Seguimiento"). FechaInteraccion null = ahora.
+/// EjecutaAccionPendiente = true cuando se abre desde "Ejecutar ahora": la acción pendiente queda realizada.
+/// Sin próxima acción y sin EjecutaAccionPendiente, la acción pendiente anterior se mantiene.
+/// </summary>
+public record RegistrarSeguimientoDto
+{
+    public int?      IdCanal                { get; init; }
+    public int?      IdResultado            { get; init; }
+    public long?     IdContacto             { get; init; }
+    public DateTime? FechaInteraccion       { get; init; }
+    public string?   Notas                  { get; init; }
+    public bool      ProgramarProximaAccion { get; init; }
+    public ProximaAccionEntradaDto? ProximaAccion { get; init; }
+    public bool      EjecutaAccionPendiente { get; init; }
+}
+
+/// <summary>Modal "Registrar Llamada": fecha y hora, duración, resultado y notas obligatorios.</summary>
+public record RegistrarLlamadaDto
+{
+    public long?     IdContacto             { get; init; }
+    public DateTime? FechaInteraccion       { get; init; }
+    public int?      DuracionMinutos        { get; init; }
+    public int?      IdResultado            { get; init; }
+    public string?   Notas                  { get; init; }
+    public bool      ProgramarProximaAccion { get; init; }
+    public ProximaAccionEntradaDto? ProximaAccion { get; init; }
+    public bool      EjecutaAccionPendiente { get; init; }
+}
+
+public record DestinatarioSeguimientoDto(string Correo, string? Nombre = null, long? IdContacto = null);
+
+/// <summary>
+/// Modal "Registrar Correo de Seguimiento". IdCorreo = borrador que se sigue editando (null = nuevo).
+/// IdResultado null = "Correo enviado, pendiente respuesta". El correo sale desde el remitente del sistema
+/// con el nombre del usuario y "responder a" su correo.
+/// </summary>
+public record CorreoSeguimientoDto
+{
+    public long?   IdCorreo                { get; init; }
+    public int?    IdPlantilla             { get; init; }
+    public List<DestinatarioSeguimientoDto> Para { get; init; } = [];
+    public List<DestinatarioSeguimientoDto> Cc   { get; init; } = [];
+    public string? Asunto                  { get; init; }
+    public string? CuerpoHtml              { get; init; }
+    public long?   IdContacto              { get; init; }
+    public int?    IdResultado             { get; init; }
+    public bool    ProgramarProximaAccion  { get; init; }
+    public ProximaAccionEntradaDto? ProximaAccion { get; init; }
+    public bool    EjecutaAccionPendiente  { get; init; }
+}
+
+/// <summary>Datos que el caso de uso envía al SP de registro.</summary>
+public record ComandoRegistroSeguimiento(
+    int?      IdCanal,
+    string?   CanalCodigo,
+    int?      IdResultado,
+    string?   ResultadoCodigo,
+    long?     IdContacto,
+    DateTime? FechaInteraccion,
+    int?      DuracionMinutos,
+    string?   Notas,
+    string?   Asunto,
+    bool      Programar,
+    ProximaAccionEntradaDto? ProximaAccion,
+    bool      EjecutaAccion,
+    long?     IdCorreo  = null,
+    string?   Proveedor = null,
+    string?   IdMensaje = null);
+
+public record ComandoCorreoSeguimiento(
+    long?   IdCorreo,
+    int?    IdPlantilla,
+    List<DestinatarioSeguimientoDto> Para,
+    List<DestinatarioSeguimientoDto> Cc,
+    string  Asunto,
+    string  CuerpoHtml);
+
+public record CorreoSeguimientoGuardadoDto(long IdCorreo, string Usuario, string? CorreoUsuario, string? CargoUsuario);
+
+public record ResultadoRegistroSeguimientoDto(long IdSeguimiento, long? IdCorreo = null);
+
+public record AdjuntoSeguimientoDto(long IdAdjunto, string NombreArchivo, long TamanoBytes, string Url);
+
+public record RutaAdjuntoSeguimientoDto(string Ruta, string NombreArchivo, string TipoContenido);
+
+// ── Preparación de los modales ────────────────────────────────────────────────
+
+public record CabeceraRegistroSeguimientoDto
+{
+    public long      IdPropuesta              { get; init; }
+    public string    Numero                   { get; init; } = "";
+    public int       Version                  { get; init; }
+    public long      IdCliente                { get; init; }
+    public string    RazonSocial              { get; init; } = "";
+    public string?   Referencia               { get; init; }
+    public long?     IdContacto               { get; init; }
+    public string?   Contacto                 { get; init; }
+    public string?   TelefonoContacto         { get; init; }
+    public string?   CorreoContacto           { get; init; }
+    public long      IdUsuario                { get; init; }
+    public string?   Usuario                  { get; init; }
+    public string?   CorreoUsuario            { get; init; }
+    public string?   CargoUsuario             { get; init; }
+    /// <summary>Fecha y hora del servidor para prellenar "Fecha de registro" y el pie del modal.</summary>
+    public DateTime? FechaServidor            { get; init; }
+    public string    EstadoSeguimiento        { get; init; } = "";
+    public string?   ProximaAccionCodigo      { get; init; }
+    public string?   ProximaAccion            { get; init; }
+    public DateTime? ProximaAccionFecha       { get; init; }
+    /// <summary>Canal sugerido para "Ejecutar ahora" (LLAMADA, CORREO, REUNION, VISITA).</summary>
+    public string?   CanalSugeridoCodigo      { get; init; }
+    /// <summary>Plantilla sugerida (SEGUIMIENTO_INICIAL, RECORDATORIO, ENVIO_AJUSTES).</summary>
+    public string?   PlantillaSugeridaCodigo  { get; init; }
+}
+
+public record OpcionSeguimientoDto(int Id, string Nombre, string? Codigo);
+
+public record ContactoRegistroSeguimientoDto(
+    long    IdContacto,
+    string  Nombres,
+    string? Cargo,
+    string? Correo,
+    string? TelefonoMovil,
+    string? TelefonoAnexo,
+    bool    EsContactoPropuesta,
+    bool    EsContactoPrincipal);
+
+public record ResponsableSeguimientoDto(long Id, string Nombre, string? Cargo, bool EsUsuarioActual);
+
+/// <summary>Plantilla con las variables ya reemplazadas para esta propuesta.</summary>
+public record PlantillaCorreoSeguimientoDto(int IdPlantilla, string Codigo, string Nombre, string Asunto, string CuerpoHtml);
+
+/// <summary>Último borrador (o envío fallido) del usuario. Estado: borrador | error.</summary>
+public record BorradorCorreoSeguimientoDto(
+    long      IdCorreo,
+    int?      IdPlantilla,
+    List<DestinatarioSeguimientoDto> Para,
+    List<DestinatarioSeguimientoDto> Cc,
+    string    Asunto,
+    string    CuerpoHtml,
+    string    Estado,
+    string?   Error,
+    DateTime? Fecha);
+
+public record PreparacionRegistroSeguimientoDto(
+    CabeceraRegistroSeguimientoDto       Cabecera,
+    List<OpcionSeguimientoDto>           TiposSeguimiento,
+    List<OpcionSeguimientoDto>           Resultados,
+    List<ContactoRegistroSeguimientoDto> Contactos,
+    List<OpcionSeguimientoDto>           TiposTarea,
+    List<OpcionSeguimientoDto>           Prioridades,
+    List<ResponsableSeguimientoDto>      Responsables,
+    List<PlantillaCorreoSeguimientoDto>  Plantillas,
+    BorradorCorreoSeguimientoDto?        Borrador);

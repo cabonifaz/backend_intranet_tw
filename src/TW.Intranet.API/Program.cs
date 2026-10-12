@@ -305,10 +305,17 @@ builder.Services.AddScoped<CompararVersionesPropuestaCasoDeUso>();
 builder.Services.AddScoped<ObtenerCostoSuministroCasoDeUso>();
 builder.Services.AddScoped<GuardarCostoSuministroCasoDeUso>();
 
-// ── INYECCIÓN DE DEPENDENCIAS — Seguimiento comercial (HU-17 / HU-18) ────────────────
+// ── INYECCIÓN DE DEPENDENCIAS — Seguimiento comercial (HU-17 / HU-18 / HU-19) ────────────────
 builder.Services.AddScoped<ISeguimientoComercialRepositorio, SeguimientoComercialRepositorio>();
 builder.Services.AddScoped<ObtenerBandejaSeguimientoCasoDeUso>();
 builder.Services.AddScoped<ObtenerDetalleSeguimientoCasoDeUso>();
+builder.Services.AddScoped<PrepararRegistroSeguimientoCasoDeUso>();
+builder.Services.AddScoped<RegistrarSeguimientoCasoDeUso>();
+builder.Services.AddScoped<RegistrarLlamadaSeguimientoCasoDeUso>();
+builder.Services.AddScoped<GuardarBorradorCorreoSeguimientoCasoDeUso>();
+builder.Services.AddScoped<EnviarCorreoSeguimientoCasoDeUso>();
+builder.Services.AddScoped<SubirAdjuntosSeguimientoCasoDeUso>();
+builder.Services.AddScoped<ObtenerAdjuntoSeguimientoCasoDeUso>();
 
 // ── INYECCIÓN DE DEPENDENCIAS — Consulta de RUC (OpenRUC + caché) ────────────
 // Variables: ConsultaRuc__DiasVigenciaCache (30), ConsultaRuc__OpenRuc__Habilitado (true),

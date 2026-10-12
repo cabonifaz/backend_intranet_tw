@@ -1,27 +1,42 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Net.Http.Headers;
 using TW.Intranet.API.Seguridad;
 using TW.Intranet.Aplicacion.CasosDeUso;
 using TW.Intranet.Aplicacion.Dtos;
 
 namespace TW.Intranet.API.Controllers;
 
-/// <summary>HU-17 Bandeja · HU-18 Detalle del Seguimiento Comercial (propuestas enviadas al cliente).</summary>
+/// <summary>
+/// HU-17 Bandeja · HU-18 Detalle · HU-19 Registro de acciones del Seguimiento Comercial
+/// (propuestas enviadas al cliente).
+/// </summary>
 [ApiController]
 [Authorize]
 public class SeguimientoComercialController(
-    ObtenerBandejaSeguimientoCasoDeUso obtenerBandeja,
-    ObtenerDetalleSeguimientoCasoDeUso obtenerDetalle) : ControllerBase
+    ObtenerBandejaSeguimientoCasoDeUso         obtenerBandeja,
+    ObtenerDetalleSeguimientoCasoDeUso         obtenerDetalle,
+    PrepararRegistroSeguimientoCasoDeUso       prepararRegistro,
+    RegistrarSeguimientoCasoDeUso              registrarSeguimiento,
+    RegistrarLlamadaSeguimientoCasoDeUso       registrarLlamada,
+    GuardarBorradorCorreoSeguimientoCasoDeUso  guardarBorradorCorreo,
+    EnviarCorreoSeguimientoCasoDeUso           enviarCorreo,
+    SubirAdjuntosSeguimientoCasoDeUso          subirAdjuntos,
+    ObtenerAdjuntoSeguimientoCasoDeUso         obtenerAdjunto) : ControllerBase
 {
+    /// <summary>5 archivos de 10 MB + margen para el resto del multipart.</summary>
+    private const long TamanoMaximoPeticion =
+        SubirAdjuntosSeguimientoCasoDeUso.MaximoArchivos * SubirAdjuntosSeguimientoCasoDeUso.TamanoMaximoBytes + 1024 * 1024;
+
     private long IdUsuarioActual =>
         long.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub"), out var id) ? id : 0;
 
-    private IActionResult Responder<T>(RespuestaDto<T> r) =>
+    private IActionResult Responder<T>(RespuestaDto<T> r, bool noEncontradoComo404 = false) =>
         r.IdTipoMensaje switch
         {
             2 => Ok(r),
-            1 => BadRequest(r),
+            1 => noEncontradoComo404 ? NotFound(r) : BadRequest(r),
             _ => StatusCode(500, r),
         };
 
@@ -44,4 +59,88 @@ public class SeguimientoComercialController(
     [HttpGet("api/crm/seguimiento/{idPropuesta:long}")]
     public async Task<IActionResult> Detalle(long idPropuesta, CancellationToken ct = default)
         => Responder(await obtenerDetalle.EjecutarAsync(idPropuesta, IdUsuarioActual, ct));
+
+    // ══════════════════════ HU-19 — Registro de acciones ══════════════════════
+
+    /// <summary>
+    /// HU-19 — Datos para los modales Registrar Seguimiento / Llamada / Correo: tipos de seguimiento,
+    /// resultados, contactos, tipos de tarea, prioridades, responsables, plantillas (ya armadas)
+    /// y el último borrador de correo del usuario.
+    /// </summary>
+    [RequierePermiso("propuesta_seguimiento_registrar")]
+    [HttpGet("api/crm/seguimiento/{idPropuesta:long}/registro/preparar")]
+    public async Task<IActionResult> PrepararRegistro(long idPropuesta, CancellationToken ct = default)
+        => Responder(await prepararRegistro.EjecutarAsync(idPropuesta, IdUsuarioActual, ct));
+
+    /// <summary>HU-19 — Registro general: tipo de seguimiento, resultado, notas y próxima acción opcional.</summary>
+    [RequierePermiso("propuesta_seguimiento_registrar")]
+    [HttpPost("api/crm/seguimiento/{idPropuesta:long}/registros")]
+    public async Task<IActionResult> Registrar(long idPropuesta, [FromBody] RegistrarSeguimientoDto dto, CancellationToken ct = default)
+        => Responder(await registrarSeguimiento.EjecutarAsync(idPropuesta, dto, IdUsuarioActual, ct));
+
+    /// <summary>HU-19 — Registrar llamada: fecha y hora, duración, resultado, notas y próxima acción opcional.</summary>
+    [RequierePermiso("propuesta_seguimiento_registrar")]
+    [HttpPost("api/crm/seguimiento/{idPropuesta:long}/llamadas")]
+    public async Task<IActionResult> RegistrarLlamada(long idPropuesta, [FromBody] RegistrarLlamadaDto dto, CancellationToken ct = default)
+        => Responder(await registrarLlamada.EjecutarAsync(idPropuesta, dto, IdUsuarioActual, ct));
+
+    /// <summary>HU-19 — Guardar borrador del correo (Para, CC, asunto, plantilla y cuerpo HTML).</summary>
+    [RequierePermiso("propuesta_seguimiento_registrar")]
+    [HttpPost("api/crm/seguimiento/{idPropuesta:long}/correos/borrador")]
+    public async Task<IActionResult> GuardarBorradorCorreo(long idPropuesta, [FromBody] CorreoSeguimientoDto dto, CancellationToken ct = default)
+        => Responder(await guardarBorradorCorreo.EjecutarAsync(idPropuesta, dto, IdUsuarioActual, ct));
+
+    /// <summary>HU-19 — Enviar el correo y registrar el seguimiento (con próxima acción opcional).</summary>
+    [RequierePermiso("propuesta_seguimiento_registrar")]
+    [HttpPost("api/crm/seguimiento/{idPropuesta:long}/correos/enviar")]
+    public async Task<IActionResult> EnviarCorreo(long idPropuesta, [FromBody] CorreoSeguimientoDto dto, CancellationToken ct = default)
+        => Responder(await enviarCorreo.EjecutarAsync(idPropuesta, dto, IdUsuarioActual, ct));
+
+    /// <summary>
+    /// HU-19 — Documentos adjuntos de un seguimiento ya registrado (multipart/form-data, campo "archivos",
+    /// hasta 5 archivos de 10 MB: PDF, imágenes, Word, Excel, .msg/.eml o .txt).
+    /// </summary>
+    [RequierePermiso("propuesta_seguimiento_registrar")]
+    [HttpPost("api/crm/seguimiento/registros/{idSeguimiento:long}/adjuntos")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(TamanoMaximoPeticion)]
+    [RequestFormLimits(MultipartBodyLengthLimit = TamanoMaximoPeticion)]
+    public async Task<IActionResult> SubirAdjuntos(long idSeguimiento, [FromForm] List<IFormFile>? archivos, CancellationToken ct = default)
+    {
+        var lista = (archivos ?? []).Where(a => a.Length > 0).ToList();
+        if (lista.Count == 0)
+            return BadRequest(new RespuestaDto<object>(1, "Seleccione al menos un archivo."));
+
+        var streams = new List<Stream>();
+        try
+        {
+            var entradas = new List<SubirAdjuntosSeguimientoCasoDeUso.ArchivoEntrada>();
+            foreach (var a in lista)
+            {
+                var s = a.OpenReadStream();
+                streams.Add(s);
+                entradas.Add(new(s, a.FileName, a.Length));
+            }
+            return Responder(await subirAdjuntos.EjecutarAsync(idSeguimiento, entradas, IdUsuarioActual, ct));
+        }
+        finally
+        {
+            foreach (var s in streams) await s.DisposeAsync();
+        }
+    }
+
+    /// <summary>HU-19 — Ver o descargar un adjunto de seguimiento.</summary>
+    [RequierePermiso("propuesta_seguimiento_bandeja")]
+    [HttpGet("api/crm/seguimiento/adjuntos/{idAdjunto:long}")]
+    public async Task<IActionResult> ObtenerAdjunto(long idAdjunto, CancellationToken ct = default)
+    {
+        var r = await obtenerAdjunto.EjecutarAsync(idAdjunto, IdUsuarioActual, ct);
+        if (r.IdTipoMensaje != 2 || r.Datos is null)
+            return Responder(new RespuestaDto<object>(r.IdTipoMensaje, r.Mensaje), noEncontradoComo404: true);
+
+        var disposicion = new ContentDispositionHeaderValue("inline");
+        disposicion.SetHttpFileName(r.Datos.NombreArchivo);
+        Response.Headers[HeaderNames.ContentDisposition] = disposicion.ToString();
+        return File(r.Datos.Contenido, r.Datos.TipoContenido, enableRangeProcessing: true);
+    }
 }

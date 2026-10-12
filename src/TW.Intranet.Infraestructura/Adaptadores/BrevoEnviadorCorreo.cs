@@ -16,12 +16,22 @@ public class BrevoEnviadorCorreo(HttpClient http, ConfiguracionCorreo configurac
 
     public async Task<ResultadoEnvioCorreoDto> EnviarAsync(MensajeCorreoDto mensaje, CancellationToken ct)
     {
+        var para = new List<object> { Destinatario(mensaje.Para, mensaje.NombrePara) };
+        if (mensaje.ParaAdicionales is { Count: > 0 })
+            para.AddRange(mensaje.ParaAdicionales.Select(d => Destinatario(d.Correo, d.Nombre)));
+
         var cuerpo = new
         {
-            sender      = new { email = configuracion.Remitente, name = configuracion.NombreRemitente },
-            to          = new[] { string.IsNullOrWhiteSpace(mensaje.NombrePara)
-                                      ? (object)new { email = mensaje.Para }
-                                      : new { email = mensaje.Para, name = mensaje.NombrePara } },
+            sender      = new { email = configuracion.Remitente,
+                                name  = string.IsNullOrWhiteSpace(mensaje.NombreRemitente)
+                                            ? configuracion.NombreRemitente : mensaje.NombreRemitente },
+            to          = para,
+            cc          = mensaje.Cc is { Count: > 0 }
+                              ? mensaje.Cc.Select(d => Destinatario(d.Correo, d.Nombre)).ToList()
+                              : null,
+            replyTo     = string.IsNullOrWhiteSpace(mensaje.ResponderA)
+                              ? null
+                              : Destinatario(mensaje.ResponderA, mensaje.NombreResponderA),
             subject     = mensaje.Asunto,
             htmlContent = mensaje.Html,
             textContent = mensaje.Texto,
@@ -32,7 +42,7 @@ public class BrevoEnviadorCorreo(HttpClient http, ConfiguracionCorreo configurac
         {
             using var solicitud = new HttpRequestMessage(HttpMethod.Post, "v3/smtp/email")
             {
-                Content = JsonContent.Create(cuerpo),
+                Content = JsonContent.Create(cuerpo, options: OpcionesJson),
             };
             solicitud.Headers.Add("api-key", configuracion.ApiKey);
 
@@ -62,6 +72,15 @@ public class BrevoEnviadorCorreo(HttpClient http, ConfiguracionCorreo configurac
             return new ResultadoEnvioCorreoDto(false, Proveedor, null, Recortar($"No se pudo conectar con Brevo: {ex.Message}"));
         }
     }
+
+    // cc / replyTo nulos no se envían (Brevo rechaza "cc": null)
+    private static readonly JsonSerializerOptions OpcionesJson = new()
+    {
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+    };
+
+    private static object Destinatario(string correo, string? nombre) =>
+        string.IsNullOrWhiteSpace(nombre) ? new { email = correo } : new { email = correo, name = nombre };
 
     private static string? Leer(string json, string propiedad)
     {
