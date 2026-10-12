@@ -7,11 +7,12 @@ using TW.Intranet.Aplicacion.Dtos;
 
 namespace TW.Intranet.API.Controllers;
 
-/// <summary>HU-17 — Bandeja de Seguimiento Comercial (propuestas enviadas al cliente).</summary>
+/// <summary>HU-17 Bandeja · HU-18 Detalle del Seguimiento Comercial (propuestas enviadas al cliente).</summary>
 [ApiController]
 [Authorize]
 public class SeguimientoComercialController(
-    ObtenerBandejaSeguimientoCasoDeUso obtenerBandeja) : ControllerBase
+    ObtenerBandejaSeguimientoCasoDeUso obtenerBandeja,
+    ObtenerDetalleSeguimientoCasoDeUso obtenerDetalle) : ControllerBase
 {
     private long IdUsuarioActual =>
         long.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub"), out var id) ? id : 0;
@@ -33,4 +34,14 @@ public class SeguimientoComercialController(
     [HttpGet("api/crm/seguimiento")]
     public async Task<IActionResult> Bandeja([FromQuery] FiltrosBandejaSeguimientoDto filtros, CancellationToken ct = default)
         => Responder(await obtenerBandeja.EjecutarAsync(filtros, IdUsuarioActual, ct));
+
+    /// <summary>
+    /// HU-18 — Detalle del seguimiento de una propuesta: panel superior (monto, días, SLA restante),
+    /// próxima acción, timeline de interacciones, próximas acciones, contactos, documentos
+    /// y permisos de los botones (registrar seguimiento, aceptación y rechazo).
+    /// </summary>
+    [RequierePermiso("propuesta_seguimiento_bandeja")]
+    [HttpGet("api/crm/seguimiento/{idPropuesta:long}")]
+    public async Task<IActionResult> Detalle(long idPropuesta, CancellationToken ct = default)
+        => Responder(await obtenerDetalle.EjecutarAsync(idPropuesta, IdUsuarioActual, ct));
 }

@@ -33,3 +33,15 @@ public class ObtenerBandejaSeguimientoCasoDeUso(ISeguimientoComercialRepositorio
         return repositorio.ObtenerBandejaAsync(filtros, idUsuario, ct);
     }
 }
+
+// ══════════════════════ HU-18 — Vista Detalle del Seguimiento ══════════════════════
+
+public class ObtenerDetalleSeguimientoCasoDeUso(ISeguimientoComercialRepositorio repositorio)
+{
+    public Task<RespuestaDto<DetalleSeguimientoDto>> EjecutarAsync(long idPropuesta, long idUsuario, CancellationToken ct = default)
+    {
+        if (idPropuesta <= 0)
+            return Task.FromResult(new RespuestaDto<DetalleSeguimientoDto>(1, "Propuesta no válida."));
+        return repositorio.ObtenerDetalleAsync(idPropuesta, idUsuario, ct);
+    }
+}

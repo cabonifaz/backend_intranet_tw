@@ -118,4 +118,143 @@ public class SeguimientoComercialRepositorio(CadenaConexionBd conexion)
                     new BandejaSeguimientoDto(kpis, items, total, f.Pagina, f.PorPagina, responsables, parametros));
             },
             ct);
+
+    // ── HU-18 Detalle ─────────────────────────────────────────────────────────
+    public Task<RespuestaDto<DetalleSeguimientoDto>> ObtenerDetalleAsync(long idPropuesta, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_ObtenerDetalleSeguimiento",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario",   idUsuario);
+                p.AddWithValue("p_id_propuesta", idPropuesta);
+            },
+            async (r, mensaje) =>
+            {
+                // 2. Cabecera
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<DetalleSeguimientoDto>(3, "No se pudo leer el detalle del seguimiento.");
+
+                var cabecera = new CabeceraDetalleSeguimientoDto
+                {
+                    IdPropuesta               = EnteroLargo(r, "id_propuesta"),
+                    Numero                    = Texto(r, "numero") ?? "",
+                    Version                   = Ent(r, "version"),
+                    IdRequerimiento           = EnteroLargoNulo(r, "id_requerimiento"),
+                    NumeroRq                  = Texto(r, "numero_rq"),
+                    IdCliente                 = EnteroLargo(r, "id_cliente"),
+                    RazonSocial               = Texto(r, "razon_social") ?? "",
+                    Ruc                       = Texto(r, "ruc"),
+                    IdContacto                = EnteroLargoNulo(r, "id_contacto"),
+                    Contacto                  = Texto(r, "contacto"),
+                    CargoContacto             = Texto(r, "cargo_contacto"),
+                    TelefonoContacto          = Texto(r, "telefono_contacto"),
+                    CorreoContacto            = Texto(r, "correo_contacto"),
+                    Total                     = Dec(r, "total"),
+                    IdMoneda                  = Ent(r, "id_moneda"),
+                    Moneda                    = Texto(r, "moneda"),
+                    MonedaSimbolo             = Texto(r, "moneda_simbolo"),
+                    FechaEnvio                = FechaHora(r, "fecha_envio"),
+                    DiasTranscurridos         = Ent(r, "dias_transcurridos"),
+                    DiasSinRespuesta          = Ent(r, "dias_sin_respuesta"),
+                    IdResponsable             = EnteroLargo(r, "id_responsable"),
+                    Responsable               = Texto(r, "responsable"),
+                    Interacciones             = Ent(r, "interacciones"),
+                    FechaUltimaInteraccion    = FechaHora(r, "fecha_ult_interaccion"),
+                    ResultadoUltimoCodigo     = Texto(r, "resultado_ult_codigo"),
+                    ResultadoUltimo           = Texto(r, "resultado_ult"),
+                    ProximaAccionCodigo       = Texto(r, "proxima_accion_codigo"),
+                    ProximaAccion             = Texto(r, "proxima_accion"),
+                    ProximaAccionDetalle      = Texto(r, "proxima_accion_detalle"),
+                    ProximaAccionFecha        = FechaHora(r, "proxima_accion_fecha"),
+                    DiasParaAccion            = EntNulo(r, "dias_para_accion"),
+                    HorasParaAccion           = EntNulo(r, "horas_para_accion"),
+                    MinutosParaAccion         = EntNulo(r, "minutos_para_accion"),
+                    IdPrioridadAccion         = EntNulo(r, "id_prioridad_accion"),
+                    PrioridadAccion           = Texto(r, "prioridad_accion"),
+                    PrioridadAccionCodigo     = Texto(r, "prioridad_accion_codigo"),
+                    IdAsignado                = EnteroLargoNulo(r, "id_asignado"),
+                    Asignado                  = Texto(r, "asignado"),
+                    EstadoSeguimiento         = Texto(r, "estado_seguimiento") ?? "",
+                    EstadoPropuesta           = Texto(r, "estado_propuesta") ?? "",
+                    SlaEstado                 = Texto(r, "sla_estado") ?? "",
+                    SlaPct                    = EntNulo(r, "sla_pct"),
+                    SlaHoras                  = Ent(r, "sla_horas"),
+                    FechaAceptacion           = FechaHora(r, "fecha_aceptacion"),
+                    FechaRechazo              = FechaHora(r, "fecha_rechazo"),
+                    TieneOc                   = Booleano(r, "tiene_oc"),
+                    OcPorValidar              = Ent(r, "oc_por_validar"),
+                    PuedeRegistrarSeguimiento = Booleano(r, "puede_registrar_seguimiento"),
+                    PuedeEjecutarAccion       = Booleano(r, "puede_ejecutar_accion"),
+                    PuedeRegistrarAceptacion  = Booleano(r, "puede_registrar_aceptacion"),
+                    PuedeRegistrarRechazo     = Booleano(r, "puede_registrar_rechazo"),
+                };
+
+                // 3. Timeline
+                await r.NextResultAsync(ct);
+                var timeline = new List<EventoTimelineSeguimientoDto>();
+                while (await r.ReadAsync(ct))
+                    timeline.Add(new EventoTimelineSeguimientoDto(
+                        FechaHora(r, "fecha") ?? DateTime.MinValue,
+                        Texto(r, "tipo") ?? "",
+                        Texto(r, "titulo") ?? "",
+                        Texto(r, "descripcion"),
+                        Ent(r, "version"),
+                        EnteroLargoNulo(r, "id_usuario"),
+                        Texto(r, "usuario"),
+                        Texto(r, "canal_codigo"),
+                        Texto(r, "canal"),
+                        Texto(r, "resultado_codigo"),
+                        EnteroLargoNulo(r, "id_seguimiento")));
+
+                // 4. Próximas acciones
+                await r.NextResultAsync(ct);
+                var acciones = new List<ProximaAccionSeguimientoDto>();
+                while (await r.ReadAsync(ct))
+                    acciones.Add(new ProximaAccionSeguimientoDto(
+                        EnteroLargo(r, "id_seguimiento"),
+                        FechaHora(r, "fecha"),
+                        Texto(r, "tipo_codigo"),
+                        Texto(r, "tipo") ?? "",
+                        Texto(r, "detalle"),
+                        EntNulo(r, "id_prioridad_accion"),
+                        Texto(r, "prioridad"),
+                        Texto(r, "prioridad_codigo"),
+                        EnteroLargoNulo(r, "id_asignado"),
+                        Texto(r, "asignado"),
+                        Texto(r, "estado") ?? "",
+                        FechaHora(r, "programada_en")));
+
+                // 5. Contactos
+                await r.NextResultAsync(ct);
+                var contactos = new List<ContactoSeguimientoDto>();
+                while (await r.ReadAsync(ct))
+                    contactos.Add(new ContactoSeguimientoDto(
+                        EnteroLargo(r, "id_contacto"),
+                        Texto(r, "nombres") ?? "",
+                        Texto(r, "cargo"),
+                        Texto(r, "area"),
+                        Texto(r, "correo"),
+                        Texto(r, "telefono_movil"),
+                        Texto(r, "telefono_anexo"),
+                        Texto(r, "estado"),
+                        Ent(r, "es_contacto_principal") == 1,
+                        Ent(r, "autorizado_aprobar_cotizaciones") == 1,
+                        Ent(r, "es_contacto_propuesta") == 1));
+
+                // 6. Documentos
+                await r.NextResultAsync(ct);
+                var documentos = new List<DocumentoSeguimientoDto>();
+                while (await r.ReadAsync(ct))
+                    documentos.Add(new DocumentoSeguimientoDto(
+                        Texto(r, "tipo") ?? "",
+                        Texto(r, "nombre") ?? "",
+                        FechaHora(r, "fecha"),
+                        Ent(r, "version"),
+                        Texto(r, "url"),
+                        Texto(r, "estado")));
+
+                return new RespuestaDto<DetalleSeguimientoDto>(2, mensaje,
+                    new DetalleSeguimientoDto(cabecera, timeline, acciones, contactos, documentos));
+            },
+            ct);
 }
