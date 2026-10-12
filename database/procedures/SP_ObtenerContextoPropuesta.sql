@@ -48,6 +48,10 @@ proc: BEGIN
                        OR oc.id_oc IN (SELECT op.id_oc FROM oc_propuesta op
                                        WHERE op.id_propuesta = p.id_propuesta
                                          AND op.eliminado_en IS NULL)))  AS tiene_oc,
+        -- HU-21: el cliente aceptó la propuesta en el seguimiento (etapa Órdenes de Compra)
+        EXISTS (SELECT 1 FROM seguimiento_comercial sa
+                WHERE sa.id_propuesta = p.id_propuesta AND sa.eliminado_en IS NULL
+                  AND sa.estado = 'cerrado_aceptacion')            AS aceptada_cliente,
         -- SLA
         CASE
             WHEN p.estado = 'pendiente_vb' THEN 'visto_bueno'

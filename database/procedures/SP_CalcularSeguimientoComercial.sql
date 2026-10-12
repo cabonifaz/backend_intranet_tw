@@ -4,7 +4,8 @@
 -- y SP_ObtenerDetalleSeguimiento (HU-18), así ambas pantallas calculan exactamente lo mismo.
 -- p_id_propuesta NULL = todas. El que llama debe hacer DROP TEMPORARY TABLE tmp_seg al terminar.
 -- Universo: versión vigente de cada propuesta enviada al cliente (estado 'enviado'),
--- más las aprobadas que ya tienen orden de compra (aceptadas).
+-- más las aprobadas que ya tienen orden de compra (aceptadas) y las que pasaron a 'rechazado'
+-- por un cierre de seguimiento (rechazo o sin venta, HU-21).
 -- ALCANCE: propuestas cuyo responsable es de la misma área del usuario.
 --   Con la acción propuesta_seguimiento_todas (admins de Gerencia y TI) todas las áreas.
 -- ESTADO VISUAL (estado_seguimiento):
@@ -91,7 +92,7 @@ BEGIN
     FROM propuesta_comercial p
     JOIN usuario u ON u.id_usuario = COALESCE(p.id_responsable, p.id_creador)
     WHERE p.eliminado_en IS NULL
-      AND p.estado IN ('enviado', 'aprobado')
+      AND p.estado IN ('enviado', 'aprobado', 'rechazado')
       AND p.version = (SELECT MAX(p2.version) FROM propuesta_comercial p2
                        WHERE p2.numero = p.numero AND p2.eliminado_en IS NULL)
       AND (v_todas = 1 OR u.area = v_area)
@@ -175,7 +176,9 @@ BEGIN
             LEFT JOIN tabla_maestra rs ON rs.IdMaestro = 27 AND rs.IdEmpresa = 1 AND rs.Num1 = s.id_resultado
             LEFT JOIN tabla_maestra ta ON ta.Descripcion = 'TIPO_ACCION_SEGUIMIENTO' AND ta.IdEmpresa = 1
                                       AND ta.Num1 = IF(s.id_seguimiento IS NULL, r0.id_tipo_accion_nueva, s.id_tipo_proxima_accion)
-            WHERE b.estado_propuesta = 'enviado' OR b.fecha_primera_oc IS NOT NULL
+            WHERE b.estado_propuesta = 'enviado'
+               OR (b.estado_propuesta = 'aprobado' AND b.fecha_primera_oc IS NOT NULL)
+               OR (b.estado_propuesta = 'rechazado' AND s.estado IN ('cerrado_rechazo', 'cerrado_sin_venta'))
         ) j
     ) k;
 

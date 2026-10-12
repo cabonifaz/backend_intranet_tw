@@ -3,7 +3,7 @@
 --   variacion_pct   : pendientes creadas este mes vs. el mes anterior (%)
 --   por_visto_bueno : pendiente_vb
 --   por_enviar      : aprobado (VB aprobado, falta enviar al cliente) y sin orden de compra
---   en_seguimiento  : enviado y aún sin orden de compra
+--   en_seguimiento  : enviado y aún sin orden de compra ni aceptación del cliente (HU-21)
 --   sla_vencidos    : abiertas (borrador / pendiente_vb / enviado) con vigencia vencida
 --   Filtros opcionales: año y comercial (los mismos del listado).
 DROP PROCEDURE IF EXISTS SP_ObtenerKpisPropuestas;
@@ -21,11 +21,13 @@ BEGIN
     DROP TEMPORARY TABLE IF EXISTS tmp_kpi_prop;
     CREATE TEMPORARY TABLE tmp_kpi_prop AS
         SELECT p.estado, p.fecha_creacion, p.fecha_expiracion,
-               EXISTS (SELECT 1 FROM orden_compra oc
+               (EXISTS (SELECT 1 FROM orden_compra oc
                        WHERE oc.eliminado_en IS NULL AND oc.estado <> 'anulada'
                          AND (oc.id_propuesta = p.id_propuesta
                               OR oc.id_oc IN (SELECT op.id_oc FROM oc_propuesta op
-                                              WHERE op.id_propuesta = p.id_propuesta AND op.eliminado_en IS NULL))) AS tiene_oc
+                                              WHERE op.id_propuesta = p.id_propuesta AND op.eliminado_en IS NULL))) OR EXISTS (SELECT 1 FROM seguimiento_comercial sa
+                        WHERE sa.id_propuesta = p.id_propuesta AND sa.eliminado_en IS NULL
+                          AND sa.estado = 'cerrado_aceptacion')) AS tiene_oc
         FROM propuesta_comercial p
         WHERE p.eliminado_en IS NULL
           AND (p_anio IS NULL OR p_anio = 0 OR YEAR(p.fecha_creacion) = p_anio)

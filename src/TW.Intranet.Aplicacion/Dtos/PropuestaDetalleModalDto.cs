@@ -111,6 +111,8 @@ public class PropuestaContextoDto
     public DateTime? FechaExpiracion     { get; set; }
     public bool      EsUltimaVersion     { get; set; }
     public bool      TieneOc             { get; set; }
+    /// <summary>HU-21 — el cliente aceptó la propuesta en el seguimiento.</summary>
+    public bool      AceptadaCliente     { get; set; }
     public string?   SlaTipo             { get; set; }
     public DateTime? SlaVenceEn          { get; set; }
     public string?   NumeroContratoMarco { get; set; }

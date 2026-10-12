@@ -380,3 +380,75 @@ public class ReprogramarAccionSeguimientoCasoDeUso(ISeguimientoComercialReposito
             : new(r.IdTipoMensaje, r.Mensaje);
     }
 }
+
+// ══════════════════════ HU-21 — Cierre del seguimiento ══════════════════════
+
+/// <summary>Cabecera, tipos de aceptación, motivos (tal cual) y contactos para los modales de cierre.</summary>
+public class PrepararCierreSeguimientoCasoDeUso(ISeguimientoComercialRepositorio repositorio)
+{
+    public Task<RespuestaDto<PreparacionCierreSeguimientoDto>> EjecutarAsync(long idPropuesta, long idUsuario, CancellationToken ct = default)
+    {
+        if (idPropuesta <= 0)
+            return Task.FromResult(new RespuestaDto<PreparacionCierreSeguimientoDto>(1, "Propuesta no válida."));
+        return repositorio.PrepararCierreAsync(idPropuesta, idUsuario, ct);
+    }
+}
+
+/// <summary>Aceptación: tipo, contacto que confirma y fecha/hora. La propuesta pasa a la etapa Órdenes de Compra.</summary>
+public class RegistrarAceptacionSeguimientoCasoDeUso(ISeguimientoComercialRepositorio repositorio)
+{
+    public Task<RespuestaDto<ResultadoCierreSeguimientoDto>> EjecutarAsync(
+        long idPropuesta, RegistrarAceptacionDto dto, long idUsuario, CancellationToken ct = default)
+    {
+        string? error = idPropuesta <= 0                 ? "Propuesta no válida."
+                      : dto.IdTipoAceptacion is null or <= 0 ? "Seleccione el tipo de aceptación."
+                      : dto.IdContacto is null or <= 0   ? "Seleccione el contacto que confirma la aceptación."
+                      : (dto.Comentario?.Trim().Length ?? 0) > 2000 ? "El comentario admite hasta 2000 caracteres."
+                      : null;
+        if (error is not null) return Task.FromResult(new RespuestaDto<ResultadoCierreSeguimientoDto>(1, error));
+
+        return repositorio.CerrarAsync(idPropuesta, new ComandoCierreSeguimiento(
+            "aceptacion", dto.IdTipoAceptacion, null, dto.IdContacto, dto.Fecha, dto.Comentario?.Trim(), false, true),
+            idUsuario, ct);
+    }
+}
+
+/// <summary>Rechazo: motivo tipificado y comentario justificativo (mínimo 20 caracteres).</summary>
+public class RegistrarRechazoSeguimientoCasoDeUso(ISeguimientoComercialRepositorio repositorio)
+{
+    public Task<RespuestaDto<ResultadoCierreSeguimientoDto>> EjecutarAsync(
+        long idPropuesta, RegistrarRechazoDto dto, long idUsuario, CancellationToken ct = default)
+    {
+        var comentario = dto.Comentario?.Trim() ?? "";
+        string? error = idPropuesta <= 0           ? "Propuesta no válida."
+                      : dto.IdMotivo is null or <= 0 ? "Seleccione el motivo del rechazo."
+                      : comentario.Length < 20      ? "Escriba la justificación del rechazo (mínimo 20 caracteres)."
+                      : comentario.Length > 2000    ? "El comentario admite hasta 2000 caracteres."
+                      : null;
+        if (error is not null) return Task.FromResult(new RespuestaDto<ResultadoCierreSeguimientoDto>(1, error));
+
+        return repositorio.CerrarAsync(idPropuesta, new ComandoCierreSeguimiento(
+            "rechazo", null, dto.IdMotivo, null, dto.Fecha, comentario, false, true), idUsuario, ct);
+    }
+}
+
+/// <summary>Cierre sin venta: motivo, detalle (mínimo 20), "Permitir reactivación futura" y check "Confirmo el cierre".</summary>
+public class CerrarSinVentaSeguimientoCasoDeUso(ISeguimientoComercialRepositorio repositorio)
+{
+    public Task<RespuestaDto<ResultadoCierreSeguimientoDto>> EjecutarAsync(
+        long idPropuesta, CerrarSinVentaDto dto, long idUsuario, CancellationToken ct = default)
+    {
+        var detalle = dto.Detalle?.Trim() ?? "";
+        string? error = idPropuesta <= 0           ? "Propuesta no válida."
+                      : dto.IdMotivo is null or <= 0 ? "Seleccione el motivo del cierre sin venta."
+                      : detalle.Length < 20         ? "Explique las razones del cierre sin venta (mínimo 20 caracteres)."
+                      : detalle.Length > 2000       ? "El detalle admite hasta 2000 caracteres."
+                      : !dto.ConfirmoCierre         ? "Debe confirmar el cierre de la oportunidad sin venta."
+                      : null;
+        if (error is not null) return Task.FromResult(new RespuestaDto<ResultadoCierreSeguimientoDto>(1, error));
+
+        return repositorio.CerrarAsync(idPropuesta, new ComandoCierreSeguimiento(
+            "sin_venta", null, dto.IdMotivo, null, null, detalle, dto.PermitirReactivacion, dto.ConfirmoCierre),
+            idUsuario, ct);
+    }
+}

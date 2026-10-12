@@ -375,6 +375,7 @@ public class PropuestasRepositorio(CadenaConexionBd conexion)
                     FechaExpiracion     = FechaHora(r, "fecha_expiracion"),
                     EsUltimaVersion     = Booleano(r, "es_ultima_version"),
                     TieneOc             = Booleano(r, "tiene_oc"),
+                    AceptadaCliente     = Booleano(r, "aceptada_cliente"),
                     SlaTipo             = Texto(r, "sla_tipo"),
                     SlaVenceEn          = FechaHora(r, "sla_vence_en"),
                     NumeroContratoMarco = Texto(r, "numero_contrato_marco"),

@@ -66,7 +66,8 @@ public class ObtenerDetallePropuestaCasoDeUso(IPropuestasRepositorio repositorio
         string? terminal = null;
         int indice;
 
-        if (c.TieneOc)
+        // HU-21: con la aceptación del cliente ya está en la etapa de aceptación (falta la OC)
+        if (c.TieneOc || c.AceptadaCliente)
             indice = PasoAceptacion;
         else
             switch (c.Estado)

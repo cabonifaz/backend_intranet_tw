@@ -6,7 +6,7 @@ using MySqlConnector;
 
 namespace TW.Intranet.Infraestructura.Adaptadores;
 
-/// <summary>HU-17 / HU-18 / HU-19 / HU-20 — Seguimiento comercial de propuestas enviadas.</summary>
+/// <summary>HU-17 / HU-18 / HU-19 / HU-20 / HU-21 — Seguimiento comercial de propuestas enviadas.</summary>
 public class SeguimientoComercialRepositorio(CadenaConexionBd conexion)
     : RepositorioSpBase(conexion), ISeguimientoComercialRepositorio
 {
@@ -190,6 +190,8 @@ public class SeguimientoComercialRepositorio(CadenaConexionBd conexion)
                     PuedeRegistrarRechazo     = Booleano(r, "puede_registrar_rechazo"),
                     PuedeReprogramar          = Booleano(r, "puede_reprogramar"),
                     Reprogramaciones          = Ent(r, "reprogramaciones"),
+                    PuedeCerrarSinVenta       = Booleano(r, "puede_cerrar_sin_venta"),
+                    PermiteReactivacion       = Booleano(r, "permite_reactivacion"),
                 };
 
                 // 3. Timeline
@@ -562,6 +564,89 @@ public class SeguimientoComercialRepositorio(CadenaConexionBd conexion)
                 await r.NextResultAsync(ct);
                 long id = await r.ReadAsync(ct) ? EnteroLargo(r, "id_reprogramacion") : 0;
                 return new RespuestaDto<long>(2, mensaje, id);
+            },
+            ct);
+
+    // ── HU-21 Cierre ──────────────────────────────────────────────────────────
+    public Task<RespuestaDto<PreparacionCierreSeguimientoDto>> PrepararCierreAsync(long idPropuesta, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_PrepararCierreSeguimiento",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario",   idUsuario);
+                p.AddWithValue("p_id_propuesta", idPropuesta);
+            },
+            async (r, mensaje) =>
+            {
+                // 2. Cabecera
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<PreparacionCierreSeguimientoDto>(3, "No se pudo leer la propuesta.");
+                var cabecera = new CabeceraCierreSeguimientoDto
+                {
+                    IdPropuesta       = EnteroLargo(r, "id_propuesta"),
+                    Numero            = Texto(r, "numero") ?? "",
+                    Version           = Ent(r, "version"),
+                    IdCliente         = EnteroLargo(r, "id_cliente"),
+                    RazonSocial       = Texto(r, "razon_social") ?? "",
+                    Ruc               = Texto(r, "ruc"),
+                    IdRequerimiento   = EnteroLargoNulo(r, "id_requerimiento"),
+                    NumeroRq          = Texto(r, "numero_rq"),
+                    Total             = Dec(r, "total"),
+                    IdMoneda          = Ent(r, "id_moneda"),
+                    Moneda            = Texto(r, "moneda"),
+                    MonedaSimbolo     = Texto(r, "moneda_simbolo"),
+                    IdResponsable     = EnteroLargo(r, "id_responsable"),
+                    Responsable       = Texto(r, "responsable"),
+                    IdContacto        = EnteroLargoNulo(r, "id_contacto"),
+                    Contacto          = Texto(r, "contacto"),
+                    CargoContacto     = Texto(r, "cargo_contacto"),
+                    EstadoSeguimiento = Texto(r, "estado_seguimiento") ?? "",
+                    DiasTranscurridos = Ent(r, "dias_transcurridos"),
+                    FechaServidor     = FechaHora(r, "fecha_servidor"),
+                };
+
+                // 3-5. Tipos de aceptación y motivos
+                var tiposAceptacion = await LeerOpcionesAsync(r, ct);
+                var motivosRechazo  = await LeerOpcionesAsync(r, ct);
+                var motivosSinVenta = await LeerOpcionesAsync(r, ct);
+
+                // 6. Contactos
+                await r.NextResultAsync(ct);
+                var contactos = new List<ContactoRegistroSeguimientoDto>();
+                while (await r.ReadAsync(ct))
+                    contactos.Add(new ContactoRegistroSeguimientoDto(
+                        EnteroLargo(r, "id_contacto"), Texto(r, "nombres") ?? "", Texto(r, "cargo"),
+                        Texto(r, "correo"), Texto(r, "telefono_movil"), Texto(r, "telefono_anexo"),
+                        Ent(r, "es_contacto_propuesta") == 1, Ent(r, "es_contacto_principal") == 1));
+
+                return new RespuestaDto<PreparacionCierreSeguimientoDto>(2, mensaje,
+                    new PreparacionCierreSeguimientoDto(cabecera, tiposAceptacion, motivosRechazo, motivosSinVenta, contactos));
+            },
+            ct);
+
+    public Task<RespuestaDto<ResultadoCierreSeguimientoDto>> CerrarAsync(long idPropuesta, ComandoCierreSeguimiento c, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_CerrarSeguimiento",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario",           idUsuario);
+                p.AddWithValue("p_id_propuesta",         idPropuesta);
+                p.AddWithValue("p_tipo",                 c.Tipo);
+                p.AddWithValue("p_id_tipo_aceptacion",   Valor(c.IdTipoAceptacion));
+                p.AddWithValue("p_id_motivo",            Valor(c.IdMotivo));
+                p.AddWithValue("p_id_contacto",          Valor(c.IdContacto));
+                p.AddWithValue("p_fecha",                Valor(c.Fecha));
+                p.AddWithValue("p_comentario",           Valor(c.Comentario));
+                p.AddWithValue("p_permite_reactivacion", Bit(c.PermiteReactivacion));
+                p.AddWithValue("p_confirmado",           Bit(c.Confirmado));
+                p.AddWithValue("p_solo_validar",         0);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<ResultadoCierreSeguimientoDto>(3, "No se pudo leer el resultado del cierre.");
+                return new RespuestaDto<ResultadoCierreSeguimientoDto>(2, mensaje, new ResultadoCierreSeguimientoDto(
+                    EnteroLargo(r, "id_seguimiento"), Texto(r, "estado_seguimiento") ?? "", Texto(r, "siguiente_etapa")));
             },
             ct);
 }

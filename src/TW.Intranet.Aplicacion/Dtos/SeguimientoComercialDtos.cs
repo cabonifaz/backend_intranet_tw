@@ -163,6 +163,10 @@ public record CabeceraDetalleSeguimientoDto
     public bool      PuedeReprogramar          { get; init; }
     /// <summary>HU-20 — veces que se reprogramó la próxima acción.</summary>
     public int       Reprogramaciones          { get; init; }
+    /// <summary>HU-21 — botón "Cerrar sin venta".</summary>
+    public bool      PuedeCerrarSinVenta       { get; init; }
+    /// <summary>HU-21 — el cierre sin venta permite reactivación futura (null si no está cerrado).</summary>
+    public bool      PermiteReactivacion       { get; init; }
 }
 
 /// <summary>
@@ -462,3 +466,76 @@ public record PreparacionReprogramacionDto(
     List<ReprogramacionHistorialDto>  Historial);
 
 public record ResultadoReprogramacionDto(long IdReprogramacion);
+
+// ══════════════════════ HU-21 — Cierre del seguimiento ══════════════════════
+
+/// <summary>Registrar Aceptación. Fecha null = ahora. La evidencia se sube luego a .../registros/{idSeguimiento}/adjuntos.</summary>
+public record RegistrarAceptacionDto
+{
+    public int?      IdTipoAceptacion { get; init; }
+    public long?     IdContacto       { get; init; }
+    public DateTime? Fecha            { get; init; }
+    public string?   Comentario       { get; init; }
+}
+
+/// <summary>Registrar Rechazo: motivo (MOTIVO_RECHAZO) y comentario de al menos 20 caracteres.</summary>
+public record RegistrarRechazoDto
+{
+    public int?      IdMotivo   { get; init; }
+    public DateTime? Fecha      { get; init; }
+    public string?   Comentario { get; init; }
+}
+
+/// <summary>Cerrar sin Venta: motivo (MOTIVO_CIERRE_SIN_VENTA), detalle (mín. 20), reactivación y confirmación.</summary>
+public record CerrarSinVentaDto
+{
+    public int?    IdMotivo             { get; init; }
+    public string? Detalle              { get; init; }
+    public bool    PermitirReactivacion { get; init; }
+    public bool    ConfirmoCierre       { get; init; }
+}
+
+/// <summary>Datos que el caso de uso envía al SP de cierre. Tipo: aceptacion | rechazo | sin_venta.</summary>
+public record ComandoCierreSeguimiento(
+    string    Tipo,
+    int?      IdTipoAceptacion,
+    int?      IdMotivo,
+    long?     IdContacto,
+    DateTime? Fecha,
+    string?   Comentario,
+    bool      PermiteReactivacion,
+    bool      Confirmado);
+
+/// <summary>EstadoSeguimiento: aceptada | rechazada. SiguienteEtapa: ordenes_compra (aceptación) o null.</summary>
+public record ResultadoCierreSeguimientoDto(long IdSeguimiento, string EstadoSeguimiento, string? SiguienteEtapa);
+
+public record CabeceraCierreSeguimientoDto
+{
+    public long      IdPropuesta       { get; init; }
+    public string    Numero            { get; init; } = "";
+    public int       Version           { get; init; }
+    public long      IdCliente         { get; init; }
+    public string    RazonSocial       { get; init; } = "";
+    public string?   Ruc               { get; init; }
+    public long?     IdRequerimiento   { get; init; }
+    public string?   NumeroRq          { get; init; }
+    public decimal   Total             { get; init; }
+    public int       IdMoneda          { get; init; }
+    public string?   Moneda            { get; init; }
+    public string?   MonedaSimbolo     { get; init; }
+    public long      IdResponsable     { get; init; }
+    public string?   Responsable       { get; init; }
+    public long?     IdContacto        { get; init; }
+    public string?   Contacto          { get; init; }
+    public string?   CargoContacto     { get; init; }
+    public string    EstadoSeguimiento { get; init; } = "";
+    public int       DiasTranscurridos { get; init; }
+    public DateTime? FechaServidor     { get; init; }
+}
+
+public record PreparacionCierreSeguimientoDto(
+    CabeceraCierreSeguimientoDto         Cabecera,
+    List<OpcionSeguimientoDto>           TiposAceptacion,
+    List<OpcionSeguimientoDto>           MotivosRechazo,
+    List<OpcionSeguimientoDto>           MotivosSinVenta,
+    List<ContactoRegistroSeguimientoDto> Contactos);

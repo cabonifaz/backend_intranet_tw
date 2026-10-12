@@ -9,7 +9,7 @@ using TW.Intranet.Aplicacion.Dtos;
 namespace TW.Intranet.API.Controllers;
 
 /// <summary>
-/// HU-17 Bandeja · HU-18 Detalle · HU-19 Registro · HU-20 Reprogramación de acciones del Seguimiento Comercial
+/// HU-17 Bandeja · HU-18 Detalle · HU-19 Registro · HU-20 Reprogramación · HU-21 Cierre del Seguimiento Comercial
 /// (propuestas enviadas al cliente).
 /// </summary>
 [ApiController]
@@ -25,7 +25,11 @@ public class SeguimientoComercialController(
     SubirAdjuntosSeguimientoCasoDeUso          subirAdjuntos,
     ObtenerAdjuntoSeguimientoCasoDeUso         obtenerAdjunto,
     PrepararReprogramacionSeguimientoCasoDeUso prepararReprogramacion,
-    ReprogramarAccionSeguimientoCasoDeUso      reprogramarAccion) : ControllerBase
+    ReprogramarAccionSeguimientoCasoDeUso      reprogramarAccion,
+    PrepararCierreSeguimientoCasoDeUso         prepararCierre,
+    RegistrarAceptacionSeguimientoCasoDeUso    registrarAceptacion,
+    RegistrarRechazoSeguimientoCasoDeUso       registrarRechazo,
+    CerrarSinVentaSeguimientoCasoDeUso         cerrarSinVenta) : ControllerBase
 {
     /// <summary>5 archivos de 10 MB + margen para el resto del multipart.</summary>
     private const long TamanoMaximoPeticion =
@@ -164,4 +168,38 @@ public class SeguimientoComercialController(
     [HttpPost("api/crm/seguimiento/{idPropuesta:long}/reprogramar")]
     public async Task<IActionResult> Reprogramar(long idPropuesta, [FromBody] ReprogramarAccionDto dto, CancellationToken ct = default)
         => Responder(await reprogramarAccion.EjecutarAsync(idPropuesta, dto, IdUsuarioActual, ct));
+
+    // ══════════════════════ HU-21 — Cierre del seguimiento ══════════════════════
+
+    /// <summary>
+    /// HU-21 — Datos de los modales de cierre: cabecera (cliente, monto, RQ, responsable), tipos de aceptación,
+    /// motivos de rechazo y de cierre sin venta (tal cual) y contactos del cliente.
+    /// </summary>
+    [RequierePermiso("propuesta_seguimiento_cerrar")]
+    [HttpGet("api/crm/seguimiento/{idPropuesta:long}/cierre/preparar")]
+    public async Task<IActionResult> PrepararCierre(long idPropuesta, CancellationToken ct = default)
+        => Responder(await prepararCierre.EjecutarAsync(idPropuesta, IdUsuarioActual, ct));
+
+    /// <summary>
+    /// HU-21 — Registrar aceptación: { idTipoAceptacion, idContacto, fecha, comentario? }. La propuesta pasa a la
+    /// etapa Órdenes de Compra. La evidencia se sube con POST .../registros/{idSeguimiento}/adjuntos.
+    /// </summary>
+    [RequierePermiso("propuesta_seguimiento_cerrar")]
+    [HttpPost("api/crm/seguimiento/{idPropuesta:long}/aceptar")]
+    public async Task<IActionResult> Aceptar(long idPropuesta, [FromBody] RegistrarAceptacionDto dto, CancellationToken ct = default)
+        => Responder(await registrarAceptacion.EjecutarAsync(idPropuesta, dto, IdUsuarioActual, ct));
+
+    /// <summary>HU-21 — Registrar rechazo: { idMotivo, fecha?, comentario (mín. 20) }. La propuesta queda rechazada.</summary>
+    [RequierePermiso("propuesta_seguimiento_cerrar")]
+    [HttpPost("api/crm/seguimiento/{idPropuesta:long}/rechazar")]
+    public async Task<IActionResult> Rechazar(long idPropuesta, [FromBody] RegistrarRechazoDto dto, CancellationToken ct = default)
+        => Responder(await registrarRechazo.EjecutarAsync(idPropuesta, dto, IdUsuarioActual, ct));
+
+    /// <summary>
+    /// HU-21 — Cerrar sin venta: { idMotivo, detalle (mín. 20), permitirReactivacion, confirmoCierre: true }.
+    /// </summary>
+    [RequierePermiso("propuesta_seguimiento_cerrar")]
+    [HttpPost("api/crm/seguimiento/{idPropuesta:long}/cerrar-sin-venta")]
+    public async Task<IActionResult> CerrarSinVenta(long idPropuesta, [FromBody] CerrarSinVentaDto dto, CancellationToken ct = default)
+        => Responder(await cerrarSinVenta.EjecutarAsync(idPropuesta, dto, IdUsuarioActual, ct));
 }
