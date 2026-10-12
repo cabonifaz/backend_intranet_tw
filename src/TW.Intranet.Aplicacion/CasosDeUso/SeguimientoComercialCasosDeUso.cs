@@ -340,3 +340,43 @@ public class ObtenerAdjuntoSeguimientoCasoDeUso(ISeguimientoComercialRepositorio
         return new(2, ruta.Mensaje, new ArchivoDescargaDto(contenido, ruta.Datos.NombreArchivo, ruta.Datos.TipoContenido));
     }
 }
+
+// ══════════════════════ HU-20 — Reprogramación de acciones ══════════════════════
+
+/// <summary>Acción actual, catálogos, responsables, motivos e historial para el modal de reprogramación.</summary>
+public class PrepararReprogramacionSeguimientoCasoDeUso(ISeguimientoComercialRepositorio repositorio)
+{
+    public Task<RespuestaDto<PreparacionReprogramacionDto>> EjecutarAsync(long idPropuesta, long idUsuario, CancellationToken ct = default)
+    {
+        if (idPropuesta <= 0)
+            return Task.FromResult(new RespuestaDto<PreparacionReprogramacionDto>(1, "Propuesta no válida."));
+        return repositorio.PrepararReprogramacionAsync(idPropuesta, idUsuario, ct);
+    }
+}
+
+/// <summary>
+/// Reprograma la próxima acción pendiente: tipo, nueva fecha y hora, prioridad, responsable,
+/// motivo (radio buttons) y detalle obligatorio. Guarda el historial con la acción anterior.
+/// </summary>
+public class ReprogramarAccionSeguimientoCasoDeUso(ISeguimientoComercialRepositorio repositorio)
+{
+    public async Task<RespuestaDto<ResultadoReprogramacionDto>> EjecutarAsync(
+        long idPropuesta, ReprogramarAccionDto dto, long idUsuario, CancellationToken ct = default)
+    {
+        if (idPropuesta <= 0)                    return new(1, "Propuesta no válida.");
+        if (dto.IdTipoAccion is null or <= 0)    return new(1, "Seleccione el tipo de acción.");
+        if (dto.Fecha is null)                   return new(1, "Indique la nueva fecha y hora.");
+        if (dto.IdPrioridad is null or <= 0)     return new(1, "Seleccione la prioridad.");
+        if (dto.IdResponsable is null or <= 0)   return new(1, "Seleccione el responsable.");
+        if (dto.IdMotivo is null or <= 0)        return new(1, "Seleccione el motivo de la reprogramación.");
+
+        var detalle = dto.Detalle?.Trim() ?? "";
+        if (detalle.Length < 10)  return new(1, "Explique el motivo de la reprogramación (mínimo 10 caracteres).");
+        if (detalle.Length > 500) return new(1, "El detalle admite hasta 500 caracteres.");
+
+        var r = await repositorio.ReprogramarAccionAsync(idPropuesta, dto with { Detalle = detalle }, idUsuario, ct);
+        return r.IdTipoMensaje == 2
+            ? new(2, r.Mensaje, new ResultadoReprogramacionDto(r.Datos))
+            : new(r.IdTipoMensaje, r.Mensaje);
+    }
+}

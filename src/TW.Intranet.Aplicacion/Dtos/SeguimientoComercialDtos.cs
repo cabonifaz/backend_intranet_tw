@@ -159,11 +159,16 @@ public record CabeceraDetalleSeguimientoDto
     public bool      PuedeEjecutarAccion       { get; init; }
     public bool      PuedeRegistrarAceptacion  { get; init; }
     public bool      PuedeRegistrarRechazo     { get; init; }
+    /// <summary>HU-20 — botón "Reprogramar".</summary>
+    public bool      PuedeReprogramar          { get; init; }
+    /// <summary>HU-20 — veces que se reprogramó la próxima acción.</summary>
+    public int       Reprogramaciones          { get; init; }
 }
 
 /// <summary>
 /// Evento del timeline. Tipo: propuesta_creada | vb_solicitado | vb_aprobado | vb_devuelto | vb_rechazado |
-/// vb_cancelado | enviada_cliente | seguimiento | cierre_aceptacion | cierre_rechazo | cierre_sin_venta | orden_compra.
+/// vb_cancelado | enviada_cliente | seguimiento | cierre_aceptacion | cierre_rechazo | cierre_sin_venta |
+/// accion_reprogramada (HU-20) | orden_compra.
 /// </summary>
 public record EventoTimelineSeguimientoDto(
     DateTime  Fecha,
@@ -181,7 +186,7 @@ public record EventoTimelineSeguimientoDto(
     string?   Asunto          = null,
     int       Adjuntos        = 0);
 
-/// <summary>Acción programada. Estado: pendiente | vencida | realizada | cancelada.</summary>
+/// <summary>Acción programada. Estado: pendiente | vencida | realizada | reprogramada | cancelada.</summary>
 public record ProximaAccionSeguimientoDto(
     long      IdSeguimiento,
     DateTime? Fecha,
@@ -393,3 +398,67 @@ public record PreparacionRegistroSeguimientoDto(
     List<ResponsableSeguimientoDto>      Responsables,
     List<PlantillaCorreoSeguimientoDto>  Plantillas,
     BorradorCorreoSeguimientoDto?        Borrador);
+
+// ══════════════════════ HU-20 — Reprogramación de acciones ══════════════════════
+
+/// <summary>Modal "Reprogramar Próxima Acción". Fecha = nueva fecha y hora. Detalle obligatorio (10 a 500).</summary>
+public record ReprogramarAccionDto
+{
+    public int?      IdTipoAccion  { get; init; }
+    public DateTime? Fecha         { get; init; }
+    public int?      IdPrioridad   { get; init; }
+    public long?     IdResponsable { get; init; }
+    public int?      IdMotivo      { get; init; }
+    public string?   Detalle       { get; init; }
+}
+
+/// <summary>
+/// Acción actual. Origen: programada (registrada en un seguimiento o reprogramación) |
+/// calculada (plazo por defecto del SLA, sin tipo ni prioridad).
+/// </summary>
+public record AccionActualSeguimientoDto
+{
+    public long      IdPropuesta          { get; init; }
+    public string    Numero               { get; init; } = "";
+    public int       Version              { get; init; }
+    public long      IdCliente            { get; init; }
+    public string    RazonSocial          { get; init; } = "";
+    public string?   ProximaAccionCodigo  { get; init; }
+    public string?   ProximaAccion        { get; init; }
+    public int?      IdTipoAccion         { get; init; }
+    public DateTime? FechaProgramada      { get; init; }
+    public int?      IdPrioridad          { get; init; }
+    public string?   Prioridad            { get; init; }
+    public string?   PrioridadCodigo      { get; init; }
+    public long?     IdResponsable        { get; init; }
+    public string?   Responsable          { get; init; }
+    public string    Origen               { get; init; } = "";
+    public string    SlaEstado            { get; init; } = "";
+    public string    EstadoSeguimiento    { get; init; } = "";
+    public int       Reprogramaciones     { get; init; }
+    public DateTime? FechaServidor        { get; init; }
+}
+
+public record ReprogramacionHistorialDto(
+    long      IdReprogramacion,
+    DateTime? Fecha,
+    DateTime? FechaAnterior,
+    string?   TipoAnterior,
+    DateTime? FechaNueva,
+    string?   TipoNuevo,
+    string?   PrioridadNueva,
+    string?   ResponsableNuevo,
+    string?   Motivo,
+    string?   MotivoCodigo,
+    string?   Detalle,
+    string?   Usuario);
+
+public record PreparacionReprogramacionDto(
+    AccionActualSeguimientoDto        AccionActual,
+    List<OpcionSeguimientoDto>        TiposAccion,
+    List<OpcionSeguimientoDto>        Prioridades,
+    List<ResponsableSeguimientoDto>   Responsables,
+    List<OpcionSeguimientoDto>        Motivos,
+    List<ReprogramacionHistorialDto>  Historial);
+
+public record ResultadoReprogramacionDto(long IdReprogramacion);

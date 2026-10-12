@@ -2,7 +2,7 @@ using TW.Intranet.Aplicacion.Dtos;
 
 namespace TW.Intranet.Aplicacion.Puertos;
 
-/// <summary>HU-17 / HU-18 / HU-19 — Seguimiento comercial de propuestas enviadas.</summary>
+/// <summary>HU-17 / HU-18 / HU-19 / HU-20 — Seguimiento comercial de propuestas enviadas.</summary>
 public interface ISeguimientoComercialRepositorio
 {
     Task<RespuestaDto<BandejaSeguimientoDto>> ObtenerBandejaAsync(FiltrosBandejaSeguimientoDto f, long idUsuario, CancellationToken ct);
@@ -23,4 +23,9 @@ public interface ISeguimientoComercialRepositorio
                                             long tamanoBytes, long idUsuario, bool soloValidar, CancellationToken ct);
 
     Task<RespuestaDto<RutaAdjuntoSeguimientoDto>> ObtenerAdjuntoAsync(long idAdjunto, long idUsuario, CancellationToken ct);
+
+    // HU-20
+    Task<RespuestaDto<PreparacionReprogramacionDto>> PrepararReprogramacionAsync(long idPropuesta, long idUsuario, CancellationToken ct);
+
+    Task<RespuestaDto<long>> ReprogramarAccionAsync(long idPropuesta, ReprogramarAccionDto dto, long idUsuario, CancellationToken ct);
 }

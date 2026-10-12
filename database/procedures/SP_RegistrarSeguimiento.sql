@@ -219,6 +219,17 @@ proc: BEGIN
         WHERE s.id_propuesta = p_id_propuesta AND s.eliminado_en IS NULL
         ORDER BY s.fecha_interaccion DESC, s.id_seguimiento DESC
         LIMIT 1;
+
+        -- Sin seguimientos previos: la reprogramación del "Primer seguimiento" (HU-20), si existe
+        IF NOT EXISTS (SELECT 1 FROM seguimiento_comercial
+                       WHERE id_propuesta = p_id_propuesta AND eliminado_en IS NULL) THEN
+            SELECT r.fecha_nueva, r.id_tipo_accion_nueva, NULL, r.id_prioridad_nueva, r.id_responsable_nuevo
+              INTO v_ant_fecha, v_ant_tipo, v_ant_detalle, v_ant_prioridad, v_ant_resp
+            FROM seguimiento_reprogramacion r
+            WHERE r.id_propuesta = p_id_propuesta AND r.id_seguimiento IS NULL AND r.eliminado_en IS NULL
+            ORDER BY r.id_reprogramacion DESC
+            LIMIT 1;
+        END IF;
     END IF;
 
     -- Guardar

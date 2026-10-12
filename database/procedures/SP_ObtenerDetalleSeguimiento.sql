@@ -7,9 +7,9 @@
 --   1 mensaje
 --   2 cabecera: panel superior (monto, días, SLA restante), datos de la oportunidad,
 --     próxima acción con prioridad y asignado, y permisos de los botones
---   3 timeline: creación y versiones, visto bueno, envío al cliente, seguimientos y OC
+--   3 timeline: creación y versiones, visto bueno, envío al cliente, seguimientos, reprogramaciones y OC
 --     (de todas las versiones de la propuesta), del más reciente al más antiguo
---   4 próximas acciones programadas (pendiente, realizada o cancelada)
+--   4 próximas acciones programadas (pendiente, vencida, realizada, reprogramada o cancelada)
 --   5 contactos del cliente (primero el de la propuesta)
 --   6 documentos: PDF de cada versión, órdenes de compra y adjuntos de los seguimientos (HU-19)
 DROP PROCEDURE IF EXISTS SP_ObtenerDetalleSeguimiento;
@@ -32,6 +32,7 @@ BEGIN
     DECLARE v_numero         VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_registrar      TINYINT DEFAULT 0;
     DECLARE v_cerrar         TINYINT DEFAULT 0;
+    DECLARE v_reprogramar    TINYINT DEFAULT 0;
 
     CALL SP_CalcularSeguimientoComercial(p_id_usuario, p_id_propuesta,
                                          v_dias_sin_resp, v_meta, v_sla_horas, v_alerta_horas);
@@ -54,6 +55,7 @@ BEGIN
         SELECT numero INTO v_numero FROM propuesta_comercial WHERE id_propuesta = p_id_propuesta;
         SET v_registrar = FN_PermisoAccion(p_id_usuario, 'propuesta_seguimiento_registrar');
         SET v_cerrar    = FN_PermisoAccion(p_id_usuario, 'propuesta_seguimiento_cerrar');
+        SET v_reprogramar = FN_PermisoAccion(p_id_usuario, 'propuesta_seguimiento_reprogramar');
 
         -- 1. Header
         SELECT 2 AS IdTipoMensaje, 'Éxito.' AS Mensaje;
@@ -76,9 +78,10 @@ BEGIN
             IF(t.vence_accion IS NULL, NULL, TIMESTAMPDIFF(HOUR, NOW(), t.vence_accion))   AS horas_para_accion,
             IF(t.vence_accion IS NULL, NULL, TIMESTAMPDIFF(MINUTE, NOW(), t.vence_accion)) AS minutos_para_accion,
             t.id_prioridad_accion, pr.String1                 AS prioridad_accion, pr.String3 AS prioridad_accion_codigo,
-            COALESCE(IF(t.estado_ult_seg = 'activo', s.id_responsable, NULL), t.id_responsable) AS id_asignado,
+            COALESCE(t.id_responsable_accion, t.id_responsable) AS id_asignado,
             (SELECT CONCAT(ua.nombre, ' ', ua.apellido) FROM usuario ua
-             WHERE ua.id_usuario = COALESCE(IF(t.estado_ult_seg = 'activo', s.id_responsable, NULL), t.id_responsable)) AS asignado,
+             WHERE ua.id_usuario = COALESCE(t.id_responsable_accion, t.id_responsable)) AS asignado,
+            t.reprogramaciones,
             t.estado_seguimiento, t.estado_propuesta,
             t.sla_estado,
             CASE
@@ -97,7 +100,8 @@ BEGIN
             (v_abierta > 0 AND v_registrar = 1)               AS puede_registrar_seguimiento,
             (v_abierta > 0 AND v_registrar = 1)               AS puede_ejecutar_accion,
             (v_abierta > 0 AND v_cerrar = 1)                  AS puede_registrar_aceptacion,
-            (v_abierta > 0 AND v_cerrar = 1)                  AS puede_registrar_rechazo
+            (v_abierta > 0 AND v_cerrar = 1)                  AS puede_registrar_rechazo,
+            (v_abierta > 0 AND v_reprogramar = 1)             AS puede_reprogramar
         FROM tmp_seg t
         LEFT JOIN seguimiento_comercial s ON s.id_seguimiento   = t.id_ult_seg
         LEFT JOIN requerimiento r         ON r.id_requerimiento = t.id_requerimiento
@@ -195,6 +199,22 @@ BEGIN
             WHERE p.numero = v_numero AND p.eliminado_en IS NULL AND s.eliminado_en IS NULL
 
             UNION ALL
+            -- Reprogramaciones de la próxima acción (HU-20)
+            SELECT r.creado_en, 'accion_reprogramada',
+                   CONCAT('Acción reprogramada: ', IFNULL(ta.String1, 'seguimiento')),
+                   CONCAT(IFNULL(DATE_FORMAT(r.fecha_anterior, '%d/%m/%Y %H:%i'), 'sin fecha'), ' → ',
+                          DATE_FORMAT(r.fecha_nueva, '%d/%m/%Y %H:%i'),
+                          '. Motivo: ', IFNULL(mo.String1, ''), '. ', r.detalle),
+                   p.version, r.creado_por, CONCAT(u.nombre, ' ', u.apellido),
+                   NULL, NULL, NULL, NULL, NULL, NULL, 0
+            FROM seguimiento_reprogramacion r
+            JOIN propuesta_comercial p ON p.id_propuesta = r.id_propuesta
+            LEFT JOIN tabla_maestra ta ON ta.Descripcion = 'TIPO_ACCION_SEGUIMIENTO' AND ta.IdEmpresa = 1 AND ta.Num1 = r.id_tipo_accion_nueva
+            LEFT JOIN tabla_maestra mo ON mo.Descripcion = 'MOTIVO_REPROGRAMACION_SEGUIMIENTO' AND mo.IdEmpresa = 1 AND mo.Num1 = r.id_motivo
+            LEFT JOIN usuario u ON u.id_usuario = r.creado_por
+            WHERE p.numero = v_numero AND p.eliminado_en IS NULL AND r.eliminado_en IS NULL
+
+            UNION ALL
             -- Órdenes de compra
             SELECT oc.fecha_registro, 'orden_compra',
                    CONCAT('Orden de compra ', oc.numero_oc, ' registrada'),
@@ -225,6 +245,11 @@ BEGIN
             s.id_responsable                          AS id_asignado,
             CONCAT(u.nombre, ' ', u.apellido)         AS asignado,
             CASE
+                WHEN EXISTS (SELECT 1 FROM seguimiento_reprogramacion rp
+                             WHERE rp.id_propuesta = s.id_propuesta AND rp.eliminado_en IS NULL
+                               AND rp.fecha_anterior = s.proxima_accion_fecha
+                               AND rp.fecha_nueva <> s.proxima_accion_fecha)
+                    THEN 'reprogramada'
                 WHEN EXISTS (SELECT 1 FROM seguimiento_comercial s2
                              WHERE s2.id_propuesta = s.id_propuesta AND s2.eliminado_en IS NULL
                                AND (s2.fecha_interaccion > s.fecha_interaccion

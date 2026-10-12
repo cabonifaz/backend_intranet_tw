@@ -16,6 +16,9 @@
 -- PRÓXIMA ACCIÓN: la programada en el último seguimiento activo. Si no hay seguimientos,
 --   "Primer seguimiento" a fecha_envio + SLA (CONFIG_SLA propuesta / seguimiento).
 --   Aceptada sin OC = Generar orden de compra. OC pendiente de validación = Validar orden de compra.
+-- HU-20: si la acción se reprogramó, el seguimiento vigente ya trae los nuevos datos. Si todavía no hay
+--   seguimientos, se usa la última reprogramación del "Primer seguimiento" (seguimiento_reprogramacion
+--   con id_seguimiento NULL).
 -- SLA: en_plazo | proximo (dentro de las horas de alerta) | vencido | cumplido | cerrado.
 DROP PROCEDURE IF EXISTS SP_CalcularSeguimientoComercial;
 
@@ -79,7 +82,12 @@ BEGIN
          WHERE oc.eliminado_en IS NULL AND oc.estado = 'pendiente_validacion'
            AND (oc.id_propuesta = p.id_propuesta
                 OR oc.id_oc IN (SELECT op.id_oc FROM oc_propuesta op
-                                WHERE op.id_propuesta = p.id_propuesta AND op.eliminado_en IS NULL))) AS oc_por_validar
+                                WHERE op.id_propuesta = p.id_propuesta AND op.eliminado_en IS NULL))) AS oc_por_validar,
+        (SELECT MAX(r.id_reprogramacion) FROM seguimiento_reprogramacion r
+         WHERE r.id_propuesta = p.id_propuesta AND r.id_seguimiento IS NULL
+           AND r.eliminado_en IS NULL)                                               AS id_reprog_inicial,
+        (SELECT COUNT(*) FROM seguimiento_reprogramacion r
+         WHERE r.id_propuesta = p.id_propuesta AND r.eliminado_en IS NULL)          AS reprogramaciones
     FROM propuesta_comercial p
     JOIN usuario u ON u.id_usuario = COALESCE(p.id_responsable, p.id_creador)
     WHERE p.eliminado_en IS NULL
@@ -98,8 +106,8 @@ BEGIN
             WHEN k.estado_seguimiento = 'aceptada' AND k.fecha_primera_oc IS NULL THEN 'GENERAR_OC'
             WHEN k.estado_seguimiento = 'aceptada' AND k.oc_por_validar > 0       THEN 'VALIDAR_OC'
             WHEN k.estado_seguimiento = 'aceptada'                                THEN NULL
-            WHEN k.estado_ult_seg IS NULL                                         THEN 'PRIMER_SEGUIMIENTO'
             WHEN k.tipo_accion_codigo IS NOT NULL                                 THEN k.tipo_accion_codigo
+            WHEN k.estado_ult_seg IS NULL                                         THEN 'PRIMER_SEGUIMIENTO'
             ELSE 'PROGRAMAR_SEGUIMIENTO'
         END AS proxima_accion_codigo,
         CASE
@@ -107,8 +115,8 @@ BEGIN
             WHEN k.estado_seguimiento = 'aceptada' AND k.fecha_primera_oc IS NULL THEN 'Generar orden de compra'
             WHEN k.estado_seguimiento = 'aceptada' AND k.oc_por_validar > 0       THEN 'Validar orden de compra'
             WHEN k.estado_seguimiento = 'aceptada'                                THEN NULL
-            WHEN k.estado_ult_seg IS NULL                                         THEN 'Primer seguimiento'
             WHEN k.tipo_accion_nombre IS NOT NULL                                 THEN k.tipo_accion_nombre
+            WHEN k.estado_ult_seg IS NULL                                         THEN 'Primer seguimiento'
             ELSE 'Programar seguimiento'
         END AS proxima_accion,
         CASE
@@ -137,7 +145,8 @@ BEGIN
             DATEDIFF(CURDATE(), DATE(COALESCE(j.fecha_ult_respuesta, j.fecha_envio)))  AS dias_sin_respuesta,
             COALESCE(j.fecha_ult_interaccion, j.fecha_envio)                           AS inicio_sla,
             CASE
-                WHEN j.estado_ult_seg IS NULL THEN j.fecha_envio + INTERVAL v_sla_horas HOUR
+                WHEN j.estado_ult_seg IS NULL
+                    THEN COALESCE(j.proxima_accion_fecha, j.fecha_envio + INTERVAL v_sla_horas HOUR)
                 WHEN j.estado_ult_seg = 'activo'
                     THEN COALESCE(j.proxima_accion_fecha, j.fecha_ult_interaccion + INTERVAL v_sla_horas HOUR)
                 ELSE j.proxima_accion_fecha
@@ -146,10 +155,14 @@ BEGIN
             SELECT b.*,
                 s.estado                 AS estado_ult_seg,
                 s.fecha_interaccion      AS fecha_ult_interaccion,
-                s.proxima_accion_fecha,
-                s.id_tipo_proxima_accion,
-                s.proxima_accion_detalle,
-                s.id_prioridad_accion,
+                IF(s.id_seguimiento IS NULL, r0.fecha_nueva,        s.proxima_accion_fecha)   AS proxima_accion_fecha,
+                IF(s.id_seguimiento IS NULL, r0.id_tipo_accion_nueva, s.id_tipo_proxima_accion) AS id_tipo_proxima_accion,
+                IF(s.id_seguimiento IS NULL, NULL,                   s.proxima_accion_detalle) AS proxima_accion_detalle,
+                IF(s.id_seguimiento IS NULL, r0.id_prioridad_nueva,  s.id_prioridad_accion)    AS id_prioridad_accion,
+                CASE
+                    WHEN s.id_seguimiento IS NULL THEN r0.id_responsable_nuevo
+                    WHEN s.estado = 'activo'      THEN s.id_responsable
+                END                                                                            AS id_responsable_accion,
                 s.id_canal               AS id_canal_ult,
                 s.notas                  AS notas_ult,
                 rs.String2               AS resultado_ult_codigo,
@@ -158,9 +171,10 @@ BEGIN
                 ta.String1               AS tipo_accion_nombre
             FROM tmp_seg_base b
             LEFT JOIN seguimiento_comercial s ON s.id_seguimiento = b.id_ult_seg
+            LEFT JOIN seguimiento_reprogramacion r0 ON r0.id_reprogramacion = b.id_reprog_inicial
             LEFT JOIN tabla_maestra rs ON rs.IdMaestro = 27 AND rs.IdEmpresa = 1 AND rs.Num1 = s.id_resultado
             LEFT JOIN tabla_maestra ta ON ta.Descripcion = 'TIPO_ACCION_SEGUIMIENTO' AND ta.IdEmpresa = 1
-                                      AND ta.Num1 = s.id_tipo_proxima_accion
+                                      AND ta.Num1 = IF(s.id_seguimiento IS NULL, r0.id_tipo_accion_nueva, s.id_tipo_proxima_accion)
             WHERE b.estado_propuesta = 'enviado' OR b.fecha_primera_oc IS NOT NULL
         ) j
     ) k;

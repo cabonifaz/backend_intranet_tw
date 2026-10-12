@@ -9,7 +9,7 @@ using TW.Intranet.Aplicacion.Dtos;
 namespace TW.Intranet.API.Controllers;
 
 /// <summary>
-/// HU-17 Bandeja · HU-18 Detalle · HU-19 Registro de acciones del Seguimiento Comercial
+/// HU-17 Bandeja · HU-18 Detalle · HU-19 Registro · HU-20 Reprogramación de acciones del Seguimiento Comercial
 /// (propuestas enviadas al cliente).
 /// </summary>
 [ApiController]
@@ -23,7 +23,9 @@ public class SeguimientoComercialController(
     GuardarBorradorCorreoSeguimientoCasoDeUso  guardarBorradorCorreo,
     EnviarCorreoSeguimientoCasoDeUso           enviarCorreo,
     SubirAdjuntosSeguimientoCasoDeUso          subirAdjuntos,
-    ObtenerAdjuntoSeguimientoCasoDeUso         obtenerAdjunto) : ControllerBase
+    ObtenerAdjuntoSeguimientoCasoDeUso         obtenerAdjunto,
+    PrepararReprogramacionSeguimientoCasoDeUso prepararReprogramacion,
+    ReprogramarAccionSeguimientoCasoDeUso      reprogramarAccion) : ControllerBase
 {
     /// <summary>5 archivos de 10 MB + margen para el resto del multipart.</summary>
     private const long TamanoMaximoPeticion =
@@ -143,4 +145,23 @@ public class SeguimientoComercialController(
         Response.Headers[HeaderNames.ContentDisposition] = disposicion.ToString();
         return File(r.Datos.Contenido, r.Datos.TipoContenido, enableRangeProcessing: true);
     }
+
+    // ══════════════════════ HU-20 — Reprogramación de acciones ══════════════════════
+
+    /// <summary>
+    /// HU-20 — Datos del modal "Reprogramar Próxima Acción": acción actual (tipo, fecha, prioridad,
+    /// responsable), tipos de acción, prioridades, responsables, motivos e historial de reprogramaciones.
+    /// </summary>
+    [RequierePermiso("propuesta_seguimiento_reprogramar")]
+    [HttpGet("api/crm/seguimiento/{idPropuesta:long}/reprogramacion/preparar")]
+    public async Task<IActionResult> PrepararReprogramacion(long idPropuesta, CancellationToken ct = default)
+        => Responder(await prepararReprogramacion.EjecutarAsync(idPropuesta, IdUsuarioActual, ct));
+
+    /// <summary>
+    /// HU-20 — Reprogramar la próxima acción: { idTipoAccion, fecha, idPrioridad, idResponsable, idMotivo, detalle }.
+    /// </summary>
+    [RequierePermiso("propuesta_seguimiento_reprogramar")]
+    [HttpPost("api/crm/seguimiento/{idPropuesta:long}/reprogramar")]
+    public async Task<IActionResult> Reprogramar(long idPropuesta, [FromBody] ReprogramarAccionDto dto, CancellationToken ct = default)
+        => Responder(await reprogramarAccion.EjecutarAsync(idPropuesta, dto, IdUsuarioActual, ct));
 }

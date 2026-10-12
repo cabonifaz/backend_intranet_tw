@@ -6,7 +6,7 @@ using MySqlConnector;
 
 namespace TW.Intranet.Infraestructura.Adaptadores;
 
-/// <summary>HU-17 / HU-18 / HU-19 — Seguimiento comercial de propuestas enviadas.</summary>
+/// <summary>HU-17 / HU-18 / HU-19 / HU-20 — Seguimiento comercial de propuestas enviadas.</summary>
 public class SeguimientoComercialRepositorio(CadenaConexionBd conexion)
     : RepositorioSpBase(conexion), ISeguimientoComercialRepositorio
 {
@@ -188,6 +188,8 @@ public class SeguimientoComercialRepositorio(CadenaConexionBd conexion)
                     PuedeEjecutarAccion       = Booleano(r, "puede_ejecutar_accion"),
                     PuedeRegistrarAceptacion  = Booleano(r, "puede_registrar_aceptacion"),
                     PuedeRegistrarRechazo     = Booleano(r, "puede_registrar_rechazo"),
+                    PuedeReprogramar          = Booleano(r, "puede_reprogramar"),
+                    Reprogramaciones          = Ent(r, "reprogramaciones"),
                 };
 
                 // 3. Timeline
@@ -472,6 +474,94 @@ public class SeguimientoComercialRepositorio(CadenaConexionBd conexion)
                 return new RespuestaDto<RutaAdjuntoSeguimientoDto>(2, mensaje, new RutaAdjuntoSeguimientoDto(
                     Texto(r, "ruta") ?? "", Texto(r, "nombre_archivo") ?? "adjunto",
                     Texto(r, "tipo_contenido") ?? "application/octet-stream"));
+            },
+            ct);
+
+    // ── HU-20 Reprogramación ──────────────────────────────────────────────────
+    public Task<RespuestaDto<PreparacionReprogramacionDto>> PrepararReprogramacionAsync(long idPropuesta, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_PrepararReprogramacionSeguimiento",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario",   idUsuario);
+                p.AddWithValue("p_id_propuesta", idPropuesta);
+            },
+            async (r, mensaje) =>
+            {
+                // 2. Acción actual
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<PreparacionReprogramacionDto>(3, "No se pudo leer la acción actual.");
+                var actual = new AccionActualSeguimientoDto
+                {
+                    IdPropuesta         = EnteroLargo(r, "id_propuesta"),
+                    Numero              = Texto(r, "numero") ?? "",
+                    Version             = Ent(r, "version"),
+                    IdCliente           = EnteroLargo(r, "id_cliente"),
+                    RazonSocial         = Texto(r, "razon_social") ?? "",
+                    ProximaAccionCodigo = Texto(r, "proxima_accion_codigo"),
+                    ProximaAccion       = Texto(r, "proxima_accion"),
+                    IdTipoAccion        = EntNulo(r, "id_tipo_accion"),
+                    FechaProgramada     = FechaHora(r, "fecha_programada"),
+                    IdPrioridad         = EntNulo(r, "id_prioridad_accion"),
+                    Prioridad           = Texto(r, "prioridad"),
+                    PrioridadCodigo     = Texto(r, "prioridad_codigo"),
+                    IdResponsable       = EnteroLargoNulo(r, "id_responsable_accion"),
+                    Responsable         = Texto(r, "responsable_accion"),
+                    Origen              = Texto(r, "origen") ?? "",
+                    SlaEstado           = Texto(r, "sla_estado") ?? "",
+                    EstadoSeguimiento   = Texto(r, "estado_seguimiento") ?? "",
+                    Reprogramaciones    = Ent(r, "reprogramaciones"),
+                    FechaServidor       = FechaHora(r, "fecha_servidor"),
+                };
+
+                // 3-4. Tipos de acción y prioridades
+                var tipos       = await LeerOpcionesAsync(r, ct);
+                var prioridades = await LeerOpcionesAsync(r, ct);
+
+                // 5. Responsables
+                await r.NextResultAsync(ct);
+                var responsables = new List<ResponsableSeguimientoDto>();
+                while (await r.ReadAsync(ct))
+                    responsables.Add(new ResponsableSeguimientoDto(
+                        EnteroLargo(r, "id"), Texto(r, "nombre") ?? "", Texto(r, "cargo"), Ent(r, "es_usuario_actual") == 1));
+
+                // 6. Motivos
+                var motivos = await LeerOpcionesAsync(r, ct);
+
+                // 7. Historial
+                await r.NextResultAsync(ct);
+                var historial = new List<ReprogramacionHistorialDto>();
+                while (await r.ReadAsync(ct))
+                    historial.Add(new ReprogramacionHistorialDto(
+                        EnteroLargo(r, "id_reprogramacion"), FechaHora(r, "fecha"),
+                        FechaHora(r, "fecha_anterior"), Texto(r, "tipo_anterior"),
+                        FechaHora(r, "fecha_nueva"), Texto(r, "tipo_nuevo"),
+                        Texto(r, "prioridad_nueva"), Texto(r, "responsable_nuevo"),
+                        Texto(r, "motivo"), Texto(r, "motivo_codigo"), Texto(r, "detalle"), Texto(r, "usuario")));
+
+                return new RespuestaDto<PreparacionReprogramacionDto>(2, mensaje,
+                    new PreparacionReprogramacionDto(actual, tipos, prioridades, responsables, motivos, historial));
+            },
+            ct);
+
+    public Task<RespuestaDto<long>> ReprogramarAccionAsync(long idPropuesta, ReprogramarAccionDto dto, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_ReprogramarAccionSeguimiento",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario",     idUsuario);
+                p.AddWithValue("p_id_propuesta",   idPropuesta);
+                p.AddWithValue("p_id_tipo_accion", Valor(dto.IdTipoAccion));
+                p.AddWithValue("p_fecha_nueva",    Valor(dto.Fecha));
+                p.AddWithValue("p_id_prioridad",   Valor(dto.IdPrioridad));
+                p.AddWithValue("p_id_responsable", Valor(dto.IdResponsable));
+                p.AddWithValue("p_id_motivo",      Valor(dto.IdMotivo));
+                p.AddWithValue("p_detalle",        Valor(dto.Detalle));
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                long id = await r.ReadAsync(ct) ? EnteroLargo(r, "id_reprogramacion") : 0;
+                return new RespuestaDto<long>(2, mensaje, id);
             },
             ct);
 }
