@@ -305,6 +305,30 @@ builder.Services.AddScoped<CompararVersionesPropuestaCasoDeUso>();
 builder.Services.AddScoped<ObtenerCostoSuministroCasoDeUso>();
 builder.Services.AddScoped<GuardarCostoSuministroCasoDeUso>();
 
+// ── INYECCIÓN DE DEPENDENCIAS — Consulta de RUC (OpenRUC + caché) ────────────
+// Variables: ConsultaRuc__DiasVigenciaCache (30), ConsultaRuc__OpenRuc__Habilitado (true),
+// ConsultaRuc__OpenRuc__UrlBase (https://openruc.com/), ConsultaRuc__OpenRuc__TimeoutSegundos (8).
+var seccionRuc = cfg.GetSection("ConsultaRuc");
+builder.Services.AddSingleton(new TW.Intranet.Aplicacion.Dtos.OpcionesConsultaRuc(
+    int.TryParse(seccionRuc["DiasVigenciaCache"], out var diasCacheRuc) && diasCacheRuc > 0 ? diasCacheRuc : 30));
+var configuracionOpenRuc = new ConfiguracionOpenRuc(
+    Habilitado:      !bool.TryParse(seccionRuc["OpenRuc:Habilitado"], out var openRucHabilitado) || openRucHabilitado,
+    UrlBase:         string.IsNullOrWhiteSpace(seccionRuc["OpenRuc:UrlBase"]) ? "https://openruc.com/" : seccionRuc["OpenRuc:UrlBase"]!.TrimEnd('/') + "/",
+    TimeoutSegundos: int.TryParse(seccionRuc["OpenRuc:TimeoutSegundos"], out var timeoutRuc) && timeoutRuc > 0 ? timeoutRuc : 8);
+if (configuracionOpenRuc.Habilitado)
+{
+    builder.Services.AddHttpClient<IProveedorRuc, OpenRucProveedor>(c =>
+    {
+        c.BaseAddress = new Uri(configuracionOpenRuc.UrlBase);
+        c.Timeout     = TimeSpan.FromSeconds(configuracionOpenRuc.TimeoutSegundos);
+        c.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+        c.DefaultRequestHeaders.UserAgent.ParseAdd("TW-Intranet/1.0");
+    });
+}
+builder.Services.AddScoped<IConsultaRucRepositorio, ConsultaRucRepositorio>();
+builder.Services.AddScoped<ConsultarRucCasoDeUso>();
+builder.Services.AddScoped<ObtenerUsoConsultaRucCasoDeUso>();
+
 // ─────────────────────────────────────────────────────────────────────────────
 var app = builder.Build();
 
