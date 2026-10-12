@@ -329,6 +329,42 @@ builder.Services.AddScoped<IConsultaRucRepositorio, ConsultaRucRepositorio>();
 builder.Services.AddScoped<ConsultarRucCasoDeUso>();
 builder.Services.AddScoped<ObtenerUsoConsultaRucCasoDeUso>();
 
+// ── INYECCIÓN DE DEPENDENCIAS — Servicio de correo (Brevo por API HTTPS) ─────
+// Variables: Correo__ApiKey, Correo__Remitente, Correo__NombreRemitente, Correo__UrlIntranet.
+// Sin ApiKey no se envía nada (los intentos quedan en correo_envio como "no_configurado").
+var seccionCorreo = cfg.GetSection("Correo");
+var configuracionCorreo = new ConfiguracionCorreo(
+    Proveedor:       string.IsNullOrWhiteSpace(seccionCorreo["Proveedor"]) ? "brevo" : seccionCorreo["Proveedor"]!.Trim().ToLowerInvariant(),
+    ApiKey:          seccionCorreo["ApiKey"]?.Trim() ?? "",
+    Remitente:       seccionCorreo["Remitente"]?.Trim() ?? "",
+    NombreRemitente: string.IsNullOrWhiteSpace(seccionCorreo["NombreRemitente"]) ? "Intranet Total Weight" : seccionCorreo["NombreRemitente"]!.Trim(),
+    UrlBase:         string.IsNullOrWhiteSpace(seccionCorreo["UrlBase"]) ? "https://api.brevo.com/" : seccionCorreo["UrlBase"]!.TrimEnd('/') + "/",
+    TimeoutSegundos: int.TryParse(seccionCorreo["TimeoutSegundos"], out var timeoutCorreo) && timeoutCorreo > 0 ? timeoutCorreo : 15);
+builder.Services.AddSingleton(configuracionCorreo);
+builder.Services.AddSingleton(new TW.Intranet.Aplicacion.Dtos.OpcionesCorreo(
+    // Si no se configura, se usa el primer origen de Cors:AllowedOrigins (la URL del front).
+    UrlIntranet:   !string.IsNullOrWhiteSpace(seccionCorreo["UrlIntranet"])
+                       ? seccionCorreo["UrlIntranet"]!.Trim()
+                       : (cfg["Cors:AllowedOrigins"] ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault() ?? "",
+    NombreSistema: "Intranet Total Weight"));
+if (configuracionCorreo.Configurado && configuracionCorreo.Proveedor == "brevo")
+{
+    builder.Services.AddHttpClient<IEnviadorCorreo, BrevoEnviadorCorreo>(c =>
+    {
+        c.BaseAddress = new Uri(configuracionCorreo.UrlBase);
+        c.Timeout     = TimeSpan.FromSeconds(configuracionCorreo.TimeoutSegundos);
+        c.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+    });
+}
+else
+{
+    builder.Services.AddSingleton<IEnviadorCorreo, EnviadorCorreoNoConfigurado>();
+}
+builder.Services.AddScoped<ICorreoRepositorio, CorreoRepositorio>();
+builder.Services.AddScoped<NotificadorCorreo>();
+builder.Services.AddScoped<ReenviarCredencialesCasoDeUso>();
+builder.Services.AddScoped<EnviarCorreoPruebaCasoDeUso>();
+
 // ─────────────────────────────────────────────────────────────────────────────
 var app = builder.Build();
 
