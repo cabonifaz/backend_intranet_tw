@@ -63,7 +63,8 @@ BEGIN
     SELECT
         p.id_propuesta, p.numero, p.version, p.id_requerimiento, p.id_cliente, p.id_contacto,
         p.total, p.id_moneda, p.estado AS estado_propuesta,
-        COALESCE(p.fecha_envio, p.modificado_en, p.fecha_creacion) AS fecha_envio,
+        -- fecha_envio_cliente la registra el envío al cliente (HU-10b). modificado_en es solo el último respaldo
+        COALESCE(p.fecha_envio_cliente, p.fecha_envio, p.modificado_en, p.fecha_creacion) AS fecha_envio,
         COALESCE(p.id_responsable, p.id_creador)                   AS id_responsable,
         (SELECT s.id_seguimiento FROM seguimiento_comercial s
          WHERE s.id_propuesta = p.id_propuesta AND s.eliminado_en IS NULL

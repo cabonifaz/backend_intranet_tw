@@ -312,6 +312,13 @@ builder.Services.AddScoped<CompararVersionesPropuestaCasoDeUso>();
 builder.Services.AddScoped<ObtenerCostoSuministroCasoDeUso>();
 builder.Services.AddScoped<GuardarCostoSuministroCasoDeUso>();
 
+// ── INYECCIÓN DE DEPENDENCIAS — Órdenes de compra (HU-22) ────────────────────
+builder.Services.AddScoped<IOrdenCompraRepositorio, OrdenCompraRepositorio>();
+builder.Services.AddScoped<PrepararOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<CalcularCoberturaOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<RegistrarOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<ObtenerPdfOrdenCompraCasoDeUso>();
+
 // ── INYECCIÓN DE DEPENDENCIAS — Seguimiento comercial (HU-17 / HU-18 / HU-19 / HU-20 / HU-21) ────────────────
 builder.Services.AddScoped<ISeguimientoComercialRepositorio, SeguimientoComercialRepositorio>();
 builder.Services.AddScoped<ObtenerBandejaSeguimientoCasoDeUso>();

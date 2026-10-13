@@ -161,13 +161,14 @@ BEGIN
 
             UNION ALL
             -- Envío al cliente
-            SELECT p.fecha_envio, 'enviada_cliente', 'Propuesta enviada al cliente',
+            SELECT COALESCE(p.fecha_envio_cliente, p.fecha_envio), 'enviada_cliente', 'Propuesta enviada al cliente',
                    CONCAT('Se envió la versión ', p.version, ' al cliente.'),
-                   p.version, COALESCE(p.id_responsable, p.id_creador), CONCAT(u.nombre, ' ', u.apellido),
+                   p.version, COALESCE(p.enviado_cliente_por, p.id_responsable, p.id_creador), CONCAT(u.nombre, ' ', u.apellido),
                    NULL, NULL, NULL, NULL, NULL, NULL, 0
             FROM propuesta_comercial p
-            LEFT JOIN usuario u ON u.id_usuario = COALESCE(p.id_responsable, p.id_creador)
-            WHERE p.numero = v_numero AND p.eliminado_en IS NULL AND p.fecha_envio IS NOT NULL
+            LEFT JOIN usuario u ON u.id_usuario = COALESCE(p.enviado_cliente_por, p.id_responsable, p.id_creador)
+            WHERE p.numero = v_numero AND p.eliminado_en IS NULL
+              AND COALESCE(p.fecha_envio_cliente, p.fecha_envio) IS NOT NULL
 
             UNION ALL
             -- Interacciones de seguimiento
@@ -317,7 +318,9 @@ BEGIN
 
             UNION ALL
             SELECT 'orden_compra', CONCAT('OC ', oc.numero_oc), oc.fecha_registro,
-                   p.version, oc.url_archivo_pdf, oc.estado
+                   p.version,
+                   IF(oc.url_archivo_pdf IS NULL, NULL, CONCAT('/api/crm/ordenes-compra/', oc.id_oc, '/pdf')),
+                   oc.estado
             FROM orden_compra oc
             JOIN propuesta_comercial p ON p.numero = v_numero AND p.eliminado_en IS NULL
                                       AND (oc.id_propuesta = p.id_propuesta

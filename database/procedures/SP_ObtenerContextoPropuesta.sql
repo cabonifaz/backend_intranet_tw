@@ -100,7 +100,8 @@ proc: BEGIN
 
     UNION ALL
     SELECT 'orden_compra', oc.id_oc, oc.numero_oc, 'Orden de compra', oc.estado,
-           oc.url_archivo_pdf, oc.fecha_registro
+           IF(oc.url_archivo_pdf IS NULL, NULL, CONCAT('/api/crm/ordenes-compra/', oc.id_oc, '/pdf')),
+           oc.fecha_registro
     FROM orden_compra oc
     WHERE oc.eliminado_en IS NULL
       AND (oc.id_propuesta = p_id_propuesta
