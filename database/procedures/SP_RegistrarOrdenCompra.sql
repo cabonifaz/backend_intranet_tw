@@ -10,6 +10,7 @@
 --   completa (diferencia 0), parcial (OC menor), excede (OC mayor) o moneda_diferente.
 -- Al guardar: orden_compra en 'pendiente_validacion' con su vigencia, oc_propuesta con el monto
 --   asignado y notificación a Operaciones y Administración (Contabilidad) y al responsable comercial.
+-- HU-24: p_referencia (referencia / glosa, opcional, hasta 200 caracteres).
 -- Resultados: 1 mensaje, 2 cobertura (validar) o datos de la OC registrada (guardar).
 DROP PROCEDURE IF EXISTS SP_RegistrarOrdenCompra;
 
@@ -25,6 +26,7 @@ CREATE PROCEDURE SP_RegistrarOrdenCompra(
     IN p_monto             DECIMAL(14,2),
     IN p_vigencia_dias     INT,
     IN p_observaciones     VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_referencia        VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_ruta_pdf          VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_nombre_pdf        VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_tamano_pdf        BIGINT,
@@ -171,12 +173,12 @@ proc: BEGIN
     START TRANSACTION;
 
     INSERT INTO orden_compra (
-        numero_oc, id_propuesta, id_cliente, id_moneda, monto_total, monto_aplicado, saldo, cobertura_pct,
+        numero_oc, referencia, id_propuesta, id_cliente, id_moneda, monto_total, monto_aplicado, saldo, cobertura_pct,
         fecha_oc, fecha_recepcion, vigencia_desde, vigencia_hasta, vigencia_dias, observaciones,
         url_archivo_pdf, nombre_archivo_pdf, tamano_pdf_bytes, hash_pdf,
         estado, fecha_registro, creado_por)
     VALUES (
-        v_numero_oc, p_id_propuesta, v_id_cliente, p_id_moneda, p_monto, 0, p_monto, v_pct,
+        v_numero_oc, NULLIF(TRIM(IFNULL(p_referencia, '')), ''), p_id_propuesta, v_id_cliente, p_id_moneda, p_monto, 0, p_monto, v_pct,
         p_fecha_oc, p_fecha_recepcion, p_fecha_oc, p_fecha_oc + INTERVAL p_vigencia_dias DAY, p_vigencia_dias,
         NULLIF(TRIM(IFNULL(p_observaciones, '')), ''),
         p_ruta_pdf, p_nombre_pdf, p_tamano_pdf, p_hash_pdf,

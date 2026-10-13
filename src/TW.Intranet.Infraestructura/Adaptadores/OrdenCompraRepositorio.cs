@@ -69,6 +69,7 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
         p.AddWithValue("p_monto",           Valor(d.Monto));
         p.AddWithValue("p_vigencia_dias",   Valor(d.VigenciaDias));
         p.AddWithValue("p_observaciones",   Valor(d.Observaciones));
+        p.AddWithValue("p_referencia",      Valor(d.Referencia));
         p.AddWithValue("p_ruta_pdf",        Valor(ruta));
         p.AddWithValue("p_nombre_pdf",      Valor(nombre));
         p.AddWithValue("p_tamano_pdf",      Valor(tamano));
@@ -231,6 +232,7 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
                 {
                     IdOc                = EnteroLargo(r, "id_oc"),
                     NumeroOc            = Texto(r, "numero_oc") ?? "",
+                    Referencia          = Texto(r, "referencia"),
                     Estado              = Texto(r, "estado") ?? "",
                     EstadoVisual        = Texto(r, "estado_visual") ?? "",
                     FechaOc             = Fecha(r, "fecha_oc"),
@@ -353,6 +355,165 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
                         Dec(r, "total"), Ent(r, "id_moneda"), Texto(r, "moneda"), Texto(r, "moneda_simbolo"),
                         FechaHora(r, "fecha_aceptacion"), EnteroLargo(r, "id_responsable"), Texto(r, "responsable")));
                 return new RespuestaDto<List<PropuestaSinOrdenCompraDto>>(2, mensaje, lista);
+            },
+            ct);
+
+    // ══════════════════════ HU-24 — Registro y Edición ══════════════════════
+
+    public Task<RespuestaDto<EvaluacionOrdenCompraDto>> EvaluarAsync(long? idPropuesta, long? idOc, EvaluacionOrdenCompraSolicitudDto d, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_EvaluarOrdenCompra",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario",    idUsuario);
+                p.AddWithValue("p_id_propuesta",  Valor(idPropuesta));
+                p.AddWithValue("p_id_oc",         Valor(idOc));
+                p.AddWithValue("p_numero_oc",     Valor(d.NumeroOc));
+                p.AddWithValue("p_id_moneda",     Valor(d.IdMoneda));
+                p.AddWithValue("p_monto",         Valor(d.Monto));
+                p.AddWithValue("p_tiene_archivo", Bit(d.TieneArchivo));
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<EvaluacionOrdenCompraDto>(3, "No se pudo evaluar la orden de compra.");
+                var evaluacion = new EvaluacionOrdenCompraDto
+                {
+                    EstadoCobertura         = Texto(r, "estado_cobertura") ?? "",
+                    EtiquetaCobertura       = Texto(r, "etiqueta_cobertura") ?? "",
+                    CoberturaPct            = Dec(r, "cobertura_pct"),
+                    Diferencia              = DecimalNulo(r, "diferencia"),
+                    MontoPropuesta          = Dec(r, "monto_propuesta"),
+                    IdMonedaPropuesta       = Ent(r, "id_moneda_propuesta"),
+                    MonedaSimboloPropuesta  = Texto(r, "moneda_simbolo_propuesta"),
+                    MontoOc                 = DecimalNulo(r, "monto_oc"),
+                    IdMonedaOc              = EntNulo(r, "id_moneda_oc"),
+                    MonedaSimboloOc         = Texto(r, "moneda_simbolo_oc"),
+                    ToleranciaPct           = Dec(r, "tolerancia_pct"),
+                    DentroTolerancia        = Booleano(r, "dentro_tolerancia"),
+                    EsEdicion               = Booleano(r, "es_edicion"),
+                    MontoOcActual           = DecimalNulo(r, "monto_oc_actual"),
+                    IdMonedaActual          = EntNulo(r, "id_moneda_actual"),
+                    CambiaMontoMoneda       = Booleano(r, "cambia_monto_moneda"),
+                    RequiereRevalidacion    = Booleano(r, "requiere_revalidacion"),
+                    CambioBloqueado         = Booleano(r, "cambio_bloqueado"),
+                    MontoAplicadoProyectado = Dec(r, "monto_aplicado_proyectado"),
+                    SaldoProyectado         = Dec(r, "saldo_proyectado"),
+                };
+
+                await r.NextResultAsync(ct);
+                var checklist = new List<ItemChecklistOrdenCompraDto>();
+                while (await r.ReadAsync(ct))
+                    checklist.Add(new ItemChecklistOrdenCompraDto(
+                        Texto(r, "codigo") ?? "", Texto(r, "descripcion") ?? "", Booleano(r, "cumple"), Texto(r, "detalle")));
+
+                int cumplidos = checklist.Count(c => c.Cumple);
+                return new RespuestaDto<EvaluacionOrdenCompraDto>(2, mensaje, evaluacion with
+                {
+                    Checklist          = checklist,
+                    ChecklistCumplidos = cumplidos,
+                    TodoConforme       = checklist.Count > 0 && cumplidos == checklist.Count,
+                });
+            },
+            ct);
+
+    public Task<RespuestaDto<EdicionOrdenCompraDto>> PrepararEdicionAsync(long idOc, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_PrepararEdicionOrdenCompra",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario", idUsuario);
+                p.AddWithValue("p_id_oc",      idOc);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<EdicionOrdenCompraDto>(3, "No se pudo leer la orden de compra.");
+                var oc = new OrdenCompraEdicionDto
+                {
+                    IdOc                          = EnteroLargo(r, "id_oc"),
+                    NumeroOc                      = Texto(r, "numero_oc") ?? "",
+                    Referencia                    = Texto(r, "referencia"),
+                    FechaOc                       = Fecha(r, "fecha_oc"),
+                    FechaRecepcion                = Fecha(r, "fecha_recepcion"),
+                    VigenciaDias                  = EntNulo(r, "vigencia_dias"),
+                    VigenciaHasta                 = Fecha(r, "vigencia_hasta"),
+                    IdMoneda                      = Ent(r, "id_moneda"),
+                    Moneda                        = Texto(r, "moneda"),
+                    MonedaSimbolo                 = Texto(r, "moneda_simbolo"),
+                    MonedaNombre                  = Texto(r, "moneda_nombre"),
+                    MontoOc                       = Dec(r, "monto_oc"),
+                    Observaciones                 = Texto(r, "observaciones"),
+                    NombreArchivoPdf              = Texto(r, "nombre_archivo_pdf"),
+                    TamanoPdfBytes                = EnteroLargoNulo(r, "tamano_pdf_bytes"),
+                    UrlPdf                        = Texto(r, "url_pdf"),
+                    IdPropuesta                   = EnteroLargoNulo(r, "id_propuesta"),
+                    NumeroPropuesta               = Texto(r, "numero_propuesta"),
+                    VersionPropuesta              = EntNulo(r, "version_propuesta"),
+                    IdRequerimiento               = EnteroLargoNulo(r, "id_requerimiento"),
+                    NumeroRq                      = Texto(r, "numero_rq"),
+                    IdCliente                     = EnteroLargo(r, "id_cliente"),
+                    RazonSocial                   = Texto(r, "razon_social") ?? "",
+                    Ruc                           = Texto(r, "ruc"),
+                    IdMonedaPropuesta             = EntNulo(r, "id_moneda_propuesta"),
+                    MonedaSimboloPropuesta        = Texto(r, "moneda_simbolo_propuesta"),
+                    MontoPropuesta                = Dec(r, "monto_propuesta"),
+                    MontoAplicado                 = Dec(r, "monto_aplicado"),
+                    Saldo                         = Dec(r, "saldo"),
+                    CoberturaPct                  = DecimalNulo(r, "cobertura_pct"),
+                    UtilizacionPct                = Dec(r, "utilizacion_pct"),
+                    CoberturaCodigo               = Texto(r, "cobertura_codigo") ?? "",
+                    CoberturaProyectada           = Texto(r, "cobertura_proyectada") ?? "",
+                    Estado                        = Texto(r, "estado") ?? "",
+                    EstadoVisual                  = Texto(r, "estado_visual") ?? "",
+                    IdMotivoObservacion           = EntNulo(r, "id_motivo_observacion"),
+                    MotivoObservacion             = Texto(r, "motivo_observacion"),
+                    RequiereRevalidacionAlCambiar = Booleano(r, "requiere_revalidacion_al_cambiar"),
+                    PuedeCambiarMonto             = Booleano(r, "puede_cambiar_monto"),
+                    OrdenesServicio               = Ent(r, "ordenes_servicio"),
+                    FechaServidor                 = Fecha(r, "fecha_servidor"),
+                };
+
+                await r.NextResultAsync(ct);
+                var monedas = new List<MonedaOrdenCompraDto>();
+                while (await r.ReadAsync(ct))
+                    monedas.Add(new MonedaOrdenCompraDto(Ent(r, "id"), Texto(r, "nombre") ?? "", Texto(r, "simbolo"), Texto(r, "codigo")));
+
+                return new RespuestaDto<EdicionOrdenCompraDto>(2, mensaje, new EdicionOrdenCompraDto(oc, monedas));
+            },
+            ct);
+
+    public Task<RespuestaDto<OrdenCompraEditadaDto>> EditarAsync(long idOc, ComandoEdicionOrdenCompra c, bool soloValidar, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_EditarOrdenCompra",
+            p =>
+            {
+                var d = c.Datos;
+                p.AddWithValue("p_id_usuario",      idUsuario);
+                p.AddWithValue("p_id_oc",           idOc);
+                p.AddWithValue("p_numero_oc",       Valor(d.NumeroOc));
+                p.AddWithValue("p_referencia",      Valor(d.Referencia));
+                p.AddWithValue("p_fecha_oc",        Valor(d.FechaOc));
+                p.AddWithValue("p_fecha_recepcion", Valor(d.FechaRecepcion));
+                p.AddWithValue("p_id_moneda",       Valor(d.IdMoneda));
+                p.AddWithValue("p_monto",           Valor(d.Monto));
+                p.AddWithValue("p_vigencia_dias",   Valor(d.VigenciaDias));
+                p.AddWithValue("p_observaciones",   Valor(d.Observaciones));
+                p.AddWithValue("p_revalidar",       Bit(c.Revalidar));
+                p.AddWithValue("p_ruta_pdf",        Valor(c.RutaPdf));
+                p.AddWithValue("p_nombre_pdf",      Valor(c.NombrePdf));
+                p.AddWithValue("p_tamano_pdf",      Valor(c.TamanoPdf));
+                p.AddWithValue("p_hash_pdf",        Valor(c.HashPdf));
+                p.AddWithValue("p_solo_validar",    Bit(soloValidar));
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<OrdenCompraEditadaDto>(3, "No se pudo leer la orden de compra editada.");
+                return new RespuestaDto<OrdenCompraEditadaDto>(2, mensaje, new OrdenCompraEditadaDto(
+                    EnteroLargo(r, "id_oc"), Texto(r, "numero_oc") ?? "", Texto(r, "estado") ?? "",
+                    Texto(r, "estado_cobertura") ?? "", Dec(r, "cobertura_pct"), DecimalNulo(r, "diferencia"),
+                    Booleano(r, "requiere_revalidacion"), Texto(r, "cambios"), Ent(r, "notificados")));
             },
             ct);
 }

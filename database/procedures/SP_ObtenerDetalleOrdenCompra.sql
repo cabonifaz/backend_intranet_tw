@@ -8,7 +8,7 @@
 --   5 vinculaciones del proceso: RQ, propuesta, expediente y OS (disponible = 0 si aún no existe)
 --   6 documentos: PDF de la OC, PDF de las propuestas y evidencias de la aceptación
 --   7 workflow: etapas con estado completado | actual | observado | bloqueado | pendiente
---   8 historial
+--   8 historial (HU-24: incluye las ediciones de la OC)
 DROP PROCEDURE IF EXISTS SP_ObtenerDetalleOrdenCompra;
 
 DELIMITER $$
@@ -121,7 +121,7 @@ BEGIN
 
             SELECT MAX(registrado_en) INTO v_fecha_valid
             FROM auditoria_evento
-            WHERE entidad_tipo = 'orden_compra' AND id_entidad = p_id_oc AND accion LIKE '%valid%';
+            WHERE entidad_tipo = 'orden_compra' AND id_entidad = p_id_oc AND accion = 'validar_oc';
 
             SELECT fecha_creacion INTO v_fecha_rq FROM requerimiento WHERE id_requerimiento = v_id_rq;
 
@@ -137,7 +137,7 @@ BEGIN
 
             -- 2. Resumen
             SELECT
-                t.id_oc, t.numero_oc, t.estado_bd AS estado, t.estado_visual,
+                t.id_oc, t.numero_oc, oc.referencia, t.estado_bd AS estado, t.estado_visual,
                 t.fecha_oc, t.fecha_recepcion, t.vigencia_desde, t.vigencia_hasta, t.vigencia_dias,
                 IF(t.vigencia_hasta IS NULL, NULL, DATEDIFF(t.vigencia_hasta, CURDATE())) AS dias_para_vencer,
                 t.observaciones,
@@ -325,7 +325,13 @@ BEGIN
                 GROUP BY DATE_FORMAT(n.fecha_creacion, '%Y-%m-%d %H:%i')
                 UNION ALL
                 SELECT a.registrado_en, a.accion,
-                       CONCAT(UPPER(LEFT(REPLACE(a.accion, '_', ' '), 1)), SUBSTRING(REPLACE(a.accion, '_', ' '), 2)),
+                       CASE a.accion
+                           WHEN 'editar_oc'              THEN 'Orden de compra editada'
+                           WHEN 'editar_oc_revalidacion' THEN 'Editada y enviada a revalidación'
+                           WHEN 'validar_oc'             THEN 'Orden de compra validada'
+                           WHEN 'observar_oc'            THEN 'Orden de compra observada'
+                           ELSE CONCAT(UPPER(LEFT(REPLACE(a.accion, '_', ' '), 1)), SUBSTRING(REPLACE(a.accion, '_', ' '), 2))
+                       END,
                        COALESCE(a.descripcion,
                                 CONCAT(IFNULL(a.estado_anterior, ''), ' → ', IFNULL(a.estado_nuevo, ''))),
                        a.id_usuario, CONCAT(u.nombre, ' ', u.apellido)

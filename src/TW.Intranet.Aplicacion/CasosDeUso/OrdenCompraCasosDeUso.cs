@@ -21,6 +21,7 @@ internal static class ValidacionOrdenCompra
         if (d.Monto > 999_999_999_999m)             return "El monto de la orden de compra es demasiado grande.";
         if (d.VigenciaDias is null or < 1 or > 3650) return "Indique la vigencia de la orden de compra en días (1 a 3650).";
         if ((d.Observaciones?.Trim().Length ?? 0) > 500) return "Las observaciones admiten hasta 500 caracteres.";
+        if ((d.Referencia?.Trim().Length ?? 0) > 200)    return "La referencia admite hasta 200 caracteres.";
         return null;
     }
 
@@ -31,7 +32,42 @@ internal static class ValidacionOrdenCompra
         FechaRecepcion = d.FechaRecepcion?.Date,
         Monto          = d.Monto is { } m ? Math.Round(m, 2) : null,
         Observaciones  = string.IsNullOrWhiteSpace(d.Observaciones) ? null : d.Observaciones.Trim(),
+        Referencia     = string.IsNullOrWhiteSpace(d.Referencia) ? null : d.Referencia.Trim(),
     };
+}
+
+/// <summary>Lectura y verificación del PDF de la OC (registro HU-22 y edición HU-24).</summary>
+internal static class PdfOrdenCompra
+{
+    public const long TamanoMaximoBytes = 10 * 1024 * 1024;
+
+    /// <summary>Copia el archivo al buffer y verifica tamaño y firma "%PDF-" (no basta con la extensión). Devuelve el error o null.</summary>
+    public static async Task<string?> LeerAsync(Stream pdf, MemoryStream buffer, CancellationToken ct)
+    {
+        await pdf.CopyToAsync(buffer, ct);
+        if (buffer.Length == 0)                return "Adjunte el PDF de la orden de compra.";
+        if (buffer.Length > TamanoMaximoBytes) return "El PDF de la orden de compra no puede superar los 10 MB.";
+        if (!buffer.GetBuffer().AsSpan(0, (int)buffer.Length).StartsWith("%PDF-"u8))
+            return "El archivo de la orden de compra no es un PDF válido.";
+        return null;
+    }
+
+    public static string Hash(MemoryStream buffer) =>
+        Convert.ToHexStringLower(SHA256.HashData(buffer.GetBuffer().AsSpan(0, (int)buffer.Length)));
+
+    public static string Ruta(string carpeta) =>
+        $"ordenes-compra/{carpeta}/{DateTime.UtcNow:yyyyMMddHHmmss}_{Guid.NewGuid():N}.pdf";
+
+    public static string NormalizarNombre(string? nombreArchivo, string numeroOc)
+    {
+        var nombre = Path.GetFileName(nombreArchivo ?? "").Trim();
+        foreach (var c in Path.GetInvalidFileNameChars())
+            nombre = nombre.Replace(c, '_');
+        if (nombre.Length == 0) nombre = $"OC-{numeroOc}.pdf";
+        if (!nombre.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase)) nombre += ".pdf";
+        if (nombre.Length > 255) nombre = nombre[..251] + ".pdf";
+        return nombre;
+    }
 }
 
 /// <summary>Datos del modal: propuesta aceptada (monto y moneda para la cobertura), monedas y vigencia sugerida.</summary>
@@ -65,7 +101,7 @@ public class CalcularCoberturaOrdenCompraCasoDeUso(IOrdenCompraRepositorio repos
 /// </summary>
 public class RegistrarOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio, IAlmacenArchivos almacen)
 {
-    public const long TamanoMaximoBytes = 10 * 1024 * 1024;
+    public const long TamanoMaximoBytes = PdfOrdenCompra.TamanoMaximoBytes;
 
     public async Task<RespuestaDto<OrdenCompraRegistradaDto>> EjecutarAsync(
         long idPropuesta, DatosOrdenCompraDto datos, Stream? pdf, string? nombreArchivo, long tamanoBytes,
@@ -84,15 +120,11 @@ public class RegistrarOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio, 
 
         // 2. Leer y verificar el PDF
         using var buffer = new MemoryStream();
-        await pdf.CopyToAsync(buffer, ct);
-        if (buffer.Length == 0)                 return new(1, "Adjunte el PDF de la orden de compra.");
-        if (buffer.Length > TamanoMaximoBytes)  return new(1, "El PDF de la orden de compra no puede superar los 10 MB.");
-
-        var (esPdf, hash) = Analizar(buffer);
-        if (!esPdf)                             return new(1, "El archivo de la orden de compra no es un PDF válido.");
-
-        var nombre = NormalizarNombre(nombreArchivo, normalizados.NumeroOc!);
-        var ruta   = $"ordenes-compra/{idPropuesta}/{DateTime.UtcNow:yyyyMMddHHmmss}_{Guid.NewGuid():N}.pdf";
+        var errorPdf = await PdfOrdenCompra.LeerAsync(pdf, buffer, ct);
+        if (errorPdf is not null) return new(1, errorPdf);
+        var hash   = PdfOrdenCompra.Hash(buffer);
+        var nombre = PdfOrdenCompra.NormalizarNombre(nombreArchivo, normalizados.NumeroOc!);
+        var ruta   = PdfOrdenCompra.Ruta(idPropuesta.ToString());
 
         buffer.Position = 0;
         await almacen.GuardarAsync(ruta, buffer, ct);
@@ -104,25 +136,6 @@ public class RegistrarOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio, 
             await almacen.EliminarAsync(ruta, CancellationToken.None);
 
         return registro;
-    }
-
-    /// <summary>Verifica la firma "%PDF-" (no basta con la extensión) y calcula el SHA-256.</summary>
-    private static (bool EsPdf, string Hash) Analizar(MemoryStream buffer)
-    {
-        ReadOnlySpan<byte> bytes = buffer.GetBuffer().AsSpan(0, (int)buffer.Length);
-        bool esPdf = bytes.StartsWith("%PDF-"u8);
-        return (esPdf, esPdf ? Convert.ToHexStringLower(SHA256.HashData(bytes)) : "");
-    }
-
-    private static string NormalizarNombre(string? nombreArchivo, string numeroOc)
-    {
-        var nombre = Path.GetFileName(nombreArchivo ?? "").Trim();
-        foreach (var c in Path.GetInvalidFileNameChars())
-            nombre = nombre.Replace(c, '_');
-        if (nombre.Length == 0) nombre = $"OC-{numeroOc}.pdf";
-        if (!nombre.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase)) nombre += ".pdf";
-        if (nombre.Length > 255) nombre = nombre[..251] + ".pdf";
-        return nombre;
     }
 }
 
@@ -208,5 +221,94 @@ public class ObtenerPropuestasSinOrdenCompraCasoDeUso(IOrdenCompraRepositorio re
         var texto = string.IsNullOrWhiteSpace(busqueda) ? null : busqueda.Trim();
         if (texto is { Length: > 200 }) texto = texto[..200];
         return repositorio.ObtenerPropuestasSinOrdenCompraAsync(texto, idUsuario, ct);
+    }
+}
+
+// ══════════════════════ HU-24 — Registro y Edición de Orden de Compra ══════════════════════
+
+/// <summary>Panel lateral en tiempo real (cobertura + checklist de negocio) para el registro y la edición.</summary>
+public class EvaluarOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio)
+{
+    private static EvaluacionOrdenCompraSolicitudDto Normalizar(EvaluacionOrdenCompraSolicitudDto d) => d with
+    {
+        NumeroOc = string.IsNullOrWhiteSpace(d.NumeroOc) ? null : d.NumeroOc.Trim()[..Math.Min(d.NumeroOc.Trim().Length, 50)],
+        IdMoneda = d.IdMoneda is > 0 ? d.IdMoneda : null,
+        Monto    = d.Monto is > 0 and <= 999_999_999_999m ? Math.Round(d.Monto.Value, 2) : null,
+    };
+
+    public Task<RespuestaDto<EvaluacionOrdenCompraDto>> EvaluarRegistroAsync(
+        long idPropuesta, EvaluacionOrdenCompraSolicitudDto datos, long idUsuario, CancellationToken ct = default)
+    {
+        if (idPropuesta <= 0)
+            return Task.FromResult(new RespuestaDto<EvaluacionOrdenCompraDto>(1, "Propuesta no válida."));
+        return repositorio.EvaluarAsync(idPropuesta, null, Normalizar(datos), idUsuario, ct);
+    }
+
+    public Task<RespuestaDto<EvaluacionOrdenCompraDto>> EvaluarEdicionAsync(
+        long idOc, EvaluacionOrdenCompraSolicitudDto datos, long idUsuario, CancellationToken ct = default)
+    {
+        if (idOc <= 0)
+            return Task.FromResult(new RespuestaDto<EvaluacionOrdenCompraDto>(1, "Orden de compra no válida."));
+        return repositorio.EvaluarAsync(null, idOc, Normalizar(datos), idUsuario, ct);
+    }
+}
+
+/// <summary>Datos de la pantalla "Editar Orden de Compra".</summary>
+public class PrepararEdicionOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio)
+{
+    public Task<RespuestaDto<EdicionOrdenCompraDto>> EjecutarAsync(long idOc, long idUsuario, CancellationToken ct = default)
+    {
+        if (idOc <= 0)
+            return Task.FromResult(new RespuestaDto<EdicionOrdenCompraDto>(1, "Orden de compra no válida."));
+        return repositorio.PrepararEdicionAsync(idOc, idUsuario, ct);
+    }
+}
+
+/// <summary>
+/// Edita la OC: valida en BD, guarda el PDF nuevo si llega (opcional) y actualiza. Cambiar monto o moneda
+/// de una OC validada, o "Guardar y revalidar", la regresa a validación y notifica a Contabilidad y Operaciones.
+/// </summary>
+public class EditarOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio, IAlmacenArchivos almacen)
+{
+    public async Task<RespuestaDto<OrdenCompraEditadaDto>> EjecutarAsync(
+        long idOc, EditarOrdenCompraSolicitudDto datos, Stream? pdf, string? nombreArchivo, long tamanoBytes,
+        long idUsuario, CancellationToken ct = default)
+    {
+        if (idOc <= 0) return new(1, "Orden de compra no válida.");
+        if (ValidacionOrdenCompra.Validar(datos) is { } error) return new(1, error);
+        if (pdf is not null && tamanoBytes > PdfOrdenCompra.TamanoMaximoBytes)
+            return new(1, "El PDF de la orden de compra no puede superar los 10 MB.");
+
+        var normalizados = ValidacionOrdenCompra.Normalizar(datos);
+
+        // 1. Validar en BD antes de escribir nada en disco
+        var validacion = await repositorio.EditarAsync(idOc,
+            new ComandoEdicionOrdenCompra(normalizados, datos.Revalidar, null, null, null, null),
+            soloValidar: true, idUsuario, ct);
+        if (validacion.IdTipoMensaje != 2) return validacion;
+
+        // 2. Sin PDF nuevo: se guardan solo los datos
+        if (pdf is null || tamanoBytes <= 0)
+            return await repositorio.EditarAsync(idOc,
+                new ComandoEdicionOrdenCompra(normalizados, datos.Revalidar, null, null, null, null),
+                soloValidar: false, idUsuario, ct);
+
+        // 3. Con PDF nuevo: verificar, guardar y registrar (el anterior se conserva para el historial)
+        using var buffer = new MemoryStream();
+        var errorPdf = await PdfOrdenCompra.LeerAsync(pdf, buffer, ct);
+        if (errorPdf is not null) return new(1, errorPdf);
+
+        var ruta = PdfOrdenCompra.Ruta($"oc-{idOc}");
+        buffer.Position = 0;
+        await almacen.GuardarAsync(ruta, buffer, ct);
+
+        var resultado = await repositorio.EditarAsync(idOc,
+            new ComandoEdicionOrdenCompra(normalizados, datos.Revalidar, ruta,
+                PdfOrdenCompra.NormalizarNombre(nombreArchivo, normalizados.NumeroOc!), buffer.Length, PdfOrdenCompra.Hash(buffer)),
+            soloValidar: false, idUsuario, ct);
+        if (resultado.IdTipoMensaje != 2)
+            await almacen.EliminarAsync(ruta, CancellationToken.None);
+
+        return resultado;
     }
 }

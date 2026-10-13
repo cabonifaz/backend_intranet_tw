@@ -8,7 +8,7 @@ using TW.Intranet.Aplicacion.Dtos;
 
 namespace TW.Intranet.API.Controllers;
 
-/// <summary>HU-22 Registro y HU-23 Bandeja y Detalle de las Órdenes de Compra recibidas del cliente.</summary>
+/// <summary>HU-22/HU-24 Registro y Edición y HU-23 Bandeja y Detalle de las Órdenes de Compra recibidas del cliente.</summary>
 [ApiController]
 [Authorize]
 public class OrdenesCompraController(
@@ -18,7 +18,10 @@ public class OrdenesCompraController(
     ObtenerPdfOrdenCompraCasoDeUso        obtenerPdf,
     ObtenerBandejaOrdenesCompraCasoDeUso      obtenerBandeja,
     ObtenerDetalleOrdenCompraCasoDeUso        obtenerDetalle,
-    ObtenerPropuestasSinOrdenCompraCasoDeUso  obtenerPropuestasSinOc) : ControllerBase
+    ObtenerPropuestasSinOrdenCompraCasoDeUso  obtenerPropuestasSinOc,
+    EvaluarOrdenCompraCasoDeUso               evaluar,
+    PrepararEdicionOrdenCompraCasoDeUso       prepararEdicion,
+    EditarOrdenCompraCasoDeUso                editar) : ControllerBase
 {
     /// <summary>10 MB del PDF + margen para el resto del multipart.</summary>
     private const long TamanoMaximoPeticion = RegistrarOrdenCompraCasoDeUso.TamanoMaximoBytes + 1024 * 1024;
@@ -116,4 +119,49 @@ public class OrdenesCompraController(
     [HttpGet("api/crm/ordenes-compra/{idOc:long}")]
     public async Task<IActionResult> Detalle(long idOc, CancellationToken ct = default)
         => Responder(await obtenerDetalle.EjecutarAsync(idOc, IdUsuarioActual, ct), noEncontradoComo404: true);
+
+    /// <summary>
+    /// HU-24 — Panel "Validación de Cobertura" y "Checklist de negocio" en tiempo real al REGISTRAR:
+    /// { numeroOc, idMoneda, monto, tieneArchivo } (todo opcional). No guarda nada.
+    /// </summary>
+    [RequierePermiso("oc_registrar")]
+    [HttpPost("api/crm/propuestas/{idPropuesta:long}/orden-compra/evaluar")]
+    public async Task<IActionResult> EvaluarRegistro(long idPropuesta, [FromBody] EvaluacionOrdenCompraSolicitudDto datos, CancellationToken ct = default)
+        => Responder(await evaluar.EvaluarRegistroAsync(idPropuesta, datos, IdUsuarioActual, ct));
+
+    /// <summary>
+    /// HU-24 — Datos de la pantalla "Editar Orden de Compra": campos editables, propuesta/RQ/cliente bloqueados,
+    /// resumen de situación y si cambiar monto o moneda exigirá revalidación.
+    /// </summary>
+    [RequierePermiso("oc_editar")]
+    [HttpGet("api/crm/ordenes-compra/{idOc:long}/edicion")]
+    public async Task<IActionResult> PrepararEdicion(long idOc, CancellationToken ct = default)
+        => Responder(await prepararEdicion.EjecutarAsync(idOc, IdUsuarioActual, ct), noEncontradoComo404: true);
+
+    /// <summary>HU-24 — Panel en tiempo real al EDITAR (incluye requiereRevalidacion y cambioBloqueado).</summary>
+    [RequierePermiso("oc_editar")]
+    [HttpPost("api/crm/ordenes-compra/{idOc:long}/evaluar")]
+    public async Task<IActionResult> EvaluarEdicion(long idOc, [FromBody] EvaluacionOrdenCompraSolicitudDto datos, CancellationToken ct = default)
+        => Responder(await evaluar.EvaluarEdicionAsync(idOc, datos, IdUsuarioActual, ct));
+
+    /// <summary>
+    /// HU-24 — Guardar la edición (multipart/form-data): numeroOc, referencia, fechaOc, fechaRecepcion, idMoneda,
+    /// monto, vigenciaDias, observaciones, revalidar (true = "Guardar y revalidar") y opcionalmente un PDF nuevo
+    /// en "archivo". Cambiar monto o moneda de una OC validada la regresa a validación.
+    /// </summary>
+    [RequierePermiso("oc_editar")]
+    [HttpPut("api/crm/ordenes-compra/{idOc:long}")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(TamanoMaximoPeticion)]
+    [RequestFormLimits(MultipartBodyLengthLimit = TamanoMaximoPeticion)]
+    public async Task<IActionResult> Editar(long idOc, [FromForm] EditarOrdenCompraSolicitudDto datos,
+                                            IFormFile? archivo, CancellationToken ct = default)
+    {
+        if (archivo is null || archivo.Length == 0)
+            return Responder(await editar.EjecutarAsync(idOc, datos, null, null, 0, IdUsuarioActual, ct));
+
+        await using var contenido = archivo.OpenReadStream();
+        return Responder(await editar.EjecutarAsync(
+            idOc, datos, contenido, archivo.FileName, archivo.Length, IdUsuarioActual, ct));
+    }
 }

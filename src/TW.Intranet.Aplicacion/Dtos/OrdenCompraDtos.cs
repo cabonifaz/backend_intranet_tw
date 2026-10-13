@@ -41,6 +41,8 @@ public record DatosOrdenCompraDto
     public decimal?  Monto          { get; init; }
     public int?      VigenciaDias   { get; init; }
     public string?   Observaciones  { get; init; }
+    /// <summary>HU-24 — Referencia / glosa de la OC (opcional, hasta 200 caracteres).</summary>
+    public string?   Referencia     { get; init; }
 }
 
 /// <summary>Datos que el caso de uso envía al SP (incluye el PDF ya guardado).</summary>
@@ -172,6 +174,7 @@ public record ResumenOrdenCompraDto
 {
     public long      IdOc                 { get; init; }
     public string    NumeroOc             { get; init; } = "";
+    public string?   Referencia           { get; init; }
     public string    Estado               { get; init; } = "";
     public string    EstadoVisual         { get; init; } = "";
     public string?   FechaOc              { get; init; }
@@ -280,3 +283,124 @@ public record PropuestaSinOrdenCompraDto(
     DateTime? FechaAceptacion,
     long      IdResponsable,
     string?   Responsable);
+
+// ══════════════════════ HU-24 — Registro y Edición de Orden de Compra ══════════════════════
+
+/// <summary>Datos que se van escribiendo en el formulario (panel en tiempo real). Todos opcionales.</summary>
+public record EvaluacionOrdenCompraSolicitudDto
+{
+    public string?  NumeroOc     { get; init; }
+    public int?     IdMoneda     { get; init; }
+    public decimal? Monto        { get; init; }
+    /// <summary>true si el usuario ya seleccionó el PDF (aún no subido).</summary>
+    public bool     TieneArchivo { get; init; }
+}
+
+/// <summary>
+/// Panel "Validación de Cobertura" + "Checklist de negocio".
+/// EstadoCobertura: sin_monto | completa | con_saldo | insuficiente | moneda_diferente.
+/// En edición: CambiaMontoMoneda, RequiereRevalidacion (la OC validada vuelve a validación) y
+/// CambioBloqueado (la OC ya tiene órdenes de servicio).
+/// </summary>
+public record EvaluacionOrdenCompraDto
+{
+    public string   EstadoCobertura         { get; init; } = "";
+    public string   EtiquetaCobertura       { get; init; } = "";
+    public decimal  CoberturaPct            { get; init; }
+    public decimal? Diferencia              { get; init; }
+    public decimal  MontoPropuesta          { get; init; }
+    public int      IdMonedaPropuesta       { get; init; }
+    public string?  MonedaSimboloPropuesta  { get; init; }
+    public decimal? MontoOc                 { get; init; }
+    public int?     IdMonedaOc              { get; init; }
+    public string?  MonedaSimboloOc         { get; init; }
+    public decimal  ToleranciaPct           { get; init; }
+    public bool     DentroTolerancia        { get; init; }
+    public bool     EsEdicion               { get; init; }
+    public decimal? MontoOcActual           { get; init; }
+    public int?     IdMonedaActual          { get; init; }
+    public bool     CambiaMontoMoneda       { get; init; }
+    public bool     RequiereRevalidacion    { get; init; }
+    public bool     CambioBloqueado         { get; init; }
+    public decimal  MontoAplicadoProyectado { get; init; }
+    public decimal  SaldoProyectado         { get; init; }
+    public List<ItemChecklistOrdenCompraDto> Checklist { get; init; } = [];
+    public int      ChecklistCumplidos      { get; init; }
+    public bool     TodoConforme            { get; init; }
+}
+
+/// <summary>OC a editar: datos editables, datos bloqueados (propuesta, RQ, cliente) y resumen de situación.</summary>
+public record OrdenCompraEdicionDto
+{
+    public long      IdOc                          { get; init; }
+    public string    NumeroOc                      { get; init; } = "";
+    public string?   Referencia                    { get; init; }
+    public string?   FechaOc                       { get; init; }
+    public string?   FechaRecepcion                { get; init; }
+    public int?      VigenciaDias                  { get; init; }
+    public string?   VigenciaHasta                 { get; init; }
+    public int       IdMoneda                      { get; init; }
+    public string?   Moneda                        { get; init; }
+    public string?   MonedaSimbolo                 { get; init; }
+    public string?   MonedaNombre                  { get; init; }
+    public decimal   MontoOc                       { get; init; }
+    public string?   Observaciones                 { get; init; }
+    public string?   NombreArchivoPdf              { get; init; }
+    public long?     TamanoPdfBytes                { get; init; }
+    public string?   UrlPdf                        { get; init; }
+    public long?     IdPropuesta                   { get; init; }
+    public string?   NumeroPropuesta               { get; init; }
+    public int?      VersionPropuesta              { get; init; }
+    public long?     IdRequerimiento               { get; init; }
+    public string?   NumeroRq                      { get; init; }
+    public long      IdCliente                     { get; init; }
+    public string    RazonSocial                   { get; init; } = "";
+    public string?   Ruc                           { get; init; }
+    public int?      IdMonedaPropuesta             { get; init; }
+    public string?   MonedaSimboloPropuesta        { get; init; }
+    public decimal   MontoPropuesta                { get; init; }
+    public decimal   MontoAplicado                 { get; init; }
+    public decimal   Saldo                         { get; init; }
+    public decimal?  CoberturaPct                  { get; init; }
+    public decimal   UtilizacionPct                { get; init; }
+    public string    CoberturaCodigo               { get; init; } = "";
+    public string    CoberturaProyectada           { get; init; } = "";
+    public string    Estado                        { get; init; } = "";
+    public string    EstadoVisual                  { get; init; } = "";
+    public int?      IdMotivoObservacion           { get; init; }
+    public string?   MotivoObservacion             { get; init; }
+    /// <summary>true si la OC está validada: cambiar monto o moneda la regresa a validación (alerta "Revalidación necesaria").</summary>
+    public bool      RequiereRevalidacionAlCambiar { get; init; }
+    /// <summary>false si la OC ya tiene órdenes de servicio (no se puede cambiar monto ni moneda).</summary>
+    public bool      PuedeCambiarMonto             { get; init; }
+    public int       OrdenesServicio               { get; init; }
+    public string?   FechaServidor                 { get; init; }
+}
+
+public record EdicionOrdenCompraDto(OrdenCompraEdicionDto OrdenCompra, List<MonedaOrdenCompraDto> Monedas);
+
+/// <summary>Formulario de edición: los datos de la OC + Revalidar ("Guardar y revalidar").</summary>
+public record EditarOrdenCompraSolicitudDto : DatosOrdenCompraDto
+{
+    public bool Revalidar { get; init; }
+}
+
+public record ComandoEdicionOrdenCompra(
+    DatosOrdenCompraDto Datos,
+    bool                Revalidar,
+    string?             RutaPdf,
+    string?             NombrePdf,
+    long?               TamanoPdf,
+    string?             HashPdf);
+
+/// <summary>Resultado de la edición. RequiereRevalidacion = la OC volvió a 'pendiente_validacion'.</summary>
+public record OrdenCompraEditadaDto(
+    long     IdOc,
+    string   NumeroOc,
+    string   Estado,
+    string   EstadoCobertura,
+    decimal  CoberturaPct,
+    decimal? Diferencia,
+    bool     RequiereRevalidacion,
+    string?  Cambios,
+    int      Notificados);

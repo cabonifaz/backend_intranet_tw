@@ -20,4 +20,12 @@ public interface IOrdenCompraRepositorio
     Task<RespuestaDto<DetalleOrdenCompraDto>> ObtenerDetalleAsync(long idOc, long idUsuario, CancellationToken ct);
 
     Task<RespuestaDto<List<PropuestaSinOrdenCompraDto>>> ObtenerPropuestasSinOrdenCompraAsync(string? busqueda, long idUsuario, CancellationToken ct);
+
+    // HU-24
+    /// <summary>Panel en tiempo real. Registro: idPropuesta. Edición: idOc.</summary>
+    Task<RespuestaDto<EvaluacionOrdenCompraDto>> EvaluarAsync(long? idPropuesta, long? idOc, EvaluacionOrdenCompraSolicitudDto datos, long idUsuario, CancellationToken ct);
+
+    Task<RespuestaDto<EdicionOrdenCompraDto>> PrepararEdicionAsync(long idOc, long idUsuario, CancellationToken ct);
+
+    Task<RespuestaDto<OrdenCompraEditadaDto>> EditarAsync(long idOc, ComandoEdicionOrdenCompra comando, bool soloValidar, long idUsuario, CancellationToken ct);
 }
