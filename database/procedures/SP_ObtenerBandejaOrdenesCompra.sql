@@ -6,6 +6,7 @@
 --   p_cobertura: vacío, completa, con_saldo, insuficiente, moneda_diferente, pendiente
 --   p_id_cliente, p_id_responsable, p_fecha_desde / p_fecha_hasta (fecha de la OC),
 --   p_con_pdf (NULL todas, 1 con PDF, 0 sin PDF), p_busqueda (N° OC, cliente, RUC, RQ, propuesta)
+-- HU-27: las filas traen tipo de OC (principal | complementaria), OC de origen, saldo disponible y faltante.
 -- Resultados: 1 mensaje, 2 tarjetas, 3 filas, 4 total, 5 clientes (filtro), 6 responsables (filtro).
 DROP PROCEDURE IF EXISTS SP_ObtenerBandejaOrdenesCompra;
 
@@ -100,7 +101,11 @@ BEGIN
             t.tiene_pdf,
             IF(t.tiene_pdf = 1, CONCAT('/api/crm/ordenes-compra/', t.id_oc, '/pdf'), NULL) AS url_pdf,
             t.lista_programacion,
-            t.fecha_registro
+            t.fecha_registro,
+            -- HU-27
+            t.tipo_oc, t.id_oc_origen,
+            (SELECT o.numero_oc FROM orden_compra o WHERE o.id_oc = t.id_oc_origen) AS numero_oc_origen,
+            t.saldo_disponible, t.faltante
         FROM tmp_oc_filtro t
         WHERE (
                (v_estado = 'activas'              AND t.estado_bd <> 'anulada')

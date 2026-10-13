@@ -9,6 +9,8 @@
 --   p_revalidar = 1 ("Guardar y revalidar") la regresa siempre a 'pendiente_validacion' y levanta la
 --   observación. En ambos casos se notifica a Operaciones, Administración y al responsable comercial.
 --   Si la OC ya tiene órdenes de servicio no se puede cambiar el monto ni la moneda.
+-- HU-27: compara contra el requerido neto, recalcula el monto asignado a la propuesta principal y no deja
+--   bajar el monto por debajo de lo distribuido a otras propuestas.
 -- HU-26: "Guardar y revalidar" levanta la observación abierta, resuelve el bloqueo del expediente
 --   y avisa también a quien observó la OC.
 -- HU-25: el PDF nuevo se registra como nueva versión en documento_adjunto.
@@ -73,6 +75,9 @@ proc: BEGIN
     DECLARE v_usuario       VARCHAR(220) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_cliente       VARCHAR(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_notificados   INT DEFAULT 0;
+    DECLARE v_otras_asig    DECIMAL(14,2) DEFAULT 0;
+    DECLARE v_otros_princ   DECIMAL(14,2) DEFAULT 0;
+    DECLARE v_total_princ   DECIMAL(14,2) DEFAULT 0;
     DECLARE v_obs_abierta   BIGINT;
     DECLARE v_observador    BIGINT;
     DECLARE v_id_exp        BIGINT;
@@ -100,7 +105,7 @@ proc: BEGIN
 
     -- OC en alcance
     CALL SP_CalcularOrdenesCompra(p_id_usuario, p_id_oc);
-    SELECT COUNT(*), MAX(id_cliente), MAX(id_propuesta), MAX(id_responsable), MAX(monto_propuesta),
+    SELECT COUNT(*), MAX(id_cliente), MAX(id_propuesta), MAX(id_responsable), MAX(monto_requerido_neto),
            MAX(validada), MAX(ordenes_servicio), MAX(estado_bd)
       INTO v_existe, v_id_cliente, v_id_prop, v_id_resp, v_total, v_validada, v_n_os, v_estado
     FROM tmp_oc;
@@ -164,6 +169,22 @@ proc: BEGIN
     END IF;
 
     SET v_cambia_monto = IF(p_monto <> a_monto OR p_id_moneda <> a_moneda, 1, 0);
+
+    -- HU-27: el monto no puede bajar de lo ya distribuido a otras propuestas
+    SELECT IFNULL(SUM(monto_asignado), 0) INTO v_otras_asig
+    FROM oc_propuesta WHERE id_oc = p_id_oc AND id_propuesta <> v_id_prop AND eliminado_en IS NULL;
+    SELECT IFNULL(SUM(op.monto_asignado), 0) INTO v_otros_princ
+    FROM oc_propuesta op
+    JOIN orden_compra o2 ON o2.id_oc = op.id_oc AND o2.eliminado_en IS NULL AND o2.estado <> 'anulada'
+             AND o2.id_moneda = (SELECT pz.id_moneda FROM propuesta_comercial pz WHERE pz.id_propuesta = op.id_propuesta)
+    WHERE op.id_propuesta = v_id_prop AND op.id_oc <> p_id_oc AND op.eliminado_en IS NULL;
+    SELECT total INTO v_total_princ FROM propuesta_comercial WHERE id_propuesta = v_id_prop;
+
+    IF p_monto < v_otras_asig THEN
+        SELECT 1 AS IdTipoMensaje,
+               CONCAT('El monto no puede ser menor a lo ya distribuido a otras propuestas (', FORMAT(v_otras_asig, 2), ').') AS Mensaje;
+        LEAVE proc;
+    END IF;
 
     IF v_cambia_monto = 1 AND v_n_os > 0 THEN
         SELECT 1 AS IdTipoMensaje,
@@ -246,11 +267,14 @@ proc: BEGIN
     WHERE id_oc = p_id_oc;
 
     UPDATE oc_propuesta SET
-        monto_asignado = IF(v_estado_cob = 'moneda_diferente', p_monto, LEAST(p_monto, v_total)),
+        monto_asignado = IF(v_estado_cob = 'moneda_diferente', p_monto,
+                            GREATEST(LEAST(p_monto - v_otras_asig, v_total_princ - v_otros_princ), 0)),
         modificado_por = p_id_usuario
     WHERE id_oc = p_id_oc AND id_propuesta = v_id_prop AND eliminado_en IS NULL;
 
-    -- HU-26: "Guardar y revalidar" levanta la observación abierta y el bloqueo del expediente
+    -- HU-27: compara contra el requerido neto, recalcula el monto asignado a la propuesta principal y no deja
+--   bajar el monto por debajo de lo distribuido a otras propuestas.
+-- HU-26: "Guardar y revalidar" levanta la observación abierta y el bloqueo del expediente
     SELECT MAX(id_observacion) INTO v_obs_abierta
     FROM orden_compra_observacion WHERE id_oc = p_id_oc AND estado = 'abierta' AND eliminado_en IS NULL;
 

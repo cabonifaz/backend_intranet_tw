@@ -6,6 +6,7 @@
 -- Al validar: estado vigente (o cobertura_parcial si la OC deja saldo a favor), monto aplicado y saldo,
 -- validador, bloqueos de la OC en el expediente resueltos, auditoría validar_oc con el checklist y
 -- notificación al responsable comercial y a Operaciones (OC lista para programación).
+-- HU-27: el monto aplicado es el requerido neto (lo que otras OC no cubren de sus propuestas).
 -- Resultados: 1 mensaje, 2 OC validada.
 DROP PROCEDURE IF EXISTS SP_ValidarOrdenCompra;
 
@@ -55,7 +56,7 @@ proc: BEGIN
     END IF;
 
     CALL SP_CalcularOrdenesCompra(p_id_usuario, p_id_oc);
-    SELECT COUNT(*), MAX(estado_bd), MAX(cobertura_proyectada), MAX(monto_propuesta), MAX(monto_oc),
+    SELECT COUNT(*), MAX(estado_bd), MAX(cobertura_proyectada), MAX(monto_requerido_neto), MAX(monto_oc),
            MAX(id_responsable), MAX(id_expediente), MAX(numero_oc)
       INTO v_existe, v_estado, v_cobertura, v_total, v_monto, v_id_resp, v_id_exp, v_numero
     FROM tmp_oc;
@@ -116,6 +117,12 @@ proc: BEGIN
         saldo                 = v_monto - LEAST(v_total, v_monto),
         modificado_por        = p_id_usuario
     WHERE id_oc = p_id_oc;
+
+    -- HU-27: si es una OC complementaria, la OC de origen deja de estar en saldo insuficiente
+    UPDATE orden_compra o
+    JOIN orden_compra c ON c.id_oc = p_id_oc AND c.tipo_oc = 'complementaria'
+    SET o.estado = 'vigente', o.modificado_por = p_id_usuario
+    WHERE o.id_oc = c.id_oc_origen AND o.estado = 'saldo_insuficiente';
 
     -- Bloqueos de la OC en el expediente: resueltos
     IF v_id_exp IS NOT NULL THEN

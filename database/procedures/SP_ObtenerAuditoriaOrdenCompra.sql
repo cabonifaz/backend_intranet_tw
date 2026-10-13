@@ -5,7 +5,7 @@
 -- Resultados:
 --   1 mensaje
 --   2 cabecera: expediente, OC, propuesta, RQ, cliente y fecha de generación
---   3 timeline de eventos críticos: RQ, expediente, versiones de la propuesta, visto bueno, envío al
+--   3 timeline de eventos críticos (HU-27: distribución de saldo y OC complementaria): RQ, expediente, versiones de la propuesta, visto bueno, envío al
 --     cliente, aceptación, registro de la OC, documentos, ediciones, validación u observación y OS
 --   4 registro de auditoría (CRM): auditoria_evento de RQ, propuestas, OC y expediente, y accesos al PDF
 --   5 aplicaciones relacionadas (propuestas vinculadas a la OC)
@@ -152,6 +152,8 @@ proc: BEGIN
                    WHEN 'validar_oc'             THEN 'Orden de compra validada'
                    WHEN 'observar_oc'            THEN 'Orden de compra observada'
                    WHEN 'anular_oc'              THEN 'Orden de compra anulada'
+                   WHEN 'distribuir_oc'          THEN 'Saldo de la OC distribuido'
+                   WHEN 'registrar_oc_complementaria' THEN 'OC complementaria registrada'
                END,
                a.descripcion,
                CASE WHEN a.accion = 'validar_oc' THEN 'exito'
@@ -160,7 +162,8 @@ proc: BEGIN
                NULL, NULL, a.id_usuario
         FROM auditoria_evento a
         WHERE a.entidad_tipo = 'orden_compra' AND a.id_entidad = p_id_oc
-          AND a.accion IN ('editar_oc', 'editar_oc_revalidacion', 'validar_oc', 'observar_oc', 'anular_oc')
+          AND a.accion IN ('editar_oc', 'editar_oc_revalidacion', 'validar_oc', 'observar_oc', 'anular_oc',
+                           'distribuir_oc', 'registrar_oc_complementaria')
         UNION ALL
         SELECT os.fecha_creacion, 'os_creada', 'Orden de servicio programada',
                CONCAT('OS ', os.numero, ' para el ', DATE_FORMAT(os.fecha_ejecucion, '%d/%m/%Y'), ' (', os.estado, ').'),

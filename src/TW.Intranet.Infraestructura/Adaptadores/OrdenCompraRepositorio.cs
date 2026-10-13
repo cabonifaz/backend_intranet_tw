@@ -192,6 +192,11 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
                         UrlPdf              = Texto(r, "url_pdf"),
                         ListaProgramacion   = Booleano(r, "lista_programacion"),
                         FechaRegistro       = FechaHora(r, "fecha_registro"),
+                        TipoOc              = Texto(r, "tipo_oc") ?? "principal",
+                        IdOcOrigen          = EnteroLargoNulo(r, "id_oc_origen"),
+                        NumeroOcOrigen      = Texto(r, "numero_oc_origen"),
+                        SaldoDisponible     = Dec(r, "saldo_disponible"),
+                        Faltante            = Dec(r, "faltante"),
                     });
 
                 // 4. Total
@@ -282,6 +287,14 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
                     UrlPdf              = Texto(r, "url_pdf"),
                     ListaProgramacion   = Booleano(r, "lista_programacion"),
                     OrdenesServicio     = Ent(r, "ordenes_servicio"),
+                    TipoOc              = Texto(r, "tipo_oc") ?? "principal",
+                    IdOcOrigen          = EnteroLargoNulo(r, "id_oc_origen"),
+                    NumeroOcOrigen      = Texto(r, "numero_oc_origen"),
+                    MontoRequeridoNeto  = Dec(r, "monto_requerido_neto"),
+                    CoberturaOtros      = Dec(r, "cobertura_otros"),
+                    MontoAsignadoOc     = Dec(r, "monto_asignado_oc"),
+                    SaldoDisponible     = Dec(r, "saldo_disponible"),
+                    Faltante            = Dec(r, "faltante"),
                 };
 
                 // 3. Aplicaciones
@@ -292,7 +305,7 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
                         EnteroLargo(r, "id_propuesta"), Texto(r, "numero") ?? "", Ent(r, "version"), Texto(r, "estado") ?? "",
                         Dec(r, "monto_propuesta"), Ent(r, "id_moneda"), Texto(r, "moneda"), Texto(r, "moneda_simbolo"),
                         DecimalNulo(r, "monto_asignado"), FechaHora(r, "fecha_asignacion"), FechaHora(r, "fecha_aceptacion"),
-                        Booleano(r, "es_principal")));
+                        Booleano(r, "es_principal"), Dec(r, "cubierto_otras_oc"), Dec(r, "pendiente")));
 
                 // 4. Checklist
                 await r.NextResultAsync(ct);
@@ -813,6 +826,161 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
                     EnteroLargo(r, "id_observacion"), EnteroLargo(r, "id_oc"), Texto(r, "numero_oc") ?? "",
                     Texto(r, "estado") ?? "", Texto(r, "motivos"), EnteroLargo(r, "id_responsable"), Texto(r, "responsable"),
                     Booleano(r, "expediente_bloqueado"), Ent(r, "notificados")));
+            },
+            ct);
+
+    // ══════════════════════ HU-27 — Distribución y OC Complementaria ══════════════════════
+
+    public Task<RespuestaDto<DistribucionOrdenCompraDto>> PrepararDistribucionAsync(long idOc, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_PrepararDistribucionOrdenCompra",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario", idUsuario);
+                p.AddWithValue("p_id_oc",      idOc);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<DistribucionOrdenCompraDto>(3, "No se pudo leer la orden de compra.");
+                var oc = new OcDistribucionDto
+                {
+                    IdOc               = EnteroLargo(r, "id_oc"),
+                    NumeroOc           = Texto(r, "numero_oc") ?? "",
+                    TipoOc             = Texto(r, "tipo_oc") ?? "principal",
+                    Estado             = Texto(r, "estado") ?? "",
+                    EstadoVisual       = Texto(r, "estado_visual") ?? "",
+                    IdCliente          = EnteroLargo(r, "id_cliente"),
+                    RazonSocial        = Texto(r, "razon_social"),
+                    Ruc                = Texto(r, "ruc"),
+                    IdMoneda           = Ent(r, "id_moneda"),
+                    Moneda             = Texto(r, "moneda"),
+                    MonedaSimbolo      = Texto(r, "moneda_simbolo"),
+                    MontoTotal         = Dec(r, "monto_total"),
+                    MontoAplicado      = Dec(r, "monto_aplicado"),
+                    SaldoDisponible    = Dec(r, "saldo_disponible"),
+                    UsoPct             = Dec(r, "uso_pct"),
+                    PuedeDistribuir    = Booleano(r, "puede_distribuir"),
+                    MotivoNoDisponible = Texto(r, "motivo_no_disponible"),
+                };
+
+                await r.NextResultAsync(ct);
+                var aplicaciones = new List<AplicacionDistribucionDto>();
+                while (await r.ReadAsync(ct))
+                    aplicaciones.Add(new AplicacionDistribucionDto(
+                        EnteroLargo(r, "id_propuesta"), Texto(r, "documento") ?? "", Texto(r, "tipo") ?? "Propuesta",
+                        Texto(r, "numero") ?? "", Ent(r, "version"), Texto(r, "cliente"), Texto(r, "concepto"),
+                        Dec(r, "requerido"), Dec(r, "aplicado"), Dec(r, "aplicado_otras_oc"), Dec(r, "pendiente"),
+                        Texto(r, "estado_cobertura") ?? "", Booleano(r, "vinculada"), Booleano(r, "es_principal"),
+                        EnteroLargoNulo(r, "id_responsable"), Texto(r, "responsable")));
+
+                return new RespuestaDto<DistribucionOrdenCompraDto>(2, mensaje, new DistribucionOrdenCompraDto(oc, aplicaciones));
+            },
+            ct);
+
+    public Task<RespuestaDto<ResultadoDistribucionDto>> DistribuirAsync(long idOc, long idPropuesta, decimal monto, bool soloValidar, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_DistribuirOrdenCompra",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario",   idUsuario);
+                p.AddWithValue("p_id_oc",        idOc);
+                p.AddWithValue("p_id_propuesta", idPropuesta);
+                p.AddWithValue("p_monto",        monto);
+                p.AddWithValue("p_solo_validar", Bit(soloValidar));
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<ResultadoDistribucionDto>(3, "No se pudo leer el resultado de la distribución.");
+                return new RespuestaDto<ResultadoDistribucionDto>(2, mensaje, new ResultadoDistribucionDto(
+                    EnteroLargo(r, "id_oc"), EnteroLargo(r, "id_propuesta"), Texto(r, "propuesta") ?? "",
+                    Dec(r, "saldo_antes"), Dec(r, "saldo_despues"), Dec(r, "aplicado_antes"), Dec(r, "aplicado_despues"),
+                    Dec(r, "pendiente_propuesta"), Texto(r, "estado_cobertura") ?? ""));
+            },
+            ct);
+
+    public Task<RespuestaDto<PreparacionOcComplementariaDto>> PrepararOcComplementariaAsync(long idPropuesta, decimal? monto, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_PrepararOcComplementaria",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario",   idUsuario);
+                p.AddWithValue("p_id_propuesta", idPropuesta);
+                p.AddWithValue("p_monto",        Valor(monto));
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<PreparacionOcComplementariaDto>(3, "No se pudo leer la propuesta.");
+                var propuesta = new PropuestaOcComplementariaDto
+                {
+                    IdPropuesta         = EnteroLargo(r, "id_propuesta"),
+                    Numero              = Texto(r, "numero") ?? "",
+                    Version             = Ent(r, "version"),
+                    IdCliente           = EnteroLargo(r, "id_cliente"),
+                    RazonSocial         = Texto(r, "razon_social"),
+                    Ruc                 = Texto(r, "ruc"),
+                    IdRequerimiento     = EnteroLargoNulo(r, "id_requerimiento"),
+                    NumeroRq            = Texto(r, "numero_rq"),
+                    IdMoneda            = Ent(r, "id_moneda"),
+                    Moneda              = Texto(r, "moneda"),
+                    MonedaSimbolo       = Texto(r, "moneda_simbolo"),
+                    MonedaNombre        = Texto(r, "moneda_nombre"),
+                    MontoPropuesta      = Dec(r, "monto_propuesta"),
+                    MontoCubierto       = Dec(r, "monto_cubierto"),
+                    Faltante            = Dec(r, "faltante"),
+                    CoberturaPct        = Dec(r, "cobertura_pct"),
+                    VigenciaDiasDefecto = Ent(r, "vigencia_dias_defecto"),
+                    FechaServidor       = Fecha(r, "fecha_servidor"),
+                    MontoNuevaOc        = DecimalNulo(r, "monto_nueva_oc"),
+                    CoberturaTotal      = Dec(r, "cobertura_total"),
+                    CoberturaTotalPct   = Dec(r, "cobertura_total_pct"),
+                    EstadoResultado     = Texto(r, "estado_resultado") ?? "",
+                    SaldoNuevaOc        = Dec(r, "saldo_nueva_oc"),
+                    FaltanteDespues     = Dec(r, "faltante_despues"),
+                };
+
+                await r.NextResultAsync(ct);
+                var ocs = new List<OcExistenteDto>();
+                while (await r.ReadAsync(ct))
+                    ocs.Add(new OcExistenteDto(EnteroLargo(r, "id_oc"), Texto(r, "numero_oc") ?? "", Texto(r, "tipo_oc") ?? "",
+                        Texto(r, "estado") ?? "", Dec(r, "monto_total"), Dec(r, "monto_asignado"), Fecha(r, "fecha_oc")));
+
+                return new RespuestaDto<PreparacionOcComplementariaDto>(2, mensaje, new PreparacionOcComplementariaDto(propuesta, ocs));
+            },
+            ct);
+
+    public Task<RespuestaDto<OcComplementariaRegistradaDto>> RegistrarOcComplementariaAsync(long idPropuesta, RegistrarOcComplementariaSolicitudDto d,
+        string? ruta, string? nombre, long? tamano, string? hash, bool soloValidar, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_RegistrarOcComplementaria",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario",      idUsuario);
+                p.AddWithValue("p_id_propuesta",    idPropuesta);
+                p.AddWithValue("p_numero_oc",       Valor(d.NumeroOc));
+                p.AddWithValue("p_fecha_oc",        Valor(d.FechaOc));
+                p.AddWithValue("p_fecha_recepcion", Valor(d.FechaRecepcion));
+                p.AddWithValue("p_monto",           Valor(d.Monto));
+                p.AddWithValue("p_vigencia_dias",   Valor(d.VigenciaDias));
+                p.AddWithValue("p_observaciones",   Valor(d.Observaciones));
+                p.AddWithValue("p_referencia",      Valor(d.Referencia));
+                p.AddWithValue("p_ruta_pdf",        Valor(ruta));
+                p.AddWithValue("p_nombre_pdf",      Valor(nombre));
+                p.AddWithValue("p_tamano_pdf",      Valor(tamano));
+                p.AddWithValue("p_hash_pdf",        Valor(hash));
+                p.AddWithValue("p_solo_validar",    Bit(soloValidar));
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<OcComplementariaRegistradaDto>(3, "No se pudo leer la OC complementaria.");
+                return new RespuestaDto<OcComplementariaRegistradaDto>(2, mensaje, new OcComplementariaRegistradaDto(
+                    EnteroLargoNulo(r, "id_oc"), Texto(r, "numero_oc") ?? "", Texto(r, "estado") ?? "",
+                    EnteroLargo(r, "id_oc_origen"), Texto(r, "numero_oc_origen"),
+                    Dec(r, "monto_existente"), Dec(r, "monto_nueva_oc"), Dec(r, "cobertura_total"), Dec(r, "cobertura_total_pct"),
+                    Texto(r, "estado_resultado") ?? "", Dec(r, "saldo_nueva_oc"), Ent(r, "notificados")));
             },
             ct);
 }

@@ -502,3 +502,110 @@ public class ObservarOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio)
         return repositorio.ObservarAsync(idOc, string.Join(',', motivos), detalle, datos.IdResponsable.Value, idUsuario, ct);
     }
 }
+
+// ══════════════════════ HU-27 — Distribución de Saldos y OC Complementaria ══════════════════════
+
+/// <summary>Modal "Distribuir Monto de OC": totales de la OC, aplicaciones registradas y propuestas destino.</summary>
+public class PrepararDistribucionOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio)
+{
+    public Task<RespuestaDto<DistribucionOrdenCompraDto>> EjecutarAsync(long idOc, long idUsuario, CancellationToken ct = default)
+    {
+        if (idOc <= 0)
+            return Task.FromResult(new RespuestaDto<DistribucionOrdenCompraDto>(1, "Orden de compra no válida."));
+        return repositorio.PrepararDistribucionAsync(idOc, idUsuario, ct);
+    }
+}
+
+/// <summary>
+/// Asigna (o corrige) el monto que la OC aplica a una propuesta. No puede exceder el saldo disponible
+/// ni lo pendiente de la propuesta. soloValidar = true calcula el saldo antes/después sin guardar.
+/// </summary>
+public class DistribuirOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio)
+{
+    public Task<RespuestaDto<ResultadoDistribucionDto>> EjecutarAsync(
+        long idOc, DistribuirOrdenCompraSolicitudDto datos, bool soloValidar, long idUsuario, CancellationToken ct = default)
+    {
+        static Task<RespuestaDto<ResultadoDistribucionDto>> Error(string m) => Task.FromResult(new RespuestaDto<ResultadoDistribucionDto>(1, m));
+
+        if (idOc <= 0) return Error("Orden de compra no válida.");
+        if (datos.IdPropuesta is not > 0) return Error("Seleccione el documento destino.");
+        if (datos.Monto is null or < 0) return Error("Ingrese el monto a aplicar.");
+        if (datos.Monto > 999_999_999_999m) return Error("El monto a aplicar es demasiado grande.");
+        return repositorio.DistribuirAsync(idOc, datos.IdPropuesta.Value, Math.Round(datos.Monto.Value, 2), soloValidar, idUsuario, ct);
+    }
+}
+
+/// <summary>Modal "Registrar OC Complementaria" con el resultado calculado (OC existente + Nueva OC = Cobertura total).</summary>
+public class PrepararOcComplementariaCasoDeUso(IOrdenCompraRepositorio repositorio)
+{
+    public Task<RespuestaDto<PreparacionOcComplementariaDto>> EjecutarAsync(long idPropuesta, decimal? monto, long idUsuario, CancellationToken ct = default)
+    {
+        if (idPropuesta <= 0)
+            return Task.FromResult(new RespuestaDto<PreparacionOcComplementariaDto>(1, "Propuesta no válida."));
+        var valor = monto is >= 0 and <= 999_999_999_999m ? Math.Round(monto.Value, 2) : (decimal?)null;
+        return repositorio.PrepararOcComplementariaAsync(idPropuesta, valor, idUsuario, ct);
+    }
+}
+
+/// <summary>
+/// Registra la OC complementaria con su PDF obligatorio: valida en BD, verifica y guarda el PDF y registra la OC
+/// (pendiente de validación) aplicando a la propuesta lo que le falta.
+/// </summary>
+public class RegistrarOcComplementariaCasoDeUso(IOrdenCompraRepositorio repositorio, IAlmacenArchivos almacen)
+{
+    private static string? Validar(RegistrarOcComplementariaSolicitudDto d)
+    {
+        var numero = d.NumeroOc?.Trim() ?? "";
+        if (numero.Length == 0)  return "Ingrese el número de la orden de compra.";
+        if (numero.Length > 50)  return "El número de la orden de compra admite hasta 50 caracteres.";
+        if (d.FechaOc is null)        return "Indique la fecha de la orden de compra.";
+        if (d.FechaRecepcion is null) return "Indique la fecha de recepción.";
+        if (d.Monto is null or <= 0)  return "Ingrese el monto de la orden de compra (mayor a 0).";
+        if (d.Monto > 999_999_999_999m) return "El monto de la orden de compra es demasiado grande.";
+        if (d.VigenciaDias is < 1 or > 3650) return "La vigencia de la orden de compra debe estar entre 1 y 3650 días.";
+        if ((d.Observaciones?.Trim().Length ?? 0) > 500) return "Las observaciones admiten hasta 500 caracteres.";
+        if ((d.Referencia?.Trim().Length ?? 0) > 200)    return "La referencia admite hasta 200 caracteres.";
+        return null;
+    }
+
+    public async Task<RespuestaDto<OcComplementariaRegistradaDto>> EjecutarAsync(
+        long idPropuesta, RegistrarOcComplementariaSolicitudDto datos, Stream? pdf, string? nombreArchivo, long tamanoBytes,
+        long idUsuario, CancellationToken ct = default)
+    {
+        if (idPropuesta <= 0) return new(1, "Propuesta no válida.");
+        if (Validar(datos) is { } error) return new(1, error);
+        if (pdf is null || tamanoBytes <= 0) return new(1, "Adjunte el PDF de la orden de compra.");
+        if (tamanoBytes > PdfOrdenCompra.TamanoMaximoBytes) return new(1, "El PDF de la orden de compra no puede superar los 10 MB.");
+
+        var d = datos with
+        {
+            NumeroOc       = datos.NumeroOc!.Trim(),
+            FechaOc        = datos.FechaOc!.Value.Date,
+            FechaRecepcion = datos.FechaRecepcion!.Value.Date,
+            Monto          = Math.Round(datos.Monto!.Value, 2),
+            Observaciones  = string.IsNullOrWhiteSpace(datos.Observaciones) ? null : datos.Observaciones.Trim(),
+            Referencia     = string.IsNullOrWhiteSpace(datos.Referencia) ? null : datos.Referencia.Trim(),
+        };
+
+        // 1. Validar en BD antes de escribir nada en disco
+        var validacion = await repositorio.RegistrarOcComplementariaAsync(idPropuesta, d, null, null, null, null, soloValidar: true, idUsuario, ct);
+        if (validacion.IdTipoMensaje != 2) return new(validacion.IdTipoMensaje, validacion.Mensaje);
+
+        // 2. Verificar y guardar el PDF
+        using var buffer = new MemoryStream();
+        var errorPdf = await PdfOrdenCompra.LeerAsync(pdf, buffer, ct);
+        if (errorPdf is not null) return new(1, errorPdf);
+
+        var ruta = PdfOrdenCompra.Ruta(idPropuesta.ToString());
+        buffer.Position = 0;
+        await almacen.GuardarAsync(ruta, buffer, ct);
+
+        // 3. Registrar (si falla, no dejar el archivo huérfano)
+        var registro = await repositorio.RegistrarOcComplementariaAsync(idPropuesta, d, ruta,
+            PdfOrdenCompra.NormalizarNombre(nombreArchivo, d.NumeroOc!), buffer.Length, PdfOrdenCompra.Hash(buffer),
+            soloValidar: false, idUsuario, ct);
+        if (registro.IdTipoMensaje != 2)
+            await almacen.EliminarAsync(ruta, CancellationToken.None);
+        return registro;
+    }
+}

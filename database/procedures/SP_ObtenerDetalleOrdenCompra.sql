@@ -3,7 +3,7 @@
 --   1 mensaje
 --   2 resumen (HU-26: con la observación abierta): datos generales, cobertura económica (propuesta vs. OC, diferencia/saldo, utilización),
 --     estado, vigencia, responsable, PDF y referencia del servicio
---   3 aplicaciones: propuestas vinculadas a la OC con su monto asignado
+--   3 aplicaciones: propuestas vinculadas a la OC con su monto asignado (HU-27: cubierto por otras OC y pendiente)
 --   4 checklist de validación (codigo, descripcion, cumple, detalle)
 --   5 vinculaciones del proceso: RQ, propuesta, expediente y OS (disponible = 0 si aún no existe)
 --   6 documentos: PDF de la OC, PDF de las propuestas y evidencias de la aceptación
@@ -61,7 +61,7 @@ BEGIN
         CALL SP_CalcularOrdenesCompra(p_id_usuario, p_id_oc);
 
         SELECT COUNT(*), MAX(id_cliente), MAX(id_propuesta), MAX(id_requerimiento), MAX(id_expediente),
-               MAX(id_moneda), MAX(numero_oc), MAX(monto_oc), MAX(monto_propuesta), MAX(fecha_oc),
+               MAX(id_moneda), MAX(numero_oc), MAX(monto_oc), MAX(monto_requerido_neto), MAX(fecha_oc),
                MAX(vigencia_hasta), MAX(tiene_pdf), MAX(validada), MAX(vencida), MAX(estado_visual),
                MAX(cobertura_proyectada), MAX(lista_programacion), MAX(ordenes_servicio),
                MAX(fecha_registro), MAX(creado_por)
@@ -146,8 +146,12 @@ BEGIN
                 LEFT(r.descripcion, 300)                     AS referencia_servicio,
                 t.id_propuesta, t.numero_propuesta, t.version_propuesta,
                 t.id_moneda, m.String3 AS moneda, m.String2 AS moneda_simbolo, m.String1 AS moneda_nombre,
-                t.monto_oc, t.monto_propuesta, t.monto_propuesta - t.monto_oc AS diferencia_propuesta,
-                t.monto_oc - t.monto_propuesta              AS diferencia,
+                t.monto_oc, t.monto_propuesta, t.monto_requerido_neto - t.monto_oc AS diferencia_propuesta,
+                t.monto_oc - t.monto_requerido_neto         AS diferencia,
+                -- HU-27: distribución y OC complementaria
+                t.tipo_oc, t.id_oc_origen,
+                (SELECT o.numero_oc FROM orden_compra o WHERE o.id_oc = t.id_oc_origen) AS numero_oc_origen,
+                t.monto_requerido_neto, t.cobertura_otros, t.monto_asignado_oc, t.saldo_disponible, t.faltante,
                 t.monto_aplicado, t.saldo,
                 t.cobertura_pct, t.utilizacion_pct, t.cobertura_codigo, t.cobertura_proyectada,
                 t.id_responsable, CONCAT(u.nombre, ' ', u.apellido)   AS responsable,
@@ -188,6 +192,16 @@ BEGIN
             -- 3. Aplicaciones (propuestas vinculadas)
             SELECT p.id_propuesta, p.numero, p.version, p.estado,
                    p.total AS monto_propuesta, p.id_moneda, m.String3 AS moneda, m.String2 AS moneda_simbolo,
+                   -- HU-27: lo cubierto por otras OC y lo pendiente de la propuesta
+                   (SELECT IFNULL(SUM(op2.monto_asignado), 0) FROM oc_propuesta op2
+                    JOIN orden_compra o2 ON o2.id_oc = op2.id_oc AND o2.eliminado_en IS NULL AND o2.estado <> 'anulada'
+             AND o2.id_moneda = (SELECT pz.id_moneda FROM propuesta_comercial pz WHERE pz.id_propuesta = op2.id_propuesta)
+                    WHERE op2.id_propuesta = p.id_propuesta AND op2.id_oc <> p_id_oc AND op2.eliminado_en IS NULL) AS cubierto_otras_oc,
+                   GREATEST(p.total - IFNULL(p.monto_asignado, 0)
+                            - (SELECT IFNULL(SUM(op2.monto_asignado), 0) FROM oc_propuesta op2
+                               JOIN orden_compra o2 ON o2.id_oc = op2.id_oc AND o2.eliminado_en IS NULL AND o2.estado <> 'anulada'
+             AND o2.id_moneda = (SELECT pz.id_moneda FROM propuesta_comercial pz WHERE pz.id_propuesta = op2.id_propuesta)
+                               WHERE op2.id_propuesta = p.id_propuesta AND op2.id_oc <> p_id_oc AND op2.eliminado_en IS NULL), 0) AS pendiente,
                    IFNULL(p.monto_asignado, IF(p.id_moneda = v_id_moneda, LEAST(p.total, v_monto_oc), NULL)) AS monto_asignado,
                    p.fecha_asignacion, p.fecha_aceptacion,
                    (p.id_propuesta = v_id_propuesta) AS es_principal
@@ -345,6 +359,8 @@ BEGIN
                            WHEN 'observar_oc'            THEN 'Orden de compra observada'
                            WHEN 'reemplazar_pdf_oc'      THEN 'Documento de la OC reemplazado'
                            WHEN 'exportar_auditoria_oc'  THEN 'Historial de auditoría descargado'
+                           WHEN 'distribuir_oc'          THEN 'Saldo de la OC distribuido'
+                           WHEN 'registrar_oc_complementaria' THEN 'OC complementaria registrada'
                            ELSE CONCAT(UPPER(LEFT(REPLACE(a.accion, '_', ' '), 1)), SUBSTRING(REPLACE(a.accion, '_', ' '), 2))
                        END,
                        COALESCE(a.descripcion,

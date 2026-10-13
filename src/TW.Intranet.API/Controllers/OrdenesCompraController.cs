@@ -8,7 +8,7 @@ using TW.Intranet.Aplicacion.Dtos;
 
 namespace TW.Intranet.API.Controllers;
 
-/// <summary>Órdenes de Compra recibidas del cliente: registro y edición (HU-22/24), bandeja y detalle (HU-23), documento y auditoría (HU-25), validación y observación (HU-26).</summary>
+/// <summary>Órdenes de Compra recibidas del cliente: registro y edición (HU-22/24), bandeja y detalle (HU-23), documento y auditoría (HU-25), validación y observación (HU-26), distribución de saldo y OC complementaria (HU-27).</summary>
 [ApiController]
 [Authorize]
 public class OrdenesCompraController(
@@ -29,7 +29,11 @@ public class OrdenesCompraController(
     ExportarAuditoriaOrdenCompraCasoDeUso        exportarAuditoria,
     PrepararValidacionOrdenCompraCasoDeUso       prepararValidacion,
     ValidarOrdenCompraCasoDeUso                  validar,
-    ObservarOrdenCompraCasoDeUso                 observar) : ControllerBase
+    ObservarOrdenCompraCasoDeUso                 observar,
+    PrepararDistribucionOrdenCompraCasoDeUso     prepararDistribucion,
+    DistribuirOrdenCompraCasoDeUso               distribuir,
+    PrepararOcComplementariaCasoDeUso            prepararComplementaria,
+    RegistrarOcComplementariaCasoDeUso           registrarComplementaria) : ControllerBase
 {
     /// <summary>10 MB del PDF + margen para el resto del multipart.</summary>
     private const long TamanoMaximoPeticion = RegistrarOrdenCompraCasoDeUso.TamanoMaximoBytes + 1024 * 1024;
@@ -248,4 +252,57 @@ public class OrdenesCompraController(
     [HttpPost("api/crm/ordenes-compra/{idOc:long}/observar")]
     public async Task<IActionResult> Observar(long idOc, [FromBody] ObservarOrdenCompraSolicitudDto datos, CancellationToken ct = default)
         => Responder(await observar.EjecutarAsync(idOc, datos, IdUsuarioActual, ct));
+
+    /// <summary>
+    /// HU-27 — Modal "Distribuir Monto de OC": monto total, aplicado, saldo disponible y uso de fondos, aplicaciones
+    /// registradas y propuestas destino (aceptadas, mismo cliente y moneda, con monto pendiente).
+    /// </summary>
+    [RequierePermiso("oc_distribuir")]
+    [HttpGet("api/crm/ordenes-compra/{idOc:long}/distribucion")]
+    public async Task<IActionResult> PrepararDistribucion(long idOc, CancellationToken ct = default)
+        => Responder(await prepararDistribucion.EjecutarAsync(idOc, IdUsuarioActual, ct), noEncontradoComo404: true);
+
+    /// <summary>HU-27 — Cálculo en tiempo real (sin guardar): { idPropuesta, monto } → saldo de la OC antes y después.</summary>
+    [RequierePermiso("oc_distribuir")]
+    [HttpPost("api/crm/ordenes-compra/{idOc:long}/distribucion/evaluar")]
+    public async Task<IActionResult> EvaluarDistribucion(long idOc, [FromBody] DistribuirOrdenCompraSolicitudDto datos, CancellationToken ct = default)
+        => Responder(await distribuir.EjecutarAsync(idOc, datos, soloValidar: true, IdUsuarioActual, ct));
+
+    /// <summary>
+    /// HU-27 — Guardar distribución: { idPropuesta, monto }. El monto no puede exceder el saldo disponible ni lo pendiente
+    /// de la propuesta. monto = 0 quita la aplicación (salvo la propuesta principal).
+    /// </summary>
+    [RequierePermiso("oc_distribuir")]
+    [HttpPost("api/crm/ordenes-compra/{idOc:long}/distribucion")]
+    public async Task<IActionResult> Distribuir(long idOc, [FromBody] DistribuirOrdenCompraSolicitudDto datos, CancellationToken ct = default)
+        => Responder(await distribuir.EjecutarAsync(idOc, datos, soloValidar: false, IdUsuarioActual, ct));
+
+    /// <summary>
+    /// HU-27 — Modal "Registrar OC Complementaria": cobertura actual (propuesta, OC existentes, faltante, %) y el resultado
+    /// en tiempo real con ?monto= (OC existente + Nueva OC = Cobertura total).
+    /// </summary>
+    [RequierePermiso("oc_registrar")]
+    [HttpGet("api/crm/propuestas/{idPropuesta:long}/orden-compra-complementaria/preparar")]
+    public async Task<IActionResult> PrepararComplementaria(long idPropuesta, [FromQuery] decimal? monto, CancellationToken ct = default)
+        => Responder(await prepararComplementaria.EjecutarAsync(idPropuesta, monto, IdUsuarioActual, ct));
+
+    /// <summary>
+    /// HU-27 — Registrar la OC complementaria (multipart/form-data): numeroOc, fechaOc, fechaRecepcion, monto,
+    /// vigenciaDias (opcional), observaciones, referencia y el PDF obligatorio en "archivo". La moneda es la de la propuesta.
+    /// </summary>
+    [RequierePermiso("oc_registrar")]
+    [HttpPost("api/crm/propuestas/{idPropuesta:long}/orden-compra-complementaria")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(TamanoMaximoPeticion)]
+    [RequestFormLimits(MultipartBodyLengthLimit = TamanoMaximoPeticion)]
+    public async Task<IActionResult> RegistrarComplementaria(long idPropuesta, [FromForm] RegistrarOcComplementariaSolicitudDto datos,
+                                                             IFormFile? archivo, CancellationToken ct = default)
+    {
+        if (archivo is null || archivo.Length == 0)
+            return BadRequest(new RespuestaDto<object>(1, "Adjunte el PDF de la orden de compra."));
+
+        await using var contenido = archivo.OpenReadStream();
+        return Responder(await registrarComplementaria.EjecutarAsync(
+            idPropuesta, datos, contenido, archivo.FileName, archivo.Length, IdUsuarioActual, ct));
+    }
 }

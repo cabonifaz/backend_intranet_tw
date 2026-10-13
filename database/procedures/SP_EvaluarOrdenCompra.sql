@@ -5,6 +5,7 @@
 --   Edición : p_id_oc = OC a editar, p_id_propuesta NULL (acción oc_editar)
 -- Cobertura (monto OC frente al monto de la propuesta, en la misma moneda):
 --   sin_monto, completa, con_saldo (la OC supera la propuesta), insuficiente (no alcanza) o moneda_diferente.
+-- HU-27: en edición se compara contra el requerido neto (lo que otras OC no cubren todavía).
 -- Resultados: 1 mensaje, 2 cobertura (y en edición el impacto del cambio), 3 checklist.
 DROP PROCEDURE IF EXISTS SP_EvaluarOrdenCompra;
 
@@ -84,7 +85,7 @@ proc: BEGIN
         SET v_id_cliente_oc = v_id_cliente;
     ELSE
         CALL SP_CalcularOrdenesCompra(p_id_usuario, p_id_oc);
-        SELECT COUNT(*), MAX(id_propuesta), MAX(id_cliente), MAX(monto_propuesta), MAX(monto_oc),
+        SELECT COUNT(*), MAX(id_propuesta), MAX(id_cliente), MAX(monto_requerido_neto), MAX(monto_oc),
                MAX(id_moneda), MAX(validada), MAX(estado_bd), MAX(ordenes_servicio)
           INTO v_existe, v_id_prop, v_id_cliente_oc, v_total, v_monto_actual,
                v_moneda_actual, v_validada, v_estado_bd, v_n_os

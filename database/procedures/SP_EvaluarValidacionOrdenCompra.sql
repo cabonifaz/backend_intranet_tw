@@ -3,6 +3,7 @@
 -- Cada ítem trae el valor registrado en el sistema, el valor de referencia (propuesta), si cumple la
 -- verificación automática y si requiere que el validador lo confirme contra la OC física
 -- (razón social, RUC, moneda, monto y legibilidad del PDF).
+-- HU-27: el monto se compara contra el requerido neto (sin lo que ya cubren otras OC).
 DROP PROCEDURE IF EXISTS SP_EvaluarValidacionOrdenCompra;
 
 DELIMITER $$
@@ -35,6 +36,7 @@ BEGIN
     DECLARE v_sim_oc       VARCHAR(10)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_sim_prop     VARCHAR(10)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_duplicadas   INT DEFAULT 0;
+    DECLARE v_otros        DECIMAL(14,2) DEFAULT 0;
 
     SELECT oc.id_cliente, oc.id_moneda, oc.monto_total, oc.numero_oc, (oc.url_archivo_pdf IS NOT NULL),
            oc.vigencia_hasta, oc.id_propuesta
@@ -52,8 +54,18 @@ BEGIN
 
     SELECT IFNULL(SUM(pv.total), 0), IFNULL(SUM(pv.id_moneda <> v_id_moneda), 0) INTO v_total, v_otra_moneda
     FROM propuesta_comercial pv
-    WHERE pv.id_propuesta = v_id_prop
-       OR pv.id_propuesta IN (SELECT op.id_propuesta FROM oc_propuesta op WHERE op.id_oc = p_id_oc AND op.eliminado_en IS NULL);
+    WHERE pv.id_propuesta = v_id_prop;
+    -- HU-27: más lo asignado a las propuestas distribuidas
+    SET v_total = v_total + (SELECT IFNULL(SUM(op.monto_asignado), 0) FROM oc_propuesta op
+                             WHERE op.id_oc = p_id_oc AND op.eliminado_en IS NULL AND op.id_propuesta <> IFNULL(v_id_prop, 0));
+
+    -- HU-27: lo que otras OC ya cubren de la propuesta principal no lo tiene que cubrir esta OC
+    SELECT IFNULL(SUM(op2.monto_asignado), 0) INTO v_otros
+    FROM oc_propuesta op2
+    JOIN orden_compra o2 ON o2.id_oc = op2.id_oc AND o2.eliminado_en IS NULL AND o2.estado <> 'anulada'
+             AND o2.id_moneda = (SELECT pz.id_moneda FROM propuesta_comercial pz WHERE pz.id_propuesta = op2.id_propuesta)
+    WHERE op2.eliminado_en IS NULL AND op2.id_oc <> p_id_oc AND op2.id_propuesta = v_id_prop;
+    SET v_total = GREATEST(v_total - v_otros, 0);
 
     SELECT CAST(IFNULL(MAX(Num2), 0) AS DECIMAL(9,4)) INTO v_tolerancia
     FROM tabla_maestra WHERE Descripcion = 'PARAMETRO_PROPUESTA' AND String2 = 'OC_TOLERANCIA_MONTO_PCT';

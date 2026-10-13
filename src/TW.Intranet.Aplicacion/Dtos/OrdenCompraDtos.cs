@@ -158,6 +158,12 @@ public record ItemBandejaOrdenCompraDto
     public string?  UrlPdf              { get; init; }
     public bool     ListaProgramacion   { get; init; }
     public DateTime? FechaRegistro      { get; init; }
+    /// <summary>HU-27 — principal | complementaria, OC de origen, saldo disponible para distribuir y faltante.</summary>
+    public string   TipoOc              { get; init; } = "principal";
+    public long?    IdOcOrigen          { get; init; }
+    public string?  NumeroOcOrigen      { get; init; }
+    public decimal  SaldoDisponible     { get; init; }
+    public decimal  Faltante            { get; init; }
 }
 
 public record BandejaOrdenesCompraDto(
@@ -227,6 +233,16 @@ public record ResumenOrdenCompraDto
     public string?   UrlPdf               { get; init; }
     public bool      ListaProgramacion    { get; init; }
     public int       OrdenesServicio      { get; init; }
+    /// <summary>HU-27 — Tipo de OC, OC de origen y montos de la distribución.</summary>
+    public string    TipoOc               { get; init; } = "principal";
+    public long?     IdOcOrigen           { get; init; }
+    public string?   NumeroOcOrigen       { get; init; }
+    /// <summary>Lo que esta OC debe cubrir (propuesta principal sin lo que cubren otras OC + lo distribuido).</summary>
+    public decimal   MontoRequeridoNeto   { get; init; }
+    public decimal   CoberturaOtros       { get; init; }
+    public decimal   MontoAsignadoOc      { get; init; }
+    public decimal   SaldoDisponible      { get; init; }
+    public decimal   Faltante             { get; init; }
 }
 
 /// <summary>Propuesta vinculada a la OC (pestaña Aplicaciones).</summary>
@@ -242,7 +258,10 @@ public record AplicacionOrdenCompraDto(
     decimal?  MontoAsignado,
     DateTime? FechaAsignacion,
     DateTime? FechaAceptacion,
-    bool      EsPrincipal);
+    bool      EsPrincipal,
+    /// <summary>HU-27 — Lo que otras OC cubren de la propuesta y lo que aún falta.</summary>
+    decimal   CubiertoOtrasOc = 0,
+    decimal   Pendiente       = 0);
 
 /// <summary>Ítem del checklist: cliente_coincide, moneda_coincide, propuesta_vigente, monto_suficiente, pdf_adjunto, numero_unico, oc_vigente.</summary>
 public record ItemChecklistOrdenCompraDto(string Codigo, string Descripcion, bool Cumple, string? Detalle);
@@ -569,3 +588,109 @@ public record ObservarOrdenCompraSolicitudDto
 public record ObservacionRegistradaDto(
     long IdObservacion, long IdOc, string NumeroOc, string Estado, string? Motivos,
     long IdResponsable, string? Responsable, bool ExpedienteBloqueado, int Notificados);
+
+// ══════════════════════ HU-27 — Distribución de Saldos y OC Complementaria ══════════════════════
+
+public record OcDistribucionDto
+{
+    public long     IdOc               { get; init; }
+    public string   NumeroOc           { get; init; } = "";
+    public string   TipoOc             { get; init; } = "";
+    public string   Estado             { get; init; } = "";
+    public string   EstadoVisual       { get; init; } = "";
+    public long     IdCliente          { get; init; }
+    public string?  RazonSocial        { get; init; }
+    public string?  Ruc                { get; init; }
+    public int      IdMoneda           { get; init; }
+    public string?  Moneda             { get; init; }
+    public string?  MonedaSimbolo      { get; init; }
+    public decimal  MontoTotal         { get; init; }
+    public decimal  MontoAplicado      { get; init; }
+    public decimal  SaldoDisponible    { get; init; }
+    public decimal  UsoPct             { get; init; }
+    public bool     PuedeDistribuir    { get; init; }
+    public string?  MotivoNoDisponible { get; init; }
+}
+
+/// <summary>Propuesta vinculada (Vinculada = true) o destino posible. EstadoCobertura: cubierto | parcial | pendiente.</summary>
+public record AplicacionDistribucionDto(
+    long    IdPropuesta,
+    string  Documento,
+    string  Tipo,
+    string  Numero,
+    int     Version,
+    string? Cliente,
+    string? Concepto,
+    decimal Requerido,
+    decimal Aplicado,
+    decimal AplicadoOtrasOc,
+    decimal Pendiente,
+    string  EstadoCobertura,
+    bool    Vinculada,
+    bool    EsPrincipal,
+    long?   IdResponsable,
+    string? Responsable);
+
+public record DistribucionOrdenCompraDto(OcDistribucionDto OrdenCompra, List<AplicacionDistribucionDto> Aplicaciones);
+
+/// <summary>Monto = 0 quita la aplicación (salvo la propuesta principal).</summary>
+public record DistribuirOrdenCompraSolicitudDto
+{
+    public long?    IdPropuesta { get; init; }
+    public decimal? Monto       { get; init; }
+}
+
+public record ResultadoDistribucionDto(
+    long IdOc, long IdPropuesta, string Propuesta, decimal SaldoAntes, decimal SaldoDespues,
+    decimal AplicadoAntes, decimal AplicadoDespues, decimal PendientePropuesta, string EstadoCobertura);
+
+/// <summary>Propuesta, cobertura actual y resultado "OC existente + Nueva OC = Cobertura total".
+/// EstadoResultado: sin_monto | completa | con_saldo | insuficiente.</summary>
+public record PropuestaOcComplementariaDto
+{
+    public long      IdPropuesta         { get; init; }
+    public string    Numero              { get; init; } = "";
+    public int       Version             { get; init; }
+    public long      IdCliente           { get; init; }
+    public string?   RazonSocial         { get; init; }
+    public string?   Ruc                 { get; init; }
+    public long?     IdRequerimiento     { get; init; }
+    public string?   NumeroRq            { get; init; }
+    public int       IdMoneda            { get; init; }
+    public string?   Moneda              { get; init; }
+    public string?   MonedaSimbolo       { get; init; }
+    public string?   MonedaNombre        { get; init; }
+    public decimal   MontoPropuesta      { get; init; }
+    public decimal   MontoCubierto       { get; init; }
+    public decimal   Faltante            { get; init; }
+    public decimal   CoberturaPct        { get; init; }
+    public int       VigenciaDiasDefecto { get; init; }
+    public string?   FechaServidor       { get; init; }
+    public decimal?  MontoNuevaOc        { get; init; }
+    public decimal   CoberturaTotal      { get; init; }
+    public decimal   CoberturaTotalPct   { get; init; }
+    public string    EstadoResultado     { get; init; } = "";
+    public decimal   SaldoNuevaOc        { get; init; }
+    public decimal   FaltanteDespues     { get; init; }
+}
+
+public record OcExistenteDto(long IdOc, string NumeroOc, string TipoOc, string Estado, decimal MontoTotal, decimal MontoAsignado, string? FechaOc);
+
+public record PreparacionOcComplementariaDto(PropuestaOcComplementariaDto Propuesta, List<OcExistenteDto> OrdenesExistentes);
+
+/// <summary>Datos de la OC complementaria. La moneda es la de la propuesta. VigenciaDias opcional (parámetro por defecto).</summary>
+public record RegistrarOcComplementariaSolicitudDto
+{
+    public string?   NumeroOc       { get; init; }
+    public DateTime? FechaOc        { get; init; }
+    public DateTime? FechaRecepcion { get; init; }
+    public decimal?  Monto          { get; init; }
+    public int?      VigenciaDias   { get; init; }
+    public string?   Observaciones  { get; init; }
+    public string?   Referencia     { get; init; }
+}
+
+public record OcComplementariaRegistradaDto(
+    long? IdOc, string NumeroOc, string Estado, long IdOcOrigen, string? NumeroOcOrigen,
+    decimal MontoExistente, decimal MontoNuevaOc, decimal CoberturaTotal, decimal CoberturaTotalPct,
+    string EstadoResultado, decimal SaldoNuevaOc, int Notificados);
