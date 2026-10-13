@@ -18,7 +18,8 @@ public class VistoBuenoController(
     ObtenerCostoSuministroCasoDeUso         obtenerCosto,
     GuardarCostoSuministroCasoDeUso         guardarCosto,
     PrepararDecisionVistoBuenoCasoDeUso     prepararDecision,
-    ObtenerCorreccionPropuestaCasoDeUso     obtenerCorreccion) : ControllerBase
+    ObtenerCorreccionPropuestaCasoDeUso     obtenerCorreccion,
+    ResolverRevocacionVbCasoDeUso           resolverRevocacion) : ControllerBase
 {
     private long IdUsuarioActual =>
         long.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub"), out var id) ? id : 0;
@@ -90,4 +91,14 @@ public class VistoBuenoController(
     [HttpGet("api/crm/propuestas/{id:long}/correccion")]
     public async Task<IActionResult> Correccion(long id, CancellationToken ct = default)
         => Responder(await obtenerCorreccion.EjecutarAsync(id, ct));
+
+    /// <summary>
+    /// HU-13b — Resolver la solicitud de revocación de VB.
+    /// aprobar  → la propuesta vuelve a 'borrador' y el comercial puede editarla.
+    /// rechazar → la propuesta se mantiene 'aprobado'. Comentario obligatorio (mín. 10).
+    /// </summary>
+    [RequierePermiso("vb_resolver_revocacion")]
+    [HttpPost("api/crm/propuestas/{id:long}/revocacion/resolver")]
+    public async Task<IActionResult> ResolverRevocacion(long id, [FromBody] ResolverRevocacionVbDto dto, CancellationToken ct = default)
+        => Responder(await resolverRevocacion.EjecutarAsync(id, dto, IdUsuarioActual, ct));
 }

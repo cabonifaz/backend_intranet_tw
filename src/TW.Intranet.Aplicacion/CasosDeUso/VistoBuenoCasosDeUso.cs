@@ -74,6 +74,43 @@ public class ResolverVistoBuenoCasoDeUso(IVistoBuenoRepositorio repositorio)
                           .Select(v => v.Trim().ToLowerInvariant()).Distinct().ToList();
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// HU-13b — Resolver solicitud de revocación de VB (jefe VB)
+// ─────────────────────────────────────────────────────────────────────────────
+
+public class ResolverRevocacionVbCasoDeUso(IVistoBuenoRepositorio repositorio)
+{
+    private static readonly string[] Acciones = ["aprobar", "rechazar"];
+    private const int MinComentario = 10;
+    private const int MaxComentario = 2000;
+
+    public async Task<RespuestaDto<ResultadoResolverRevocacionVbDto>> EjecutarAsync(
+        long idPropuesta, ResolverRevocacionVbDto? dto, long idUsuario, CancellationToken ct = default)
+    {
+        if (idPropuesta <= 0)
+            return new RespuestaDto<ResultadoResolverRevocacionVbDto>(1, "Indique la propuesta.");
+        if (dto is null)
+            return new RespuestaDto<ResultadoResolverRevocacionVbDto>(1, "Indique la acción.");
+
+        var accion = dto.Accion?.Trim().ToLowerInvariant() ?? "";
+        if (!Acciones.Contains(accion))
+            return new RespuestaDto<ResultadoResolverRevocacionVbDto>(1, "Acción no válida. Use aprobar o rechazar.");
+
+        var comentario = dto.Comentario?.Trim();
+        if (accion == "rechazar")
+        {
+            if (string.IsNullOrEmpty(comentario) || comentario.Length < MinComentario)
+                return new RespuestaDto<ResultadoResolverRevocacionVbDto>(1,
+                    $"Indique el motivo del rechazo (mínimo {MinComentario} caracteres).");
+        }
+        if (comentario is { Length: > MaxComentario })
+            return new RespuestaDto<ResultadoResolverRevocacionVbDto>(1,
+                $"El comentario no puede superar los {MaxComentario} caracteres.");
+
+        return await repositorio.ResolverRevocacionAsync(idPropuesta, dto with { Accion = accion, Comentario = comentario }, idUsuario, ct);
+    }
+}
+
 /// <summary>HU-15 — Datos de los modales Aprobar / Rechazar / Solicitar Corrección.</summary>
 public class PrepararDecisionVistoBuenoCasoDeUso(IVistoBuenoRepositorio repositorio)
 {

@@ -7,6 +7,9 @@ public interface IVistoBuenoRepositorio
 {
     Task<RespuestaDto<BandejaVistoBuenoDto>>      ObtenerBandejaAsync(FiltrosBandejaVistoBuenoDto f, long idUsuario, CancellationToken ct);
     Task<RespuestaDto<ResultadoResolverVistoBuenoDto>> ResolverAsync(long idPropuesta, ResolverVistoBuenoDto dto, long idUsuario, CancellationToken ct);
+
+    /// <summary>HU-13b — Resolver la solicitud de revocación de VB (aprobar o rechazar).</summary>
+    Task<RespuestaDto<ResultadoResolverRevocacionVbDto>> ResolverRevocacionAsync(long idPropuesta, ResolverRevocacionVbDto dto, long idUsuario, CancellationToken ct);
     Task<RespuestaDto<DecisionVistoBuenoDto>>     PrepararDecisionAsync(long idPropuesta, long idUsuario, CancellationToken ct);
     Task<RespuestaDto<CorreccionPropuestaDto?>>   ObtenerCorreccionAsync(long idPropuesta, CancellationToken ct);
     Task<RespuestaDto<(List<ValidacionPreviaDto> Validaciones, ResumenEconomicoVbDto Resumen)>> ObtenerValidacionesAsync(long idPropuesta, long idUsuario, CancellationToken ct);

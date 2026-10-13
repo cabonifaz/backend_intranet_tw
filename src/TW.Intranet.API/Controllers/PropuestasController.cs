@@ -29,6 +29,9 @@ public class PropuestasController(
     EnviarVistoBuenoPropuestaCasoDeUso       enviarVistoBueno,
     PrepararAnulacionPropuestaCasoDeUso      prepararAnulacion,
     AnularPropuestaCasoDeUso                 anularPropuesta,
+    PrepararEnvioClienteCasoDeUso            prepararEnvioCliente,
+    EnviarPropuestaClienteCasoDeUso          enviarPropuestaCliente,
+    SolicitarRevocacionVbCasoDeUso           solicitarRevocacionVb,
     GenerarPdfPropuestaCasoDeUso             generarPdf) : ControllerBase
 {
     private long IdUsuarioActual =>
@@ -183,6 +186,35 @@ public class PropuestasController(
     [HttpPost("{id:long}/anular")]
     public async Task<IActionResult> Anular(long id, [FromBody] AnularPropuestaDto dto, CancellationToken ct = default)
         => Responder(await anularPropuesta.EjecutarAsync(id, dto, IdUsuarioActual, ct));
+
+    // ── HU-10b: envío de propuesta aprobada al cliente ──────────────────────
+
+    /// <summary>
+    /// Marca la propuesta (estado 'aprobado') como enviada al cliente. Pasa a 'enviado',
+    /// registra fecha_envio_cliente y entra al pipeline del seguimiento comercial (HU-17).
+    /// </summary>
+    /// <summary>Datos del modal "Enviar al Cliente": cabecera + contactos del cliente + plantillas.</summary>
+    [RequierePermiso("propuesta_enviar_cliente")]
+    [HttpGet("{id:long}/enviar-cliente/preparar")]
+    public async Task<IActionResult> PrepararEnviarCliente(long id, CancellationToken ct = default)
+        => Responder(await prepararEnvioCliente.EjecutarAsync(id, IdUsuarioActual, ct));
+
+    [RequierePermiso("propuesta_enviar_cliente")]
+    [HttpPost("{id:long}/enviar-cliente")]
+    public async Task<IActionResult> EnviarCliente(long id, [FromBody] EnviarPropuestaClienteDto dto, CancellationToken ct = default)
+        => Responder(await enviarPropuestaCliente.EjecutarAsync(id, dto, IdUsuarioActual, ct));
+
+    // ── HU-13b: solicitar revocación de VB (comercial) ──────────────────────
+
+    /// <summary>
+    /// El comercial autor solicita al jefe VB revocar la aprobación anterior. Requiere motivo
+    /// (mín. 10 caracteres). La propuesta pasa a 'pendiente_revocacion' y aparece de nuevo
+    /// en la bandeja de VB como solicitud de revocación.
+    /// </summary>
+    [RequierePermiso("propuesta_solicitar_revocacion")]
+    [HttpPost("{id:long}/solicitar-revocacion")]
+    public async Task<IActionResult> SolicitarRevocacion(long id, [FromBody] SolicitarRevocacionVbDto? dto, CancellationToken ct = default)
+        => Responder(await solicitarRevocacionVb.EjecutarAsync(id, dto, IdUsuarioActual, ct));
 
     // ── Vista Previa / Descarga PDF ─────────────────────────────────────────
 

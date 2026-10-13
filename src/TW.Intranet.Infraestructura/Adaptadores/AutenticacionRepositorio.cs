@@ -200,4 +200,49 @@ public class AutenticacionRepositorio(CadenaConexionBd conexion) : IAutenticacio
             return false;
         }
     }
+
+    public async Task<RespuestaDto<MisDatosDto>> ObtenerMisDatosAsync(long idUsuario, CancellationToken ct)
+    {
+        try
+        {
+            await using var conn = new MySqlConnection(conexion.Valor);
+            await conn.OpenAsync(ct);
+
+            await using var cmd = new MySqlCommand("SP_ObtenerUsuarioPorId", conn)
+            {
+                CommandType = System.Data.CommandType.StoredProcedure
+            };
+            cmd.Parameters.AddWithValue("p_id_usuario", idUsuario);
+
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+
+            if (!await reader.ReadAsync(ct))
+                return new RespuestaDto<MisDatosDto>(3, "El procedimiento no devolvió resultado.");
+
+            int    idTipo  = reader.GetInt32("IdTipoMensaje");
+            string mensaje = reader.GetString("Mensaje");
+            if (idTipo != 2)
+                return new RespuestaDto<MisDatosDto>(idTipo, mensaje);
+
+            await reader.NextResultAsync(ct);
+            if (!await reader.ReadAsync(ct))
+                return new RespuestaDto<MisDatosDto>(3, "El procedimiento no devolvió datos del usuario.");
+
+            var datos = new MisDatosDto(
+                IdUsuario:              reader.GetInt64("id_usuario"),
+                Nombre:                 reader.GetString("nombre"),
+                Apellido:               reader.GetString("apellido"),
+                Correo:                 reader.GetString("correo"),
+                RolSistema:             reader.GetString("rol_sistema"),
+                RolSistemaLabel:        reader["rol_sistema_label"] is string lbl ? lbl : reader.GetString("rol_sistema"),
+                Area:                   reader["area"] is string a ? a : "",
+                ForzarCambioContrasena: reader.GetInt32("forzar_cambio_contrasena") == 1
+            );
+            return new RespuestaDto<MisDatosDto>(2, mensaje, datos);
+        }
+        catch (Exception ex)
+        {
+            return new RespuestaDto<MisDatosDto>(3, ex.Message);
+        }
+    }
 }

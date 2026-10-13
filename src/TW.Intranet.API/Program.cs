@@ -147,6 +147,7 @@ builder.Services.AddScoped<IVerificadorContrasena,    BcryptVerificadorContrasen
 // Casos de uso — Autenticación
 builder.Services.AddScoped<IniciarSesionCasoDeUso>();
 builder.Services.AddScoped<CambiarContrasenaCasoDeUso>();
+builder.Services.AddScoped<ObtenerMisDatosCasoDeUso>();
 
 // ── INYECCIÓN DE DEPENDENCIAS — Dashboard ─────────────────────────────────────
 builder.Services.AddScoped<IDashboardRepositorio,       DashboardRepositorio>();
@@ -266,6 +267,10 @@ builder.Services.AddScoped<PrepararVistoBuenoPropuestaCasoDeUso>();
 builder.Services.AddScoped<EnviarVistoBuenoPropuestaCasoDeUso>();
 builder.Services.AddScoped<PrepararAnulacionPropuestaCasoDeUso>();
 builder.Services.AddScoped<AnularPropuestaCasoDeUso>();
+builder.Services.AddScoped<PrepararEnvioClienteCasoDeUso>();
+builder.Services.AddScoped<EnviarPropuestaClienteCasoDeUso>();
+builder.Services.AddScoped<SolicitarRevocacionVbCasoDeUso>();
+builder.Services.AddScoped<ResolverRevocacionVbCasoDeUso>();
 builder.Services.AddScoped<IPropuestaPdfGenerador, PropuestaPdfGeneradorQuestPdf>();
 builder.Services.AddScoped<GenerarPdfPropuestaCasoDeUso>();
 

@@ -36,6 +36,9 @@ public class BrevoEnviadorCorreo(HttpClient http, ConfiguracionCorreo configurac
             htmlContent = mensaje.Html,
             textContent = mensaje.Texto,
             tags        = new[] { "intranet-tw" },
+            attachment  = mensaje.Adjuntos is { Count: > 0 }
+                              ? mensaje.Adjuntos.Select(a => new { name = a.Nombre, content = a.ContenidoBase64 }).ToList()
+                              : null,
         };
 
         try

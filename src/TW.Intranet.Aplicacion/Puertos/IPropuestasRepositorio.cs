@@ -43,6 +43,18 @@ public interface IPropuestasRepositorio
         long idPropuesta, int? idMotivo, string? justificacion, bool confirmacion, bool soloPreparar,
         long idUsuario, CancellationToken ct);
 
+    /// <summary>HU-10b — Datos para el modal "Enviar al Cliente" (contactos + plantillas).</summary>
+    Task<RespuestaDto<PreparacionEnvioClienteDto>> PrepararEnvioClienteAsync(
+        long idPropuesta, long idUsuario, CancellationToken ct);
+
+    /// <summary>HU-10b — Marca la propuesta como enviada (de 'aprobado' a 'enviado').</summary>
+    Task<RespuestaDto<EnvioPropuestaClienteDto>> EnviarPropuestaClienteAsync(
+        long idPropuesta, long idUsuario, CancellationToken ct);
+
+    /// <summary>HU-13b — Solicita al jefe VB revocar la aprobación (de 'aprobado' a 'pendiente_revocacion').</summary>
+    Task<RespuestaDto<ResultadoSolicitarRevocacionVbDto>> SolicitarRevocacionVbAsync(
+        long idPropuesta, string motivo, long idUsuario, CancellationToken ct);
+
     Task<RespuestaDto<GuardarPropuestaResultadoDto>> GuardarPropuestaAsync(
         GuardarPropuestaDto dto, long idUsuario, CancellationToken ct);
 }

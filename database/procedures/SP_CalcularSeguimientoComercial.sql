@@ -109,7 +109,9 @@ BEGIN
             WHEN k.estado_seguimiento = 'aceptada'                                THEN NULL
             WHEN k.tipo_accion_codigo IS NOT NULL                                 THEN k.tipo_accion_codigo
             WHEN k.estado_ult_seg IS NULL                                         THEN 'PRIMER_SEGUIMIENTO'
-            ELSE 'PROGRAMAR_SEGUIMIENTO'
+            -- HU-19: si ya hay seguimientos registrados y la última próxima acción fue consumida
+            -- explícitamente (vía "Ejecutar ahora" o decider cancelar) sin programar otra, no sugerimos nada.
+            ELSE NULL
         END AS proxima_accion_codigo,
         CASE
             WHEN k.estado_seguimiento = 'rechazada' THEN NULL
@@ -118,7 +120,7 @@ BEGIN
             WHEN k.estado_seguimiento = 'aceptada'                                THEN NULL
             WHEN k.tipo_accion_nombre IS NOT NULL                                 THEN k.tipo_accion_nombre
             WHEN k.estado_ult_seg IS NULL                                         THEN 'Primer seguimiento'
-            ELSE 'Programar seguimiento'
+            ELSE NULL
         END AS proxima_accion,
         CASE
             WHEN k.estado_seguimiento = 'rechazada' THEN 'cerrado'
@@ -146,10 +148,12 @@ BEGIN
             DATEDIFF(CURDATE(), DATE(COALESCE(j.fecha_ult_respuesta, j.fecha_envio)))  AS dias_sin_respuesta,
             COALESCE(j.fecha_ult_interaccion, j.fecha_envio)                           AS inicio_sla,
             CASE
+                -- Primer contacto sin seguimientos: SLA cuenta desde envío.
                 WHEN j.estado_ult_seg IS NULL
                     THEN COALESCE(j.proxima_accion_fecha, j.fecha_envio + INTERVAL v_sla_horas HOUR)
+                -- HU-19: si hay seguimiento activo, respetar la próxima acción explícita (NULL = sin pendiente).
                 WHEN j.estado_ult_seg = 'activo'
-                    THEN COALESCE(j.proxima_accion_fecha, j.fecha_ult_interaccion + INTERVAL v_sla_horas HOUR)
+                    THEN j.proxima_accion_fecha
                 ELSE j.proxima_accion_fecha
             END AS vence_accion
         FROM (

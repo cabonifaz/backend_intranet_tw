@@ -24,7 +24,7 @@ INSERT INTO tabla_maestra (IdEmpresa, IdMaestro, Descripcion, Num1, String1, Str
 SELECT 1, @id_area, 'AREA_CORRECCION_PROPUESTA', a.orden, a.etiqueta, a.codigo
 FROM (
           SELECT 1 AS orden, 'Configuración'       AS etiqueta, 'configuracion'       AS codigo
-UNION ALL SELECT 2, 'Ítems y precios',    'propuesta'
+UNION ALL SELECT 2, 'Propuesta',          'propuesta'
 UNION ALL SELECT 3, 'Opcionales',         'opcionales'
 UNION ALL SELECT 4, 'Detalle',            'detalle'
 UNION ALL SELECT 5, 'Recomendaciones',    'recomendaciones'
@@ -42,7 +42,7 @@ WHERE NOT EXISTS (
 UPDATE tabla_maestra tm
 JOIN (
           SELECT 1 AS orden, 'Configuración'       AS etiqueta, 'configuracion'       AS codigo
-UNION ALL SELECT 2, 'Ítems y precios',    'propuesta'
+UNION ALL SELECT 2, 'Propuesta',          'propuesta'
 UNION ALL SELECT 3, 'Opcionales',         'opcionales'
 UNION ALL SELECT 4, 'Detalle',            'detalle'
 UNION ALL SELECT 5, 'Recomendaciones',    'recomendaciones'

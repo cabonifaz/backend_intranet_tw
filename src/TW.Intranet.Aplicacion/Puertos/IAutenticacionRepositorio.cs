@@ -10,4 +10,5 @@ public interface IAutenticacionRepositorio
     Task<RespuestaDto<string>>  ActualizarUltimoLoginAsync(long idUsuario, CancellationToken ct);
     Task<bool>                  VerificarSesionTokenAsync(long idUsuario, string sesionToken, CancellationToken ct);
     Task<RespuestaDto<bool>>    CambiarContrasenaAsync(long idUsuario, string passwordHashNuevo, CancellationToken ct);
+    Task<RespuestaDto<MisDatosDto>> ObtenerMisDatosAsync(long idUsuario, CancellationToken ct);
 }

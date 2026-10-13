@@ -15,7 +15,7 @@ public record FiltrosBandejaVistoBuenoDto
     public int     PorPagina   { get; init; } = 10;
 }
 
-public record KpisVistoBuenoDto(int Pendientes, int ProximosVencer, int Vencidos, int AprobadasHoy, int Devueltas);
+public record KpisVistoBuenoDto(int Pendientes, int ProximosVencer, int Vencidos, int AprobadasHoy, int Devueltas, int RevocacionesPendientes);
 
 public record ItemBandejaVistoBuenoDto
 {
@@ -40,8 +40,18 @@ public record ItemBandejaVistoBuenoDto
     /// <summary>Pendiente: quien debe aprobar ahora (jefe o su suplente vigente). Resuelto: quien resolvió.</summary>
     public string?   Aprobador            { get; init; }
     public bool      AprobadorEsSuplente  { get; init; }
-    /// <summary>pendiente | aprobado | devuelto | rechazado</summary>
+    /// <summary>pendiente | aprobado | devuelto | rechazado | revocacion_pendiente | revocacion_aprobada | revocacion_rechazada</summary>
     public string    EstadoVb             { get; init; } = "";
+    /// <summary>HU-13b: aprobacion | revocacion. Define si la fila es una aprobación clásica o una solicitud de revocación.</summary>
+    public string    TipoVb               { get; init; } = "aprobacion";
+    /// <summary>Si TipoVb = revocacion: id del VB aprobado que se quiere revocar.</summary>
+    public long?     IdVbPadre            { get; init; }
+    /// <summary>Si TipoVb = revocacion: motivo escrito por el comercial.</summary>
+    public string?   MotivoRevocacion     { get; init; }
+    /// <summary>Si TipoVb = revocacion: id del comercial que solicitó la revocación.</summary>
+    public long?     IdSolicitante        { get; init; }
+    /// <summary>Si TipoVb = revocacion: nombre del solicitante.</summary>
+    public string?   Solicitante          { get; init; }
     public DateTime? FechaSolicitud       { get; init; }
     public DateTime? FechaRespuesta       { get; init; }
     public DateTime? VenceEn              { get; init; }
@@ -98,6 +108,34 @@ public record ResultadoResolverVistoBuenoDto(
     string    EstadoVb,
     long?     IdCorreccion = null,
     DateTime? FechaLimite  = null);
+
+// ══════════════════════ HU-13b — Revocación de VB ══════════════════════
+
+/// <summary>Modal "Solicitar Revocación de VB" (comercial). Motivo obligatorio (mín. 10).</summary>
+public record SolicitarRevocacionVbDto(string Motivo);
+
+/// <summary>Resultado de solicitar revocación.</summary>
+public record ResultadoSolicitarRevocacionVbDto(
+    long   IdPropuesta,
+    string Numero,
+    int    Version,
+    string Estado,
+    long   IdVb,
+    long?  IdVbPadre);
+
+/// <summary>Modal "Resolver Revocación" (jefe VB). Accion: aprobar | rechazar. Comentario obligatorio al rechazar.</summary>
+public record ResolverRevocacionVbDto(string Accion, string? Comentario = null);
+
+/// <summary>Resultado de resolver revocación. Si Accion='aprobar', IdNuevaVersion trae el id
+/// de la propuesta recién creada en borrador (clonada desde la revocada). Si 'rechazar' viene 0.</summary>
+public record ResultadoResolverRevocacionVbDto(
+    long   IdPropuesta,
+    string Numero,
+    int    Version,
+    string Estado,
+    string EstadoVb,
+    long   IdVb,
+    long   IdNuevaVersion);
 
 // ══════════════════════ HU-15 — Modales de decisión ══════════════════════
 

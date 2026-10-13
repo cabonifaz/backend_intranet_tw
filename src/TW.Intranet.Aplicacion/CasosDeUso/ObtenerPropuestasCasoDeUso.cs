@@ -6,7 +6,7 @@ namespace TW.Intranet.Aplicacion.CasosDeUso;
 public class ObtenerPropuestasCasoDeUso(IPropuestasRepositorio repositorio)
 {
     private static readonly string[] Grupos =
-        ["todas", "borrador", "por_vb", "en_seguimiento", "aceptada", "rechazada", "cerrada"];
+        ["todas", "borrador", "por_vb", "por_enviar", "en_seguimiento", "aceptada", "rechazada", "cerrada"];
 
     public Task<RespuestaDto<PropuestasPaginadoDto>> EjecutarAsync(FiltrosPropuestasDto filtros, CancellationToken ct = default)
     {

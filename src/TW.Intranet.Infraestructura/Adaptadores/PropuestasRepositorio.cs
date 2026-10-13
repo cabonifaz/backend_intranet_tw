@@ -642,6 +642,103 @@ public class PropuestasRepositorio(CadenaConexionBd conexion)
                 return new RespuestaDto<AnulacionPropuestaDto>(2, mensaje, a);
             }, ct);
 
+    public Task<RespuestaDto<ResultadoSolicitarRevocacionVbDto>> SolicitarRevocacionVbAsync(
+        long idPropuesta, string motivo, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_SolicitarRevocacionVB",
+            p =>
+            {
+                p.AddWithValue("p_id_propuesta", idPropuesta);
+                p.AddWithValue("p_motivo",       Valor(motivo));
+                p.AddWithValue("p_id_usuario",   idUsuario);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<ResultadoSolicitarRevocacionVbDto>(3, "El procedimiento no devolvió el resultado.");
+                return new RespuestaDto<ResultadoSolicitarRevocacionVbDto>(2, mensaje,
+                    new ResultadoSolicitarRevocacionVbDto(
+                        EnteroLargo(r, "id_propuesta"),
+                        Texto(r, "numero") ?? "",
+                        Entero(r, "version"),
+                        Texto(r, "estado") ?? "",
+                        EnteroLargo(r, "id_vb"),
+                        EnteroLargoNulo(r, "id_vb_padre")));
+            }, ct);
+
+    public Task<RespuestaDto<PreparacionEnvioClienteDto>> PrepararEnvioClienteAsync(
+        long idPropuesta, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_PrepararEnvioCliente",
+            p =>
+            {
+                p.AddWithValue("p_id_propuesta", idPropuesta);
+                p.AddWithValue("p_id_usuario",   idUsuario);
+            },
+            async (r, mensaje) =>
+            {
+                // 2. Cabecera
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<PreparacionEnvioClienteDto>(3, "El procedimiento no devolvió la cabecera.");
+                var cab = new CabeceraEnvioClienteDto(
+                    EnteroLargo(r, "id_propuesta"), Texto(r, "numero") ?? "", Entero(r, "version"),
+                    EnteroLargo(r, "id_cliente"), Texto(r, "razon_social") ?? "", Texto(r, "ruc"),
+                    Texto(r, "referencia"),
+                    DecimalNulo(r, "total") ?? 0m, Entero(r, "id_moneda"),
+                    Texto(r, "moneda_simbolo"), Texto(r, "moneda"),
+                    EnteroLargoNulo(r, "id_contacto"), Texto(r, "contacto"), Texto(r, "correo_contacto"),
+                    EnteroLargo(r, "id_usuario"), Texto(r, "usuario"),
+                    Texto(r, "correo_usuario"), Texto(r, "cargo_usuario"),
+                    FechaHora(r, "fecha_servidor"));
+
+                // 3. Contactos
+                await r.NextResultAsync(ct);
+                var contactos = new List<ContactoEnvioClienteDto>();
+                while (await r.ReadAsync(ct))
+                    contactos.Add(new ContactoEnvioClienteDto(
+                        EnteroLargo(r, "id_contacto"), Texto(r, "nombres") ?? "",
+                        Texto(r, "cargo"), Texto(r, "correo"),
+                        Texto(r, "telefono_movil"), Texto(r, "telefono_anexo"),
+                        Booleano(r, "es_contacto_propuesta"), Booleano(r, "es_contacto_principal")));
+
+                // 4. Plantillas
+                await r.NextResultAsync(ct);
+                var plantillas = new List<PlantillaEnvioClienteDto>();
+                while (await r.ReadAsync(ct))
+                    plantillas.Add(new PlantillaEnvioClienteDto(
+                        Entero(r, "id_plantilla"), Texto(r, "codigo") ?? "", Texto(r, "nombre") ?? "",
+                        Texto(r, "asunto") ?? "", Texto(r, "cuerpo_html") ?? ""));
+
+                return new RespuestaDto<PreparacionEnvioClienteDto>(2, mensaje,
+                    new PreparacionEnvioClienteDto(cab, contactos, plantillas));
+            }, ct);
+
+    public Task<RespuestaDto<EnvioPropuestaClienteDto>> EnviarPropuestaClienteAsync(
+        long idPropuesta, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_EnviarPropuestaCliente",
+            p =>
+            {
+                p.AddWithValue("p_id_propuesta", idPropuesta);
+                p.AddWithValue("p_id_usuario",   idUsuario);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<EnvioPropuestaClienteDto>(3, "El procedimiento no devolvió el resultado.");
+
+                var dto = new EnvioPropuestaClienteDto
+                {
+                    IdPropuesta       = EnteroLargo(r, "id_propuesta"),
+                    Numero            = Texto(r, "numero") ?? "",
+                    Version           = Entero(r, "version"),
+                    Estado            = Texto(r, "estado") ?? "",
+                    FechaEnvioCliente = FechaHora(r, "fecha_envio_cliente"),
+                    EnviadoClientePor = EnteroLargoNulo(r, "enviado_cliente_por"),
+                };
+                return new RespuestaDto<EnvioPropuestaClienteDto>(2, mensaje, dto);
+            }, ct);
+
     private static List<string> LeerListaJson(string? json)
     {
         if (string.IsNullOrWhiteSpace(json)) return new();

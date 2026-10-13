@@ -97,3 +97,80 @@ public class OpcionMotivoDto
     public int    Id     { get; set; }
     public string Nombre { get; set; } = "";
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HU-10b — Envío de propuesta al cliente (post VB aprobado)
+//   POST /api/crm/propuestas/{id}/enviar-cliente
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// <summary>Resultado de enviar la propuesta al cliente.</summary>
+public class EnvioPropuestaClienteDto
+{
+    public long      IdPropuesta         { get; set; }
+    public string    Numero              { get; set; } = "";
+    public int       Version             { get; set; }
+    public string    Estado              { get; set; } = "";
+    public DateTime? FechaEnvioCliente   { get; set; }
+    public long?     EnviadoClientePor   { get; set; }
+    /// <summary>true si el correo salió por Brevo (puede ser false si falló aunque el estado sí cambió).</summary>
+    public bool      CorreoEnviado       { get; set; }
+    public string?   CorreoError         { get; set; }
+}
+
+/// <summary>Destinatario del correo (PARA / CC).</summary>
+public record DestinatarioEnvioClienteDto(string Correo, string? Nombre = null, long? IdContacto = null);
+
+/// <summary>Body del POST /enviar-cliente — datos del correo que acompañan al cambio de estado.</summary>
+public class EnviarPropuestaClienteDto
+{
+    public int?    IdPlantilla { get; set; }
+    public List<DestinatarioEnvioClienteDto> Para { get; set; } = new();
+    public List<DestinatarioEnvioClienteDto> Cc   { get; set; } = new();
+    public string  Asunto     { get; set; } = "";
+    public string  CuerpoHtml { get; set; } = "";
+}
+
+// ── Preparación (GET /enviar-cliente/preparar) ──
+
+public record CabeceraEnvioClienteDto(
+    long      IdPropuesta,
+    string    Numero,
+    int       Version,
+    long      IdCliente,
+    string    RazonSocial,
+    string?   Ruc,
+    string?   Referencia,
+    decimal   Total,
+    int       IdMoneda,
+    string?   MonedaSimbolo,
+    string?   Moneda,
+    long?     IdContacto,
+    string?   Contacto,
+    string?   CorreoContacto,
+    long      IdUsuario,
+    string?   Usuario,
+    string?   CorreoUsuario,
+    string?   CargoUsuario,
+    DateTime? FechaServidor);
+
+public record ContactoEnvioClienteDto(
+    long    IdContacto,
+    string  Nombres,
+    string? Cargo,
+    string? Correo,
+    string? TelefonoMovil,
+    string? TelefonoAnexo,
+    bool    EsContactoPropuesta,
+    bool    EsContactoPrincipal);
+
+public record PlantillaEnvioClienteDto(
+    int    IdPlantilla,
+    string Codigo,
+    string Nombre,
+    string Asunto,
+    string CuerpoHtml);
+
+public record PreparacionEnvioClienteDto(
+    CabeceraEnvioClienteDto           Cabecera,
+    List<ContactoEnvioClienteDto>     Contactos,
+    List<PlantillaEnvioClienteDto>    Plantillas);

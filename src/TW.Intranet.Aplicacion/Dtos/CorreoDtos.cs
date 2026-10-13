@@ -17,10 +17,14 @@ public record MensajeCorreoDto(
     IReadOnlyList<DestinatarioCorreoDto>? Cc              = null,
     string? ResponderA       = null,
     string? NombreResponderA = null,
-    string? NombreRemitente  = null);
+    string? NombreRemitente  = null,
+    IReadOnlyList<AdjuntoCorreoDto>? Adjuntos = null);
 
 /// <summary>Destinatario adicional o en copia.</summary>
 public record DestinatarioCorreoDto(string Correo, string? Nombre);
+
+/// <summary>Archivo adjunto a enviar con el correo. Contenido en base64 según lo requiere Brevo.</summary>
+public record AdjuntoCorreoDto(string Nombre, string ContenidoBase64);
 
 /// <summary>Resultado de un envío. El adaptador nunca lanza: los errores vienen aquí.</summary>
 public record ResultadoEnvioCorreoDto(

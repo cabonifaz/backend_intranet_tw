@@ -30,10 +30,11 @@ public class VistoBuenoRepositorio(CadenaConexionBd conexion)
             async (r, mensaje) =>
             {
                 await r.NextResultAsync(ct);
-                var kpis = new KpisVistoBuenoDto(0, 0, 0, 0, 0);
+                var kpis = new KpisVistoBuenoDto(0, 0, 0, 0, 0, 0);
                 if (await r.ReadAsync(ct))
                     kpis = new KpisVistoBuenoDto(Ent(r, "pendientes"), Ent(r, "proximos_vencer"), Ent(r, "vencidos"),
-                                                 Ent(r, "aprobadas_hoy"), Ent(r, "devueltas"));
+                                                 Ent(r, "aprobadas_hoy"), Ent(r, "devueltas"),
+                                                 Ent(r, "revocaciones_pendientes"));
 
                 await r.NextResultAsync(ct);
                 var items = new List<ItemBandejaVistoBuenoDto>();
@@ -61,6 +62,11 @@ public class VistoBuenoRepositorio(CadenaConexionBd conexion)
                         Aprobador           = Texto(r, "aprobador"),
                         AprobadorEsSuplente = Booleano(r, "aprobador_es_suplente"),
                         EstadoVb            = Texto(r, "estado_vb") ?? "",
+                        TipoVb              = Texto(r, "tipo_vb") ?? "aprobacion",
+                        IdVbPadre           = EnteroLargoNulo(r, "id_vb_padre"),
+                        MotivoRevocacion    = Texto(r, "motivo_revocacion"),
+                        IdSolicitante       = EnteroLargoNulo(r, "solicitante_id"),
+                        Solicitante         = Texto(r, "solicitante"),
                         FechaSolicitud      = FechaHora(r, "fecha_solicitud"),
                         FechaRespuesta      = FechaHora(r, "fecha_respuesta"),
                         VenceEn             = FechaHora(r, "vence_en"),
@@ -127,6 +133,30 @@ public class VistoBuenoRepositorio(CadenaConexionBd conexion)
                                                        Texto(r, "estado") ?? "", Texto(r, "estado_vb") ?? "",
                                                        EnteroLargoNulo(r, "id_correccion"),
                                                        FechaHora(r, "fecha_limite")));
+            }, ct);
+
+    // ── HU-13b Resolver revocación de VB ─────────────────────────────────────
+    public Task<RespuestaDto<ResultadoResolverRevocacionVbDto>> ResolverRevocacionAsync(
+        long idPropuesta, ResolverRevocacionVbDto dto, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_ResolverRevocacionVB",
+            p =>
+            {
+                p.AddWithValue("p_id_propuesta", idPropuesta);
+                p.AddWithValue("p_accion",       dto.Accion);
+                p.AddWithValue("p_comentario",   Valor(dto.Comentario));
+                p.AddWithValue("p_id_usuario",   idUsuario);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<ResultadoResolverRevocacionVbDto>(3, "El procedimiento no devolvió el resultado.");
+                return new RespuestaDto<ResultadoResolverRevocacionVbDto>(2, mensaje,
+                    new ResultadoResolverRevocacionVbDto(EnteroLargo(r, "id_propuesta"),
+                                                          Texto(r, "numero") ?? "", Ent(r, "version"),
+                                                          Texto(r, "estado") ?? "", Texto(r, "estado_vb") ?? "",
+                                                          EnteroLargo(r, "id_vb"),
+                                                          EnteroLargo(r, "id_nueva_version")));
             }, ct);
 
     // ── HU-15 Modales de decisión ─────────────────────────────────────────────
