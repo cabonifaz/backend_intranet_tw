@@ -446,3 +446,59 @@ public class ExportarAuditoriaOrdenCompraCasoDeUso(IOrdenCompraRepositorio repos
         return texto.Replace(' ', '_');
     }
 }
+
+// ══════════════════════ HU-26 — Validación y Observación de Orden de Compra ══════════════════════
+
+/// <summary>Datos de los modales "Validar" y "Observar": resumen comparativo, checklist, motivos y responsables.</summary>
+public class PrepararValidacionOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio)
+{
+    public Task<RespuestaDto<PreparacionValidacionOrdenCompraDto>> EjecutarAsync(long idOc, long idUsuario, CancellationToken ct = default)
+    {
+        if (idOc <= 0)
+            return Task.FromResult(new RespuestaDto<PreparacionValidacionOrdenCompraDto>(1, "Orden de compra no válida."));
+        return repositorio.PrepararValidacionAsync(idOc, idUsuario, ct);
+    }
+}
+
+/// <summary>Valida definitivamente la OC: checklist automático conforme y confirmaciones contra la OC física.</summary>
+public class ValidarOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio)
+{
+    private static readonly string[] Confirmables = ["razon_social", "ruc", "moneda", "monto", "pdf_legible"];
+
+    public Task<RespuestaDto<OrdenCompraValidadaDto>> EjecutarAsync(
+        long idOc, ValidarOrdenCompraSolicitudDto datos, long idUsuario, CancellationToken ct = default)
+    {
+        if (idOc <= 0)
+            return Task.FromResult(new RespuestaDto<OrdenCompraValidadaDto>(1, "Orden de compra no válida."));
+        var comentario = string.IsNullOrWhiteSpace(datos.Comentario) ? null : datos.Comentario.Trim();
+        if (comentario is { Length: > 1000 })
+            return Task.FromResult(new RespuestaDto<OrdenCompraValidadaDto>(1, "Los comentarios admiten hasta 1000 caracteres."));
+
+        var confirmados = (datos.Confirmados ?? [])
+            .Select(c => c?.Trim().ToLowerInvariant() ?? "")
+            .Where(c => Confirmables.Contains(c))
+            .Distinct();
+        return repositorio.ValidarAsync(idOc, string.Join(',', confirmados), comentario, idUsuario, ct);
+    }
+}
+
+/// <summary>Observa la OC con motivos tipificados, detalle y responsable de corrección (bloquea el expediente y notifica).</summary>
+public class ObservarOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio)
+{
+    public Task<RespuestaDto<ObservacionRegistradaDto>> EjecutarAsync(
+        long idOc, ObservarOrdenCompraSolicitudDto datos, long idUsuario, CancellationToken ct = default)
+    {
+        static Task<RespuestaDto<ObservacionRegistradaDto>> Error(string m) =>
+            Task.FromResult(new RespuestaDto<ObservacionRegistradaDto>(1, m));
+
+        if (idOc <= 0) return Error("Orden de compra no válida.");
+        var motivos = (datos.Motivos ?? []).Where(m => m > 0).Distinct().ToList();
+        if (motivos.Count == 0) return Error("Seleccione al menos un motivo de observación.");
+        var detalle = datos.Detalle?.Trim() ?? "";
+        if (detalle.Length < 10)   return Error("Describa el problema encontrado en la orden de compra (mínimo 10 caracteres).");
+        if (detalle.Length > 1000) return Error("El detalle de la observación admite hasta 1000 caracteres.");
+        if (datos.IdResponsable is not > 0) return Error("Seleccione el responsable de corrección.");
+
+        return repositorio.ObservarAsync(idOc, string.Join(',', motivos), detalle, datos.IdResponsable.Value, idUsuario, ct);
+    }
+}

@@ -9,6 +9,8 @@
 --   p_revalidar = 1 ("Guardar y revalidar") la regresa siempre a 'pendiente_validacion' y levanta la
 --   observación. En ambos casos se notifica a Operaciones, Administración y al responsable comercial.
 --   Si la OC ya tiene órdenes de servicio no se puede cambiar el monto ni la moneda.
+-- HU-26: "Guardar y revalidar" levanta la observación abierta, resuelve el bloqueo del expediente
+--   y avisa también a quien observó la OC.
 -- HU-25: el PDF nuevo se registra como nueva versión en documento_adjunto.
 -- p_solo_validar = 1 valida y devuelve el impacto sin guardar (antes de escribir el PDF en disco).
 -- Resultados: 1 mensaje, 2 resultado de la edición.
@@ -71,6 +73,9 @@ proc: BEGIN
     DECLARE v_usuario       VARCHAR(220) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_cliente       VARCHAR(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_notificados   INT DEFAULT 0;
+    DECLARE v_obs_abierta   BIGINT;
+    DECLARE v_observador    BIGINT;
+    DECLARE v_id_exp        BIGINT;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -245,6 +250,33 @@ proc: BEGIN
         modificado_por = p_id_usuario
     WHERE id_oc = p_id_oc AND id_propuesta = v_id_prop AND eliminado_en IS NULL;
 
+    -- HU-26: "Guardar y revalidar" levanta la observación abierta y el bloqueo del expediente
+    SELECT MAX(id_observacion) INTO v_obs_abierta
+    FROM orden_compra_observacion WHERE id_oc = p_id_oc AND estado = 'abierta' AND eliminado_en IS NULL;
+
+    IF IFNULL(p_revalidar, 0) = 1 AND v_obs_abierta IS NOT NULL THEN
+        SELECT creado_por INTO v_observador FROM orden_compra_observacion WHERE id_observacion = v_obs_abierta;
+
+        UPDATE orden_compra_observacion SET
+            estado = 'levantada', fecha_levantamiento = NOW(), levantada_por = p_id_usuario, modificado_por = p_id_usuario
+        WHERE id_oc = p_id_oc AND estado = 'abierta' AND eliminado_en IS NULL;
+
+        SELECT MAX(e.id_expediente) INTO v_id_exp
+        FROM expediente_digital e
+        WHERE e.eliminado_en IS NULL AND (e.id_orden_compra = p_id_oc OR e.id_propuesta = v_id_prop);
+
+        IF v_id_exp IS NOT NULL THEN
+            UPDATE expediente_bloqueador SET resuelto = 1, fecha_resolucion = NOW(), modificado_por = p_id_usuario
+            WHERE id_expediente = v_id_exp AND resuelto = 0 AND eliminado_en IS NULL
+              AND descripcion LIKE CONCAT('OC ', a_numero, '%');
+
+            UPDATE expediente_digital SET estado = 'activo', modificado_por = p_id_usuario
+            WHERE id_expediente = v_id_exp AND estado = 'bloqueado'
+              AND NOT EXISTS (SELECT 1 FROM expediente_bloqueador b
+                              WHERE b.id_expediente = v_id_exp AND b.resuelto = 0 AND b.eliminado_en IS NULL);
+        END IF;
+    END IF;
+
     INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo,
                                   descripcion, id_usuario, registrado_en, metadata)
     VALUES ('orden_compra', p_id_oc,
@@ -275,7 +307,8 @@ proc: BEGIN
         FROM usuario u
         WHERE u.eliminado_en IS NULL AND u.estado = 'activo' AND u.id_usuario <> p_id_usuario
           AND ((u.area IN ('operaciones', 'administracion') AND u.rol_sistema IN ('supervisor', 'administrador'))
-               OR u.id_usuario = v_id_resp);
+               OR u.id_usuario = v_id_resp
+               OR u.id_usuario = v_observador);
 
         SET v_notificados = ROW_COUNT();
     END IF;

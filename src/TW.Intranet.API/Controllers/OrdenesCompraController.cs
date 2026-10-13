@@ -8,7 +8,7 @@ using TW.Intranet.Aplicacion.Dtos;
 
 namespace TW.Intranet.API.Controllers;
 
-/// <summary>Órdenes de Compra recibidas del cliente: registro y edición (HU-22/24), bandeja y detalle (HU-23), documento y auditoría (HU-25).</summary>
+/// <summary>Órdenes de Compra recibidas del cliente: registro y edición (HU-22/24), bandeja y detalle (HU-23), documento y auditoría (HU-25), validación y observación (HU-26).</summary>
 [ApiController]
 [Authorize]
 public class OrdenesCompraController(
@@ -26,7 +26,10 @@ public class OrdenesCompraController(
     ObtenerVersionDocumentoOrdenCompraCasoDeUso  obtenerVersion,
     ReemplazarDocumentoOrdenCompraCasoDeUso      reemplazarDocumento,
     ObtenerAuditoriaOrdenCompraCasoDeUso         obtenerAuditoria,
-    ExportarAuditoriaOrdenCompraCasoDeUso        exportarAuditoria) : ControllerBase
+    ExportarAuditoriaOrdenCompraCasoDeUso        exportarAuditoria,
+    PrepararValidacionOrdenCompraCasoDeUso       prepararValidacion,
+    ValidarOrdenCompraCasoDeUso                  validar,
+    ObservarOrdenCompraCasoDeUso                 observar) : ControllerBase
 {
     /// <summary>10 MB del PDF + margen para el resto del multipart.</summary>
     private const long TamanoMaximoPeticion = RegistrarOrdenCompraCasoDeUso.TamanoMaximoBytes + 1024 * 1024;
@@ -218,4 +221,31 @@ public class OrdenesCompraController(
     [HttpGet("api/crm/ordenes-compra/{idOc:long}/auditoria/xlsx")]
     public async Task<IActionResult> AuditoriaXlsx(long idOc, CancellationToken ct = default)
         => Archivo(await exportarAuditoria.EjecutarAsync(idOc, IdUsuarioActual, ct), descargar: true);
+
+    /// <summary>
+    /// HU-26 — Modales "Validar" y "Observar": resumen comparativo, checklist (con los ítems a confirmar contra la
+    /// OC física), dictamen, motivos tipificados (tal cual), responsables de corrección y observaciones anteriores.
+    /// </summary>
+    [RequierePermiso("oc_validar")]
+    [HttpGet("api/crm/ordenes-compra/{idOc:long}/validacion")]
+    public async Task<IActionResult> PrepararValidacion(long idOc, CancellationToken ct = default)
+        => Responder(await prepararValidacion.EjecutarAsync(idOc, IdUsuarioActual, ct), noEncontradoComo404: true);
+
+    /// <summary>
+    /// HU-26 — Validar la OC: { confirmados: ["razon_social","ruc","moneda","monto","pdf_legible"], comentario }.
+    /// Exige el checklist automático conforme y todas las confirmaciones. Notifica al responsable y a Operaciones.
+    /// </summary>
+    [RequierePermiso("oc_validar")]
+    [HttpPost("api/crm/ordenes-compra/{idOc:long}/validar")]
+    public async Task<IActionResult> Validar(long idOc, [FromBody] ValidarOrdenCompraSolicitudDto datos, CancellationToken ct = default)
+        => Responder(await validar.EjecutarAsync(idOc, datos, IdUsuarioActual, ct));
+
+    /// <summary>
+    /// HU-26 — Observar la OC: { motivos: [ids], detalle, idResponsable }. Queda OBSERVADA, bloquea la liberación
+    /// del expediente y notifica al responsable de corrección.
+    /// </summary>
+    [RequierePermiso("oc_validar")]
+    [HttpPost("api/crm/ordenes-compra/{idOc:long}/observar")]
+    public async Task<IActionResult> Observar(long idOc, [FromBody] ObservarOrdenCompraSolicitudDto datos, CancellationToken ct = default)
+        => Responder(await observar.EjecutarAsync(idOc, datos, IdUsuarioActual, ct));
 }

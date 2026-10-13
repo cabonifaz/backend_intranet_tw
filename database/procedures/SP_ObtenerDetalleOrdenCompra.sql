@@ -1,7 +1,7 @@
 -- HU-23 Detalle de una Orden de Compra.
 -- Resultados:
 --   1 mensaje
---   2 resumen: datos generales, cobertura económica (propuesta vs. OC, diferencia/saldo, utilización),
+--   2 resumen (HU-26: con la observación abierta): datos generales, cobertura económica (propuesta vs. OC, diferencia/saldo, utilización),
 --     estado, vigencia, responsable, PDF y referencia del servicio
 --   3 aplicaciones: propuestas vinculadas a la OC con su monto asignado
 --   4 checklist de validación (codigo, descripcion, cumple, detalle)
@@ -156,6 +156,19 @@ BEGIN
                 t.id_validado_por, CONCAT(uv.nombre, ' ', uv.apellido) AS validado_por,
                 v_fecha_valid                               AS fecha_validacion,
                 t.id_motivo_observacion, mo.String1         AS motivo_observacion,
+                -- HU-26: observación abierta (todos los motivos, detalle y responsable de corrección)
+                (SELECT GROUP_CONCAT(tm.String1 ORDER BY tm.Num1 SEPARATOR ', ')
+                 FROM orden_compra_observacion o
+                 JOIN orden_compra_observacion_motivo om ON om.id_observacion = o.id_observacion AND om.eliminado_en IS NULL
+                 JOIN tabla_maestra tm ON tm.IdMaestro = 14 AND tm.IdEmpresa = 1 AND tm.Num1 = om.id_motivo
+                 WHERE o.id_oc = t.id_oc AND o.estado = 'abierta' AND o.eliminado_en IS NULL)        AS motivos_observacion,
+                (SELECT o.detalle FROM orden_compra_observacion o
+                 WHERE o.id_oc = t.id_oc AND o.estado = 'abierta' AND o.eliminado_en IS NULL
+                 ORDER BY o.id_observacion DESC LIMIT 1)                                              AS detalle_observacion,
+                (SELECT CONCAT(ur2.nombre, ' ', ur2.apellido) FROM orden_compra_observacion o
+                 JOIN usuario ur2 ON ur2.id_usuario = o.id_responsable_correccion
+                 WHERE o.id_oc = t.id_oc AND o.estado = 'abierta' AND o.eliminado_en IS NULL
+                 ORDER BY o.id_observacion DESC LIMIT 1)                                              AS responsable_correccion,
                 oc.nombre_archivo_pdf, oc.tamano_pdf_bytes,
                 IF(t.tiene_pdf = 1, CONCAT('/api/crm/ordenes-compra/', t.id_oc, '/pdf'), NULL) AS url_pdf,
                 t.lista_programacion,

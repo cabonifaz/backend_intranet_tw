@@ -274,6 +274,9 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
                     FechaValidacion     = FechaHora(r, "fecha_validacion"),
                     IdMotivoObservacion = EntNulo(r, "id_motivo_observacion"),
                     MotivoObservacion   = Texto(r, "motivo_observacion"),
+                    MotivosObservacion  = Texto(r, "motivos_observacion"),
+                    DetalleObservacion  = Texto(r, "detalle_observacion"),
+                    ResponsableCorreccion = Texto(r, "responsable_correccion"),
                     NombreArchivoPdf    = Texto(r, "nombre_archivo_pdf"),
                     TamanoPdfBytes      = EnteroLargoNulo(r, "tamano_pdf_bytes"),
                     UrlPdf              = Texto(r, "url_pdf"),
@@ -680,6 +683,136 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
 
                 return new RespuestaDto<AuditoriaOrdenCompraDto>(2, mensaje,
                     new AuditoriaOrdenCompraDto(cabecera, timeline, registro, aplicaciones, ssoma, versiones));
+            },
+            ct);
+
+    // ══════════════════════ HU-26 — Validación y Observación ══════════════════════
+
+    public Task<RespuestaDto<PreparacionValidacionOrdenCompraDto>> PrepararValidacionAsync(long idOc, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_PrepararValidacionOrdenCompra",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario", idUsuario);
+                p.AddWithValue("p_id_oc",      idOc);
+            },
+            async (r, mensaje) =>
+            {
+                // 2. Resumen comparativo
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<PreparacionValidacionOrdenCompraDto>(3, "No se pudo leer la orden de compra.");
+                var resumen = new ResumenValidacionOrdenCompraDto
+                {
+                    IdOc                = EnteroLargo(r, "id_oc"),
+                    NumeroOc            = Texto(r, "numero_oc") ?? "",
+                    Estado              = Texto(r, "estado") ?? "",
+                    EstadoVisual        = Texto(r, "estado_visual") ?? "",
+                    IdPropuesta         = EnteroLargoNulo(r, "id_propuesta"),
+                    NumeroPropuesta     = Texto(r, "numero_propuesta"),
+                    VersionPropuesta    = EntNulo(r, "version_propuesta"),
+                    IdRequerimiento     = EnteroLargoNulo(r, "id_requerimiento"),
+                    NumeroRq            = Texto(r, "numero_rq"),
+                    IdCliente           = EnteroLargo(r, "id_cliente"),
+                    RazonSocial         = Texto(r, "razon_social"),
+                    Ruc                 = Texto(r, "ruc"),
+                    MontoOc             = Dec(r, "monto_oc"),
+                    MontoPropuesta      = Dec(r, "monto_propuesta"),
+                    IdMoneda            = Ent(r, "id_moneda"),
+                    MonedaSimbolo       = Texto(r, "moneda_simbolo"),
+                    MonedaNombre        = Texto(r, "moneda_nombre"),
+                    CoberturaPct        = DecimalNulo(r, "cobertura_pct"),
+                    CoberturaProyectada = Texto(r, "cobertura_proyectada"),
+                    FechaOc             = Fecha(r, "fecha_oc"),
+                    FechaRecepcion      = Fecha(r, "fecha_recepcion"),
+                    VigenciaHasta       = Fecha(r, "vigencia_hasta"),
+                    NombreArchivoPdf    = Texto(r, "nombre_archivo_pdf"),
+                    UrlPdf              = Texto(r, "url_pdf"),
+                    IdResponsable       = EnteroLargo(r, "id_responsable"),
+                    Responsable         = Texto(r, "responsable"),
+                    Dictamen            = Texto(r, "dictamen") ?? "",
+                    DictamenMensaje     = Texto(r, "dictamen_mensaje"),
+                    Inconsistencias     = Ent(r, "inconsistencias"),
+                    PuedeValidar        = Booleano(r, "puede_validar"),
+                    PuedeObservar       = Booleano(r, "puede_observar"),
+                    MotivoNoDisponible  = Texto(r, "motivo_no_disponible"),
+                };
+
+                // 3. Checklist
+                await r.NextResultAsync(ct);
+                var checklist = new List<ItemValidacionOrdenCompraDto>();
+                while (await r.ReadAsync(ct))
+                    checklist.Add(new ItemValidacionOrdenCompraDto(
+                        Ent(r, "orden"), Texto(r, "codigo") ?? "", Texto(r, "descripcion") ?? "",
+                        Texto(r, "valor_sistema"), Texto(r, "valor_referencia"),
+                        Booleano(r, "cumple_auto"), Booleano(r, "requiere_confirmacion"), Texto(r, "detalle")));
+
+                // 4. Motivos (tal cual)
+                await r.NextResultAsync(ct);
+                var motivos = new List<OpcionFiltroDto>();
+                while (await r.ReadAsync(ct))
+                    motivos.Add(new OpcionFiltroDto(EnteroLargo(r, "id"), Texto(r, "nombre") ?? "", Texto(r, "codigo")));
+
+                // 5. Responsables de corrección
+                await r.NextResultAsync(ct);
+                var responsables = new List<ResponsableCorreccionDto>();
+                while (await r.ReadAsync(ct))
+                    responsables.Add(new ResponsableCorreccionDto(
+                        EnteroLargo(r, "id"), Texto(r, "nombre") ?? "", Texto(r, "etiqueta") ?? "", Booleano(r, "es_responsable_propuesta")));
+
+                // 6. Observaciones anteriores
+                await r.NextResultAsync(ct);
+                var observaciones = new List<ObservacionOrdenCompraDto>();
+                while (await r.ReadAsync(ct))
+                    observaciones.Add(new ObservacionOrdenCompraDto(
+                        EnteroLargo(r, "id_observacion"), Texto(r, "estado") ?? "", Texto(r, "detalle") ?? "",
+                        FechaHora(r, "fecha_observacion"), FechaHora(r, "fecha_levantamiento"),
+                        Texto(r, "observado_por"), Texto(r, "responsable_correccion"), Texto(r, "motivos")));
+
+                return new RespuestaDto<PreparacionValidacionOrdenCompraDto>(2, mensaje,
+                    new PreparacionValidacionOrdenCompraDto(resumen, checklist, motivos, responsables, observaciones));
+            },
+            ct);
+
+    public Task<RespuestaDto<OrdenCompraValidadaDto>> ValidarAsync(long idOc, string confirmados, string? comentario, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_ValidarOrdenCompra",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario",  idUsuario);
+                p.AddWithValue("p_id_oc",       idOc);
+                p.AddWithValue("p_confirmados", confirmados);
+                p.AddWithValue("p_comentario",  Valor(comentario));
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<OrdenCompraValidadaDto>(3, "No se pudo leer la orden de compra validada.");
+                return new RespuestaDto<OrdenCompraValidadaDto>(2, mensaje, new OrdenCompraValidadaDto(
+                    EnteroLargo(r, "id_oc"), Texto(r, "numero_oc") ?? "", Texto(r, "estado") ?? "",
+                    Texto(r, "estado_cobertura") ?? "", FechaHora(r, "fecha_validacion"), Texto(r, "validado_por"),
+                    Ent(r, "notificados")));
+            },
+            ct);
+
+    public Task<RespuestaDto<ObservacionRegistradaDto>> ObservarAsync(long idOc, string motivos, string detalle, long idResponsable, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_ObservarOrdenCompra",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario",     idUsuario);
+                p.AddWithValue("p_id_oc",          idOc);
+                p.AddWithValue("p_motivos",        motivos);
+                p.AddWithValue("p_detalle",        detalle);
+                p.AddWithValue("p_id_responsable", idResponsable);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<ObservacionRegistradaDto>(3, "No se pudo leer la observación registrada.");
+                return new RespuestaDto<ObservacionRegistradaDto>(2, mensaje, new ObservacionRegistradaDto(
+                    EnteroLargo(r, "id_observacion"), EnteroLargo(r, "id_oc"), Texto(r, "numero_oc") ?? "",
+                    Texto(r, "estado") ?? "", Texto(r, "motivos"), EnteroLargo(r, "id_responsable"), Texto(r, "responsable"),
+                    Booleano(r, "expediente_bloqueado"), Ent(r, "notificados")));
             },
             ct);
 }

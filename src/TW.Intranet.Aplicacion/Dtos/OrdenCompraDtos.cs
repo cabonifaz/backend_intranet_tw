@@ -218,6 +218,10 @@ public record ResumenOrdenCompraDto
     public DateTime? FechaValidacion      { get; init; }
     public int?      IdMotivoObservacion  { get; init; }
     public string?   MotivoObservacion    { get; init; }
+    /// <summary>HU-26 — Observación abierta: todos los motivos, detalle y responsable de corrección.</summary>
+    public string?   MotivosObservacion   { get; init; }
+    public string?   DetalleObservacion   { get; init; }
+    public string?   ResponsableCorreccion { get; init; }
     public string?   NombreArchivoPdf     { get; init; }
     public long?     TamanoPdfBytes       { get; init; }
     public string?   UrlPdf               { get; init; }
@@ -480,3 +484,88 @@ public record AuditoriaOrdenCompraDto(
     List<AplicacionAuditoriaDto>           Aplicaciones,
     List<DocumentoSsomaAuditoriaDto>       DocumentacionSsoma,
     List<VersionDocumentoOrdenCompraDto>   VersionesPdf);
+
+// ══════════════════════ HU-26 — Validación y Observación de Orden de Compra ══════════════════════
+
+/// <summary>
+/// Resumen comparativo del modal "Validar Orden de Compra".
+/// Dictamen: aprobable | con_alertas | no_aprobable. PuedeValidar exige checklist automático conforme.
+/// </summary>
+public record ResumenValidacionOrdenCompraDto
+{
+    public long      IdOc                { get; init; }
+    public string    NumeroOc            { get; init; } = "";
+    public string    Estado              { get; init; } = "";
+    public string    EstadoVisual        { get; init; } = "";
+    public long?     IdPropuesta         { get; init; }
+    public string?   NumeroPropuesta     { get; init; }
+    public int?      VersionPropuesta    { get; init; }
+    public long?     IdRequerimiento     { get; init; }
+    public string?   NumeroRq            { get; init; }
+    public long      IdCliente           { get; init; }
+    public string?   RazonSocial         { get; init; }
+    public string?   Ruc                 { get; init; }
+    public decimal   MontoOc             { get; init; }
+    public decimal   MontoPropuesta      { get; init; }
+    public int       IdMoneda            { get; init; }
+    public string?   MonedaSimbolo       { get; init; }
+    public string?   MonedaNombre        { get; init; }
+    public decimal?  CoberturaPct        { get; init; }
+    public string?   CoberturaProyectada { get; init; }
+    public string?   FechaOc             { get; init; }
+    public string?   FechaRecepcion      { get; init; }
+    public string?   VigenciaHasta       { get; init; }
+    public string?   NombreArchivoPdf    { get; init; }
+    public string?   UrlPdf              { get; init; }
+    public long      IdResponsable       { get; init; }
+    public string?   Responsable         { get; init; }
+    public string    Dictamen            { get; init; } = "";
+    public string?   DictamenMensaje     { get; init; }
+    public int       Inconsistencias     { get; init; }
+    public bool      PuedeValidar        { get; init; }
+    public bool      PuedeObservar       { get; init; }
+    public string?   MotivoNoDisponible  { get; init; }
+}
+
+/// <summary>
+/// Ítem del checklist: razon_social, ruc, propuesta_aceptada, moneda, monto, numero_unico, pdf_legible, oc_vigente.
+/// RequiereConfirmacion = el validador lo confirma contra la OC física (se envía en "confirmados").
+/// </summary>
+public record ItemValidacionOrdenCompraDto(
+    int Orden, string Codigo, string Descripcion, string? ValorSistema, string? ValorReferencia,
+    bool CumpleAuto, bool RequiereConfirmacion, string? Detalle);
+
+public record ResponsableCorreccionDto(long Id, string Nombre, string Etiqueta, bool EsResponsablePropuesta);
+
+public record ObservacionOrdenCompraDto(
+    long IdObservacion, string Estado, string Detalle, DateTime? FechaObservacion, DateTime? FechaLevantamiento,
+    string? ObservadoPor, string? ResponsableCorreccion, string? Motivos);
+
+public record PreparacionValidacionOrdenCompraDto(
+    ResumenValidacionOrdenCompraDto     Resumen,
+    List<ItemValidacionOrdenCompraDto>  Checklist,
+    List<OpcionFiltroDto>               Motivos,
+    List<ResponsableCorreccionDto>      Responsables,
+    List<ObservacionOrdenCompraDto>     Observaciones);
+
+/// <summary>Confirmados: códigos del checklist confirmados contra la OC física (razon_social, ruc, moneda, monto, pdf_legible).</summary>
+public record ValidarOrdenCompraSolicitudDto
+{
+    public List<string>? Confirmados { get; init; }
+    public string?       Comentario  { get; init; }
+}
+
+public record OrdenCompraValidadaDto(
+    long IdOc, string NumeroOc, string Estado, string EstadoCobertura, DateTime? FechaValidacion, string? ValidadoPor, int Notificados);
+
+/// <summary>Motivos: ids de MOTIVO_OBSERVACION_OC. Detalle obligatorio. IdResponsable: responsable de corrección.</summary>
+public record ObservarOrdenCompraSolicitudDto
+{
+    public List<int>? Motivos       { get; init; }
+    public string?    Detalle       { get; init; }
+    public long?      IdResponsable { get; init; }
+}
+
+public record ObservacionRegistradaDto(
+    long IdObservacion, long IdOc, string NumeroOc, string Estado, string? Motivos,
+    long IdResponsable, string? Responsable, bool ExpedienteBloqueado, int Notificados);
