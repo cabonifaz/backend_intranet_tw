@@ -151,7 +151,7 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
                     kpis = new KpisOrdenesCompraDto(
                         Ent(r, "vigentes"), Ent(r, "cobertura_parcial"), Ent(r, "saldo_insuficiente"),
                         Ent(r, "pendientes_validacion"), Ent(r, "listas_programacion"), Ent(r, "observadas"),
-                        Ent(r, "vencidas"), Ent(r, "pendientes_con_alerta"));
+                        Ent(r, "vencidas"), Ent(r, "pendientes_con_alerta"), Ent(r, "liberadas"));
 
                 // 3. Filas
                 await r.NextResultAsync(ct);
@@ -197,6 +197,7 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
                         NumeroOcOrigen      = Texto(r, "numero_oc_origen"),
                         SaldoDisponible     = Dec(r, "saldo_disponible"),
                         Faltante            = Dec(r, "faltante"),
+                        FechaLiberacion     = FechaHora(r, "fecha_liberacion"),
                     });
 
                 // 4. Total
@@ -295,6 +296,8 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
                     MontoAsignadoOc     = Dec(r, "monto_asignado_oc"),
                     SaldoDisponible     = Dec(r, "saldo_disponible"),
                     Faltante            = Dec(r, "faltante"),
+                    FechaLiberacion     = FechaHora(r, "fecha_liberacion"),
+                    LiberadoPor         = Texto(r, "liberado_por"),
                 };
 
                 // 3. Aplicaciones
@@ -981,6 +984,76 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
                     EnteroLargo(r, "id_oc_origen"), Texto(r, "numero_oc_origen"),
                     Dec(r, "monto_existente"), Dec(r, "monto_nueva_oc"), Dec(r, "cobertura_total"), Dec(r, "cobertura_total_pct"),
                     Texto(r, "estado_resultado") ?? "", Dec(r, "saldo_nueva_oc"), Ent(r, "notificados")));
+            },
+            ct);
+
+    // ══════════════════════ HU-28 — Liberación para Programación ══════════════════════
+
+    public Task<RespuestaDto<PreparacionLiberacionDto>> PrepararLiberacionAsync(long idOc, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_PrepararLiberacionOrdenCompra",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario", idUsuario);
+                p.AddWithValue("p_id_oc",      idOc);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<PreparacionLiberacionDto>(3, "No se pudo leer la orden de compra.");
+                var cabecera = new CabeceraLiberacionDto
+                {
+                    IdOc                      = EnteroLargo(r, "id_oc"),
+                    NumeroOc                  = Texto(r, "numero_oc") ?? "",
+                    IdCliente                 = EnteroLargo(r, "id_cliente"),
+                    RazonSocial               = Texto(r, "razon_social"),
+                    IdExpediente              = EnteroLargoNulo(r, "id_expediente"),
+                    NumeroExpediente          = Texto(r, "numero_expediente"),
+                    EtapaExpediente           = Texto(r, "etapa_expediente"),
+                    EstadoExpediente          = Texto(r, "estado_expediente"),
+                    CreaExpediente            = Booleano(r, "crea_expediente"),
+                    PuedeLiberar              = Booleano(r, "puede_liberar"),
+                    RequiereConfirmacion      = Booleano(r, "requiere_confirmacion"),
+                    Bloqueantes               = Ent(r, "bloqueantes"),
+                    Alertas                   = Ent(r, "alertas"),
+                    Impacto                   = Texto(r, "impacto"),
+                    InformacionProceso        = Texto(r, "informacion_proceso"),
+                    SiguienteEtapaCodigo      = Texto(r, "siguiente_etapa_codigo") ?? "programacion",
+                    SiguienteEtapa            = Texto(r, "siguiente_etapa") ?? "Programación",
+                    ResponsableSiguienteEtapa = Texto(r, "responsable_siguiente_etapa") ?? "Operaciones",
+                    SlaHoras                  = Ent(r, "sla_horas"),
+                };
+
+                await r.NextResultAsync(ct);
+                var validaciones = new List<ValidacionLiberacionDto>();
+                while (await r.ReadAsync(ct))
+                    validaciones.Add(new ValidacionLiberacionDto(
+                        Ent(r, "orden"), Texto(r, "codigo") ?? "", Texto(r, "descripcion") ?? "",
+                        Texto(r, "estado") ?? "", FechaHora(r, "fecha"), Texto(r, "detalle")));
+
+                return new RespuestaDto<PreparacionLiberacionDto>(2, mensaje, new PreparacionLiberacionDto(cabecera, validaciones));
+            },
+            ct);
+
+    public Task<RespuestaDto<OrdenCompraLiberadaDto>> LiberarAsync(long idOc, bool confirmaImpacto, string? comentario, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_LiberarOrdenCompra",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario",       idUsuario);
+                p.AddWithValue("p_id_oc",            idOc);
+                p.AddWithValue("p_confirma_impacto", Bit(confirmaImpacto));
+                p.AddWithValue("p_comentario",       Valor(comentario));
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<OrdenCompraLiberadaDto>(3, "No se pudo leer el resultado de la liberación.");
+                return new RespuestaDto<OrdenCompraLiberadaDto>(2, mensaje, new OrdenCompraLiberadaDto(
+                    EnteroLargo(r, "id_oc"), Texto(r, "numero_oc") ?? "", EnteroLargo(r, "id_expediente"),
+                    Texto(r, "numero_expediente") ?? "", Booleano(r, "expediente_creado"), Texto(r, "etapa") ?? "",
+                    Texto(r, "estado_expediente") ?? "", Ent(r, "alertas_pendientes"), Ent(r, "sla_horas"),
+                    FechaHora(r, "fecha_limite_programacion"), Ent(r, "notificados")));
             },
             ct);
 }

@@ -56,4 +56,9 @@ public interface IOrdenCompraRepositorio
 
     Task<RespuestaDto<OcComplementariaRegistradaDto>> RegistrarOcComplementariaAsync(long idPropuesta, RegistrarOcComplementariaSolicitudDto datos,
         string? ruta, string? nombre, long? tamano, string? hash, bool soloValidar, long idUsuario, CancellationToken ct);
+
+    // HU-28
+    Task<RespuestaDto<PreparacionLiberacionDto>> PrepararLiberacionAsync(long idOc, long idUsuario, CancellationToken ct);
+
+    Task<RespuestaDto<OrdenCompraLiberadaDto>> LiberarAsync(long idOc, bool confirmaImpacto, string? comentario, long idUsuario, CancellationToken ct);
 }

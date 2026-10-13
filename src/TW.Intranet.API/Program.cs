@@ -337,6 +337,8 @@ builder.Services.AddScoped<PrepararDistribucionOrdenCompraCasoDeUso>();
 builder.Services.AddScoped<DistribuirOrdenCompraCasoDeUso>();
 builder.Services.AddScoped<PrepararOcComplementariaCasoDeUso>();
 builder.Services.AddScoped<RegistrarOcComplementariaCasoDeUso>();
+builder.Services.AddScoped<PrepararLiberacionOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<LiberarOrdenCompraCasoDeUso>();
 
 // ── INYECCIÓN DE DEPENDENCIAS — Seguimiento comercial (HU-17 / HU-18 / HU-19 / HU-20 / HU-21) ────────────────
 builder.Services.AddScoped<ISeguimientoComercialRepositorio, SeguimientoComercialRepositorio>();

@@ -90,6 +90,23 @@ public class AnulacionPropuestaDto
     public DateTime? FechaAnulacion      { get; set; }
     /// <summary>Motivos de anulación (solo en preparar).</summary>
     public List<OpcionMotivoDto> Motivos { get; set; } = new();
+
+    // ── HU-28: anulación del proceso completo ──
+    public decimal  MontoTotal               { get; set; }
+    public string?  MonedaSimbolo            { get; set; }
+    /// <summary>true si la anulación afecta OC, expediente o coberturas ("Impacto Crítico Detectado").</summary>
+    public bool     ImpactoCritico           { get; set; }
+    public string?  ImpactoCriticoMensaje    { get; set; }
+    /// <summary>OC que se anularán (principal y complementarias).</summary>
+    public string?  OrdenesCompraAfectadas   { get; set; }
+    /// <summary>Otras propuestas que pierden la cobertura de esas OC (distribución, HU-27).</summary>
+    public string?  PropuestasAfectadas      { get; set; }
+    /// <summary>Orden de Servicio vinculada que bloquea la anulación ("NO ES POSIBLE ANULAR DIRECTAMENTE").</summary>
+    public long?    IdOsBloqueante           { get; set; }
+    public string?  NumeroOsBloqueante       { get; set; }
+    public string?  EstadoOsBloqueante       { get; set; }
+    /// <summary>Texto del check de confirmación de impacto.</summary>
+    public string?  TextoConfirmacion        { get; set; }
 }
 
 public class OpcionMotivoDto

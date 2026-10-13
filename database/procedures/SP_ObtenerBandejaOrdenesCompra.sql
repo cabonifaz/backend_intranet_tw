@@ -80,6 +80,7 @@ BEGIN
             IFNULL(SUM(lista_programacion = 1), 0)                                             AS listas_programacion,
             IFNULL(SUM(estado_visual = 'observada'), 0)                                        AS observadas,
             IFNULL(SUM(estado_visual = 'vencida'), 0)                                          AS vencidas,
+            IFNULL(SUM(estado_visual = 'liberada'), 0)                                         AS liberadas,
             IFNULL(SUM(estado_bd <> 'anulada' AND cobertura_proyectada IN ('insuficiente', 'moneda_diferente')
                        AND estado_visual = 'pendiente_validacion'), 0)                        AS pendientes_con_alerta
         FROM tmp_oc_filtro;
@@ -105,20 +106,21 @@ BEGIN
             -- HU-27
             t.tipo_oc, t.id_oc_origen,
             (SELECT o.numero_oc FROM orden_compra o WHERE o.id_oc = t.id_oc_origen) AS numero_oc_origen,
-            t.saldo_disponible, t.faltante
+            t.saldo_disponible, t.faltante,
+            t.fecha_liberacion
         FROM tmp_oc_filtro t
         WHERE (
                (v_estado = 'activas'              AND t.estado_bd <> 'anulada')
             OR (v_estado = 'vigentes'             AND t.estado_bd <> 'anulada' AND t.vencida = 0)
             OR (v_estado = 'listas_programacion'  AND t.lista_programacion = 1)
             OR (v_estado IN ('pendiente_validacion', 'validada', 'validada_parcial', 'observada',
-                             'bloqueada', 'vencida', 'anulada') AND t.estado_visual = v_estado)
+                             'bloqueada', 'vencida', 'anulada', 'liberada') AND t.estado_visual = v_estado)
             OR  v_estado = 'todas'
           )
           AND (v_cobertura = '' OR t.cobertura_codigo = v_cobertura)
         ORDER BY CASE t.estado_visual
                      WHEN 'pendiente_validacion' THEN 1 WHEN 'observada' THEN 2 WHEN 'bloqueada' THEN 3
-                     WHEN 'validada_parcial'     THEN 4 WHEN 'validada'  THEN 5 WHEN 'vencida'   THEN 6
+                     WHEN 'validada_parcial'     THEN 4 WHEN 'validada'  THEN 5 WHEN 'liberada'  THEN 6 WHEN 'vencida' THEN 7
                      ELSE 7 END,
                  t.fecha_recepcion DESC, t.id_oc DESC
         LIMIT v_por_pagina OFFSET v_offset;
@@ -131,7 +133,7 @@ BEGIN
             OR (v_estado = 'vigentes'             AND t.estado_bd <> 'anulada' AND t.vencida = 0)
             OR (v_estado = 'listas_programacion'  AND t.lista_programacion = 1)
             OR (v_estado IN ('pendiente_validacion', 'validada', 'validada_parcial', 'observada',
-                             'bloqueada', 'vencida', 'anulada') AND t.estado_visual = v_estado)
+                             'bloqueada', 'vencida', 'anulada', 'liberada') AND t.estado_visual = v_estado)
             OR  v_estado = 'todas'
           )
           AND (v_cobertura = '' OR t.cobertura_codigo = v_cobertura);

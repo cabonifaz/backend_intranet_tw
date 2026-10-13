@@ -164,7 +164,7 @@ public class ObtenerBandejaOrdenesCompraCasoDeUso(IOrdenCompraRepositorio reposi
     private static readonly string[] Estados =
     [
         "", "activas", "vigentes", "pendiente_validacion", "validada", "validada_parcial", "observada",
-        "bloqueada", "listas_programacion", "vencida", "anulada", "todas",
+        "bloqueada", "listas_programacion", "vencida", "anulada", "liberada", "todas",
     ];
 
     private static readonly string[] Coberturas = ["", "completa", "con_saldo", "insuficiente", "moneda_diferente", "pendiente"];
@@ -178,7 +178,7 @@ public class ObtenerBandejaOrdenesCompraCasoDeUso(IOrdenCompraRepositorio reposi
         if (!Estados.Contains(estado))
             return Task.FromResult(new RespuestaDto<BandejaOrdenesCompraDto>(1,
                 "Estado no válido. Use activas, vigentes, pendiente_validacion, validada, validada_parcial, " +
-                "observada, bloqueada, listas_programacion, vencida, anulada o todas."));
+                "observada, bloqueada, listas_programacion, vencida, anulada, liberada o todas."));
         if (!Coberturas.Contains(cobertura))
             return Task.FromResult(new RespuestaDto<BandejaOrdenesCompraDto>(1,
                 "Cobertura no válida. Use completa, con_saldo, insuficiente, moneda_diferente o pendiente."));
@@ -607,5 +607,36 @@ public class RegistrarOcComplementariaCasoDeUso(IOrdenCompraRepositorio reposito
         if (registro.IdTipoMensaje != 2)
             await almacen.EliminarAsync(ruta, CancellationToken.None);
         return registro;
+    }
+}
+
+// ══════════════════════ HU-28 — Liberación para Programación ══════════════════════
+
+/// <summary>Modal "Liberar para Programación": validaciones de cumplimiento, impacto, siguiente etapa, responsable y SLA.</summary>
+public class PrepararLiberacionOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio)
+{
+    public Task<RespuestaDto<PreparacionLiberacionDto>> EjecutarAsync(long idOc, long idUsuario, CancellationToken ct = default)
+    {
+        if (idOc <= 0)
+            return Task.FromResult(new RespuestaDto<PreparacionLiberacionDto>(1, "Orden de compra no válida."));
+        return repositorio.PrepararLiberacionAsync(idOc, idUsuario, ct);
+    }
+}
+
+/// <summary>
+/// Libera el expediente para programación. Con requisitos pendientes (alertas) exige confirmar el impacto:
+/// la responsabilidad de completarlos pasa a Operaciones.
+/// </summary>
+public class LiberarOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio)
+{
+    public Task<RespuestaDto<OrdenCompraLiberadaDto>> EjecutarAsync(
+        long idOc, LiberarOrdenCompraSolicitudDto datos, long idUsuario, CancellationToken ct = default)
+    {
+        if (idOc <= 0)
+            return Task.FromResult(new RespuestaDto<OrdenCompraLiberadaDto>(1, "Orden de compra no válida."));
+        var comentario = string.IsNullOrWhiteSpace(datos.Comentario) ? null : datos.Comentario.Trim();
+        if (comentario is { Length: > 1000 })
+            return Task.FromResult(new RespuestaDto<OrdenCompraLiberadaDto>(1, "El comentario admite hasta 1000 caracteres."));
+        return repositorio.LiberarAsync(idOc, datos.ConfirmaImpacto, comentario, idUsuario, ct);
     }
 }

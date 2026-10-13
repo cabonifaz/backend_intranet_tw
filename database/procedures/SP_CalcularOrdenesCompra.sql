@@ -21,7 +21,7 @@
 --   insuficiente     el monto de la OC no alcanza para la propuesta (saldo negativo)
 --   moneda_diferente la OC y la propuesta están en monedas distintas
 --
--- estado_visual: anulada, vencida, observada, pendiente_validacion, bloqueada, validada_parcial, validada
+-- estado_visual: anulada, vencida, observada, pendiente_validacion, liberada (HU-28), bloqueada, validada_parcial, validada
 DROP PROCEDURE IF EXISTS SP_CalcularOrdenesCompra;
 
 DELIMITER $$
@@ -46,7 +46,7 @@ BEGIN
         oc.id_oc, oc.numero_oc, oc.id_cliente, oc.id_moneda,
         oc.monto_total                                              AS monto_oc,
         oc.estado                                                   AS estado_bd,
-        oc.id_motivo_observacion, oc.id_validado_por,
+        oc.id_motivo_observacion, oc.id_validado_por, oc.fecha_liberacion, oc.liberado_por,
         oc.fecha_oc, oc.fecha_recepcion, oc.vigencia_desde, oc.vigencia_hasta, oc.vigencia_dias,
         oc.observaciones, oc.fecha_registro, oc.creado_por,
         (oc.url_archivo_pdf IS NOT NULL)                            AS tiene_pdf,
@@ -118,6 +118,7 @@ BEGIN
             WHEN c.vencida = 1                                        THEN 'vencida'
             WHEN c.id_motivo_observacion IS NOT NULL                  THEN 'observada'
             WHEN c.validada = 0                                       THEN 'pendiente_validacion'
+            WHEN c.fecha_liberacion IS NOT NULL                       THEN 'liberada'
             WHEN c.cobertura_proyectada IN ('insuficiente', 'moneda_diferente')
                  OR c.estado_bd = 'saldo_insuficiente'                THEN 'bloqueada'
             WHEN c.cobertura_proyectada = 'con_saldo'
@@ -128,7 +129,8 @@ BEGIN
          AND c.id_motivo_observacion IS NULL
          AND c.cobertura_proyectada IN ('completa', 'con_saldo')
          AND c.estado_bd <> 'saldo_insuficiente'
-         AND c.ordenes_servicio = 0)                                                       AS lista_programacion
+         AND c.ordenes_servicio = 0
+         AND c.fecha_liberacion IS NULL)                                                   AS lista_programacion
     FROM tmp_oc_cob c;
 
     DROP TEMPORARY TABLE IF EXISTS tmp_oc_cob;

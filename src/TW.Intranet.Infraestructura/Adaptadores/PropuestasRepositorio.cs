@@ -629,6 +629,16 @@ public class PropuestasRepositorio(CadenaConexionBd conexion)
                     MotivoAnulacion        = Texto(r, "motivo_anulacion"),
                     JustificacionAnulacion = Texto(r, "justificacion_anulacion"),
                     FechaAnulacion         = FechaHora(r, "fecha_anulacion"),
+                    MontoTotal             = DecimalNulo(r, "monto_total") ?? 0m,
+                    MonedaSimbolo          = Texto(r, "moneda_simbolo"),
+                    ImpactoCritico         = Booleano(r, "impacto_critico"),
+                    ImpactoCriticoMensaje  = Texto(r, "impacto_critico_mensaje"),
+                    OrdenesCompraAfectadas = Texto(r, "ordenes_compra_afectadas"),
+                    PropuestasAfectadas    = Texto(r, "propuestas_afectadas"),
+                    IdOsBloqueante         = EnteroLargoNulo(r, "id_os_bloqueante"),
+                    NumeroOsBloqueante     = Texto(r, "numero_os_bloqueante"),
+                    EstadoOsBloqueante     = Texto(r, "estado_os_bloqueante"),
+                    TextoConfirmacion      = Texto(r, "texto_confirmacion"),
                 };
 
                 if (soloPreparar && await r.NextResultAsync(ct))

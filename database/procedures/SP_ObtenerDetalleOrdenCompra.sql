@@ -45,6 +45,7 @@ BEGIN
     DECLARE v_id_os          BIGINT;
     DECLARE v_estado_os      VARCHAR(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_fecha_os       DATETIME;
+    DECLARE v_fecha_lib      DATETIME;
     -- checklist
     DECLARE v_n_prop         INT DEFAULT 0;
     DECLARE v_otro_cliente   INT DEFAULT 0;
@@ -64,12 +65,12 @@ BEGIN
                MAX(id_moneda), MAX(numero_oc), MAX(monto_oc), MAX(monto_requerido_neto), MAX(fecha_oc),
                MAX(vigencia_hasta), MAX(tiene_pdf), MAX(validada), MAX(vencida), MAX(estado_visual),
                MAX(cobertura_proyectada), MAX(lista_programacion), MAX(ordenes_servicio),
-               MAX(fecha_registro), MAX(creado_por)
+               MAX(fecha_registro), MAX(creado_por), MAX(fecha_liberacion)
           INTO v_existe, v_id_cliente, v_id_propuesta, v_id_rq, v_id_expediente,
                v_id_moneda, v_numero_oc, v_monto_oc, v_monto_prop, v_fecha_oc,
                v_vigencia_hasta, v_tiene_pdf, v_validada, v_vencida, v_estado_visual,
                v_cob_proy, v_lista, v_n_os,
-               v_fecha_registro, v_creado_por
+               v_fecha_registro, v_creado_por, v_fecha_lib
         FROM tmp_oc;
 
         IF v_existe = 0 THEN
@@ -150,6 +151,8 @@ BEGIN
                 t.monto_oc - t.monto_requerido_neto         AS diferencia,
                 -- HU-27: distribución y OC complementaria
                 t.tipo_oc, t.id_oc_origen,
+                -- HU-28: liberación para programación
+                t.fecha_liberacion, CONCAT(ul.nombre, ' ', ul.apellido) AS liberado_por,
                 (SELECT o.numero_oc FROM orden_compra o WHERE o.id_oc = t.id_oc_origen) AS numero_oc_origen,
                 t.monto_requerido_neto, t.cobertura_otros, t.monto_asignado_oc, t.saldo_disponible, t.faltante,
                 t.monto_aplicado, t.saldo,
@@ -184,6 +187,7 @@ BEGIN
             LEFT JOIN usuario u       ON u.id_usuario       = t.id_responsable
             LEFT JOIN usuario ur      ON ur.id_usuario      = t.creado_por
             LEFT JOIN usuario uv      ON uv.id_usuario      = t.id_validado_por
+            LEFT JOIN usuario ul      ON ul.id_usuario      = t.liberado_por
             LEFT JOIN tabla_maestra m  ON m.IdMaestro  = 1  AND m.IdEmpresa  = 1 AND m.Num1  = t.id_moneda
             LEFT JOIN tabla_maestra mo ON mo.IdMaestro = 14 AND mo.IdEmpresa = 1 AND mo.Num1 = t.id_motivo_observacion;
 
@@ -316,14 +320,15 @@ BEGIN
                        IF(v_validada = 1, v_fecha_valid, NULL)
                 UNION ALL
                 SELECT 6, 'liberacion_programacion', 'Liberada para programación',
-                       CASE WHEN v_n_os > 0                          THEN 'completado'
+                       CASE WHEN v_n_os > 0 OR v_fecha_lib IS NOT NULL THEN 'completado'
                             WHEN v_validada = 1 AND v_estado_visual = 'bloqueada' THEN 'bloqueado'
                             WHEN v_lista = 1                         THEN 'actual'
                             ELSE 'pendiente' END,
-                       NULL
+                       v_fecha_lib
                 UNION ALL
                 SELECT 7, 'orden_servicio', 'Orden de servicio',
-                       CASE WHEN v_id_os IS NULL                     THEN 'pendiente'
+                       CASE WHEN v_id_os IS NULL AND v_fecha_lib IS NOT NULL THEN 'actual'
+                            WHEN v_id_os IS NULL                     THEN 'pendiente'
                             WHEN v_estado_os = 'finalizada'          THEN 'completado'
                             ELSE 'actual' END,
                        v_fecha_os
@@ -360,6 +365,8 @@ BEGIN
                            WHEN 'reemplazar_pdf_oc'      THEN 'Documento de la OC reemplazado'
                            WHEN 'exportar_auditoria_oc'  THEN 'Historial de auditoría descargado'
                            WHEN 'distribuir_oc'          THEN 'Saldo de la OC distribuido'
+                           WHEN 'liberar_oc'             THEN 'Liberada para programación'
+                           WHEN 'anular_oc'              THEN 'Orden de compra anulada'
                            WHEN 'registrar_oc_complementaria' THEN 'OC complementaria registrada'
                            ELSE CONCAT(UPPER(LEFT(REPLACE(a.accion, '_', ' '), 1)), SUBSTRING(REPLACE(a.accion, '_', ' '), 2))
                        END,

@@ -153,17 +153,18 @@ proc: BEGIN
                    WHEN 'observar_oc'            THEN 'Orden de compra observada'
                    WHEN 'anular_oc'              THEN 'Orden de compra anulada'
                    WHEN 'distribuir_oc'          THEN 'Saldo de la OC distribuido'
+                   WHEN 'liberar_oc'             THEN 'Expediente liberado para programación'
                    WHEN 'registrar_oc_complementaria' THEN 'OC complementaria registrada'
                END,
                a.descripcion,
-               CASE WHEN a.accion = 'validar_oc' THEN 'exito'
+               CASE WHEN a.accion IN ('validar_oc', 'liberar_oc') THEN 'exito'
                     WHEN a.accion IN ('observar_oc', 'anular_oc', 'editar_oc_revalidacion') THEN 'alerta'
                     ELSE 'info' END,
                NULL, NULL, a.id_usuario
         FROM auditoria_evento a
         WHERE a.entidad_tipo = 'orden_compra' AND a.id_entidad = p_id_oc
           AND a.accion IN ('editar_oc', 'editar_oc_revalidacion', 'validar_oc', 'observar_oc', 'anular_oc',
-                           'distribuir_oc', 'registrar_oc_complementaria')
+                           'distribuir_oc', 'registrar_oc_complementaria', 'liberar_oc')
         UNION ALL
         SELECT os.fecha_creacion, 'os_creada', 'Orden de servicio programada',
                CONCAT('OS ', os.numero, ' para el ', DATE_FORMAT(os.fecha_ejecucion, '%d/%m/%Y'), ' (', os.estado, ').'),

@@ -8,7 +8,7 @@ using TW.Intranet.Aplicacion.Dtos;
 
 namespace TW.Intranet.API.Controllers;
 
-/// <summary>Órdenes de Compra recibidas del cliente: registro y edición (HU-22/24), bandeja y detalle (HU-23), documento y auditoría (HU-25), validación y observación (HU-26), distribución de saldo y OC complementaria (HU-27).</summary>
+/// <summary>Órdenes de Compra recibidas del cliente: registro y edición (HU-22/24), bandeja y detalle (HU-23), documento y auditoría (HU-25), validación y observación (HU-26), distribución de saldo y OC complementaria (HU-27), liberación para programación (HU-28).</summary>
 [ApiController]
 [Authorize]
 public class OrdenesCompraController(
@@ -33,7 +33,9 @@ public class OrdenesCompraController(
     PrepararDistribucionOrdenCompraCasoDeUso     prepararDistribucion,
     DistribuirOrdenCompraCasoDeUso               distribuir,
     PrepararOcComplementariaCasoDeUso            prepararComplementaria,
-    RegistrarOcComplementariaCasoDeUso           registrarComplementaria) : ControllerBase
+    RegistrarOcComplementariaCasoDeUso           registrarComplementaria,
+    PrepararLiberacionOrdenCompraCasoDeUso       prepararLiberacion,
+    LiberarOrdenCompraCasoDeUso                  liberar) : ControllerBase
 {
     /// <summary>10 MB del PDF + margen para el resto del multipart.</summary>
     private const long TamanoMaximoPeticion = RegistrarOrdenCompraCasoDeUso.TamanoMaximoBytes + 1024 * 1024;
@@ -305,4 +307,22 @@ public class OrdenesCompraController(
         return Responder(await registrarComplementaria.EjecutarAsync(
             idPropuesta, datos, contenido, archivo.FileName, archivo.Length, IdUsuarioActual, ct));
     }
+
+    /// <summary>
+    /// HU-28 — Modal "Liberar para Programación": validaciones de cumplimiento (propuesta, OC, cobertura, vigencia, SCTR,
+    /// SSOMA, bloqueos), impacto, siguiente etapa (Programación), responsable (Operaciones) y SLA estimado.
+    /// </summary>
+    [RequierePermiso("oc_liberar")]
+    [HttpGet("api/crm/ordenes-compra/{idOc:long}/liberacion")]
+    public async Task<IActionResult> PrepararLiberacion(long idOc, CancellationToken ct = default)
+        => Responder(await prepararLiberacion.EjecutarAsync(idOc, IdUsuarioActual, ct), noEncontradoComo404: true);
+
+    /// <summary>
+    /// HU-28 — Liberar para programación: { confirmaImpacto, comentario }. Con requisitos pendientes exige confirmaImpacto
+    /// (la responsabilidad pasa a Operaciones). Crea o actualiza el expediente y notifica a Operaciones.
+    /// </summary>
+    [RequierePermiso("oc_liberar")]
+    [HttpPost("api/crm/ordenes-compra/{idOc:long}/liberar")]
+    public async Task<IActionResult> Liberar(long idOc, [FromBody] LiberarOrdenCompraSolicitudDto datos, CancellationToken ct = default)
+        => Responder(await liberar.EjecutarAsync(idOc, datos, IdUsuarioActual, ct));
 }

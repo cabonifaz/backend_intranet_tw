@@ -114,7 +114,9 @@ public record KpisOrdenesCompraDto(
     int Observadas,
     int Vencidas,
     /// <summary>Pendientes de validación cuyo monto no alcanza o están en otra moneda.</summary>
-    int PendientesConAlerta);
+    int PendientesConAlerta,
+    /// <summary>HU-28 — OC que ya liberaron su expediente a programación.</summary>
+    int Liberadas = 0);
 
 /// <summary>
 /// Fila de la bandeja. MontoAplicado = monto de la propuesta ya aplicado a la OC (0 mientras no se valida);
@@ -164,6 +166,8 @@ public record ItemBandejaOrdenCompraDto
     public string?  NumeroOcOrigen      { get; init; }
     public decimal  SaldoDisponible     { get; init; }
     public decimal  Faltante            { get; init; }
+    /// <summary>HU-28 — Fecha en que se liberó el expediente a programación.</summary>
+    public DateTime? FechaLiberacion    { get; init; }
 }
 
 public record BandejaOrdenesCompraDto(
@@ -243,6 +247,9 @@ public record ResumenOrdenCompraDto
     public decimal   MontoAsignadoOc      { get; init; }
     public decimal   SaldoDisponible      { get; init; }
     public decimal   Faltante             { get; init; }
+    /// <summary>HU-28 — Liberación del expediente a programación.</summary>
+    public DateTime? FechaLiberacion      { get; init; }
+    public string?   LiberadoPor          { get; init; }
 }
 
 /// <summary>Propuesta vinculada a la OC (pestaña Aplicaciones).</summary>
@@ -694,3 +701,46 @@ public record OcComplementariaRegistradaDto(
     long? IdOc, string NumeroOc, string Estado, long IdOcOrigen, string? NumeroOcOrigen,
     decimal MontoExistente, decimal MontoNuevaOc, decimal CoberturaTotal, decimal CoberturaTotalPct,
     string EstadoResultado, decimal SaldoNuevaOc, int Notificados);
+
+// ══════════════════════ HU-28 — Liberación para Programación ══════════════════════
+
+public record CabeceraLiberacionDto
+{
+    public long    IdOc                      { get; init; }
+    public string  NumeroOc                  { get; init; } = "";
+    public long    IdCliente                 { get; init; }
+    public string? RazonSocial               { get; init; }
+    public long?   IdExpediente              { get; init; }
+    public string? NumeroExpediente          { get; init; }
+    public string? EtapaExpediente           { get; init; }
+    public string? EstadoExpediente          { get; init; }
+    /// <summary>true si el expediente no existe y se creará al liberar.</summary>
+    public bool    CreaExpediente            { get; init; }
+    public bool    PuedeLiberar              { get; init; }
+    /// <summary>true si hay requisitos pendientes (alertas): se debe confirmar el impacto.</summary>
+    public bool    RequiereConfirmacion      { get; init; }
+    public int     Bloqueantes               { get; init; }
+    public int     Alertas                   { get; init; }
+    public string? Impacto                   { get; init; }
+    public string? InformacionProceso        { get; init; }
+    public string  SiguienteEtapaCodigo      { get; init; } = "programacion";
+    public string  SiguienteEtapa            { get; init; } = "Programación";
+    public string  ResponsableSiguienteEtapa { get; init; } = "Operaciones";
+    public int     SlaHoras                  { get; init; }
+}
+
+/// <summary>Validación de cumplimiento. Estado: cumple | alerta (no impide liberar) | bloqueante.</summary>
+public record ValidacionLiberacionDto(int Orden, string Codigo, string Descripcion, string Estado, DateTime? Fecha, string? Detalle);
+
+public record PreparacionLiberacionDto(CabeceraLiberacionDto Cabecera, List<ValidacionLiberacionDto> Validaciones);
+
+/// <summary>ConfirmaImpacto: obligatorio si hay alertas (la responsabilidad pasa a Operaciones).</summary>
+public record LiberarOrdenCompraSolicitudDto
+{
+    public bool    ConfirmaImpacto { get; init; }
+    public string? Comentario      { get; init; }
+}
+
+public record OrdenCompraLiberadaDto(
+    long IdOc, string NumeroOc, long IdExpediente, string NumeroExpediente, bool ExpedienteCreado,
+    string Etapa, string EstadoExpediente, int AlertasPendientes, int SlaHoras, DateTime? FechaLimiteProgramacion, int Notificados);
