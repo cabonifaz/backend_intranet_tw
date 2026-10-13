@@ -42,7 +42,9 @@ builder.Services.AddCors(options =>
 // Se apaga con la variable de entorno Permisos__ValidarEnBack=false.
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<TW.Intranet.API.Seguridad.PermisosFilter>();
-builder.Services.AddControllers(o => o.Filters.AddService<TW.Intranet.API.Seguridad.PermisosFilter>());
+builder.Services.AddControllers(o => o.Filters.AddService<TW.Intranet.API.Seguridad.PermisosFilter>())
+    // Fechas en hora de Lima (UTC-5): ver Configuracion/ZonaHorariaLima.cs
+    .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new TW.Intranet.API.Configuracion.FechaHoraLimaJsonConverter()));
 
 // ── OPENAPI / SWAGGER ─────────────────────────────────────────────────────────
 builder.Services.AddOpenApi(options =>
@@ -390,6 +392,14 @@ builder.Services.AddScoped<EnviarCorreoPruebaCasoDeUso>();
 
 // ─────────────────────────────────────────────────────────────────────────────
 var app = builder.Build();
+
+// El contenedor debe correr en hora de Lima (ENV TZ=America/Lima en el Dockerfile).
+if (TimeZoneInfo.Local.BaseUtcOffset != TW.Intranet.API.Configuracion.ZonaHorariaLima.Zona.BaseUtcOffset)
+    app.Logger.LogWarning(
+        "La zona horaria del servidor es {Zona} y no la de Lima (UTC-5). DateTime.Now no coincidirá con la hora de Perú. " +
+        "Configure TZ=America/Lima.", TimeZoneInfo.Local.Id);
+else
+    app.Logger.LogInformation("Zona horaria {Zona}, hora local {Hora:yyyy-MM-dd HH:mm:ss}", TimeZoneInfo.Local.Id, DateTime.Now);
 
 if (string.IsNullOrWhiteSpace(rutaAlmacenamientoConfigurada) && !app.Environment.IsDevelopment())
     app.Logger.LogWarning(
