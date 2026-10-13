@@ -11,6 +11,7 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
 {
     private static decimal Dec(MySqlDataReader r, string c) => DecimalNulo(r, c) ?? 0m;
     private static int Ent(MySqlDataReader r, string c) => (int)(DecimalNulo(r, c) ?? 0m);
+    private static int? EntNulo(MySqlDataReader r, string c) => DecimalNulo(r, c) is { } v ? (int)v : null;
 
     public Task<RespuestaDto<PreparacionOrdenCompraDto>> PrepararAsync(long idPropuesta, long idUsuario, CancellationToken ct)
         => EjecutarAsync("SP_PrepararOrdenCompra",
@@ -119,6 +120,239 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
                     return new RespuestaDto<RutaPdfOrdenCompraDto>(1, "La orden de compra no tiene PDF adjunto.");
                 return new RespuestaDto<RutaPdfOrdenCompraDto>(2, mensaje,
                     new RutaPdfOrdenCompraDto(Texto(r, "ruta") ?? "", Texto(r, "nombre_archivo") ?? "orden-compra.pdf"));
+            },
+            ct);
+
+    // ══════════════════════ HU-23 — Bandeja y Detalle ══════════════════════
+
+    public Task<RespuestaDto<BandejaOrdenesCompraDto>> ObtenerBandejaAsync(FiltrosBandejaOrdenesCompraDto f, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_ObtenerBandejaOrdenesCompra",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario",     idUsuario);
+                p.AddWithValue("p_estado",         Valor(f.Estado));
+                p.AddWithValue("p_cobertura",      Valor(f.Cobertura));
+                p.AddWithValue("p_id_cliente",     Valor(f.IdCliente));
+                p.AddWithValue("p_id_responsable", Valor(f.IdResponsable));
+                p.AddWithValue("p_fecha_desde",    Valor(f.FechaDesde));
+                p.AddWithValue("p_fecha_hasta",    Valor(f.FechaHasta));
+                p.AddWithValue("p_con_pdf",        f.ConPdf is { } conPdf ? Bit(conPdf) : DBNull.Value);
+                p.AddWithValue("p_busqueda",       Valor(f.Busqueda));
+                p.AddWithValue("p_pagina",         f.Pagina);
+                p.AddWithValue("p_por_pagina",     f.PorPagina);
+            },
+            async (r, mensaje) =>
+            {
+                // 2. Tarjetas
+                await r.NextResultAsync(ct);
+                var kpis = new KpisOrdenesCompraDto(0, 0, 0, 0, 0, 0, 0, 0);
+                if (await r.ReadAsync(ct))
+                    kpis = new KpisOrdenesCompraDto(
+                        Ent(r, "vigentes"), Ent(r, "cobertura_parcial"), Ent(r, "saldo_insuficiente"),
+                        Ent(r, "pendientes_validacion"), Ent(r, "listas_programacion"), Ent(r, "observadas"),
+                        Ent(r, "vencidas"), Ent(r, "pendientes_con_alerta"));
+
+                // 3. Filas
+                await r.NextResultAsync(ct);
+                var items = new List<ItemBandejaOrdenCompraDto>();
+                while (await r.ReadAsync(ct))
+                    items.Add(new ItemBandejaOrdenCompraDto
+                    {
+                        IdOc                = EnteroLargo(r, "id_oc"),
+                        NumeroOc            = Texto(r, "numero_oc") ?? "",
+                        FechaOc             = Fecha(r, "fecha_oc"),
+                        FechaRecepcion      = Fecha(r, "fecha_recepcion"),
+                        IdCliente           = EnteroLargo(r, "id_cliente"),
+                        RazonSocial         = Texto(r, "razon_social") ?? "",
+                        Ruc                 = Texto(r, "ruc"),
+                        IdRequerimiento     = EnteroLargoNulo(r, "id_requerimiento"),
+                        NumeroRq            = Texto(r, "numero_rq"),
+                        IdPropuesta         = EnteroLargoNulo(r, "id_propuesta"),
+                        NumeroPropuesta     = Texto(r, "numero_propuesta"),
+                        VersionPropuesta    = EntNulo(r, "version_propuesta"),
+                        IdMoneda            = Ent(r, "id_moneda"),
+                        Moneda              = Texto(r, "moneda"),
+                        MonedaSimbolo       = Texto(r, "moneda_simbolo"),
+                        MontoOc             = Dec(r, "monto_oc"),
+                        MontoPropuesta      = Dec(r, "monto_propuesta"),
+                        MontoAplicado       = Dec(r, "monto_aplicado"),
+                        Saldo               = Dec(r, "saldo"),
+                        CoberturaPct        = DecimalNulo(r, "cobertura_pct"),
+                        UtilizacionPct      = Dec(r, "utilizacion_pct"),
+                        CoberturaCodigo     = Texto(r, "cobertura_codigo") ?? "",
+                        CoberturaProyectada = Texto(r, "cobertura_proyectada") ?? "",
+                        Estado              = Texto(r, "estado") ?? "",
+                        EstadoVisual        = Texto(r, "estado_visual") ?? "",
+                        VigenciaHasta       = Fecha(r, "vigencia_hasta"),
+                        DiasParaVencer      = EntNulo(r, "dias_para_vencer"),
+                        IdResponsable       = EnteroLargo(r, "id_responsable"),
+                        Responsable         = Texto(r, "responsable"),
+                        TienePdf            = Booleano(r, "tiene_pdf"),
+                        UrlPdf              = Texto(r, "url_pdf"),
+                        ListaProgramacion   = Booleano(r, "lista_programacion"),
+                        FechaRegistro       = FechaHora(r, "fecha_registro"),
+                    });
+
+                // 4. Total
+                int total = await LeerTotalAsync(r, ct);
+
+                // 5. Clientes y 6. Responsables
+                var clientes     = await LeerOpcionesAsync(r, ct);
+                var responsables = await LeerOpcionesAsync(r, ct);
+
+                return new RespuestaDto<BandejaOrdenesCompraDto>(2, mensaje,
+                    new BandejaOrdenesCompraDto(kpis, items, total, f.Pagina, f.PorPagina, clientes, responsables));
+            },
+            ct);
+
+    private static async Task<List<OpcionFiltroDto>> LeerOpcionesAsync(MySqlDataReader r, CancellationToken ct)
+    {
+        var lista = new List<OpcionFiltroDto>();
+        if (!await r.NextResultAsync(ct)) return lista;
+        while (await r.ReadAsync(ct))
+            lista.Add(new OpcionFiltroDto(EnteroLargo(r, "id"), Texto(r, "nombre") ?? "", Texto(r, "codigo")));
+        return lista;
+    }
+
+    public Task<RespuestaDto<DetalleOrdenCompraDto>> ObtenerDetalleAsync(long idOc, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_ObtenerDetalleOrdenCompra",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario", idUsuario);
+                p.AddWithValue("p_id_oc",      idOc);
+            },
+            async (r, mensaje) =>
+            {
+                // 2. Resumen
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<DetalleOrdenCompraDto>(3, "No se pudo leer la orden de compra.");
+                var resumen = new ResumenOrdenCompraDto
+                {
+                    IdOc                = EnteroLargo(r, "id_oc"),
+                    NumeroOc            = Texto(r, "numero_oc") ?? "",
+                    Estado              = Texto(r, "estado") ?? "",
+                    EstadoVisual        = Texto(r, "estado_visual") ?? "",
+                    FechaOc             = Fecha(r, "fecha_oc"),
+                    FechaRecepcion      = Fecha(r, "fecha_recepcion"),
+                    VigenciaDesde       = Fecha(r, "vigencia_desde"),
+                    VigenciaHasta       = Fecha(r, "vigencia_hasta"),
+                    VigenciaDias        = EntNulo(r, "vigencia_dias"),
+                    DiasParaVencer      = EntNulo(r, "dias_para_vencer"),
+                    Observaciones       = Texto(r, "observaciones"),
+                    IdCliente           = EnteroLargo(r, "id_cliente"),
+                    RazonSocial         = Texto(r, "razon_social") ?? "",
+                    Ruc                 = Texto(r, "ruc"),
+                    IdRequerimiento     = EnteroLargoNulo(r, "id_requerimiento"),
+                    NumeroRq            = Texto(r, "numero_rq"),
+                    ReferenciaServicio  = Texto(r, "referencia_servicio"),
+                    IdPropuesta         = EnteroLargoNulo(r, "id_propuesta"),
+                    NumeroPropuesta     = Texto(r, "numero_propuesta"),
+                    VersionPropuesta    = EntNulo(r, "version_propuesta"),
+                    IdMoneda            = Ent(r, "id_moneda"),
+                    Moneda              = Texto(r, "moneda"),
+                    MonedaSimbolo       = Texto(r, "moneda_simbolo"),
+                    MonedaNombre        = Texto(r, "moneda_nombre"),
+                    MontoOc             = Dec(r, "monto_oc"),
+                    MontoPropuesta      = Dec(r, "monto_propuesta"),
+                    Diferencia          = Dec(r, "diferencia"),
+                    MontoAplicado       = Dec(r, "monto_aplicado"),
+                    Saldo               = Dec(r, "saldo"),
+                    CoberturaPct        = DecimalNulo(r, "cobertura_pct"),
+                    UtilizacionPct      = Dec(r, "utilizacion_pct"),
+                    CoberturaCodigo     = Texto(r, "cobertura_codigo") ?? "",
+                    CoberturaProyectada = Texto(r, "cobertura_proyectada") ?? "",
+                    IdResponsable       = EnteroLargo(r, "id_responsable"),
+                    Responsable         = Texto(r, "responsable"),
+                    IdRegistradoPor     = EnteroLargoNulo(r, "id_registrado_por"),
+                    RegistradoPor       = Texto(r, "registrado_por"),
+                    FechaRegistro       = FechaHora(r, "fecha_registro"),
+                    IdValidadoPor       = EnteroLargoNulo(r, "id_validado_por"),
+                    ValidadoPor         = Texto(r, "validado_por"),
+                    FechaValidacion     = FechaHora(r, "fecha_validacion"),
+                    IdMotivoObservacion = EntNulo(r, "id_motivo_observacion"),
+                    MotivoObservacion   = Texto(r, "motivo_observacion"),
+                    NombreArchivoPdf    = Texto(r, "nombre_archivo_pdf"),
+                    TamanoPdfBytes      = EnteroLargoNulo(r, "tamano_pdf_bytes"),
+                    UrlPdf              = Texto(r, "url_pdf"),
+                    ListaProgramacion   = Booleano(r, "lista_programacion"),
+                    OrdenesServicio     = Ent(r, "ordenes_servicio"),
+                };
+
+                // 3. Aplicaciones
+                await r.NextResultAsync(ct);
+                var aplicaciones = new List<AplicacionOrdenCompraDto>();
+                while (await r.ReadAsync(ct))
+                    aplicaciones.Add(new AplicacionOrdenCompraDto(
+                        EnteroLargo(r, "id_propuesta"), Texto(r, "numero") ?? "", Ent(r, "version"), Texto(r, "estado") ?? "",
+                        Dec(r, "monto_propuesta"), Ent(r, "id_moneda"), Texto(r, "moneda"), Texto(r, "moneda_simbolo"),
+                        DecimalNulo(r, "monto_asignado"), FechaHora(r, "fecha_asignacion"), FechaHora(r, "fecha_aceptacion"),
+                        Booleano(r, "es_principal")));
+
+                // 4. Checklist
+                await r.NextResultAsync(ct);
+                var checklist = new List<ItemChecklistOrdenCompraDto>();
+                while (await r.ReadAsync(ct))
+                    checklist.Add(new ItemChecklistOrdenCompraDto(
+                        Texto(r, "codigo") ?? "", Texto(r, "descripcion") ?? "", Booleano(r, "cumple"), Texto(r, "detalle")));
+
+                // 5. Vinculaciones
+                await r.NextResultAsync(ct);
+                var vinculaciones = new List<VinculacionOrdenCompraDto>();
+                while (await r.ReadAsync(ct))
+                    vinculaciones.Add(new VinculacionOrdenCompraDto(
+                        Texto(r, "tipo") ?? "", EnteroLargoNulo(r, "id_entidad"), Texto(r, "codigo"),
+                        Texto(r, "descripcion") ?? "", Texto(r, "estado"), Booleano(r, "disponible"), Texto(r, "url")));
+
+                // 6. Documentos
+                await r.NextResultAsync(ct);
+                var documentos = new List<DocumentoOrdenCompraDto>();
+                while (await r.ReadAsync(ct))
+                    documentos.Add(new DocumentoOrdenCompraDto(
+                        Texto(r, "tipo") ?? "", Texto(r, "nombre") ?? "", EnteroLargoNulo(r, "tamano_bytes"),
+                        FechaHora(r, "fecha"), Texto(r, "url")));
+
+                // 7. Workflow
+                await r.NextResultAsync(ct);
+                var workflow = new List<EtapaWorkflowOrdenCompraDto>();
+                while (await r.ReadAsync(ct))
+                    workflow.Add(new EtapaWorkflowOrdenCompraDto(
+                        Ent(r, "orden"), Texto(r, "codigo") ?? "", Texto(r, "etapa") ?? "",
+                        Texto(r, "estado") ?? "", FechaHora(r, "fecha")));
+
+                // 8. Historial
+                await r.NextResultAsync(ct);
+                var historial = new List<EventoHistorialOrdenCompraDto>();
+                while (await r.ReadAsync(ct))
+                    historial.Add(new EventoHistorialOrdenCompraDto(
+                        FechaHora(r, "fecha"), Texto(r, "tipo") ?? "", Texto(r, "titulo") ?? "",
+                        Texto(r, "descripcion"), EnteroLargoNulo(r, "id_usuario"), Texto(r, "usuario")));
+
+                return new RespuestaDto<DetalleOrdenCompraDto>(2, mensaje, new DetalleOrdenCompraDto(
+                    resumen, aplicaciones, checklist, checklist.Count(c => c.Cumple),
+                    vinculaciones, documentos, workflow, historial));
+            },
+            ct);
+
+    public Task<RespuestaDto<List<PropuestaSinOrdenCompraDto>>> ObtenerPropuestasSinOrdenCompraAsync(string? busqueda, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_ObtenerPropuestasSinOrdenCompra",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario", idUsuario);
+                p.AddWithValue("p_busqueda",   Valor(busqueda));
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                var lista = new List<PropuestaSinOrdenCompraDto>();
+                while (await r.ReadAsync(ct))
+                    lista.Add(new PropuestaSinOrdenCompraDto(
+                        EnteroLargo(r, "id_propuesta"), Texto(r, "numero") ?? "", Ent(r, "version"),
+                        EnteroLargo(r, "id_cliente"), Texto(r, "razon_social") ?? "", Texto(r, "ruc"),
+                        EnteroLargoNulo(r, "id_requerimiento"), Texto(r, "numero_rq"),
+                        Dec(r, "total"), Ent(r, "id_moneda"), Texto(r, "moneda"), Texto(r, "moneda_simbolo"),
+                        FechaHora(r, "fecha_aceptacion"), EnteroLargo(r, "id_responsable"), Texto(r, "responsable")));
+                return new RespuestaDto<List<PropuestaSinOrdenCompraDto>>(2, mensaje, lista);
             },
             ct);
 }

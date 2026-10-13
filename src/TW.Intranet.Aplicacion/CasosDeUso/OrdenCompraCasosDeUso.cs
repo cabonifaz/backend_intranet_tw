@@ -142,3 +142,71 @@ public class ObtenerPdfOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio,
         return new(2, ruta.Mensaje, new ArchivoDescargaDto(contenido, ruta.Datos.NombreArchivo, "application/pdf"));
     }
 }
+
+// ══════════════════════ HU-23 — Bandeja y Detalle de Órdenes de Compra ══════════════════════
+
+/// <summary>Bandeja: tarjetas de estado, filas con monto OC, aplicado, saldo, cobertura y estado, y opciones de filtro.</summary>
+public class ObtenerBandejaOrdenesCompraCasoDeUso(IOrdenCompraRepositorio repositorio)
+{
+    private static readonly string[] Estados =
+    [
+        "", "activas", "vigentes", "pendiente_validacion", "validada", "validada_parcial", "observada",
+        "bloqueada", "listas_programacion", "vencida", "anulada", "todas",
+    ];
+
+    private static readonly string[] Coberturas = ["", "completa", "con_saldo", "insuficiente", "moneda_diferente", "pendiente"];
+
+    public Task<RespuestaDto<BandejaOrdenesCompraDto>> EjecutarAsync(
+        FiltrosBandejaOrdenesCompraDto f, long idUsuario, CancellationToken ct = default)
+    {
+        var estado    = f.Estado?.Trim().ToLowerInvariant() ?? "";
+        var cobertura = f.Cobertura?.Trim().ToLowerInvariant() ?? "";
+
+        if (!Estados.Contains(estado))
+            return Task.FromResult(new RespuestaDto<BandejaOrdenesCompraDto>(1,
+                "Estado no válido. Use activas, vigentes, pendiente_validacion, validada, validada_parcial, " +
+                "observada, bloqueada, listas_programacion, vencida, anulada o todas."));
+        if (!Coberturas.Contains(cobertura))
+            return Task.FromResult(new RespuestaDto<BandejaOrdenesCompraDto>(1,
+                "Cobertura no válida. Use completa, con_saldo, insuficiente, moneda_diferente o pendiente."));
+        if (f.FechaDesde is { } desde && f.FechaHasta is { } hasta && desde.Date > hasta.Date)
+            return Task.FromResult(new RespuestaDto<BandejaOrdenesCompraDto>(1,
+                "La fecha desde no puede ser posterior a la fecha hasta."));
+
+        var filtros = f with
+        {
+            Estado        = estado,
+            Cobertura     = cobertura,
+            IdCliente     = f.IdCliente     is > 0 ? f.IdCliente     : null,
+            IdResponsable = f.IdResponsable is > 0 ? f.IdResponsable : null,
+            FechaDesde    = f.FechaDesde?.Date,
+            FechaHasta    = f.FechaHasta?.Date,
+            Busqueda      = string.IsNullOrWhiteSpace(f.Busqueda) ? null : f.Busqueda.Trim(),
+            Pagina        = Math.Max(1, f.Pagina),
+            PorPagina     = f.PorPagina is < 1 or > 100 ? 10 : f.PorPagina,
+        };
+        return repositorio.ObtenerBandejaAsync(filtros, idUsuario, ct);
+    }
+}
+
+/// <summary>Detalle: datos generales, cobertura económica, aplicaciones, checklist, vinculaciones, documentos, workflow e historial.</summary>
+public class ObtenerDetalleOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio)
+{
+    public Task<RespuestaDto<DetalleOrdenCompraDto>> EjecutarAsync(long idOc, long idUsuario, CancellationToken ct = default)
+    {
+        if (idOc <= 0)
+            return Task.FromResult(new RespuestaDto<DetalleOrdenCompraDto>(1, "Orden de compra no válida."));
+        return repositorio.ObtenerDetalleAsync(idOc, idUsuario, ct);
+    }
+}
+
+/// <summary>Propuestas aceptadas sin OC para el botón "+ Nueva Orden de Compra" (luego se usa el registro de la HU-22).</summary>
+public class ObtenerPropuestasSinOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio)
+{
+    public Task<RespuestaDto<List<PropuestaSinOrdenCompraDto>>> EjecutarAsync(string? busqueda, long idUsuario, CancellationToken ct = default)
+    {
+        var texto = string.IsNullOrWhiteSpace(busqueda) ? null : busqueda.Trim();
+        if (texto is { Length: > 200 }) texto = texto[..200];
+        return repositorio.ObtenerPropuestasSinOrdenCompraAsync(texto, idUsuario, ct);
+    }
+}

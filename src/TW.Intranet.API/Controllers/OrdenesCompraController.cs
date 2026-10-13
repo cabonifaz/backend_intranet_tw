@@ -8,14 +8,17 @@ using TW.Intranet.Aplicacion.Dtos;
 
 namespace TW.Intranet.API.Controllers;
 
-/// <summary>HU-22 — Registro de la Orden de Compra recibida del cliente.</summary>
+/// <summary>HU-22 Registro y HU-23 Bandeja y Detalle de las Órdenes de Compra recibidas del cliente.</summary>
 [ApiController]
 [Authorize]
 public class OrdenesCompraController(
     PrepararOrdenCompraCasoDeUso          preparar,
     CalcularCoberturaOrdenCompraCasoDeUso calcularCobertura,
     RegistrarOrdenCompraCasoDeUso         registrar,
-    ObtenerPdfOrdenCompraCasoDeUso        obtenerPdf) : ControllerBase
+    ObtenerPdfOrdenCompraCasoDeUso        obtenerPdf,
+    ObtenerBandejaOrdenesCompraCasoDeUso      obtenerBandeja,
+    ObtenerDetalleOrdenCompraCasoDeUso        obtenerDetalle,
+    ObtenerPropuestasSinOrdenCompraCasoDeUso  obtenerPropuestasSinOc) : ControllerBase
 {
     /// <summary>10 MB del PDF + margen para el resto del multipart.</summary>
     private const long TamanoMaximoPeticion = RegistrarOrdenCompraCasoDeUso.TamanoMaximoBytes + 1024 * 1024;
@@ -83,4 +86,34 @@ public class OrdenesCompraController(
         Response.Headers[HeaderNames.ContentDisposition] = disposicion.ToString();
         return File(r.Datos.Contenido, r.Datos.TipoContenido, enableRangeProcessing: true);
     }
+
+    /// <summary>
+    /// HU-23 — Bandeja de órdenes de compra: tarjetas (vigentes, cobertura parcial, saldo insuficiente,
+    /// pendientes de validación, listas para programación, observadas), filas con monto OC, monto aplicado,
+    /// saldo, cobertura y estado, y opciones de los filtros de cliente y responsable.
+    /// ?estado=&amp;cobertura=&amp;idCliente=&amp;idResponsable=&amp;fechaDesde=&amp;fechaHasta=&amp;conPdf=&amp;busqueda=&amp;pagina=1&amp;porPagina=10
+    /// </summary>
+    [RequierePermiso("oc_bandeja")]
+    [HttpGet("api/crm/ordenes-compra")]
+    public async Task<IActionResult> Bandeja([FromQuery] FiltrosBandejaOrdenesCompraDto filtros, CancellationToken ct = default)
+        => Responder(await obtenerBandeja.EjecutarAsync(filtros, IdUsuarioActual, ct));
+
+    /// <summary>
+    /// HU-23 — Propuestas aceptadas sin orden de compra (selector del botón "+ Nueva Orden de Compra").
+    /// Con la propuesta elegida se usan los endpoints de registro de la HU-22.
+    /// </summary>
+    [RequierePermiso("oc_registrar")]
+    [HttpGet("api/crm/ordenes-compra/propuestas-pendientes")]
+    public async Task<IActionResult> PropuestasPendientes([FromQuery] string? busqueda, CancellationToken ct = default)
+        => Responder(await obtenerPropuestasSinOc.EjecutarAsync(busqueda, IdUsuarioActual, ct));
+
+    /// <summary>
+    /// HU-23 — Detalle de la orden de compra: datos generales, cobertura económica (propuesta vs. OC),
+    /// aplicaciones, checklist de validación, vinculaciones (RQ, propuesta, expediente, OS), documentos,
+    /// workflow e historial.
+    /// </summary>
+    [RequierePermiso("oc_bandeja")]
+    [HttpGet("api/crm/ordenes-compra/{idOc:long}")]
+    public async Task<IActionResult> Detalle(long idOc, CancellationToken ct = default)
+        => Responder(await obtenerDetalle.EjecutarAsync(idOc, IdUsuarioActual, ct), noEncontradoComo404: true);
 }
