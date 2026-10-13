@@ -28,4 +28,15 @@ public interface IOrdenCompraRepositorio
     Task<RespuestaDto<EdicionOrdenCompraDto>> PrepararEdicionAsync(long idOc, long idUsuario, CancellationToken ct);
 
     Task<RespuestaDto<OrdenCompraEditadaDto>> EditarAsync(long idOc, ComandoEdicionOrdenCompra comando, bool soloValidar, long idUsuario, CancellationToken ct);
+
+    // HU-25
+    Task<RespuestaDto<DocumentosOrdenCompraDto>> ObtenerDocumentosAsync(long idOc, long idUsuario, CancellationToken ct);
+
+    Task<RespuestaDto<RutaPdfOrdenCompraDto>> ObtenerRutaVersionAsync(long idOc, long idDocumento, long idUsuario, CancellationToken ct);
+
+    /// <summary>soloValidar = true valida sin guardar (antes de escribir el PDF en disco).</summary>
+    Task<RespuestaDto<DocumentoReemplazadoDto>> ReemplazarDocumentoAsync(long idOc, string? motivo, string? ruta, string? nombre,
+        long? tamano, string? hash, bool soloValidar, long idUsuario, CancellationToken ct);
+
+    Task<RespuestaDto<AuditoriaOrdenCompraDto>> ObtenerAuditoriaAsync(long idOc, bool registrarExportacion, long idUsuario, CancellationToken ct);
 }

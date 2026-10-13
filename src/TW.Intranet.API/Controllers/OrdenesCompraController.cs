@@ -8,7 +8,7 @@ using TW.Intranet.Aplicacion.Dtos;
 
 namespace TW.Intranet.API.Controllers;
 
-/// <summary>HU-22/HU-24 Registro y Edición y HU-23 Bandeja y Detalle de las Órdenes de Compra recibidas del cliente.</summary>
+/// <summary>Órdenes de Compra recibidas del cliente: registro y edición (HU-22/24), bandeja y detalle (HU-23), documento y auditoría (HU-25).</summary>
 [ApiController]
 [Authorize]
 public class OrdenesCompraController(
@@ -21,7 +21,12 @@ public class OrdenesCompraController(
     ObtenerPropuestasSinOrdenCompraCasoDeUso  obtenerPropuestasSinOc,
     EvaluarOrdenCompraCasoDeUso               evaluar,
     PrepararEdicionOrdenCompraCasoDeUso       prepararEdicion,
-    EditarOrdenCompraCasoDeUso                editar) : ControllerBase
+    EditarOrdenCompraCasoDeUso                editar,
+    ObtenerDocumentosOrdenCompraCasoDeUso        obtenerDocumentos,
+    ObtenerVersionDocumentoOrdenCompraCasoDeUso  obtenerVersion,
+    ReemplazarDocumentoOrdenCompraCasoDeUso      reemplazarDocumento,
+    ObtenerAuditoriaOrdenCompraCasoDeUso         obtenerAuditoria,
+    ExportarAuditoriaOrdenCompraCasoDeUso        exportarAuditoria) : ControllerBase
 {
     /// <summary>10 MB del PDF + margen para el resto del multipart.</summary>
     private const long TamanoMaximoPeticion = RegistrarOrdenCompraCasoDeUso.TamanoMaximoBytes + 1024 * 1024;
@@ -76,18 +81,21 @@ public class OrdenesCompraController(
             idPropuesta, datos, contenido, archivo.FileName, archivo.Length, IdUsuarioActual, ct));
     }
 
-    /// <summary>HU-22 — Ver o descargar el PDF de una orden de compra (cualquier usuario activo).</summary>
+    /// <summary>HU-22 — Ver (inline) o descargar (?descargar=true) el PDF vigente de la OC. HU-25: cada acceso queda registrado.</summary>
     [HttpGet("api/crm/ordenes-compra/{idOc:long}/pdf")]
-    public async Task<IActionResult> ObtenerPdf(long idOc, CancellationToken ct = default)
+    public async Task<IActionResult> ObtenerPdf(long idOc, [FromQuery] bool descargar = false, CancellationToken ct = default)
+        => Archivo(await obtenerPdf.EjecutarAsync(idOc, IdUsuarioActual, ct), descargar);
+
+    /// <summary>Devuelve el archivo: inline (previsualizar) o attachment (descargar=true).</summary>
+    private IActionResult Archivo(RespuestaDto<ArchivoDescargaDto> r, bool descargar)
     {
-        var r = await obtenerPdf.EjecutarAsync(idOc, IdUsuarioActual, ct);
         if (r.IdTipoMensaje != 2 || r.Datos is null)
             return Responder(new RespuestaDto<object>(r.IdTipoMensaje, r.Mensaje), noEncontradoComo404: true);
 
-        var disposicion = new ContentDispositionHeaderValue("inline");
+        var disposicion = new ContentDispositionHeaderValue(descargar ? "attachment" : "inline");
         disposicion.SetHttpFileName(r.Datos.NombreArchivo);
         Response.Headers[HeaderNames.ContentDisposition] = disposicion.ToString();
-        return File(r.Datos.Contenido, r.Datos.TipoContenido, enableRangeProcessing: true);
+        return File(r.Datos.Contenido, r.Datos.TipoContenido, enableRangeProcessing: !descargar);
     }
 
     /// <summary>
@@ -164,4 +172,50 @@ public class OrdenesCompraController(
         return Responder(await editar.EjecutarAsync(
             idOc, datos, contenido, archivo.FileName, archivo.Length, IdUsuarioActual, ct));
     }
+
+    /// <summary>HU-25 — Modal "Documento de Orden de Compra": documento actual e historial de versiones.</summary>
+    [RequierePermiso("oc_bandeja")]
+    [HttpGet("api/crm/ordenes-compra/{idOc:long}/documentos")]
+    public async Task<IActionResult> Documentos(long idOc, CancellationToken ct = default)
+        => Responder(await obtenerDocumentos.EjecutarAsync(idOc, IdUsuarioActual, ct), noEncontradoComo404: true);
+
+    /// <summary>
+    /// HU-25 — Reemplazar el PDF (multipart/form-data): "archivo" (PDF, máx. 10 MB) y "motivo" (5 a 300 caracteres).
+    /// Crea una nueva versión; la anterior se conserva en el historial.
+    /// </summary>
+    [RequierePermiso("oc_documento_reemplazar")]
+    [HttpPost("api/crm/ordenes-compra/{idOc:long}/documentos")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(TamanoMaximoPeticion)]
+    [RequestFormLimits(MultipartBodyLengthLimit = TamanoMaximoPeticion)]
+    public async Task<IActionResult> ReemplazarDocumento(long idOc, [FromForm] string? motivo, IFormFile? archivo, CancellationToken ct = default)
+    {
+        if (archivo is null || archivo.Length == 0)
+            return BadRequest(new RespuestaDto<object>(1, "Adjunte el nuevo PDF de la orden de compra."));
+
+        await using var contenido = archivo.OpenReadStream();
+        return Responder(await reemplazarDocumento.EjecutarAsync(
+            idOc, motivo, contenido, archivo.FileName, archivo.Length, IdUsuarioActual, ct));
+    }
+
+    /// <summary>HU-25 — Ver (inline) o descargar (?descargar=true) una versión del PDF. Cada acceso queda registrado.</summary>
+    [HttpGet("api/crm/ordenes-compra/{idOc:long}/documentos/{idDocumento:long}")]
+    public async Task<IActionResult> VersionDocumento(long idOc, long idDocumento, [FromQuery] bool descargar = false, CancellationToken ct = default)
+        => Archivo(await obtenerVersion.EjecutarAsync(idOc, idDocumento, IdUsuarioActual, ct), descargar);
+
+    /// <summary>
+    /// HU-25 — Historial de Expediente Industrial: cabecera, timeline inmutable de eventos críticos (RQ, expediente,
+    /// propuesta, visto bueno, envío, aceptación, OC, documentos, validación y OS), registro de auditoría del CRM,
+    /// aplicaciones relacionadas y documentación SSOMA.
+    /// </summary>
+    [RequierePermiso("oc_bandeja")]
+    [HttpGet("api/crm/ordenes-compra/{idOc:long}/auditoria")]
+    public async Task<IActionResult> Auditoria(long idOc, CancellationToken ct = default)
+        => Responder(await obtenerAuditoria.EjecutarAsync(idOc, IdUsuarioActual, ct), noEncontradoComo404: true);
+
+    /// <summary>HU-25 — Descargar el historial completo de auditoría en XLSX (la descarga queda registrada).</summary>
+    [RequierePermiso("oc_bandeja")]
+    [HttpGet("api/crm/ordenes-compra/{idOc:long}/auditoria/xlsx")]
+    public async Task<IActionResult> AuditoriaXlsx(long idOc, CancellationToken ct = default)
+        => Archivo(await exportarAuditoria.EjecutarAsync(idOc, IdUsuarioActual, ct), descargar: true);
 }

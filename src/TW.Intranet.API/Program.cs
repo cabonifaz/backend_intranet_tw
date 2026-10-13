@@ -324,6 +324,12 @@ builder.Services.AddScoped<ObtenerPropuestasSinOrdenCompraCasoDeUso>();
 builder.Services.AddScoped<EvaluarOrdenCompraCasoDeUso>();
 builder.Services.AddScoped<PrepararEdicionOrdenCompraCasoDeUso>();
 builder.Services.AddScoped<EditarOrdenCompraCasoDeUso>();
+builder.Services.AddSingleton<IGeneradorExcel, GeneradorExcelXlsx>();
+builder.Services.AddScoped<ObtenerDocumentosOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<ObtenerVersionDocumentoOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<ReemplazarDocumentoOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<ObtenerAuditoriaOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<ExportarAuditoriaOrdenCompraCasoDeUso>();
 
 // ── INYECCIÓN DE DEPENDENCIAS — Seguimiento comercial (HU-17 / HU-18 / HU-19 / HU-20 / HU-21) ────────────────
 builder.Services.AddScoped<ISeguimientoComercialRepositorio, SeguimientoComercialRepositorio>();

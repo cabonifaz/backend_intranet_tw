@@ -330,6 +330,8 @@ BEGIN
                            WHEN 'editar_oc_revalidacion' THEN 'Editada y enviada a revalidación'
                            WHEN 'validar_oc'             THEN 'Orden de compra validada'
                            WHEN 'observar_oc'            THEN 'Orden de compra observada'
+                           WHEN 'reemplazar_pdf_oc'      THEN 'Documento de la OC reemplazado'
+                           WHEN 'exportar_auditoria_oc'  THEN 'Historial de auditoría descargado'
                            ELSE CONCAT(UPPER(LEFT(REPLACE(a.accion, '_', ' '), 1)), SUBSTRING(REPLACE(a.accion, '_', ' '), 2))
                        END,
                        COALESCE(a.descripcion,

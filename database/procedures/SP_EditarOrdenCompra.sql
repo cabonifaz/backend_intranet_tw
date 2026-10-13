@@ -9,6 +9,7 @@
 --   p_revalidar = 1 ("Guardar y revalidar") la regresa siempre a 'pendiente_validacion' y levanta la
 --   observación. En ambos casos se notifica a Operaciones, Administración y al responsable comercial.
 --   Si la OC ya tiene órdenes de servicio no se puede cambiar el monto ni la moneda.
+-- HU-25: el PDF nuevo se registra como nueva versión en documento_adjunto.
 -- p_solo_validar = 1 valida y devuelve el impacto sin guardar (antes de escribir el PDF en disco).
 -- Resultados: 1 mensaje, 2 resultado de la edición.
 DROP PROCEDURE IF EXISTS SP_EditarOrdenCompra;
@@ -208,6 +209,12 @@ proc: BEGIN
     END IF;
 
     START TRANSACTION;
+
+    -- HU-25: el PDF nuevo queda como una versión más (la anterior se conserva). Va antes del UPDATE
+    IF v_ruta_pdf IS NOT NULL THEN
+        CALL SP_AgregarVersionDocumentoOc(p_id_oc, p_id_usuario, v_ruta_pdf, p_nombre_pdf, p_tamano_pdf, p_hash_pdf,
+                                          'Reemplazado al editar la orden de compra');
+    END IF;
 
     UPDATE orden_compra SET
         numero_oc             = v_numero,

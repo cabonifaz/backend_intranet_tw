@@ -312,3 +312,137 @@ public class EditarOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio, IAl
         return resultado;
     }
 }
+
+// ══════════════════════ HU-25 — Gestión de Documento y Auditoría de OC ══════════════════════
+
+/// <summary>Documento actual de la OC e historial de versiones.</summary>
+public class ObtenerDocumentosOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio)
+{
+    public Task<RespuestaDto<DocumentosOrdenCompraDto>> EjecutarAsync(long idOc, long idUsuario, CancellationToken ct = default)
+    {
+        if (idOc <= 0)
+            return Task.FromResult(new RespuestaDto<DocumentosOrdenCompraDto>(1, "Orden de compra no válida."));
+        return repositorio.ObtenerDocumentosAsync(idOc, idUsuario, ct);
+    }
+}
+
+/// <summary>Abre una versión del PDF para previsualizarla o descargarla (cada acceso queda registrado).</summary>
+public class ObtenerVersionDocumentoOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio, IAlmacenArchivos almacen)
+{
+    public async Task<RespuestaDto<ArchivoDescargaDto>> EjecutarAsync(long idOc, long idDocumento, long idUsuario, CancellationToken ct = default)
+    {
+        if (idOc <= 0 || idDocumento <= 0) return new(1, "Documento no válido.");
+        var ruta = await repositorio.ObtenerRutaVersionAsync(idOc, idDocumento, idUsuario, ct);
+        if (ruta.IdTipoMensaje != 2 || ruta.Datos is null) return new(ruta.IdTipoMensaje, ruta.Mensaje);
+
+        var contenido = await almacen.AbrirLecturaAsync(ruta.Datos.Ruta, ct);
+        if (contenido is null)
+            return new(1, "La versión del documento está registrada pero no se encontró en el almacenamiento.");
+
+        return new(2, ruta.Mensaje, new ArchivoDescargaDto(contenido, ruta.Datos.NombreArchivo, "application/pdf"));
+    }
+}
+
+/// <summary>
+/// Reemplaza el PDF de la OC con un motivo obligatorio: valida en BD, verifica el PDF (máx. 10 MB, firma %PDF-),
+/// lo guarda y registra la nueva versión. La versión anterior se conserva.
+/// </summary>
+public class ReemplazarDocumentoOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio, IAlmacenArchivos almacen)
+{
+    public async Task<RespuestaDto<DocumentoReemplazadoDto>> EjecutarAsync(
+        long idOc, string? motivo, Stream? pdf, string? nombreArchivo, long tamanoBytes,
+        long idUsuario, CancellationToken ct = default)
+    {
+        if (idOc <= 0) return new(1, "Orden de compra no válida.");
+        var texto = motivo?.Trim() ?? "";
+        if (texto.Length < 5)   return new(1, "Indique el motivo del reemplazo (mínimo 5 caracteres).");
+        if (texto.Length > 300) return new(1, "El motivo admite hasta 300 caracteres.");
+        if (pdf is null || tamanoBytes <= 0) return new(1, "Adjunte el nuevo PDF de la orden de compra.");
+        if (tamanoBytes > PdfOrdenCompra.TamanoMaximoBytes) return new(1, "El PDF de la orden de compra no puede superar los 10 MB.");
+
+        using var buffer = new MemoryStream();
+        var errorPdf = await PdfOrdenCompra.LeerAsync(pdf, buffer, ct);
+        if (errorPdf is not null) return new(1, errorPdf);
+        var hash = PdfOrdenCompra.Hash(buffer);
+
+        // 1. Validar en BD (permiso, alcance, motivo y archivo idéntico) antes de escribir en disco
+        var validacion = await repositorio.ReemplazarDocumentoAsync(idOc, texto, null, null, null, hash, soloValidar: true, idUsuario, ct);
+        if (validacion.IdTipoMensaje != 2) return validacion;
+
+        // 2. Guardar y registrar la nueva versión (si falla, no dejar el archivo huérfano)
+        var ruta   = PdfOrdenCompra.Ruta($"oc-{idOc}");
+        var nombre = PdfOrdenCompra.NormalizarNombre(nombreArchivo, $"OC-{idOc}");
+        buffer.Position = 0;
+        await almacen.GuardarAsync(ruta, buffer, ct);
+
+        var resultado = await repositorio.ReemplazarDocumentoAsync(idOc, texto, ruta, nombre, buffer.Length, hash, soloValidar: false, idUsuario, ct);
+        if (resultado.IdTipoMensaje != 2)
+            await almacen.EliminarAsync(ruta, CancellationToken.None);
+        return resultado;
+    }
+}
+
+/// <summary>Historial de Expediente Industrial: timeline inmutable, registro de auditoría, aplicaciones y SSOMA.</summary>
+public class ObtenerAuditoriaOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio)
+{
+    public Task<RespuestaDto<AuditoriaOrdenCompraDto>> EjecutarAsync(long idOc, long idUsuario, CancellationToken ct = default)
+    {
+        if (idOc <= 0)
+            return Task.FromResult(new RespuestaDto<AuditoriaOrdenCompraDto>(1, "Orden de compra no válida."));
+        return repositorio.ObtenerAuditoriaAsync(idOc, registrarExportacion: false, idUsuario, ct);
+    }
+}
+
+/// <summary>Descarga el historial completo de auditoría en XLSX (la descarga queda registrada).</summary>
+public class ExportarAuditoriaOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio, IGeneradorExcel excel)
+{
+    public const string TipoXlsx = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+    public async Task<RespuestaDto<ArchivoDescargaDto>> EjecutarAsync(long idOc, long idUsuario, CancellationToken ct = default)
+    {
+        if (idOc <= 0) return new(1, "Orden de compra no válida.");
+        var r = await repositorio.ObtenerAuditoriaAsync(idOc, registrarExportacion: true, idUsuario, ct);
+        if (r.IdTipoMensaje != 2 || r.Datos is null) return new(r.IdTipoMensaje, r.Mensaje);
+
+        var a = r.Datos;
+        var c = a.Cabecera;
+        var hojas = new List<HojaExcel>
+        {
+            new("Resumen", ["Campo", "Valor"],
+            [
+                ["Expediente",           c.NumeroExpediente ?? "Sin expediente"],
+                ["Estado del expediente", c.EstadoExpediente],
+                ["Etapa del expediente",  c.EtapaExpediente?.Replace('_', ' ')],
+                ["Orden de compra",      c.NumeroOc],
+                ["Estado de la OC",      c.EstadoVisual?.Replace('_', ' ')],
+                ["Propuesta",            c.NumeroPropuesta is null ? null : $"{c.NumeroPropuesta} v{c.VersionPropuesta}"],
+                ["Requerimiento",        c.NumeroRq],
+                ["Cliente",              c.RazonSocial],
+                ["RUC",                  c.Ruc],
+                ["Generado el",          c.GeneradoEn],
+                ["Generado por",         c.GeneradoPor],
+                ["Nota",                 "Registro inmutable. Forma parte de la auditoría ISO 9001."],
+            ]),
+            new("Timeline", ["Fecha", "Evento", "Detalle", "Referencia", "Usuario", "Área", "Rol"],
+                a.Timeline.Select(e => (IReadOnlyList<object?>)[e.Fecha, e.Titulo, e.Descripcion, e.Referencia, e.Usuario, e.Area, e.Rol]).ToList()),
+            new("Auditoría CRM", ["Fecha", "Entidad", "Referencia", "Acción", "Estado anterior", "Estado nuevo", "Descripción", "Usuario"],
+                a.RegistroCrm.Select(e => (IReadOnlyList<object?>)[e.Fecha, e.Entidad, e.Referencia, e.Accion, e.EstadoAnterior, e.EstadoNuevo, e.Descripcion, e.Usuario]).ToList()),
+            new("Versiones PDF", ["Versión", "Archivo", "Fecha", "Subido por", "Motivo", "Tamaño (bytes)", "SHA-256"],
+                a.VersionesPdf.Select(v => (IReadOnlyList<object?>)[v.Version, v.NombreArchivo, v.FechaCarga, v.SubidoPor, v.Motivo, v.TamanoBytes, v.Hash]).ToList()),
+            new("Aplicaciones", ["Propuesta", "Versión", "Estado", "Monto propuesta", "Moneda", "Monto asignado", "Fecha", "Asignado por"],
+                a.Aplicaciones.Select(p => (IReadOnlyList<object?>)[p.Numero, p.Version, p.Estado, p.MontoPropuesta, p.MonedaSimbolo, p.MontoAsignado, p.FechaAsignacion, p.AsignadoPor]).ToList()),
+            new("SSOMA", ["OS", "Requisito", "Trabajador", "Estado", "Versión", "Fecha de carga", "Vencimiento", "Observación"],
+                a.DocumentacionSsoma.Select(s => (IReadOnlyList<object?>)[s.NumeroOs, s.Requisito, s.Trabajador, s.Estado, s.Version, s.FechaCarga, s.FechaVencimiento, s.MotivoObservacion]).ToList()),
+        };
+
+        var bytes  = excel.Generar(hojas);
+        var nombre = $"Auditoria_{Seguro(c.NumeroExpediente ?? c.NumeroOc)}_{DateTime.Now:yyyyMMdd_HHmm}.xlsx";
+        return new(2, "Historial de auditoría generado.", new ArchivoDescargaDto(new MemoryStream(bytes), nombre, TipoXlsx));
+    }
+
+    private static string Seguro(string texto)
+    {
+        foreach (var ch in Path.GetInvalidFileNameChars()) texto = texto.Replace(ch, '_');
+        return texto.Replace(' ', '_');
+    }
+}

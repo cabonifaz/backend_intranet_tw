@@ -404,3 +404,79 @@ public record OrdenCompraEditadaDto(
     bool     RequiereRevalidacion,
     string?  Cambios,
     int      Notificados);
+
+// ══════════════════════ HU-25 — Gestión de Documento y Auditoría de OC ══════════════════════
+
+/// <summary>Versión del PDF de la OC. IdDocumento null = OC antigua sin historial (se muestra su PDF vigente como v1).</summary>
+public record VersionDocumentoOrdenCompraDto(
+    long?     IdDocumento,
+    int       Version,
+    string    NombreArchivo,
+    long?     TamanoBytes,
+    string?   Motivo,
+    string?   Hash,
+    DateTime? FechaCarga,
+    long?     IdSubidoPor,
+    string?   SubidoPor,
+    bool      EsActual,
+    string?   Url);
+
+/// <summary>Modal "Documento de Orden de Compra": documento actual (Versiones[0]) e historial.</summary>
+public record DocumentosOrdenCompraDto(
+    long                                  IdOc,
+    string                                NumeroOc,
+    string                                Estado,
+    bool                                  PuedeReemplazar,
+    int                                   TotalVersiones,
+    VersionDocumentoOrdenCompraDto?       Actual,
+    List<VersionDocumentoOrdenCompraDto>  Versiones);
+
+public record DocumentoReemplazadoDto(long IdDocumento, int Version, string? NombreArchivo, long? TamanoBytes, string? Motivo, string? Url);
+
+public record CabeceraAuditoriaOrdenCompraDto
+{
+    public long      IdOc              { get; init; }
+    public string    NumeroOc          { get; init; } = "";
+    public string    Estado            { get; init; } = "";
+    public string?   EstadoVisual      { get; init; }
+    public long?     IdExpediente      { get; init; }
+    public string?   NumeroExpediente  { get; init; }
+    public string?   EstadoExpediente  { get; init; }
+    public string?   EtapaExpediente   { get; init; }
+    public long?     IdPropuesta       { get; init; }
+    public string?   NumeroPropuesta   { get; init; }
+    public int?      VersionPropuesta  { get; init; }
+    public long?     IdRequerimiento   { get; init; }
+    public string?   NumeroRq          { get; init; }
+    public long      IdCliente         { get; init; }
+    public string?   RazonSocial       { get; init; }
+    public string?   Ruc               { get; init; }
+    public DateTime? GeneradoEn        { get; init; }
+    public string?   GeneradoPor       { get; init; }
+}
+
+/// <summary>Evento del timeline. Nivel: exito | info | alerta | documento | neutro.</summary>
+public record EventoTimelineAuditoriaDto(
+    DateTime? Fecha, string Codigo, string Titulo, string? Descripcion, string Nivel,
+    string? Referencia, string? Url, long? IdUsuario, string? Usuario, string? Area, string? Rol);
+
+public record RegistroAuditoriaCrmDto(
+    DateTime? Fecha, string Entidad, long IdEntidad, string? Referencia, string Accion,
+    string? EstadoAnterior, string? EstadoNuevo, string? Descripcion, long? IdUsuario, string? Usuario);
+
+public record AplicacionAuditoriaDto(
+    long IdPropuesta, string Numero, int Version, string Estado, decimal MontoPropuesta,
+    string? MonedaSimbolo, decimal MontoAsignado, DateTime? FechaAsignacion, string? AsignadoPor);
+
+public record DocumentoSsomaAuditoriaDto(
+    string NumeroOs, long IdSsomaDoc, string? Requisito, string? Trabajador, string Estado, int Version,
+    DateTime? FechaCarga, string? FechaVencimiento, string? MotivoObservacion);
+
+/// <summary>Historial de Expediente Industrial: pestañas Timeline, Registro de Auditoría (CRM), Aplicaciones y SSOMA.</summary>
+public record AuditoriaOrdenCompraDto(
+    CabeceraAuditoriaOrdenCompraDto        Cabecera,
+    List<EventoTimelineAuditoriaDto>       Timeline,
+    List<RegistroAuditoriaCrmDto>          RegistroCrm,
+    List<AplicacionAuditoriaDto>           Aplicaciones,
+    List<DocumentoSsomaAuditoriaDto>       DocumentacionSsoma,
+    List<VersionDocumentoOrdenCompraDto>   VersionesPdf);

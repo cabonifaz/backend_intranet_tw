@@ -10,6 +10,7 @@
 --   completa (diferencia 0), parcial (OC menor), excede (OC mayor) o moneda_diferente.
 -- Al guardar: orden_compra en 'pendiente_validacion' con su vigencia, oc_propuesta con el monto
 --   asignado y notificación a Operaciones y Administración (Contabilidad) y al responsable comercial.
+-- HU-25: guarda el PDF como versión 1 en documento_adjunto.
 -- HU-24: p_referencia (referencia / glosa, opcional, hasta 200 caracteres).
 -- Resultados: 1 mensaje, 2 cobertura (validar) o datos de la OC registrada (guardar).
 DROP PROCEDURE IF EXISTS SP_RegistrarOrdenCompra;
@@ -189,6 +190,14 @@ proc: BEGIN
     INSERT INTO oc_propuesta (id_oc, id_propuesta, monto_asignado, creado_por)
     VALUES (v_id_oc, p_id_propuesta,
             IF(v_estado_cob = 'moneda_diferente', p_monto, LEAST(p_monto, v_total)), p_id_usuario);
+
+    -- HU-25: versión 1 del PDF en el historial de versiones
+    INSERT INTO documento_adjunto (entidad_tipo, id_entidad, id_tipo_documento, nombre_archivo, url_archivo,
+                                   version, id_visibilidad, metadatos, subido_por, fecha_carga, creado_por)
+    VALUES ('orden_compra', v_id_oc, 1, LEFT(IFNULL(p_nombre_pdf, CONCAT('OC-', v_numero_oc, '.pdf')), 200),
+            p_ruta_pdf, 1, 1,
+            JSON_OBJECT('motivo', 'Versión inicial', 'tamano_bytes', p_tamano_pdf, 'hash', p_hash_pdf),
+            p_id_usuario, NOW(), p_id_usuario);
 
     -- Notificación a Operaciones y Administración (Contabilidad) y al responsable comercial
     SELECT CONCAT(nombre, ' ', apellido) INTO v_usuario FROM usuario WHERE id_usuario = p_id_usuario;

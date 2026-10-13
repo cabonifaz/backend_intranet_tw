@@ -516,4 +516,170 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
                     Booleano(r, "requiere_revalidacion"), Texto(r, "cambios"), Ent(r, "notificados")));
             },
             ct);
+
+    // ══════════════════════ HU-25 — Documento y Auditoría ══════════════════════
+
+    private static VersionDocumentoOrdenCompraDto LeerVersion(MySqlDataReader r) => new(
+        EnteroLargoNulo(r, "id_documento"), Ent(r, "version"), Texto(r, "nombre_archivo") ?? "",
+        EnteroLargoNulo(r, "tamano_bytes"), Texto(r, "motivo"), Texto(r, "hash"),
+        FechaHora(r, "fecha_carga"), EnteroLargoNulo(r, "id_subido_por"), Texto(r, "subido_por"),
+        Booleano(r, "es_actual"), Texto(r, "url"));
+
+    public Task<RespuestaDto<DocumentosOrdenCompraDto>> ObtenerDocumentosAsync(long idOc, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_ObtenerDocumentosOrdenCompra",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario", idUsuario);
+                p.AddWithValue("p_id_oc",      idOc);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<DocumentosOrdenCompraDto>(3, "No se pudo leer la orden de compra.");
+                long id = EnteroLargo(r, "id_oc");
+                string numero = Texto(r, "numero_oc") ?? "", estado = Texto(r, "estado") ?? "";
+                bool puede = Booleano(r, "puede_reemplazar");
+                int total = Ent(r, "total_versiones");
+
+                await r.NextResultAsync(ct);
+                var versiones = new List<VersionDocumentoOrdenCompraDto>();
+                while (await r.ReadAsync(ct))
+                    versiones.Add(LeerVersion(r));
+
+                return new RespuestaDto<DocumentosOrdenCompraDto>(2, mensaje, new DocumentosOrdenCompraDto(
+                    id, numero, estado, puede, total, versiones.FirstOrDefault(v => v.EsActual), versiones));
+            },
+            ct);
+
+    public Task<RespuestaDto<RutaPdfOrdenCompraDto>> ObtenerRutaVersionAsync(long idOc, long idDocumento, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_ObtenerVersionDocumentoOrdenCompra",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario",   idUsuario);
+                p.AddWithValue("p_id_oc",        idOc);
+                p.AddWithValue("p_id_documento", idDocumento);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<RutaPdfOrdenCompraDto>(1, "La versión del documento no existe.");
+                return new RespuestaDto<RutaPdfOrdenCompraDto>(2, mensaje,
+                    new RutaPdfOrdenCompraDto(Texto(r, "ruta") ?? "", Texto(r, "nombre_archivo") ?? "orden-compra.pdf"));
+            },
+            ct);
+
+    public Task<RespuestaDto<DocumentoReemplazadoDto>> ReemplazarDocumentoAsync(long idOc, string? motivo, string? ruta, string? nombre,
+        long? tamano, string? hash, bool soloValidar, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_ReemplazarDocumentoOrdenCompra",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario",   idUsuario);
+                p.AddWithValue("p_id_oc",        idOc);
+                p.AddWithValue("p_motivo",       Valor(motivo));
+                p.AddWithValue("p_ruta_pdf",     Valor(ruta));
+                p.AddWithValue("p_nombre_pdf",   Valor(nombre));
+                p.AddWithValue("p_tamano_pdf",   Valor(tamano));
+                p.AddWithValue("p_hash_pdf",     Valor(hash));
+                p.AddWithValue("p_solo_validar", Bit(soloValidar));
+            },
+            async (r, mensaje) =>
+            {
+                if (soloValidar)
+                    return new RespuestaDto<DocumentoReemplazadoDto>(2, mensaje);
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<DocumentoReemplazadoDto>(3, "No se pudo leer la nueva versión del documento.");
+                return new RespuestaDto<DocumentoReemplazadoDto>(2, mensaje, new DocumentoReemplazadoDto(
+                    EnteroLargo(r, "id_documento"), Ent(r, "version"), Texto(r, "nombre_archivo"),
+                    EnteroLargoNulo(r, "tamano_bytes"), Texto(r, "motivo"), Texto(r, "url")));
+            },
+            ct);
+
+    public Task<RespuestaDto<AuditoriaOrdenCompraDto>> ObtenerAuditoriaAsync(long idOc, bool registrarExportacion, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_ObtenerAuditoriaOrdenCompra",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario",            idUsuario);
+                p.AddWithValue("p_id_oc",                 idOc);
+                p.AddWithValue("p_registrar_exportacion", Bit(registrarExportacion));
+            },
+            async (r, mensaje) =>
+            {
+                // 2. Cabecera
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<AuditoriaOrdenCompraDto>(3, "No se pudo leer la auditoría de la orden de compra.");
+                var cabecera = new CabeceraAuditoriaOrdenCompraDto
+                {
+                    IdOc             = EnteroLargo(r, "id_oc"),
+                    NumeroOc         = Texto(r, "numero_oc") ?? "",
+                    Estado           = Texto(r, "estado") ?? "",
+                    EstadoVisual     = Texto(r, "estado_visual"),
+                    IdExpediente     = EnteroLargoNulo(r, "id_expediente"),
+                    NumeroExpediente = Texto(r, "numero_expediente"),
+                    EstadoExpediente = Texto(r, "estado_expediente"),
+                    EtapaExpediente  = Texto(r, "etapa_expediente"),
+                    IdPropuesta      = EnteroLargoNulo(r, "id_propuesta"),
+                    NumeroPropuesta  = Texto(r, "numero_propuesta"),
+                    VersionPropuesta = EntNulo(r, "version_propuesta"),
+                    IdRequerimiento  = EnteroLargoNulo(r, "id_requerimiento"),
+                    NumeroRq         = Texto(r, "numero_rq"),
+                    IdCliente        = EnteroLargo(r, "id_cliente"),
+                    RazonSocial      = Texto(r, "razon_social"),
+                    Ruc              = Texto(r, "ruc"),
+                    GeneradoEn       = FechaHora(r, "generado_en"),
+                    GeneradoPor      = Texto(r, "generado_por"),
+                };
+
+                // 3. Timeline
+                await r.NextResultAsync(ct);
+                var timeline = new List<EventoTimelineAuditoriaDto>();
+                while (await r.ReadAsync(ct))
+                    timeline.Add(new EventoTimelineAuditoriaDto(
+                        FechaHora(r, "fecha"), Texto(r, "codigo") ?? "", Texto(r, "titulo") ?? "", Texto(r, "descripcion"),
+                        Texto(r, "nivel") ?? "info", Texto(r, "referencia"), Texto(r, "url"),
+                        EnteroLargoNulo(r, "id_usuario"), Texto(r, "usuario"), Texto(r, "area"), Texto(r, "rol")));
+
+                // 4. Registro de auditoría (CRM)
+                await r.NextResultAsync(ct);
+                var registro = new List<RegistroAuditoriaCrmDto>();
+                while (await r.ReadAsync(ct))
+                    registro.Add(new RegistroAuditoriaCrmDto(
+                        FechaHora(r, "fecha"), Texto(r, "entidad") ?? "", EnteroLargo(r, "id_entidad"), Texto(r, "referencia"),
+                        Texto(r, "accion") ?? "", Texto(r, "estado_anterior"), Texto(r, "estado_nuevo"),
+                        Texto(r, "descripcion"), EnteroLargoNulo(r, "id_usuario"), Texto(r, "usuario")));
+
+                // 5. Aplicaciones
+                await r.NextResultAsync(ct);
+                var aplicaciones = new List<AplicacionAuditoriaDto>();
+                while (await r.ReadAsync(ct))
+                    aplicaciones.Add(new AplicacionAuditoriaDto(
+                        EnteroLargo(r, "id_propuesta"), Texto(r, "numero") ?? "", Ent(r, "version"), Texto(r, "estado") ?? "",
+                        Dec(r, "monto_propuesta"), Texto(r, "moneda_simbolo"), Dec(r, "monto_asignado"),
+                        FechaHora(r, "fecha_asignacion"), Texto(r, "asignado_por")));
+
+                // 6. SSOMA
+                await r.NextResultAsync(ct);
+                var ssoma = new List<DocumentoSsomaAuditoriaDto>();
+                while (await r.ReadAsync(ct))
+                    ssoma.Add(new DocumentoSsomaAuditoriaDto(
+                        Texto(r, "numero_os") ?? "", EnteroLargo(r, "id_ssoma_doc"), Texto(r, "requisito"), Texto(r, "trabajador"),
+                        Texto(r, "estado") ?? "", Ent(r, "version"), FechaHora(r, "fecha_carga"),
+                        Fecha(r, "fecha_vencimiento"), Texto(r, "motivo_observacion")));
+
+                // 7. Versiones del PDF
+                await r.NextResultAsync(ct);
+                var versiones = new List<VersionDocumentoOrdenCompraDto>();
+                while (await r.ReadAsync(ct))
+                    versiones.Add(new VersionDocumentoOrdenCompraDto(
+                        null, Ent(r, "version"), Texto(r, "nombre_archivo") ?? "", EnteroLargoNulo(r, "tamano_bytes"),
+                        Texto(r, "motivo"), Texto(r, "hash"), FechaHora(r, "fecha_carga"), null, Texto(r, "subido_por"),
+                        false, null));
+
+                return new RespuestaDto<AuditoriaOrdenCompraDto>(2, mensaje,
+                    new AuditoriaOrdenCompraDto(cabecera, timeline, registro, aplicaciones, ssoma, versiones));
+            },
+            ct);
 }
