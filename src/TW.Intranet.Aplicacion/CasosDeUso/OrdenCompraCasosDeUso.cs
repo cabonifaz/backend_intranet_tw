@@ -56,7 +56,18 @@ internal static class PdfOrdenCompra
         Convert.ToHexStringLower(SHA256.HashData(buffer.GetBuffer().AsSpan(0, (int)buffer.Length)));
 
     public static string Ruta(string carpeta) =>
-        $"ordenes-compra/{carpeta}/{DateTime.UtcNow:yyyyMMddHHmmss}_{Guid.NewGuid():N}.pdf";
+        $"ordenes-compra/{carpeta}/{DateTime.Now:yyyyMMddHHmmss}_{Guid.NewGuid():N}.pdf";
+
+    /// <summary>
+    /// Abre el PDF del almacenamiento. Las OC antiguas pueden tener una URL externa en vez de una ruta interna:
+    /// en ese caso (o si la ruta no es válida) se responde como archivo no encontrado en lugar de un error 500.
+    /// </summary>
+    public static async Task<Stream?> AbrirAsync(IAlmacenArchivos almacen, string ruta, CancellationToken ct)
+    {
+        try { return await almacen.AbrirLecturaAsync(ruta, ct); }
+        catch (InvalidOperationException) { return null; }
+        catch (ArgumentException) { return null; }
+    }
 
     public static string NormalizarNombre(string? nombreArchivo, string numeroOc)
     {
@@ -148,7 +159,7 @@ public class ObtenerPdfOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio,
         var ruta = await repositorio.ObtenerRutaPdfAsync(idOc, idUsuario, ct);
         if (ruta.IdTipoMensaje != 2 || ruta.Datos is null) return new(ruta.IdTipoMensaje, ruta.Mensaje);
 
-        var contenido = await almacen.AbrirLecturaAsync(ruta.Datos.Ruta, ct);
+        var contenido = await PdfOrdenCompra.AbrirAsync(almacen, ruta.Datos.Ruta, ct);
         if (contenido is null)
             return new(1, "El PDF de la orden de compra está registrado pero no se encontró en el almacenamiento.");
 
@@ -335,7 +346,7 @@ public class ObtenerVersionDocumentoOrdenCompraCasoDeUso(IOrdenCompraRepositorio
         var ruta = await repositorio.ObtenerRutaVersionAsync(idOc, idDocumento, idUsuario, ct);
         if (ruta.IdTipoMensaje != 2 || ruta.Datos is null) return new(ruta.IdTipoMensaje, ruta.Mensaje);
 
-        var contenido = await almacen.AbrirLecturaAsync(ruta.Datos.Ruta, ct);
+        var contenido = await PdfOrdenCompra.AbrirAsync(almacen, ruta.Datos.Ruta, ct);
         if (contenido is null)
             return new(1, "La versión del documento está registrada pero no se encontró en el almacenamiento.");
 
@@ -371,7 +382,7 @@ public class ReemplazarDocumentoOrdenCompraCasoDeUso(IOrdenCompraRepositorio rep
 
         // 2. Guardar y registrar la nueva versión (si falla, no dejar el archivo huérfano)
         var ruta   = PdfOrdenCompra.Ruta($"oc-{idOc}");
-        var nombre = PdfOrdenCompra.NormalizarNombre(nombreArchivo, $"OC-{idOc}");
+        var nombre = PdfOrdenCompra.NormalizarNombre(nombreArchivo, idOc.ToString());
         buffer.Position = 0;
         await almacen.GuardarAsync(ruta, buffer, ct);
 

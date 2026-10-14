@@ -44,9 +44,9 @@ proc: BEGIN
 
     -- 3. Versiones
     SELECT d.id_documento, d.version, d.nombre_archivo,
-           CAST(JSON_UNQUOTE(JSON_EXTRACT(d.metadatos, '$.tamano_bytes')) AS SIGNED)  AS tamano_bytes,
-           JSON_UNQUOTE(JSON_EXTRACT(d.metadatos, '$.motivo'))                        AS motivo,
-           JSON_UNQUOTE(JSON_EXTRACT(d.metadatos, '$.hash'))                          AS hash,
+           CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(d.metadatos, '$.tamano_bytes')), 'null') AS SIGNED)  AS tamano_bytes,
+           NULLIF(JSON_UNQUOTE(JSON_EXTRACT(d.metadatos, '$.motivo')), 'null')                        AS motivo,
+           NULLIF(JSON_UNQUOTE(JSON_EXTRACT(d.metadatos, '$.hash')), 'null')                          AS hash,
            d.fecha_carga, d.subido_por AS id_subido_por, CONCAT(u.nombre, ' ', u.apellido) AS subido_por,
            (d.version = v_max)                                                        AS es_actual,
            CONCAT('/api/crm/ordenes-compra/', p_id_oc, '/documentos/', d.id_documento) AS url

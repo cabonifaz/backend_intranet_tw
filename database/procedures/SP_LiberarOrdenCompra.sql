@@ -3,16 +3,17 @@
 -- Si hay requisitos pendientes (alertas: SCTR, SSOMA, bloqueos de otras áreas) se exige p_confirma_impacto = 1:
 --   la liberación traslada la responsabilidad de completarlos a Operaciones.
 -- Efectos:
---   Expediente: se crea si no existe (EXP-AAAA-NNNN) o se actualiza: etapa programacion, estado activo
---     (con_excepcion si se liberó con alertas), vinculado a la OC. Las alertas quedan como bloqueos del expediente.
+--   Expediente (nace con el RQ, solo se crea aquí si no existe): pasa a programacion con área Operaciones,
+--     inicio de etapa y SLA, vinculado a la OC. También pasan los expedientes de las propuestas a las que
+--     la OC distribuyó saldo. Las alertas quedan como excepciones del expediente (estado con_excepcion).
 --   OC: fecha_liberacion y liberado_por. Auditoría liberar_oc (OC) y liberar_programacion (expediente).
 --   Notificación a Operaciones (supervisores y administradores) con el SLA, y al responsable comercial.
 -- Resultados: 1 mensaje, 2 resultado.
-DROP PROCEDURE IF EXISTS SP_LiberarOrdenCompra;
+DROP PROCEDURE IF EXISTS SP_LiberarOrdenCompraInterno;
 
 DELIMITER $$
 
-CREATE PROCEDURE SP_LiberarOrdenCompra(
+CREATE PROCEDURE SP_LiberarOrdenCompraInterno(
     IN p_id_usuario        BIGINT,
     IN p_id_oc             BIGINT,
     IN p_confirma_impacto  TINYINT,
@@ -34,7 +35,6 @@ proc: BEGIN
     DECLARE v_numero_exp  VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_creado      TINYINT DEFAULT 0;
     DECLARE v_etapa_ant   VARCHAR(30)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
-    DECLARE v_correlativo INT DEFAULT 0;
     DECLARE v_sla         INT DEFAULT 4;
     DECLARE v_usuario     VARCHAR(220) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_notificados INT DEFAULT 0;
@@ -44,6 +44,7 @@ proc: BEGIN
         ROLLBACK;
         DROP TEMPORARY TABLE IF EXISTS tmp_oc;
         DROP TEMPORARY TABLE IF EXISTS tmp_lib;
+        DROP TEMPORARY TABLE IF EXISTS tmp_lib_exp;
         GET DIAGNOSTICS CONDITION 1
             @err_msg  = MESSAGE_TEXT,
             @err_code = MYSQL_ERRNO;
@@ -94,35 +95,90 @@ proc: BEGIN
 
     START TRANSACTION;
 
-    -- Expediente: crear o actualizar
+    -- Expediente: nace con el RQ (migración 71). Solo se crea aquí si la propuesta no tiene RQ con expediente.
     IF v_id_exp IS NULL THEN
-        SELECT IFNULL(MAX(CAST(SUBSTRING_INDEX(numero, '-', -1) AS UNSIGNED)), 0) INTO v_correlativo
-        FROM expediente_digital WHERE numero LIKE CONCAT('EXP-', YEAR(CURDATE()), '-%');
-        SET v_numero_exp = CONCAT('EXP-', YEAR(CURDATE()), '-', LPAD(v_correlativo + 1, 4, '0'));
-
-        INSERT INTO expediente_digital (numero, id_requerimiento, id_propuesta, id_orden_compra, etapa_actual, estado,
+        INSERT INTO expediente_digital (numero, id_requerimiento, id_propuesta, id_orden_compra, id_cliente, etapa_actual, estado,
                                         id_responsable_actual, fecha_creacion, creado_por)
-        VALUES (v_numero_exp, v_id_rq, v_id_prop, p_id_oc, 'programacion',
-                IF(v_alertas > 0, 'con_excepcion', 'activo'), NULL, NOW(), p_id_usuario);
+        SELECT CONCAT('EXP-TMP-', p_id_oc), v_id_rq, v_id_prop, p_id_oc, oc.id_cliente, 'orden_compra', 'activo', NULL, NOW(), p_id_usuario
+        FROM orden_compra oc WHERE oc.id_oc = p_id_oc;
         SET v_id_exp = LAST_INSERT_ID();
-        SET v_creado = 1;
-        SET v_etapa_ant = NULL;
-    ELSE
-        SELECT numero, etapa_actual INTO v_numero_exp, v_etapa_ant FROM expediente_digital WHERE id_expediente = v_id_exp;
-        UPDATE expediente_digital SET
-            id_orden_compra = IFNULL(id_orden_compra, p_id_oc),
-            etapa_actual    = 'programacion',
-            estado          = IF(v_alertas > 0, 'con_excepcion', 'activo'),
-            modificado_por  = p_id_usuario
+        UPDATE expediente_digital SET numero = CONCAT('EXP-', YEAR(fecha_creacion), '-', LPAD(id_expediente, 4, '0'))
         WHERE id_expediente = v_id_exp;
+        SET v_creado = 1;
     END IF;
+    SELECT numero, etapa_actual INTO v_numero_exp, v_etapa_ant FROM expediente_digital WHERE id_expediente = v_id_exp;
 
-    -- Las alertas quedan registradas como bloqueos del expediente (Operaciones las resuelve)
-    INSERT INTO expediente_bloqueador (id_expediente, descripcion, tipo, resuelto, creado_por)
-    SELECT v_id_exp, LEFT(CONCAT(descripcion, ': ', detalle), 300),
-           IF(codigo IN ('sctr', 'ssoma'), 'ssoma', 'otro'), 0, p_id_usuario
-    FROM tmp_lib
-    WHERE estado = 'alerta' AND codigo IN ('sctr', 'ssoma');
+    -- Expedientes que pasan a Programación: el de la propuesta principal y los de las propuestas a las que esta OC
+    -- distribuyó saldo (HU-27), siempre que esas propuestas estén aceptadas por el cliente, no tengan otras OC sin
+    -- validar ni bloqueos abiertos, y sigan en la etapa comercial.
+    DROP TEMPORARY TABLE IF EXISTS tmp_lib_exp;
+    CREATE TEMPORARY TABLE tmp_lib_exp (id_expediente BIGINT PRIMARY KEY, etapa_anterior VARCHAR(30));
+    INSERT IGNORE INTO tmp_lib_exp (id_expediente, etapa_anterior)
+    SELECT e.id_expediente, e.etapa_actual
+    FROM expediente_digital e
+    WHERE e.id_expediente = v_id_exp AND e.eliminado_en IS NULL AND e.estado <> 'cerrado'
+      AND e.etapa_actual IN ('requerimiento', 'propuesta', 'visto_bueno', 'orden_compra');
+
+    INSERT IGNORE INTO tmp_lib_exp (id_expediente, etapa_anterior)
+    SELECT e.id_expediente, e.etapa_actual
+    FROM oc_propuesta op
+    JOIN propuesta_comercial p ON p.id_propuesta = op.id_propuesta
+    JOIN expediente_digital e  ON e.id_expediente = FN_ExpedienteDePropuesta(op.id_propuesta)
+    WHERE op.id_oc = p_id_oc AND op.eliminado_en IS NULL AND op.id_propuesta <> IFNULL(v_id_prop, 0)
+      AND e.eliminado_en IS NULL AND e.estado <> 'cerrado'
+      AND e.etapa_actual IN ('requerimiento', 'propuesta', 'visto_bueno', 'orden_compra')
+      AND (p.estado = 'aprobado'
+           OR EXISTS (SELECT 1 FROM seguimiento_comercial s
+                      WHERE s.id_propuesta = p.id_propuesta AND s.estado = 'cerrado_aceptacion' AND s.eliminado_en IS NULL))
+      AND NOT EXISTS (SELECT 1 FROM orden_compra o2
+                      JOIN oc_propuesta op2 ON op2.id_oc = o2.id_oc AND op2.eliminado_en IS NULL AND op2.id_propuesta = p.id_propuesta
+                      WHERE o2.id_oc <> p_id_oc AND o2.eliminado_en IS NULL AND o2.estado <> 'anulada'
+                        AND (o2.estado = 'pendiente_validacion'
+                             OR EXISTS (SELECT 1 FROM orden_compra_observacion ob
+                                        WHERE ob.id_oc = o2.id_oc AND ob.estado = 'abierta' AND ob.eliminado_en IS NULL)))
+      AND NOT EXISTS (SELECT 1 FROM expediente_bloqueador b
+                      WHERE b.id_expediente = e.id_expediente AND b.resuelto = 0 AND b.eliminado_en IS NULL AND b.clase = 'bloqueo');
+
+    UPDATE expediente_digital e
+    JOIN tmp_lib_exp t ON t.id_expediente = e.id_expediente
+    SET e.id_orden_compra       = IFNULL(e.id_orden_compra, p_id_oc),
+        e.id_propuesta          = IF(e.id_expediente = v_id_exp, IFNULL(e.id_propuesta, v_id_prop), e.id_propuesta),
+        e.etapa_actual          = 'programacion',
+        e.area_responsable      = 'operaciones',
+        e.id_responsable_actual = NULL,
+        e.fecha_etapa           = NOW(),
+        e.sla_horas             = v_sla,
+        e.fecha_limite_sla      = NOW() + INTERVAL v_sla HOUR,
+        e.modificado_por        = p_id_usuario;
+
+    INSERT INTO expediente_etapa (id_expediente, etapa, area, id_responsable, fecha_inicio, sla_horas, fecha_limite,
+                                  resultado, comentario, UsuCre, FchCre)
+    SELECT t.id_expediente, 'programacion', 'operaciones', NULL, NOW(), v_sla, NOW() + INTERVAL v_sla HOUR, 'en_curso',
+           LEFT(CONCAT('Liberado para programación con la OC ', v_numero_oc, '.',
+                       IFNULL(CONCAT(' Comentario: ', NULLIF(TRIM(p_comentario), '')), '')), 1000),
+           CAST(p_id_usuario AS CHAR), NOW()
+    FROM tmp_lib_exp t;
+
+    -- Los requisitos pendientes con los que se libera quedan como excepciones del expediente (Operaciones
+    -- las cierra antes de la salida a campo). No impiden avanzar, pero se informan.
+    -- (mismo cliente: los requisitos SSOMA aplican a todos los expedientes que se liberan)
+    INSERT INTO expediente_bloqueador (id_expediente, clase, descripcion, tipo, etapa, tipo_documental, impacto, critico,
+                                       origen_tipo, id_origen, resuelto, creado_por)
+    SELECT t.id_expediente, 'excepcion', LEFT(CONCAT(l.descripcion, ': ', l.detalle), 300),
+           IF(l.codigo IN ('sctr', 'ssoma'), 'ssoma', 'otro'), 'programacion', 'Seguridad y Salud (SSOMA)',
+           'Debe completarse antes de la salida a campo.', 0, 'liberacion', p_id_oc, 0, p_id_usuario
+    FROM tmp_lib l
+    CROSS JOIN tmp_lib_exp t
+    WHERE l.estado = 'alerta' AND l.codigo IN ('sctr', 'ssoma');
+
+    UPDATE expediente_digital e
+    JOIN tmp_lib_exp t ON t.id_expediente = e.id_expediente
+    SET e.estado = CASE
+            WHEN EXISTS (SELECT 1 FROM expediente_bloqueador b WHERE b.id_expediente = e.id_expediente
+                         AND b.resuelto = 0 AND b.eliminado_en IS NULL AND b.clase = 'bloqueo')   THEN 'bloqueado'
+            WHEN EXISTS (SELECT 1 FROM expediente_bloqueador b WHERE b.id_expediente = e.id_expediente
+                         AND b.resuelto = 0 AND b.eliminado_en IS NULL AND b.clase = 'excepcion') THEN 'con_excepcion'
+            ELSE 'activo' END;
 
     DROP TEMPORARY TABLE IF EXISTS tmp_lib;
 
@@ -139,10 +195,14 @@ proc: BEGIN
                         'confirma_impacto', IFNULL(p_confirma_impacto, 0)));
 
     INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion, id_usuario, registrado_en)
-    VALUES ('expediente', v_id_exp, IF(v_creado = 1, 'crear_y_liberar_programacion', 'liberar_programacion'),
-            v_etapa_ant, 'programacion',
-            CONCAT('Liberado para programación con la OC ', v_numero_oc, '. Responsable: Operaciones. SLA: ', v_sla, ' horas.'),
-            p_id_usuario, NOW());
+    SELECT 'expediente', t.id_expediente,
+           IF(v_creado = 1 AND t.id_expediente = v_id_exp, 'crear_y_liberar_programacion', 'liberar_programacion'),
+           t.etapa_anterior, 'programacion',
+           CONCAT('Liberado para programación con la OC ', v_numero_oc, '. Responsable: Operaciones. SLA: ', v_sla, ' horas.'),
+           p_id_usuario, NOW()
+    FROM tmp_lib_exp t;
+
+    DROP TEMPORARY TABLE IF EXISTS tmp_lib_exp;
 
     INSERT INTO notificacion (id_usuario_destino, id_canal, titulo, cuerpo, entidad_tipo, id_entidad, fecha_creacion, creado_por)
     SELECT u.id_usuario, 5,
@@ -164,6 +224,47 @@ proc: BEGIN
            v_creado AS expediente_creado, 'programacion' AS etapa, IF(v_alertas > 0, 'con_excepcion', 'activo') AS estado_expediente,
            v_alertas AS alertas_pendientes, v_sla AS sla_horas, NOW() + INTERVAL v_sla HOUR AS fecha_limite_programacion,
            v_notificados AS notificados;
+END$$
+
+DELIMITER ;
+
+
+-- SP_LiberarOrdenCompra: punto de entrada. Toma un bloqueo por cliente (GET_LOCK) para que dos operaciones simultáneas
+-- sobre las OC del mismo cliente (registro, complementaria, distribución, liberación) no pasen las mismas
+-- validaciones a la vez (OC duplicadas, saldo sobreasignado o doble liberación). La lógica está en SP_LiberarOrdenCompraInterno.
+DROP PROCEDURE IF EXISTS SP_LiberarOrdenCompra;
+
+DELIMITER $$
+
+CREATE PROCEDURE SP_LiberarOrdenCompra(
+    IN p_id_usuario        BIGINT,
+    IN p_id_oc             BIGINT,
+    IN p_confirma_impacto  TINYINT,
+    IN p_comentario        VARCHAR(1000) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci
+)
+proc: BEGIN
+    DECLARE v_bloqueo VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        DO RELEASE_LOCK(v_bloqueo);
+        GET DIAGNOSTICS CONDITION 1
+            @err_msg  = MESSAGE_TEXT,
+            @err_code = MYSQL_ERRNO;
+        SELECT 3 AS IdTipoMensaje,
+               CONCAT('[MySQL ', @err_code, '] ', @err_msg) AS Mensaje;
+    END;
+
+    SET v_bloqueo = CONCAT('tw_oc_cliente_', IFNULL((SELECT id_cliente FROM orden_compra WHERE id_oc = p_id_oc), 0));
+    IF IFNULL(GET_LOCK(v_bloqueo, 15), 0) <> 1 THEN
+        SELECT 1 AS IdTipoMensaje,
+               'Hay otra operación en curso sobre las órdenes de compra de este cliente. Intente nuevamente en unos segundos.' AS Mensaje;
+        LEAVE proc;
+    END IF;
+
+    CALL SP_LiberarOrdenCompraInterno(p_id_usuario, p_id_oc, p_confirma_impacto, p_comentario);
+
+    DO RELEASE_LOCK(v_bloqueo);
 END$$
 
 DELIMITER ;

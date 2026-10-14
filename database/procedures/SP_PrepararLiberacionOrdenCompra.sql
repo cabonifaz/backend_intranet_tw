@@ -64,9 +64,7 @@ proc: BEGIN
            v_sla                                             AS sla_horas
     FROM orden_compra oc
     LEFT JOIN cliente c ON c.id_cliente = oc.id_cliente
-    LEFT JOIN expediente_digital e ON e.id_expediente = (
-        SELECT MAX(e2.id_expediente) FROM expediente_digital e2
-        WHERE e2.eliminado_en IS NULL AND (e2.id_orden_compra = oc.id_oc OR e2.id_propuesta = oc.id_propuesta))
+    LEFT JOIN expediente_digital e ON e.id_expediente = FN_ExpedienteDePropuesta(oc.id_propuesta)
     WHERE oc.id_oc = p_id_oc;
 
     -- 3. Validaciones de cumplimiento

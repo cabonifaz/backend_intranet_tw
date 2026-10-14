@@ -2,6 +2,8 @@
 -- Acción oc_documento_reemplazar, OC del área del usuario y no anulada.
 -- Motivo obligatorio (5 a 300 caracteres). No se acepta un archivo idéntico (mismo hash) a la versión actual.
 -- La versión anterior se conserva en documento_adjunto y queda en la auditoría (reemplazar_pdf_oc).
+-- Una OC que ya liberó el expediente no admite otro PDF. Si la OC estaba validada, vuelve a 'pendiente_validacion'
+-- (la legibilidad del PDF se confirmó sobre la versión anterior).
 -- p_solo_validar = 1 valida sin guardar (antes de escribir el PDF en disco).
 -- Resultados: 1 mensaje, 2 nueva versión.
 DROP PROCEDURE IF EXISTS SP_ReemplazarDocumentoOrdenCompra;
@@ -21,6 +23,8 @@ CREATE PROCEDURE SP_ReemplazarDocumentoOrdenCompra(
 proc: BEGIN
     DECLARE v_existe  INT DEFAULT 0;
     DECLARE v_estado  VARCHAR(30)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_liberada TINYINT DEFAULT 0;
+    DECLARE v_validada TINYINT DEFAULT 0;
     DECLARE v_motivo  VARCHAR(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_hash    CHAR(64)     CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_numero  VARCHAR(50)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
@@ -46,7 +50,8 @@ proc: BEGIN
     END IF;
 
     CALL SP_CalcularOrdenesCompra(p_id_usuario, p_id_oc);
-    SELECT COUNT(*), MAX(estado_bd), MAX(numero_oc) INTO v_existe, v_estado, v_numero FROM tmp_oc;
+    SELECT COUNT(*), MAX(estado_bd), MAX(numero_oc), MAX(fecha_liberacion IS NOT NULL), MAX(validada)
+      INTO v_existe, v_estado, v_numero, v_liberada, v_validada FROM tmp_oc;
     DROP TEMPORARY TABLE IF EXISTS tmp_oc;
 
     IF v_existe = 0 THEN
@@ -55,6 +60,11 @@ proc: BEGIN
     END IF;
     IF v_estado = 'anulada' THEN
         SELECT 1 AS IdTipoMensaje, 'La orden de compra está anulada: no se puede reemplazar su documento.' AS Mensaje;
+        LEAVE proc;
+    END IF;
+    IF IFNULL(v_liberada, 0) = 1 THEN
+        SELECT 1 AS IdTipoMensaje,
+               'La orden de compra ya liberó el expediente para programación: no se puede reemplazar su PDF.' AS Mensaje;
         LEAVE proc;
     END IF;
     IF v_motivo IS NULL OR CHAR_LENGTH(v_motivo) < 5 THEN
@@ -91,19 +101,25 @@ proc: BEGIN
         nombre_archivo_pdf = p_nombre_pdf,
         tamano_pdf_bytes   = p_tamano_pdf,
         hash_pdf           = p_hash_pdf,
+        estado             = IF(IFNULL(v_validada, 0) = 1, 'pendiente_validacion', estado),
+        id_validado_por    = IF(IFNULL(v_validada, 0) = 1, NULL, id_validado_por),
+        monto_aplicado     = IF(IFNULL(v_validada, 0) = 1, 0, monto_aplicado),
+        saldo              = IF(IFNULL(v_validada, 0) = 1, monto_total, saldo),
         modificado_por     = p_id_usuario
     WHERE id_oc = p_id_oc;
 
     INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo,
                                   descripcion, id_usuario, registrado_en, metadata)
-    VALUES ('orden_compra', p_id_oc, 'reemplazar_pdf_oc', v_estado, v_estado,
-            CONCAT('PDF reemplazado por la versión ', v_version, '. Motivo: ', v_motivo), p_id_usuario, NOW(),
+    VALUES ('orden_compra', p_id_oc, 'reemplazar_pdf_oc', v_estado, IF(IFNULL(v_validada, 0) = 1, 'pendiente_validacion', v_estado),
+            CONCAT('PDF reemplazado por la versión ', v_version, '. Motivo: ', v_motivo,
+                   IF(IFNULL(v_validada, 0) = 1, '. La OC vuelve a validación.', '')), p_id_usuario, NOW(),
             JSON_OBJECT('id_documento', v_id_doc, 'version', v_version, 'nombre', p_nombre_pdf,
                         'tamano_bytes', p_tamano_pdf, 'hash', p_hash_pdf));
 
     COMMIT;
 
-    SELECT 2 AS IdTipoMensaje, CONCAT('Documento actualizado a la versión ', v_version, '.') AS Mensaje;
+    SELECT 2 AS IdTipoMensaje, CONCAT('Documento actualizado a la versión ', v_version, '.',
+                                      IF(IFNULL(v_validada, 0) = 1, ' La OC debe validarse otra vez.', '')) AS Mensaje;
     SELECT v_id_doc AS id_documento, v_version AS version, p_nombre_pdf AS nombre_archivo,
            p_tamano_pdf AS tamano_bytes, v_motivo AS motivo,
            CONCAT('/api/crm/ordenes-compra/', p_id_oc, '/documentos/', v_id_doc) AS url;

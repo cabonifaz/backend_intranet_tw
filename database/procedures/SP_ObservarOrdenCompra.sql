@@ -7,11 +7,11 @@
 --   expediente (expediente_bloqueador) y se notifica al responsable de corrección.
 -- La observación se levanta cuando el responsable corrige la OC con "Guardar y revalidar" (HU-24).
 -- Resultados: 1 mensaje, 2 observación registrada.
-DROP PROCEDURE IF EXISTS SP_ObservarOrdenCompra;
+DROP PROCEDURE IF EXISTS SP_ObservarOrdenCompraInterno;
 
 DELIMITER $$
 
-CREATE PROCEDURE SP_ObservarOrdenCompra(
+CREATE PROCEDURE SP_ObservarOrdenCompraInterno(
     IN p_id_usuario     BIGINT,
     IN p_id_oc          BIGINT,
     IN p_motivos        VARCHAR(200)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
@@ -126,15 +126,29 @@ proc: BEGIN
         modificado_por        = p_id_usuario
     WHERE id_oc = p_id_oc;
 
-    -- Bloquear la liberación del expediente
-    IF v_id_exp IS NOT NULL THEN
-        INSERT INTO expediente_bloqueador (id_expediente, descripcion, tipo, resuelto, creado_por)
-        VALUES (v_id_exp, LEFT(CONCAT('OC ', v_numero, ' observada: ', v_nombres), 300), 'documento_faltante', 0, p_id_usuario);
+    -- Bloquear los expedientes que cubre la OC (propuesta principal y distribuidas). El bloqueo queda
+    -- vinculado a la OC por su id: se resuelve al revalidarla o validarla.
+    INSERT INTO expediente_bloqueador (id_expediente, clase, descripcion, tipo, etapa, tipo_documental, impacto, critico,
+                                       origen_tipo, id_origen, id_responsable, resuelto, creado_por)
+    SELECT e.id_expediente, 'bloqueo', LEFT(CONCAT('OC ', v_numero, ' observada: ', v_nombres), 300), 'documento_faltante',
+           'orden_compra', 'Orden de compra',
+           'No se puede liberar el expediente a programación hasta corregir y revalidar la OC.', 1,
+           'orden_compra', p_id_oc, p_id_responsable, 0, p_id_usuario
+    FROM expediente_digital e
+    WHERE e.eliminado_en IS NULL AND e.estado <> 'cerrado'
+      AND e.id_expediente IN (SELECT FN_ExpedienteDePropuesta(x.id_propuesta)
+                              FROM (SELECT oc.id_propuesta FROM orden_compra oc WHERE oc.id_oc = p_id_oc
+                                    UNION
+                                    SELECT op.id_propuesta FROM oc_propuesta op
+                                    WHERE op.id_oc = p_id_oc AND op.eliminado_en IS NULL) x);
+    SET v_bloqueado = IF(ROW_COUNT() > 0, 1, 0);
 
-        UPDATE expediente_digital SET estado = 'bloqueado', modificado_por = p_id_usuario
-        WHERE id_expediente = v_id_exp AND estado <> 'cerrado';
-        SET v_bloqueado = 1;
-    END IF;
+    UPDATE expediente_digital e
+    SET e.estado = 'bloqueado', e.modificado_por = p_id_usuario
+    WHERE e.estado <> 'cerrado'
+      AND e.id_expediente IN (SELECT b.id_expediente FROM expediente_bloqueador b
+                              WHERE b.origen_tipo = 'orden_compra' AND b.id_origen = p_id_oc
+                                AND b.resuelto = 0 AND b.eliminado_en IS NULL);
 
     SELECT CONCAT(nombre, ' ', apellido) INTO v_usuario FROM usuario WHERE id_usuario = p_id_usuario;
     SELECT CONCAT(nombre, ' ', apellido) INTO v_responsable FROM usuario WHERE id_usuario = p_id_responsable;
@@ -164,6 +178,47 @@ proc: BEGIN
     SELECT v_id_obs AS id_observacion, p_id_oc AS id_oc, v_numero AS numero_oc, 'observada' AS estado,
            v_nombres AS motivos, p_id_responsable AS id_responsable, v_responsable AS responsable,
            v_bloqueado AS expediente_bloqueado, v_notificados AS notificados;
+END$$
+
+DELIMITER ;
+
+
+-- SP_ObservarOrdenCompra: punto de entrada. Toma el mismo bloqueo por cliente (GET_LOCK) que el registro, la distribución y la
+-- liberación de OC, para que no se crucen con ellas. La lógica está en SP_ObservarOrdenCompraInterno.
+DROP PROCEDURE IF EXISTS SP_ObservarOrdenCompra;
+
+DELIMITER $$
+
+CREATE PROCEDURE SP_ObservarOrdenCompra(
+    IN p_id_usuario     BIGINT,
+    IN p_id_oc          BIGINT,
+    IN p_motivos        VARCHAR(200)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_detalle        VARCHAR(1000) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_id_responsable BIGINT
+)
+proc: BEGIN
+    DECLARE v_bloqueo VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        DO RELEASE_LOCK(v_bloqueo);
+        GET DIAGNOSTICS CONDITION 1
+            @err_msg  = MESSAGE_TEXT,
+            @err_code = MYSQL_ERRNO;
+        SELECT 3 AS IdTipoMensaje,
+               CONCAT('[MySQL ', @err_code, '] ', @err_msg) AS Mensaje;
+    END;
+
+    SET v_bloqueo = CONCAT('tw_oc_cliente_', IFNULL((SELECT id_cliente FROM orden_compra WHERE id_oc = p_id_oc), 0));
+    IF IFNULL(GET_LOCK(v_bloqueo, 15), 0) <> 1 THEN
+        SELECT 1 AS IdTipoMensaje,
+               'Hay otra operación en curso sobre las órdenes de compra de este cliente. Intente nuevamente en unos segundos.' AS Mensaje;
+        LEAVE proc;
+    END IF;
+
+    CALL SP_ObservarOrdenCompraInterno(p_id_usuario, p_id_oc, p_motivos, p_detalle, p_id_responsable);
+
+    DO RELEASE_LOCK(v_bloqueo);
 END$$
 
 DELIMITER ;

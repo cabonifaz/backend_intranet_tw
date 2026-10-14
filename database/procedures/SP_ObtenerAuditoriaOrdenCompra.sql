@@ -131,8 +131,8 @@ proc: BEGIN
         UNION ALL
         SELECT d.fecha_carga, IF(d.version = 1, 'oc_adjuntada', 'oc_documento_reemplazado'),
                IF(d.version = 1, 'Orden de compra adjuntada', CONCAT('Documento de la OC reemplazado (v', d.version, ')')),
-               CONCAT(d.nombre_archivo, ' · ', IFNULL(JSON_UNQUOTE(JSON_EXTRACT(d.metadatos, '$.motivo')), ''),
-                      IFNULL(CONCAT(' · ', ROUND(CAST(JSON_UNQUOTE(JSON_EXTRACT(d.metadatos, '$.tamano_bytes')) AS DECIMAL(14,2))
+               CONCAT(d.nombre_archivo, ' · ', IFNULL(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(d.metadatos, '$.motivo')), 'null'), ''),
+                      IFNULL(CONCAT(' · ', ROUND(CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(d.metadatos, '$.tamano_bytes')), 'null') AS DECIMAL(14,2))
                                                  / 1048576, 2), ' MB'), '')),
                'documento', CONCAT('v', d.version),
                CONCAT('/api/crm/ordenes-compra/', p_id_oc, '/documentos/', d.id_documento), d.subido_por
@@ -228,9 +228,9 @@ proc: BEGIN
 
     -- 7. Versiones del PDF
     SELECT d.version, d.nombre_archivo, d.fecha_carga, CONCAT(u.nombre, ' ', u.apellido) AS subido_por,
-           JSON_UNQUOTE(JSON_EXTRACT(d.metadatos, '$.motivo'))                       AS motivo,
-           CAST(JSON_UNQUOTE(JSON_EXTRACT(d.metadatos, '$.tamano_bytes')) AS SIGNED) AS tamano_bytes,
-           JSON_UNQUOTE(JSON_EXTRACT(d.metadatos, '$.hash'))                         AS hash
+           NULLIF(JSON_UNQUOTE(JSON_EXTRACT(d.metadatos, '$.motivo')), 'null')                       AS motivo,
+           CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(d.metadatos, '$.tamano_bytes')), 'null') AS SIGNED) AS tamano_bytes,
+           NULLIF(JSON_UNQUOTE(JSON_EXTRACT(d.metadatos, '$.hash')), 'null')                         AS hash
     FROM documento_adjunto d
     LEFT JOIN usuario u ON u.id_usuario = d.subido_por
     WHERE d.entidad_tipo = 'orden_compra' AND d.id_entidad = p_id_oc AND d.eliminado_en IS NULL

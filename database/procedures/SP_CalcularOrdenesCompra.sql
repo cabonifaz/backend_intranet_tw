@@ -21,6 +21,9 @@
 --   insuficiente     el monto de la OC no alcanza para la propuesta (saldo negativo)
 --   moneda_diferente la OC y la propuesta están en monedas distintas
 --
+-- lista_programacion: validada, vigente, sin observación, con cobertura, sin OS, sin liberar, el expediente
+--   aún en la etapa de OC y sin otras OC de la propuesta pendientes de validación (complementarias).
+--
 -- estado_visual: anulada, vencida, observada, pendiente_validacion, liberada (HU-28), bloqueada, validada_parcial, validada
 DROP PROCEDURE IF EXISTS SP_CalcularOrdenesCompra;
 
@@ -71,13 +74,28 @@ BEGIN
              AND o2.id_moneda = (SELECT pz.id_moneda FROM propuesta_comercial pz WHERE pz.id_propuesta = op2.id_propuesta)
          WHERE op2.eliminado_en IS NULL AND op2.id_oc <> oc.id_oc
            AND op2.id_propuesta = oc.id_propuesta)                                       AS cobertura_otros,
-        (SELECT MAX(e.id_expediente) FROM expediente_digital e
-         WHERE e.eliminado_en IS NULL
-           AND (e.id_orden_compra = oc.id_oc OR e.id_propuesta = oc.id_propuesta))         AS id_expediente,
+        -- Expediente del RQ de la propuesta principal (nace con el RQ, migración 71)
+        FN_ExpedienteDePropuesta(oc.id_propuesta)                                         AS id_expediente,
+        -- OS de los expedientes de todas las propuestas que cubre la OC (principal y distribuidas)
         (SELECT COUNT(*) FROM orden_servicio os
-         JOIN expediente_digital e ON e.id_expediente = os.id_expediente AND e.eliminado_en IS NULL
          WHERE os.eliminado_en IS NULL AND os.estado <> 'anulada'
-           AND (e.id_orden_compra = oc.id_oc OR e.id_propuesta = oc.id_propuesta))         AS ordenes_servicio
+           AND (os.id_expediente = FN_ExpedienteDePropuesta(oc.id_propuesta)
+                OR os.id_expediente IN (SELECT FN_ExpedienteDePropuesta(op.id_propuesta) FROM oc_propuesta op
+                                        WHERE op.id_oc = oc.id_oc AND op.eliminado_en IS NULL)))  AS ordenes_servicio,
+        -- El expediente ya pasó de la etapa de OC (liberado con esta u otra OC, o más avanzado)
+        IFNULL((SELECT e.etapa_actual NOT IN ('requerimiento', 'propuesta', 'visto_bueno', 'orden_compra')
+                FROM expediente_digital e WHERE e.id_expediente = FN_ExpedienteDePropuesta(oc.id_propuesta)), 0)
+                                                                                           AS expediente_liberado,
+        -- Otras OC no anuladas que también cubren la propuesta principal y aún no están validadas
+        -- (pendientes u observadas): su monto se proyecta en la cobertura, pero no se puede liberar sin ellas
+        (SELECT GROUP_CONCAT(o3.numero_oc ORDER BY o3.id_oc SEPARATOR ', ')
+         FROM orden_compra o3
+         JOIN oc_propuesta op3 ON op3.id_oc = o3.id_oc AND op3.eliminado_en IS NULL AND op3.id_propuesta = oc.id_propuesta
+         WHERE o3.eliminado_en IS NULL AND o3.id_oc <> oc.id_oc AND o3.estado <> 'anulada'
+           AND (o3.estado = 'pendiente_validacion'
+                OR EXISTS (SELECT 1 FROM orden_compra_observacion ob3
+                           WHERE ob3.id_oc = o3.id_oc AND ob3.estado = 'abierta' AND ob3.eliminado_en IS NULL)))
+                                                                                           AS otras_oc_pendientes
     FROM orden_compra oc
     LEFT JOIN propuesta_comercial p ON p.id_propuesta = oc.id_propuesta
     JOIN usuario u ON u.id_usuario = COALESCE(p.id_responsable, p.id_creador, oc.creado_por)
@@ -130,7 +148,9 @@ BEGIN
          AND c.cobertura_proyectada IN ('completa', 'con_saldo')
          AND c.estado_bd <> 'saldo_insuficiente'
          AND c.ordenes_servicio = 0
-         AND c.fecha_liberacion IS NULL)                                                   AS lista_programacion
+         AND c.fecha_liberacion IS NULL
+         AND c.expediente_liberado = 0
+         AND c.otras_oc_pendientes IS NULL)                                                AS lista_programacion
     FROM tmp_oc_cob c;
 
     DROP TEMPORARY TABLE IF EXISTS tmp_oc_cob;

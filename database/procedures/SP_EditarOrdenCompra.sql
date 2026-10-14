@@ -15,12 +15,13 @@
 --   y avisa también a quien observó la OC.
 -- HU-25: el PDF nuevo se registra como nueva versión en documento_adjunto.
 -- p_solo_validar = 1 valida y devuelve el impacto sin guardar (antes de escribir el PDF en disco).
+-- Una OC ya liberada no puede cambiar monto, moneda ni PDF. Un PDF nuevo en una OC validada la regresa a validación.
 -- Resultados: 1 mensaje, 2 resultado de la edición.
-DROP PROCEDURE IF EXISTS SP_EditarOrdenCompra;
+DROP PROCEDURE IF EXISTS SP_EditarOrdenCompraInterno;
 
 DELIMITER $$
 
-CREATE PROCEDURE SP_EditarOrdenCompra(
+CREATE PROCEDURE SP_EditarOrdenCompraInterno(
     IN p_id_usuario      BIGINT,
     IN p_id_oc           BIGINT,
     IN p_numero_oc       VARCHAR(50)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
@@ -67,6 +68,7 @@ proc: BEGIN
     DECLARE v_ruta_pdf      VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_simbolo       VARCHAR(10)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_cambia_monto  TINYINT DEFAULT 0;
+    DECLARE v_liberada      TINYINT DEFAULT 0;
     DECLARE v_vuelve        TINYINT DEFAULT 0;
     DECLARE v_cambios       VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_estado_cob    VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
@@ -80,7 +82,6 @@ proc: BEGIN
     DECLARE v_total_princ   DECIMAL(14,2) DEFAULT 0;
     DECLARE v_obs_abierta   BIGINT;
     DECLARE v_observador    BIGINT;
-    DECLARE v_id_exp        BIGINT;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -106,8 +107,8 @@ proc: BEGIN
     -- OC en alcance
     CALL SP_CalcularOrdenesCompra(p_id_usuario, p_id_oc);
     SELECT COUNT(*), MAX(id_cliente), MAX(id_propuesta), MAX(id_responsable), MAX(monto_requerido_neto),
-           MAX(validada), MAX(ordenes_servicio), MAX(estado_bd)
-      INTO v_existe, v_id_cliente, v_id_prop, v_id_resp, v_total, v_validada, v_n_os, v_estado
+           MAX(validada), MAX(ordenes_servicio), MAX(estado_bd), MAX(fecha_liberacion IS NOT NULL)
+      INTO v_existe, v_id_cliente, v_id_prop, v_id_resp, v_total, v_validada, v_n_os, v_estado, v_liberada
     FROM tmp_oc;
     DROP TEMPORARY TABLE IF EXISTS tmp_oc;
 
@@ -186,6 +187,14 @@ proc: BEGIN
         LEAVE proc;
     END IF;
 
+    -- Una OC que ya liberó el expediente no puede cambiar monto, moneda ni PDF: volver a validarla dejaría
+    -- el expediente en Programación con una OC sin validar. Debe anularse el proceso o registrar una complementaria.
+    IF IFNULL(v_liberada, 0) = 1 AND (v_cambia_monto = 1 OR v_ruta_pdf IS NOT NULL) THEN
+        SELECT 1 AS IdTipoMensaje,
+               'La orden de compra ya liberó el expediente para programación: no se puede cambiar el monto, la moneda ni el PDF.' AS Mensaje;
+        LEAVE proc;
+    END IF;
+
     IF v_cambia_monto = 1 AND v_n_os > 0 THEN
         SELECT 1 AS IdTipoMensaje,
                'La orden de compra ya tiene órdenes de servicio: no se puede cambiar el monto ni la moneda.' AS Mensaje;
@@ -210,7 +219,8 @@ proc: BEGIN
     END IF;
 
     -- Regresa a validación: "Guardar y revalidar" o cambio de monto o moneda en una OC validada
-    SET v_vuelve       = IF(IFNULL(p_revalidar, 0) = 1 OR (v_cambia_monto = 1 AND v_validada = 1), 1, 0);
+    -- (un PDF nuevo en una OC validada también la regresa: la legibilidad se confirmó sobre el PDF anterior)
+    SET v_vuelve       = IF(IFNULL(p_revalidar, 0) = 1 OR ((v_cambia_monto = 1 OR v_ruta_pdf IS NOT NULL) AND v_validada = 1), 1, 0);
     SET v_estado_nuevo = IF(v_vuelve = 1, 'pendiente_validacion', v_estado);
 
     -- Cobertura con los datos nuevos
@@ -285,19 +295,23 @@ proc: BEGIN
             estado = 'levantada', fecha_levantamiento = NOW(), levantada_por = p_id_usuario, modificado_por = p_id_usuario
         WHERE id_oc = p_id_oc AND estado = 'abierta' AND eliminado_en IS NULL;
 
-        SELECT MAX(e.id_expediente) INTO v_id_exp
-        FROM expediente_digital e
-        WHERE e.eliminado_en IS NULL AND (e.id_orden_compra = p_id_oc OR e.id_propuesta = v_id_prop);
+        -- Bloqueos de esta OC en los expedientes: resueltos (vinculados por id, aunque cambie el N.° de OC)
+        UPDATE expediente_bloqueador SET resuelto = 1, fecha_resolucion = NOW(), resuelto_por = p_id_usuario,
+                                         sustento = 'OC corregida y enviada a revalidación.', modificado_por = p_id_usuario
+        WHERE origen_tipo = 'orden_compra' AND id_origen = p_id_oc AND resuelto = 0 AND eliminado_en IS NULL;
 
-        IF v_id_exp IS NOT NULL THEN
-            UPDATE expediente_bloqueador SET resuelto = 1, fecha_resolucion = NOW(), modificado_por = p_id_usuario
-            WHERE id_expediente = v_id_exp AND resuelto = 0 AND eliminado_en IS NULL
-              AND descripcion LIKE CONCAT('OC ', a_numero, '%');
-
-            UPDATE expediente_digital SET estado = 'activo', modificado_por = p_id_usuario
-            WHERE id_expediente = v_id_exp AND estado = 'bloqueado'
-              AND NOT EXISTS (SELECT 1 FROM expediente_bloqueador b
-                              WHERE b.id_expediente = v_id_exp AND b.resuelto = 0 AND b.eliminado_en IS NULL);
+        IF ROW_COUNT() > 0 THEN
+            UPDATE expediente_digital e
+            SET e.estado = CASE
+                    WHEN EXISTS (SELECT 1 FROM expediente_bloqueador b WHERE b.id_expediente = e.id_expediente
+                                 AND b.resuelto = 0 AND b.eliminado_en IS NULL AND b.clase = 'bloqueo')   THEN 'bloqueado'
+                    WHEN EXISTS (SELECT 1 FROM expediente_bloqueador b WHERE b.id_expediente = e.id_expediente
+                                 AND b.resuelto = 0 AND b.eliminado_en IS NULL AND b.clase = 'excepcion') THEN 'con_excepcion'
+                    ELSE 'activo' END,
+                e.modificado_por = p_id_usuario
+            WHERE e.estado <> 'cerrado'
+              AND e.id_expediente IN (SELECT b.id_expediente FROM expediente_bloqueador b
+                                      WHERE b.origen_tipo = 'orden_compra' AND b.id_origen = p_id_oc);
         END IF;
     END IF;
 
@@ -346,6 +360,58 @@ proc: BEGIN
     SELECT p_id_oc AS id_oc, v_numero AS numero_oc, v_estado_nuevo AS estado,
            v_estado_cob AS estado_cobertura, v_pct AS cobertura_pct, v_diferencia AS diferencia,
            v_vuelve AS requiere_revalidacion, v_cambios AS cambios, v_notificados AS notificados;
+END$$
+
+DELIMITER ;
+
+
+-- SP_EditarOrdenCompra: punto de entrada. Toma el mismo bloqueo por cliente (GET_LOCK) que el registro, la distribución y la
+-- liberación de OC, para que no se crucen con ellas. La lógica está en SP_EditarOrdenCompraInterno.
+DROP PROCEDURE IF EXISTS SP_EditarOrdenCompra;
+
+DELIMITER $$
+
+CREATE PROCEDURE SP_EditarOrdenCompra(
+    IN p_id_usuario      BIGINT,
+    IN p_id_oc           BIGINT,
+    IN p_numero_oc       VARCHAR(50)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_referencia      VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_fecha_oc        DATE,
+    IN p_fecha_recepcion DATE,
+    IN p_id_moneda       INT,
+    IN p_monto           DECIMAL(14,2),
+    IN p_vigencia_dias   INT,
+    IN p_observaciones   VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_revalidar       TINYINT,
+    IN p_ruta_pdf        VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_nombre_pdf      VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_tamano_pdf      BIGINT,
+    IN p_hash_pdf        CHAR(64)     CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_solo_validar    TINYINT
+)
+proc: BEGIN
+    DECLARE v_bloqueo VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        DO RELEASE_LOCK(v_bloqueo);
+        GET DIAGNOSTICS CONDITION 1
+            @err_msg  = MESSAGE_TEXT,
+            @err_code = MYSQL_ERRNO;
+        SELECT 3 AS IdTipoMensaje,
+               CONCAT('[MySQL ', @err_code, '] ', @err_msg) AS Mensaje;
+    END;
+
+    SET v_bloqueo = CONCAT('tw_oc_cliente_', IFNULL((SELECT id_cliente FROM orden_compra WHERE id_oc = p_id_oc), 0));
+    IF IFNULL(GET_LOCK(v_bloqueo, 15), 0) <> 1 THEN
+        SELECT 1 AS IdTipoMensaje,
+               'Hay otra operación en curso sobre las órdenes de compra de este cliente. Intente nuevamente en unos segundos.' AS Mensaje;
+        LEAVE proc;
+    END IF;
+
+    CALL SP_EditarOrdenCompraInterno(p_id_usuario, p_id_oc, p_numero_oc, p_referencia, p_fecha_oc, p_fecha_recepcion, p_id_moneda, p_monto, p_vigencia_dias, p_observaciones, p_revalidar, p_ruta_pdf, p_nombre_pdf, p_tamano_pdf, p_hash_pdf, p_solo_validar);
+
+    DO RELEASE_LOCK(v_bloqueo);
 END$$
 
 DELIMITER ;

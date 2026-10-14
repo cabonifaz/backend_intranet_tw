@@ -6,11 +6,11 @@
 --   p_monto = 0 quita la aplicación (salvo la propuesta principal de la OC).
 -- p_solo_validar = 1 devuelve el saldo antes y después sin guardar (cálculo en tiempo real).
 -- Resultados: 1 mensaje, 2 resultado (saldo antes/después, cobertura de la propuesta).
-DROP PROCEDURE IF EXISTS SP_DistribuirOrdenCompra;
+DROP PROCEDURE IF EXISTS SP_DistribuirOrdenCompraInterno;
 
 DELIMITER $$
 
-CREATE PROCEDURE SP_DistribuirOrdenCompra(
+CREATE PROCEDURE SP_DistribuirOrdenCompraInterno(
     IN p_id_usuario   BIGINT,
     IN p_id_oc        BIGINT,
     IN p_id_propuesta BIGINT,
@@ -208,6 +208,48 @@ proc: BEGIN
            v_actual AS aplicado_antes, p_monto AS aplicado_despues,
            GREATEST(v_total_prop - v_otras - p_monto, 0) AS pendiente_propuesta,
            IF(v_total_prop - v_otras - p_monto < 0.005, 'cubierto', IF(v_otras + p_monto > 0, 'parcial', 'pendiente')) AS estado_cobertura;
+END$$
+
+DELIMITER ;
+
+
+-- SP_DistribuirOrdenCompra: punto de entrada. Toma un bloqueo por cliente (GET_LOCK) para que dos operaciones simultáneas
+-- sobre las OC del mismo cliente (registro, complementaria, distribución, liberación) no pasen las mismas
+-- validaciones a la vez (OC duplicadas, saldo sobreasignado o doble liberación). La lógica está en SP_DistribuirOrdenCompraInterno.
+DROP PROCEDURE IF EXISTS SP_DistribuirOrdenCompra;
+
+DELIMITER $$
+
+CREATE PROCEDURE SP_DistribuirOrdenCompra(
+    IN p_id_usuario   BIGINT,
+    IN p_id_oc        BIGINT,
+    IN p_id_propuesta BIGINT,
+    IN p_monto        DECIMAL(14,2),
+    IN p_solo_validar TINYINT
+)
+proc: BEGIN
+    DECLARE v_bloqueo VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        DO RELEASE_LOCK(v_bloqueo);
+        GET DIAGNOSTICS CONDITION 1
+            @err_msg  = MESSAGE_TEXT,
+            @err_code = MYSQL_ERRNO;
+        SELECT 3 AS IdTipoMensaje,
+               CONCAT('[MySQL ', @err_code, '] ', @err_msg) AS Mensaje;
+    END;
+
+    SET v_bloqueo = CONCAT('tw_oc_cliente_', IFNULL((SELECT id_cliente FROM orden_compra WHERE id_oc = p_id_oc), 0));
+    IF IFNULL(GET_LOCK(v_bloqueo, 15), 0) <> 1 THEN
+        SELECT 1 AS IdTipoMensaje,
+               'Hay otra operación en curso sobre las órdenes de compra de este cliente. Intente nuevamente en unos segundos.' AS Mensaje;
+        LEAVE proc;
+    END IF;
+
+    CALL SP_DistribuirOrdenCompraInterno(p_id_usuario, p_id_oc, p_id_propuesta, p_monto, p_solo_validar);
+
+    DO RELEASE_LOCK(v_bloqueo);
 END$$
 
 DELIMITER ;

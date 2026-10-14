@@ -5,8 +5,9 @@
 --   cumple     conforme
 --   alerta     requisito obligatorio pendiente (SCTR, SSOMA, bloqueos de otras áreas): NO impide liberar,
 --              pero se informa el impacto y se exige confirmarlo
---   bloqueante impide liberar (propuesta sin aceptar, OC sin validar u observada, cobertura insuficiente,
---              OC vencida o ya liberada)
+--   bloqueante impide liberar (propuesta sin aceptar, OC sin validar u observada, otras OC de la propuesta
+--              sin validar, otra OC observada, cobertura insuficiente, OC vencida, OC o expediente ya liberado,
+--              u orden de servicio ya generada)
 DROP PROCEDURE IF EXISTS SP_EvaluarLiberacionOrdenCompra;
 
 DELIMITER $$
@@ -33,13 +34,21 @@ BEGIN
     DECLARE v_ssoma       VARCHAR(400) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_bloq        VARCHAR(600) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_simbolo     VARCHAR(10)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_otras_pend  VARCHAR(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_exp_lib     TINYINT DEFAULT 0;
+    DECLARE v_n_os        INT DEFAULT 0;
+    DECLARE v_etapa_exp   VARCHAR(30)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_oc_obs      VARCHAR(600) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 
     CALL SP_CalcularOrdenesCompra(p_id_usuario, p_id_oc);
     SELECT MAX(id_propuesta), MAX(id_cliente), MAX(id_expediente), MAX(validada), MAX(vencida),
-           MAX(cobertura_proyectada), MAX(faltante), MAX(estado_bd), MAX(fecha_liberacion), MAX(vigencia_hasta)
+           MAX(cobertura_proyectada), MAX(faltante), MAX(estado_bd), MAX(fecha_liberacion), MAX(vigencia_hasta),
+           MAX(otras_oc_pendientes), MAX(expediente_liberado), MAX(ordenes_servicio)
       INTO v_id_prop, v_id_cliente, v_id_exp, v_validada, v_vencida,
-           v_cobertura, v_faltante, v_estado, v_fecha_lib, v_vig_hasta
+           v_cobertura, v_faltante, v_estado, v_fecha_lib, v_vig_hasta,
+           v_otras_pend, v_exp_lib, v_n_os
     FROM tmp_oc;
+    SELECT MAX(etapa_actual) INTO v_etapa_exp FROM expediente_digital WHERE id_expediente = v_id_exp;
     DROP TEMPORARY TABLE IF EXISTS tmp_oc;
 
     SELECT MAX(s.fecha_interaccion) INTO v_fecha_acep
@@ -78,11 +87,17 @@ BEGIN
         SET v_sctr = 1;
     END IF;
 
-    -- Bloqueos del expediente que no son de la OC (SSOMA, documentos, aprobaciones)
+    -- Bloqueos abiertos del expediente (OC observadas y los registrados por las áreas): impiden liberar
+    SELECT GROUP_CONCAT(b.descripcion ORDER BY b.id_bloqueador SEPARATOR '; ') INTO v_oc_obs
+    FROM expediente_bloqueador b
+    WHERE b.id_expediente = v_id_exp AND b.resuelto = 0 AND b.eliminado_en IS NULL
+      AND b.clase = 'bloqueo';
+
+    -- Excepciones abiertas del expediente (requisitos pendientes aceptados): se informan
     SELECT GROUP_CONCAT(b.descripcion ORDER BY b.id_bloqueador SEPARATOR '; ') INTO v_bloq
     FROM expediente_bloqueador b
     WHERE b.id_expediente = v_id_exp AND b.resuelto = 0 AND b.eliminado_en IS NULL
-      AND b.descripcion NOT LIKE 'OC %';
+      AND b.clase = 'excepcion';
 
     DROP TEMPORARY TABLE IF EXISTS tmp_lib;
     CREATE TEMPORARY TABLE tmp_lib (
@@ -104,6 +119,13 @@ BEGIN
              WHEN v_obs > 0           THEN 'La OC tiene una observación abierta.'
              WHEN v_validada = 0      THEN 'La OC está pendiente de validación.'
              ELSE 'OC validada por el jefe comercial.' END),
+    (2, 'otras_oc', 'Otras OC de la propuesta validadas',
+        IF(v_otras_pend IS NULL, 'cumple', 'bloqueante'), NULL,
+        IF(v_otras_pend IS NULL, 'No hay otras OC pendientes de validación.',
+           CONCAT('La cobertura cuenta con OC aún sin validar u observadas: ', v_otras_pend, '. Valídelas antes de liberar.'))),
+    (2, 'oc_observadas', 'Sin bloqueos en el expediente',
+        IF(v_oc_obs IS NULL, 'cumple', 'bloqueante'), NULL,
+        IFNULL(CONCAT('Resuelva antes: ', v_oc_obs), 'El expediente no tiene bloqueos abiertos.')),
     (3, 'cobertura_oc', 'Cobertura económica de la OC',
         IF(v_cobertura IN ('completa', 'con_saldo'), 'cumple', 'bloqueante'), NULL,
         CASE WHEN v_cobertura = 'moneda_diferente' THEN 'La OC está en una moneda distinta a la propuesta.'
@@ -122,12 +144,16 @@ BEGIN
         IF(v_ssoma IS NULL, 'cumple', 'alerta'), NULL,
         IF(v_ssoma IS NULL, 'El cliente no tiene requisitos SSOMA adicionales.',
            CONCAT('Requisitos del cliente por completar antes de la salida a campo: ', v_ssoma, '.'))),
-    (7, 'bloqueos_expediente', 'Bloqueos del expediente',
+    (7, 'bloqueos_expediente', 'Excepciones del expediente',
         IF(v_bloq IS NULL, 'cumple', 'alerta'), NULL,
         IFNULL(CONCAT('Pendientes: ', v_bloq), 'Sin bloqueos pendientes.')),
     (8, 'no_liberada', 'Expediente aún no liberado',
-        IF(v_fecha_lib IS NULL, 'cumple', 'bloqueante'), v_fecha_lib,
-        IF(v_fecha_lib IS NULL, 'Listo para liberar.', 'El expediente ya fue liberado para programación.'));
+        IF(v_fecha_lib IS NULL AND IFNULL(v_exp_lib, 0) = 0 AND IFNULL(v_n_os, 0) = 0, 'cumple', 'bloqueante'), v_fecha_lib,
+        CASE WHEN v_fecha_lib IS NOT NULL      THEN 'Esta OC ya liberó el expediente para programación.'
+             WHEN IFNULL(v_exp_lib, 0) = 1     THEN CONCAT('El expediente ya está en la etapa ',
+                                                           REPLACE(IFNULL(v_etapa_exp, ''), '_', ' '), ' (se liberó con otra OC).')
+             WHEN IFNULL(v_n_os, 0) > 0        THEN 'Ya existe una orden de servicio para esta OC.'
+             ELSE 'Listo para liberar.' END);
 
     -- La descripción del ítem SSOMA solo dice "pendiente" si hay requisitos
     UPDATE tmp_lib SET descripcion = 'Requisitos SSOMA del cliente' WHERE codigo = 'ssoma' AND estado = 'cumple';

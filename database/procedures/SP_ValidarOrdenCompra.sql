@@ -8,11 +8,11 @@
 -- notificación al responsable comercial y a Operaciones (OC lista para programación).
 -- HU-27: el monto aplicado es el requerido neto (lo que otras OC no cubren de sus propuestas).
 -- Resultados: 1 mensaje, 2 OC validada.
-DROP PROCEDURE IF EXISTS SP_ValidarOrdenCompra;
+DROP PROCEDURE IF EXISTS SP_ValidarOrdenCompraInterno;
 
 DELIMITER $$
 
-CREATE PROCEDURE SP_ValidarOrdenCompra(
+CREATE PROCEDURE SP_ValidarOrdenCompraInterno(
     IN p_id_usuario  BIGINT,
     IN p_id_oc       BIGINT,
     IN p_confirmados VARCHAR(300)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
@@ -124,16 +124,23 @@ proc: BEGIN
     SET o.estado = 'vigente', o.modificado_por = p_id_usuario
     WHERE o.id_oc = c.id_oc_origen AND o.estado = 'saldo_insuficiente';
 
-    -- Bloqueos de la OC en el expediente: resueltos
-    IF v_id_exp IS NOT NULL THEN
-        UPDATE expediente_bloqueador SET resuelto = 1, fecha_resolucion = NOW(), modificado_por = p_id_usuario
-        WHERE id_expediente = v_id_exp AND resuelto = 0 AND eliminado_en IS NULL
-          AND descripcion LIKE CONCAT('OC ', v_numero, '%');
+    -- Bloqueos de esta OC en los expedientes: resueltos (vinculados por id de OC)
+    UPDATE expediente_bloqueador SET resuelto = 1, fecha_resolucion = NOW(), resuelto_por = p_id_usuario,
+                                     sustento = 'OC validada.', modificado_por = p_id_usuario
+    WHERE origen_tipo = 'orden_compra' AND id_origen = p_id_oc AND resuelto = 0 AND eliminado_en IS NULL;
 
-        UPDATE expediente_digital SET estado = 'activo', modificado_por = p_id_usuario
-        WHERE id_expediente = v_id_exp AND estado = 'bloqueado'
-          AND NOT EXISTS (SELECT 1 FROM expediente_bloqueador b
-                          WHERE b.id_expediente = v_id_exp AND b.resuelto = 0 AND b.eliminado_en IS NULL);
+    IF ROW_COUNT() > 0 THEN
+            UPDATE expediente_digital e
+            SET e.estado = CASE
+                    WHEN EXISTS (SELECT 1 FROM expediente_bloqueador b WHERE b.id_expediente = e.id_expediente
+                                 AND b.resuelto = 0 AND b.eliminado_en IS NULL AND b.clase = 'bloqueo')   THEN 'bloqueado'
+                    WHEN EXISTS (SELECT 1 FROM expediente_bloqueador b WHERE b.id_expediente = e.id_expediente
+                                 AND b.resuelto = 0 AND b.eliminado_en IS NULL AND b.clase = 'excepcion') THEN 'con_excepcion'
+                    ELSE 'activo' END,
+                e.modificado_por = p_id_usuario
+            WHERE e.estado <> 'cerrado'
+              AND e.id_expediente IN (SELECT b.id_expediente FROM expediente_bloqueador b
+                                      WHERE b.origen_tipo = 'orden_compra' AND b.id_origen = p_id_oc);
     END IF;
 
     INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo,
@@ -164,6 +171,46 @@ proc: BEGIN
     SELECT 2 AS IdTipoMensaje, 'Orden de compra validada.' AS Mensaje;
     SELECT p_id_oc AS id_oc, v_numero AS numero_oc, v_estado_nuevo AS estado, v_cobertura AS estado_cobertura,
            NOW() AS fecha_validacion, v_usuario AS validado_por, v_notificados AS notificados;
+END$$
+
+DELIMITER ;
+
+
+-- SP_ValidarOrdenCompra: punto de entrada. Toma el mismo bloqueo por cliente (GET_LOCK) que el registro, la distribución y la
+-- liberación de OC, para que no se crucen con ellas. La lógica está en SP_ValidarOrdenCompraInterno.
+DROP PROCEDURE IF EXISTS SP_ValidarOrdenCompra;
+
+DELIMITER $$
+
+CREATE PROCEDURE SP_ValidarOrdenCompra(
+    IN p_id_usuario  BIGINT,
+    IN p_id_oc       BIGINT,
+    IN p_confirmados VARCHAR(300)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_comentario  VARCHAR(1000) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci
+)
+proc: BEGIN
+    DECLARE v_bloqueo VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        DO RELEASE_LOCK(v_bloqueo);
+        GET DIAGNOSTICS CONDITION 1
+            @err_msg  = MESSAGE_TEXT,
+            @err_code = MYSQL_ERRNO;
+        SELECT 3 AS IdTipoMensaje,
+               CONCAT('[MySQL ', @err_code, '] ', @err_msg) AS Mensaje;
+    END;
+
+    SET v_bloqueo = CONCAT('tw_oc_cliente_', IFNULL((SELECT id_cliente FROM orden_compra WHERE id_oc = p_id_oc), 0));
+    IF IFNULL(GET_LOCK(v_bloqueo, 15), 0) <> 1 THEN
+        SELECT 1 AS IdTipoMensaje,
+               'Hay otra operación en curso sobre las órdenes de compra de este cliente. Intente nuevamente en unos segundos.' AS Mensaje;
+        LEAVE proc;
+    END IF;
+
+    CALL SP_ValidarOrdenCompraInterno(p_id_usuario, p_id_oc, p_confirmados, p_comentario);
+
+    DO RELEASE_LOCK(v_bloqueo);
 END$$
 
 DELIMITER ;

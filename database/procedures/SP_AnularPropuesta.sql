@@ -7,18 +7,19 @@
 --   HU-28 (anulación del proceso completo): una OC vinculada ya no impide anular. Solo bloquea una
 --     Orden de Servicio vinculada (no anulada): debe resolverse primero el proceso operativo.
 --     Al anular: las OC de la propuesta pasan a 'anulada', se liberan los montos que otras OC le
---     distribuyeron, el expediente se cierra y se notifica a Operaciones (si estaba liberado) y a los
+--     distribuyeron, el proceso operativo del expediente se anula (vuelve a la etapa comercial del RQ, que
+--     sigue vivo, migración 71) y se notifica a Operaciones (si estaba liberado) y a los
 --     responsables de otras propuestas que pierden cobertura.
 --   Efectos: estado 'anulado' con motivo, justificación, fecha y usuario.
 --     Un VB pendiente pasa a 'cancelado'.
 --     Si el RQ queda sin propuestas vigentes, vuelve de 'con_propuesta' a 'en_proceso'.
 --     RQ y expediente conservan su historial. Queda auditado.
 --   Resultados: 1 header · 2 resumen · 3 motivos (solo al preparar)
-DROP PROCEDURE IF EXISTS SP_AnularPropuesta;
+DROP PROCEDURE IF EXISTS SP_AnularPropuestaInterno;
 
 DELIMITER $$
 
-CREATE PROCEDURE SP_AnularPropuesta(
+CREATE PROCEDURE SP_AnularPropuestaInterno(
     IN p_id_propuesta    BIGINT,
     IN p_id_motivo       INT,
     IN p_justificacion   TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
@@ -91,19 +92,24 @@ proc: BEGIN
     JOIN propuesta_comercial p2 ON p2.id_propuesta = op.id_propuesta
     WHERE op.eliminado_en IS NULL AND op.id_propuesta <> p_id_propuesta;
 
+    -- Expediente del RQ (nace con el RQ, migración 71)
     SELECT MAX(e.id_expediente), MAX(e.etapa_actual NOT IN ('requerimiento', 'propuesta', 'visto_bueno', 'orden_compra'))
       INTO v_id_exp, v_exp_liberado
     FROM expediente_digital e
     WHERE e.eliminado_en IS NULL AND e.estado <> 'cerrado'
-      AND (e.id_propuesta = p_id_propuesta
-           OR e.id_orden_compra IN (SELECT oc.id_oc FROM orden_compra oc WHERE oc.id_propuesta = p_id_propuesta));
+      AND e.id_expediente = FN_ExpedienteDePropuesta(p_id_propuesta);
 
     SELECT os.id_os, os.numero, os.estado INTO v_id_os, v_numero_os, v_estado_os
     FROM orden_servicio os
     JOIN expediente_digital e ON e.id_expediente = os.id_expediente AND e.eliminado_en IS NULL
     WHERE os.eliminado_en IS NULL AND os.estado <> 'anulada'
-      AND (e.id_propuesta = p_id_propuesta
-           OR e.id_orden_compra IN (SELECT oc.id_oc FROM orden_compra oc WHERE oc.id_propuesta = p_id_propuesta))
+      -- OS del expediente de la propuesta y de los expedientes que dependen de sus OC por distribución (HU-27)
+      AND (e.id_expediente = FN_ExpedienteDePropuesta(p_id_propuesta)
+           OR e.id_expediente IN (SELECT FN_ExpedienteDePropuesta(op.id_propuesta)
+                                  FROM oc_propuesta op
+                                  JOIN orden_compra oc ON oc.id_oc = op.id_oc AND oc.id_propuesta = p_id_propuesta
+                                                      AND oc.eliminado_en IS NULL AND oc.estado <> 'anulada'
+                                  WHERE op.eliminado_en IS NULL))
     ORDER BY FIELD(os.estado, 'en_ejecucion', 'en_ruta', 'pausada', 'bloqueada', 'programada', 'reprogramada', 'finalizada'),
              os.id_os DESC
     LIMIT 1;
@@ -188,29 +194,67 @@ proc: BEGIN
         WHERE estado = 'abierta' AND eliminado_en IS NULL
           AND id_oc IN (SELECT id_oc FROM (SELECT id_oc FROM orden_compra WHERE id_propuesta = p_id_propuesta) x);
 
+        -- Los bloqueos que dejaron esas OC en los expedientes ya no aplican (OC anuladas)
+        UPDATE expediente_bloqueador SET resuelto = 1, fecha_resolucion = NOW(), resuelto_por = p_id_usuario,
+                                         sustento = 'OC anulada con la propuesta.', modificado_por = p_id_usuario
+        WHERE origen_tipo = 'orden_compra' AND resuelto = 0 AND eliminado_en IS NULL
+          AND id_origen IN (SELECT id_oc FROM (SELECT id_oc FROM orden_compra WHERE id_propuesta = p_id_propuesta) y);
+
+        UPDATE expediente_digital e
+        SET e.estado = CASE
+                WHEN EXISTS (SELECT 1 FROM expediente_bloqueador b WHERE b.id_expediente = e.id_expediente
+                             AND b.resuelto = 0 AND b.eliminado_en IS NULL AND b.clase = 'bloqueo')   THEN 'bloqueado'
+                WHEN EXISTS (SELECT 1 FROM expediente_bloqueador b WHERE b.id_expediente = e.id_expediente
+                             AND b.resuelto = 0 AND b.eliminado_en IS NULL AND b.clase = 'excepcion') THEN 'con_excepcion'
+                ELSE 'activo' END
+        WHERE e.estado = 'bloqueado'
+          AND e.id_expediente IN (SELECT b.id_expediente FROM expediente_bloqueador b
+                                  WHERE b.origen_tipo = 'orden_compra'
+                                    AND b.id_origen IN (SELECT id_oc FROM orden_compra WHERE id_propuesta = p_id_propuesta));
+
         UPDATE oc_propuesta op
         JOIN orden_compra oc ON oc.id_oc = op.id_oc
         SET op.eliminado_en = NOW(), op.eliminado_por = p_id_usuario
         WHERE op.id_propuesta = p_id_propuesta AND op.eliminado_en IS NULL AND IFNULL(oc.id_propuesta, 0) <> p_id_propuesta;
 
-        -- Expediente cerrado (conserva su historial)
-        IF v_id_exp IS NOT NULL THEN
-            UPDATE expediente_bloqueador SET resuelto = 1, fecha_resolucion = NOW(), modificado_por = p_id_usuario
+        -- Expediente cerrado (conserva su historial) solo si ya estaba liberado a programación. Antes de eso
+        -- el expediente es del RQ y sigue abierto: el RQ vuelve a 'en_proceso' y puede tener otra propuesta.
+        IF v_id_exp IS NOT NULL AND IFNULL(v_exp_liberado, 0) = 0 THEN
+            INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion, id_usuario, registrado_en)
+            VALUES ('expediente', v_id_exp, 'propuesta_anulada', NULL, NULL,
+                    CONCAT('Propuesta ', v_numero, ' v', v_version, ' anulada. El expediente sigue abierto con el RQ.'), p_id_usuario, NOW());
+        END IF;
+        -- Expediente ya liberado: se anula el proceso operativo. El expediente es del RQ (que sigue vivo y puede tener
+        -- otra propuesta), así que vuelve a la etapa comercial: se cancelan la etapa operativa en curso, sus bloqueos y
+        -- excepciones, y se desvincula la OC anulada. Conserva todo su historial.
+        IF v_id_exp IS NOT NULL AND IFNULL(v_exp_liberado, 0) = 1 THEN
+            UPDATE expediente_bloqueador SET resuelto = 1, fecha_resolucion = NOW(), resuelto_por = p_id_usuario,
+                                             sustento = 'Proceso anulado con la propuesta.', modificado_por = p_id_usuario
             WHERE id_expediente = v_id_exp AND resuelto = 0 AND eliminado_en IS NULL;
 
-            UPDATE expediente_digital SET estado = 'cerrado', etapa_actual = 'cerrado', fecha_cierre = NOW(), modificado_por = p_id_usuario
+            UPDATE expediente_etapa SET fecha_fin = NOW(), resultado = 'cancelado',
+                                        comentario = LEFT(CONCAT('Cancelada por la anulación de la propuesta ', v_numero, ' v', v_version, '.'), 1000),
+                                        UsuMod = CAST(p_id_usuario AS CHAR), FchMod = NOW()
+            WHERE id_expediente = v_id_exp AND fecha_fin IS NULL AND SoftDelete = 0;
+
+            UPDATE expediente_digital SET etapa_actual = 'requerimiento', estado = 'activo', area_responsable = 'comercial',
+                                          id_responsable_actual = NULL, id_orden_compra = NULL, fecha_etapa = NULL,
+                                          sla_horas = NULL, fecha_limite_sla = NULL, modificado_por = p_id_usuario
             WHERE id_expediente = v_id_exp;
 
-            INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion, id_usuario, registrado_en)
-            VALUES ('expediente', v_id_exp, 'cerrar_por_anulacion', NULL, 'cerrado',
-                    CONCAT('Expediente cerrado por la anulación de la propuesta ', v_numero, ' v', v_version, '.'), p_id_usuario, NOW());
+            INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion, id_usuario,
+                                          registrado_en, metadata)
+            VALUES ('expediente', v_id_exp, 'anular_proceso', NULL, 'requerimiento',
+                    CONCAT('Proceso operativo anulado por la anulación de la propuesta ', v_numero, ' v', v_version,
+                           '. El expediente vuelve a la etapa comercial del RQ.'), p_id_usuario, NOW(),
+                    JSON_OBJECT('etapa', 'requerimiento'));
         END IF;
 
         -- Avisos: Operaciones (si el expediente ya estaba liberado) y responsables de propuestas que pierden cobertura
         INSERT INTO notificacion (id_usuario_destino, id_canal, titulo, cuerpo, entidad_tipo, id_entidad, fecha_creacion, creado_por)
         SELECT u.id_usuario, 5, LEFT(CONCAT('Proceso anulado: ', v_numero), 150),
                CONCAT(v_usu_nombre, ' anuló la propuesta ', v_numero, ' v', v_version, ' (', v_motivo_label, ').',
-                      IFNULL(CONCAT(' OC anuladas: ', v_ocs, '.'), ''), ' El expediente fue cerrado y no debe programarse.'),
+                      IFNULL(CONCAT(' OC anuladas: ', v_ocs, '.'), ''), ' El proceso operativo del expediente fue anulado y no debe programarse.'),
                'propuesta', p_id_propuesta, NOW(), p_id_usuario
         FROM usuario u
         WHERE v_exp_liberado = 1 AND u.eliminado_en IS NULL AND u.estado = 'activo' AND u.id_usuario <> p_id_usuario
@@ -257,7 +301,7 @@ proc: BEGIN
                             'justificacion',      TRIM(p_justificacion),
                             'vb_cancelado',       v_vb_pendiente = 1,
                             'oc_anuladas',        v_ocs,
-                            'expediente_cerrado', v_id_exp,
+                            'expediente_proceso_anulado', IF(IFNULL(v_exp_liberado, 0) = 1, v_id_exp, NULL),
                             'propuestas_afectadas', v_props_afect,
                             'rq_a_en_proceso',    v_rq_revertido = 1));
 
@@ -282,7 +326,7 @@ proc: BEGIN
                   IF(v_n_ocs > 0, CONCAT(', se anularán las órdenes de compra ', v_ocs), ''),
                   IF(v_aplic_otras > 0, ', se liberarán los montos que otras OC le asignaron', ''),
                   IF(v_props_afect IS NOT NULL, CONCAT(', las propuestas ', v_props_afect, ' perderán la cobertura de esas OC'), ''),
-                  IF(v_id_exp IS NOT NULL, ' y se cerrará el expediente', ''),
+                  IF(v_id_exp IS NOT NULL AND IFNULL(v_exp_liberado, 0) = 1, ' y se anulará el proceso operativo del expediente', ''),
                   '. El RQ y el expediente conservarán el historial. La acción será auditada.') AS impacto,
            -- HU-28: impacto crítico y bloqueo operativo
            p.total                                              AS monto_total,
@@ -312,6 +356,48 @@ proc: BEGIN
         WHERE IdMaestro = 9 AND IdEmpresa = 1 AND eliminado_en IS NULL
         ORDER BY Num1;
     END IF;
+END$$
+
+DELIMITER ;
+
+
+-- SP_AnularPropuesta: punto de entrada. Toma el mismo bloqueo por cliente (GET_LOCK) que el registro, la distribución y la
+-- liberación de OC, para que no se crucen con ellas. La lógica está en SP_AnularPropuestaInterno.
+DROP PROCEDURE IF EXISTS SP_AnularPropuesta;
+
+DELIMITER $$
+
+CREATE PROCEDURE SP_AnularPropuesta(
+    IN p_id_propuesta    BIGINT,
+    IN p_id_motivo       INT,
+    IN p_justificacion   TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_confirmacion    TINYINT,
+    IN p_solo_preparar   TINYINT,
+    IN p_id_usuario      BIGINT
+)
+proc: BEGIN
+    DECLARE v_bloqueo VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        DO RELEASE_LOCK(v_bloqueo);
+        GET DIAGNOSTICS CONDITION 1
+            @err_msg  = MESSAGE_TEXT,
+            @err_code = MYSQL_ERRNO;
+        SELECT 3 AS IdTipoMensaje,
+               CONCAT('[MySQL ', @err_code, '] ', @err_msg) AS Mensaje;
+    END;
+
+    SET v_bloqueo = CONCAT('tw_oc_cliente_', IFNULL((SELECT id_cliente FROM propuesta_comercial WHERE id_propuesta = p_id_propuesta), 0));
+    IF IFNULL(GET_LOCK(v_bloqueo, 15), 0) <> 1 THEN
+        SELECT 1 AS IdTipoMensaje,
+               'Hay otra operación en curso sobre las órdenes de compra de este cliente. Intente nuevamente en unos segundos.' AS Mensaje;
+        LEAVE proc;
+    END IF;
+
+    CALL SP_AnularPropuestaInterno(p_id_propuesta, p_id_motivo, p_justificacion, p_confirmacion, p_solo_preparar, p_id_usuario);
+
+    DO RELEASE_LOCK(v_bloqueo);
 END$$
 
 DELIMITER ;

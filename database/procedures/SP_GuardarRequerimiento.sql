@@ -79,6 +79,9 @@ BEGIN
             v_responsable, NOW(), NOW(), p_id_usuario
         );
 
+        -- Expediente Digital: nace con el RQ (HU-29)
+        CALL SP_CrearExpedienteRequerimiento(v_new_id, p_id_usuario);
+
         SELECT 2 AS IdTipoMensaje, 'Requerimiento creado exitosamente.' AS Mensaje;
         SELECT v_new_id AS id_requerimiento;
 

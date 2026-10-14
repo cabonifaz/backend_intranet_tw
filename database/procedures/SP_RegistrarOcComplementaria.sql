@@ -7,11 +7,11 @@
 --   propuesta lo que falta (si el monto es mayor, el resto queda como saldo disponible de la nueva OC).
 -- p_solo_validar = 1 valida y devuelve el resultado sin guardar (antes de escribir el PDF en disco).
 -- Resultados: 1 mensaje, 2 resultado.
-DROP PROCEDURE IF EXISTS SP_RegistrarOcComplementaria;
+DROP PROCEDURE IF EXISTS SP_RegistrarOcComplementariaInterno;
 
 DELIMITER $$
 
-CREATE PROCEDURE SP_RegistrarOcComplementaria(
+CREATE PROCEDURE SP_RegistrarOcComplementariaInterno(
     IN p_id_usuario      BIGINT,
     IN p_id_propuesta    BIGINT,
     IN p_numero_oc       VARCHAR(50)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
@@ -226,6 +226,57 @@ proc: BEGIN
            v_cubierto AS monto_existente, p_monto AS monto_nueva_oc, v_cubierto + v_asignado AS cobertura_total,
            v_pct AS cobertura_total_pct, v_estado_res AS estado_resultado,
            GREATEST(p_monto - v_faltante, 0) AS saldo_nueva_oc, v_notificados AS notificados;
+END$$
+
+DELIMITER ;
+
+
+-- SP_RegistrarOcComplementaria: punto de entrada. Toma un bloqueo por cliente (GET_LOCK) para que dos operaciones simultáneas
+-- sobre las OC del mismo cliente (registro, complementaria, distribución, liberación) no pasen las mismas
+-- validaciones a la vez (OC duplicadas, saldo sobreasignado o doble liberación). La lógica está en SP_RegistrarOcComplementariaInterno.
+DROP PROCEDURE IF EXISTS SP_RegistrarOcComplementaria;
+
+DELIMITER $$
+
+CREATE PROCEDURE SP_RegistrarOcComplementaria(
+    IN p_id_usuario      BIGINT,
+    IN p_id_propuesta    BIGINT,
+    IN p_numero_oc       VARCHAR(50)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_fecha_oc        DATE,
+    IN p_fecha_recepcion DATE,
+    IN p_monto           DECIMAL(14,2),
+    IN p_vigencia_dias   INT,
+    IN p_observaciones   VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_referencia      VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_ruta_pdf        VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_nombre_pdf      VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_tamano_pdf      BIGINT,
+    IN p_hash_pdf        CHAR(64)     CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_solo_validar    TINYINT
+)
+proc: BEGIN
+    DECLARE v_bloqueo VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        DO RELEASE_LOCK(v_bloqueo);
+        GET DIAGNOSTICS CONDITION 1
+            @err_msg  = MESSAGE_TEXT,
+            @err_code = MYSQL_ERRNO;
+        SELECT 3 AS IdTipoMensaje,
+               CONCAT('[MySQL ', @err_code, '] ', @err_msg) AS Mensaje;
+    END;
+
+    SET v_bloqueo = CONCAT('tw_oc_cliente_', IFNULL((SELECT id_cliente FROM propuesta_comercial WHERE id_propuesta = p_id_propuesta), 0));
+    IF IFNULL(GET_LOCK(v_bloqueo, 15), 0) <> 1 THEN
+        SELECT 1 AS IdTipoMensaje,
+               'Hay otra operación en curso sobre las órdenes de compra de este cliente. Intente nuevamente en unos segundos.' AS Mensaje;
+        LEAVE proc;
+    END IF;
+
+    CALL SP_RegistrarOcComplementariaInterno(p_id_usuario, p_id_propuesta, p_numero_oc, p_fecha_oc, p_fecha_recepcion, p_monto, p_vigencia_dias, p_observaciones, p_referencia, p_ruta_pdf, p_nombre_pdf, p_tamano_pdf, p_hash_pdf, p_solo_validar);
+
+    DO RELEASE_LOCK(v_bloqueo);
 END$$
 
 DELIMITER ;

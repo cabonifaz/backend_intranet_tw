@@ -340,6 +340,27 @@ builder.Services.AddScoped<RegistrarOcComplementariaCasoDeUso>();
 builder.Services.AddScoped<PrepararLiberacionOrdenCompraCasoDeUso>();
 builder.Services.AddScoped<LiberarOrdenCompraCasoDeUso>();
 
+// ── INYECCIÓN DE DEPENDENCIAS — Expediente Digital (HU-29 a HU-34) ───────────
+builder.Services.AddScoped<IExpedienteRepositorio, ExpedienteRepositorio>();
+builder.Services.AddScoped<ObtenerBandejaExpedientesCasoDeUso>();
+builder.Services.AddScoped<ObtenerDetalleExpedienteCasoDeUso>();
+builder.Services.AddScoped<ObtenerWorkflowExpedienteCasoDeUso>();
+builder.Services.AddScoped<ExportarWorkflowExpedienteCasoDeUso>();
+builder.Services.AddScoped<ExportarExpedienteCasoDeUso>();
+builder.Services.AddScoped<ObtenerDocumentosExpedienteCasoDeUso>();
+builder.Services.AddScoped<ObtenerArchivoExpedienteCasoDeUso>();
+builder.Services.AddScoped<AdjuntarDocumentoExpedienteCasoDeUso>();
+builder.Services.AddScoped<RegistrarBloqueoExpedienteCasoDeUso>();
+builder.Services.AddScoped<PrepararResolucionBloqueoCasoDeUso>();
+builder.Services.AddScoped<ResolverBloqueoExpedienteCasoDeUso>();
+builder.Services.AddScoped<ObtenerHistorialExpedienteCasoDeUso>();
+builder.Services.AddScoped<ExportarHistorialExpedienteCasoDeUso>();
+builder.Services.AddScoped<PrepararReasignacionExpedienteCasoDeUso>();
+builder.Services.AddScoped<BuscarResponsablesExpedienteCasoDeUso>();
+builder.Services.AddScoped<ReasignarResponsableExpedienteCasoDeUso>();
+builder.Services.AddScoped<PrepararAvanceExpedienteCasoDeUso>();
+builder.Services.AddScoped<AvanzarEtapaExpedienteCasoDeUso>();
+
 // ── INYECCIÓN DE DEPENDENCIAS — Seguimiento comercial (HU-17 / HU-18 / HU-19 / HU-20 / HU-21) ────────────────
 builder.Services.AddScoped<ISeguimientoComercialRepositorio, SeguimientoComercialRepositorio>();
 builder.Services.AddScoped<ObtenerBandejaSeguimientoCasoDeUso>();

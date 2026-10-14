@@ -130,7 +130,7 @@ BEGIN
             FROM orden_servicio os
             JOIN expediente_digital e ON e.id_expediente = os.id_expediente AND e.eliminado_en IS NULL
             WHERE os.eliminado_en IS NULL AND os.estado <> 'anulada'
-              AND (e.id_orden_compra = p_id_oc OR e.id_propuesta = v_id_propuesta)
+              AND e.id_expediente = FN_ExpedienteDePropuesta(v_id_propuesta)
             ORDER BY os.id_os DESC LIMIT 1;
 
             -- 1. Header
