@@ -122,8 +122,11 @@ public record KpisOrdenesCompraDto(
 /// Fila de la bandeja. MontoAplicado = monto de la propuesta ya aplicado a la OC (0 mientras no se valida);
 /// Saldo = MontoOc − MontoAplicado (negativo = saldo insuficiente).
 /// CoberturaCodigo: pendiente | completa | con_saldo ("Parcial") | insuficiente | moneda_diferente.
-/// CoberturaProyectada: cómo quedará la cobertura al validar. EstadoVisual: pendiente_validacion | observada |
-/// validada | validada_parcial | bloqueada | vencida | anulada.
+/// CoberturaProyectada: cómo quedará la cobertura al validar.
+/// Estado = valor guardado en BD, solo el resultado de la validación: pendiente_validacion | vigente |
+///   cobertura_parcial | saldo_insuficiente | vencida | anulada.
+/// EstadoVisual = lo que se muestra (considera además la observación abierta, la liberación y la cobertura):
+///   pendiente_validacion | observada | validada | validada_parcial | bloqueada | liberada | vencida | anulada.
 /// </summary>
 public record ItemBandejaOrdenCompraDto
 {
@@ -229,6 +232,8 @@ public record ResumenOrdenCompraDto
     public int?      IdMotivoObservacion  { get; init; }
     public string?   MotivoObservacion    { get; init; }
     /// <summary>HU-26 — Observación abierta: todos los motivos, detalle y responsable de corrección.</summary>
+    /// <summary>Observación abierta (para "Levantar observación"); null si no hay.</summary>
+    public long?     IdObservacionAbierta { get; init; }
     public string?   MotivosObservacion   { get; init; }
     public string?   DetalleObservacion   { get; init; }
     public string?   ResponsableCorreccion { get; init; }
@@ -556,10 +561,12 @@ public record ResumenValidacionOrdenCompraDto
 /// <summary>
 /// Ítem del checklist: razon_social, ruc, propuesta_aceptada, moneda, monto, numero_unico, pdf_legible, oc_vigente.
 /// RequiereConfirmacion = el validador lo confirma contra la OC física (se envía en "confirmados").
+/// Bloqueante = si no cumple, impide validar. "monto" no es bloqueante: una OC que no cubre toda la propuesta
+/// se valida y queda en saldo insuficiente (EstadoVisual "bloqueada") hasta validar su OC complementaria.
 /// </summary>
 public record ItemValidacionOrdenCompraDto(
     int Orden, string Codigo, string Descripcion, string? ValorSistema, string? ValorReferencia,
-    bool CumpleAuto, bool RequiereConfirmacion, string? Detalle);
+    bool CumpleAuto, bool RequiereConfirmacion, string? Detalle, bool Bloqueante = true);
 
 public record ResponsableCorreccionDto(long Id, string Nombre, string Etiqueta, bool EsResponsablePropuesta);
 
@@ -595,6 +602,17 @@ public record ObservarOrdenCompraSolicitudDto
 public record ObservacionRegistradaDto(
     long IdObservacion, long IdOc, string NumeroOc, string Estado, string? Motivos,
     long IdResponsable, string? Responsable, bool ExpedienteBloqueado, int Notificados);
+
+/// <summary>Sustento obligatorio (10 a 1000 caracteres): por qué se levanta la observación sin editar la OC.</summary>
+public record LevantarObservacionOrdenCompraSolicitudDto
+{
+    public string? Sustento { get; init; }
+}
+
+/// <summary>Observación levantada: la OC queda pendiente de validación (EstadoVisual = pendiente_validacion).</summary>
+public record ObservacionLevantadaDto(
+    long IdObservacion, long IdOc, string NumeroOc, string Estado, string EstadoVisual,
+    DateTime? FechaLevantamiento, string? LevantadaPor, int ExpedientesDesbloqueados, int Notificados);
 
 // ══════════════════════ HU-27 — Distribución de Saldos y OC Complementaria ══════════════════════
 

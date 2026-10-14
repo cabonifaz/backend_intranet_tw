@@ -46,6 +46,7 @@ public interface IOrdenCompraRepositorio
     Task<RespuestaDto<OrdenCompraValidadaDto>> ValidarAsync(long idOc, string confirmados, string? comentario, long idUsuario, CancellationToken ct);
 
     Task<RespuestaDto<ObservacionRegistradaDto>> ObservarAsync(long idOc, string motivos, string detalle, long idResponsable, long idUsuario, CancellationToken ct);
+    Task<RespuestaDto<ObservacionLevantadaDto>> LevantarObservacionAsync(long idOc, long idObservacion, string sustento, long idUsuario, CancellationToken ct);
 
     // HU-27
     Task<RespuestaDto<DistribucionOrdenCompraDto>> PrepararDistribucionAsync(long idOc, long idUsuario, CancellationToken ct);

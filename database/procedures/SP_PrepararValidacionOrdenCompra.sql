@@ -4,9 +4,13 @@
 -- Una OC observada se corrige con "Guardar y revalidar" (HU-24) y vuelve a quedar lista para validar.
 -- Resultados:
 --   1 mensaje
---   2 resumen comparativo: OC, propuesta, RQ, cliente/RUC, montos, PDF y dictamen
---     (aprobable | con_alertas | no_aprobable) con puede_validar y puede_observar
---   3 checklist de validación (requiere_confirmacion = 1: el validador lo confirma contra la OC física)
+--   2 resumen comparativo: OC, propuesta, RQ, cliente/RUC, montos, PDF y dictamen con puede_validar y puede_observar:
+--       aprobable     todo conforme
+--       con_alertas   solo falla un ítem informativo (monto que no cubre la propuesta): se puede validar y la OC
+--                     queda en saldo insuficiente hasta validar su OC complementaria
+--       no_aprobable  falla un ítem bloqueante: corregir u observar
+--   3 checklist de validación (requiere_confirmacion = 1: el validador lo confirma contra la OC física,
+--     bloqueante = 0: informativo, no impide validar)
 --   4 motivos de observación (MOTIVO_OBSERVACION_OC, tal cual)
 --   5 responsables de corrección (usuarios que pueden editar la OC, el responsable comercial primero)
 --   6 observaciones anteriores de la OC
@@ -27,6 +31,7 @@ proc: BEGIN
     DECLARE v_n_os          INT DEFAULT 0;
     DECLARE v_obs_abierta   INT DEFAULT 0;
     DECLARE v_fallan        INT DEFAULT 0;
+    DECLARE v_alertas       INT DEFAULT 0;
     DECLARE v_puede         TINYINT DEFAULT 0;
     DECLARE v_motivo_no     VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 
@@ -56,7 +61,8 @@ proc: BEGIN
     SELECT area INTO v_area_resp FROM usuario WHERE id_usuario = v_id_resp;
 
     CALL SP_EvaluarValidacionOrdenCompra(p_id_oc);
-    SELECT COUNT(*) INTO v_fallan FROM tmp_oc_check WHERE cumple_auto = 0;
+    SELECT IFNULL(SUM(bloqueante = 1), 0), IFNULL(SUM(bloqueante = 0), 0) INTO v_fallan, v_alertas
+    FROM tmp_oc_check WHERE cumple_auto = 0;
 
     SET v_motivo_no = CASE
         WHEN v_estado <> 'pendiente_validacion' THEN 'La orden de compra ya fue validada.'
@@ -78,9 +84,12 @@ proc: BEGIN
            oc.nombre_archivo_pdf,
            IF(t.tiene_pdf = 1, CONCAT('/api/crm/ordenes-compra/', t.id_oc, '/pdf'), NULL) AS url_pdf,
            t.id_responsable, CONCAT(u.nombre, ' ', u.apellido) AS responsable,
-           CASE WHEN v_fallan = 0 THEN 'aprobable' WHEN v_fallan <= 1 THEN 'con_alertas' ELSE 'no_aprobable' END AS dictamen,
-           CASE WHEN v_fallan = 0 THEN 'No se detectaron inconsistencias críticas entre el documento y el sistema.'
-                ELSE CONCAT('Se detectaron ', v_fallan, ' inconsistencia(s). Corrija la OC u obsérvela.') END AS dictamen_mensaje,
+           CASE WHEN v_fallan > 0  THEN 'no_aprobable'
+                WHEN v_alertas > 0 THEN 'con_alertas'
+                ELSE                    'aprobable' END                                   AS dictamen,
+           CASE WHEN v_fallan > 0  THEN CONCAT('Se detectaron ', v_fallan, ' inconsistencia(s). Corrija la OC u obsérvela.')
+                WHEN v_alertas > 0 THEN 'La OC no cubre toda la propuesta. Se puede validar: quedará con saldo insuficiente y no se podrá liberar hasta validar una OC complementaria.'
+                ELSE                    'No se detectaron inconsistencias críticas entre el documento y el sistema.' END AS dictamen_mensaje,
            v_fallan                                       AS inconsistencias,
            IF(v_puede = 1 AND v_fallan = 0, 1, 0)         AS puede_validar,
            v_puede                                        AS puede_observar,
@@ -95,7 +104,8 @@ proc: BEGIN
     DROP TEMPORARY TABLE IF EXISTS tmp_oc;
 
     -- 3. Checklist
-    SELECT orden, codigo, descripcion, valor_sistema, valor_referencia, cumple_auto, requiere_confirmacion, detalle
+    SELECT orden, codigo, descripcion, valor_sistema, valor_referencia, cumple_auto, requiere_confirmacion, detalle,
+           bloqueante
     FROM tmp_oc_check ORDER BY orden;
     DROP TEMPORARY TABLE IF EXISTS tmp_oc_check;
 

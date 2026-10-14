@@ -280,6 +280,7 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
                     FechaValidacion     = FechaHora(r, "fecha_validacion"),
                     IdMotivoObservacion = EntNulo(r, "id_motivo_observacion"),
                     MotivoObservacion   = Texto(r, "motivo_observacion"),
+                    IdObservacionAbierta = EnteroLargoNulo(r, "id_observacion_abierta"),
                     MotivosObservacion  = Texto(r, "motivos_observacion"),
                     DetalleObservacion  = Texto(r, "detalle_observacion"),
                     ResponsableCorreccion = Texto(r, "responsable_correccion"),
@@ -760,7 +761,8 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
                     checklist.Add(new ItemValidacionOrdenCompraDto(
                         Ent(r, "orden"), Texto(r, "codigo") ?? "", Texto(r, "descripcion") ?? "",
                         Texto(r, "valor_sistema"), Texto(r, "valor_referencia"),
-                        Booleano(r, "cumple_auto"), Booleano(r, "requiere_confirmacion"), Texto(r, "detalle")));
+                        Booleano(r, "cumple_auto"), Booleano(r, "requiere_confirmacion"), Texto(r, "detalle"),
+                        Booleano(r, "bloqueante")));
 
                 // 4. Motivos (tal cual)
                 await r.NextResultAsync(ct);
@@ -829,6 +831,27 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
                     EnteroLargo(r, "id_observacion"), EnteroLargo(r, "id_oc"), Texto(r, "numero_oc") ?? "",
                     Texto(r, "estado") ?? "", Texto(r, "motivos"), EnteroLargo(r, "id_responsable"), Texto(r, "responsable"),
                     Booleano(r, "expediente_bloqueado"), Ent(r, "notificados")));
+            },
+            ct);
+
+    public Task<RespuestaDto<ObservacionLevantadaDto>> LevantarObservacionAsync(long idOc, long idObservacion, string sustento, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_LevantarObservacionOrdenCompra",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario",     idUsuario);
+                p.AddWithValue("p_id_oc",          idOc);
+                p.AddWithValue("p_id_observacion", idObservacion);
+                p.AddWithValue("p_sustento",       sustento);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<ObservacionLevantadaDto>(3, "No se pudo leer la observación levantada.");
+                return new RespuestaDto<ObservacionLevantadaDto>(2, mensaje, new ObservacionLevantadaDto(
+                    EnteroLargo(r, "id_observacion"), EnteroLargo(r, "id_oc"), Texto(r, "numero_oc") ?? "",
+                    Texto(r, "estado") ?? "", Texto(r, "estado_visual") ?? "", FechaHora(r, "fecha_levantamiento"),
+                    Texto(r, "levantada_por"), Ent(r, "expedientes_desbloqueados"), Ent(r, "notificados")));
             },
             ct);
 

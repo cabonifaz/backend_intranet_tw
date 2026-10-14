@@ -514,6 +514,28 @@ public class ObservarOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio)
     }
 }
 
+/// <summary>
+/// Levanta la observación abierta sin editar la OC (el jefe la observó por error o era de proceso): la OC vuelve a
+/// pendiente de validación, se desbloquean los expedientes y se notifica al responsable de corrección.
+/// </summary>
+public class LevantarObservacionOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio)
+{
+    public Task<RespuestaDto<ObservacionLevantadaDto>> EjecutarAsync(
+        long idOc, long idObservacion, LevantarObservacionOrdenCompraSolicitudDto datos, long idUsuario, CancellationToken ct = default)
+    {
+        static Task<RespuestaDto<ObservacionLevantadaDto>> Error(string m) =>
+            Task.FromResult(new RespuestaDto<ObservacionLevantadaDto>(1, m));
+
+        if (idOc <= 0)          return Error("Orden de compra no válida.");
+        if (idObservacion <= 0) return Error("Observación no válida.");
+        var sustento = datos?.Sustento?.Trim() ?? "";
+        if (sustento.Length < 10)   return Error("Indique el sustento para levantar la observación (mínimo 10 caracteres).");
+        if (sustento.Length > 1000) return Error("El sustento admite hasta 1000 caracteres.");
+
+        return repositorio.LevantarObservacionAsync(idOc, idObservacion, sustento, idUsuario, ct);
+    }
+}
+
 // ══════════════════════ HU-27 — Distribución de Saldos y OC Complementaria ══════════════════════
 
 /// <summary>Modal "Distribuir Monto de OC": totales de la OC, aplicaciones registradas y propuestas destino.</summary>

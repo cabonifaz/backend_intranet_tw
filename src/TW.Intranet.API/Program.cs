@@ -333,6 +333,7 @@ builder.Services.AddScoped<ExportarAuditoriaOrdenCompraCasoDeUso>();
 builder.Services.AddScoped<PrepararValidacionOrdenCompraCasoDeUso>();
 builder.Services.AddScoped<ValidarOrdenCompraCasoDeUso>();
 builder.Services.AddScoped<ObservarOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<LevantarObservacionOrdenCompraCasoDeUso>();
 builder.Services.AddScoped<PrepararDistribucionOrdenCompraCasoDeUso>();
 builder.Services.AddScoped<DistribuirOrdenCompraCasoDeUso>();
 builder.Services.AddScoped<PrepararOcComplementariaCasoDeUso>();
@@ -379,9 +380,14 @@ builder.Services.AddScoped<RegistrarAceptacionSeguimientoCasoDeUso>();
 builder.Services.AddScoped<RegistrarRechazoSeguimientoCasoDeUso>();
 builder.Services.AddScoped<CerrarSinVentaSeguimientoCasoDeUso>();
 
-// ── INYECCIÓN DE DEPENDENCIAS — Consulta de RUC (OpenRUC + caché) ────────────
+// ── INYECCIÓN DE DEPENDENCIAS — Consulta de RUC (OpenRUC + Decolecta + caché) ─
 // Variables: ConsultaRuc__DiasVigenciaCache (30), ConsultaRuc__OpenRuc__Habilitado (true),
 // ConsultaRuc__OpenRuc__UrlBase (https://openruc.com/), ConsultaRuc__OpenRuc__TimeoutSegundos (8).
+// Decolecta (RUC 10 y respaldo de RUC 20): ConsultaRuc__Decolecta__Token (obligatorio para usarlo),
+// ConsultaRuc__Decolecta__Habilitado (true), ConsultaRuc__Decolecta__UrlBase (https://api.decolecta.com/),
+// ConsultaRuc__Decolecta__TimeoutSegundos (8).
+// El orden de registro es el orden en que se prueban: primero OpenRUC (RUC 20, sin token) y luego Decolecta.
+// Cada proveedor usa un HttpClient con nombre propio (si no, compartirían la misma configuración).
 var seccionRuc = cfg.GetSection("ConsultaRuc");
 builder.Services.AddSingleton(new TW.Intranet.Aplicacion.Dtos.OpcionesConsultaRuc(
     int.TryParse(seccionRuc["DiasVigenciaCache"], out var diasCacheRuc) && diasCacheRuc > 0 ? diasCacheRuc : 30));
@@ -391,12 +397,28 @@ var configuracionOpenRuc = new ConfiguracionOpenRuc(
     TimeoutSegundos: int.TryParse(seccionRuc["OpenRuc:TimeoutSegundos"], out var timeoutRuc) && timeoutRuc > 0 ? timeoutRuc : 8);
 if (configuracionOpenRuc.Habilitado)
 {
-    builder.Services.AddHttpClient<IProveedorRuc, OpenRucProveedor>(c =>
+    builder.Services.AddHttpClient<IProveedorRuc, OpenRucProveedor>("openruc", c =>
     {
         c.BaseAddress = new Uri(configuracionOpenRuc.UrlBase);
         c.Timeout     = TimeSpan.FromSeconds(configuracionOpenRuc.TimeoutSegundos);
         c.DefaultRequestHeaders.Accept.ParseAdd("application/json");
         c.DefaultRequestHeaders.UserAgent.ParseAdd("TW-Intranet/1.0");
+    });
+}
+var configuracionDecolecta = new ConfiguracionDecolecta(
+    Habilitado:      !bool.TryParse(seccionRuc["Decolecta:Habilitado"], out var decolectaHabilitado) || decolectaHabilitado,
+    UrlBase:         string.IsNullOrWhiteSpace(seccionRuc["Decolecta:UrlBase"]) ? "https://api.decolecta.com/" : seccionRuc["Decolecta:UrlBase"]!.TrimEnd('/') + "/",
+    Token:           seccionRuc["Decolecta:Token"]?.Trim() ?? "",
+    TimeoutSegundos: int.TryParse(seccionRuc["Decolecta:TimeoutSegundos"], out var timeoutDecolecta) && timeoutDecolecta > 0 ? timeoutDecolecta : 8);
+if (configuracionDecolecta.Habilitado && configuracionDecolecta.Token.Length > 0)
+{
+    builder.Services.AddHttpClient<IProveedorRuc, DecolectaRucProveedor>("decolecta", c =>
+    {
+        c.BaseAddress = new Uri(configuracionDecolecta.UrlBase);
+        c.Timeout     = TimeSpan.FromSeconds(configuracionDecolecta.TimeoutSegundos);
+        c.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+        c.DefaultRequestHeaders.UserAgent.ParseAdd("TW-Intranet/1.0");
+        DecolectaRucProveedor.ConfigurarToken(c, configuracionDecolecta.Token);
     });
 }
 builder.Services.AddScoped<IConsultaRucRepositorio, ConsultaRucRepositorio>();

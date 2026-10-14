@@ -24,6 +24,9 @@
 -- lista_programacion: validada, vigente, sin observación, con cobertura, sin OS, sin liberar, el expediente
 --   aún en la etapa de OC y sin otras OC de la propuesta pendientes de validación (complementarias).
 --
+-- estado (BD) guarda solo el resultado de la validación: pendiente_validacion, vigente, cobertura_parcial,
+--   saldo_insuficiente, vencida, anulada. Lo que se muestra es estado_visual, que además considera la observación
+--   abierta, la liberación y la cobertura.
 -- estado_visual: anulada, vencida, observada, pendiente_validacion, liberada (HU-28), bloqueada, validada_parcial, validada
 DROP PROCEDURE IF EXISTS SP_CalcularOrdenesCompra;
 
@@ -50,6 +53,9 @@ BEGIN
         oc.monto_total                                              AS monto_oc,
         oc.estado                                                   AS estado_bd,
         oc.id_motivo_observacion, oc.id_validado_por, oc.fecha_liberacion, oc.liberado_por,
+        -- Observada = tiene una observación abierta (la observación es la fuente, no id_motivo_observacion)
+        EXISTS (SELECT 1 FROM orden_compra_observacion ob
+                WHERE ob.id_oc = oc.id_oc AND ob.estado = 'abierta' AND ob.eliminado_en IS NULL) AS obs_abierta,
         oc.fecha_oc, oc.fecha_recepcion, oc.vigencia_desde, oc.vigencia_hasta, oc.vigencia_dias,
         oc.observaciones, oc.fecha_registro, oc.creado_por,
         (oc.url_archivo_pdf IS NOT NULL)                            AS tiene_pdf,
@@ -134,7 +140,7 @@ BEGIN
         CASE
             WHEN c.estado_bd = 'anulada'                              THEN 'anulada'
             WHEN c.vencida = 1                                        THEN 'vencida'
-            WHEN c.id_motivo_observacion IS NOT NULL                  THEN 'observada'
+            WHEN c.obs_abierta = 1                                    THEN 'observada'
             WHEN c.validada = 0                                       THEN 'pendiente_validacion'
             WHEN c.fecha_liberacion IS NOT NULL                       THEN 'liberada'
             WHEN c.cobertura_proyectada IN ('insuficiente', 'moneda_diferente')
@@ -144,7 +150,7 @@ BEGIN
             ELSE                                                           'validada'
         END                                                                                AS estado_visual,
         (c.estado_bd <> 'anulada' AND c.vencida = 0 AND c.validada = 1
-         AND c.id_motivo_observacion IS NULL
+         AND c.obs_abierta = 0
          AND c.cobertura_proyectada IN ('completa', 'con_saldo')
          AND c.estado_bd <> 'saldo_insuficiente'
          AND c.ordenes_servicio = 0

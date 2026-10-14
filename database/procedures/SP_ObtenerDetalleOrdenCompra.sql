@@ -163,7 +163,9 @@ BEGIN
                 t.id_validado_por, CONCAT(uv.nombre, ' ', uv.apellido) AS validado_por,
                 v_fecha_valid                               AS fecha_validacion,
                 t.id_motivo_observacion, mo.String1         AS motivo_observacion,
-                -- HU-26: observación abierta (todos los motivos, detalle y responsable de corrección)
+                -- HU-26: observación abierta (id para levantarla, todos los motivos, detalle y responsable de corrección)
+                (SELECT MAX(o.id_observacion) FROM orden_compra_observacion o
+                 WHERE o.id_oc = t.id_oc AND o.estado = 'abierta' AND o.eliminado_en IS NULL)        AS id_observacion_abierta,
                 (SELECT GROUP_CONCAT(tm.String1 ORDER BY tm.Num1 SEPARATOR ', ')
                  FROM orden_compra_observacion o
                  JOIN orden_compra_observacion_motivo om ON om.id_observacion = o.id_observacion AND om.eliminado_en IS NULL
@@ -362,6 +364,7 @@ BEGIN
                            WHEN 'editar_oc_revalidacion' THEN 'Editada y enviada a revalidación'
                            WHEN 'validar_oc'             THEN 'Orden de compra validada'
                            WHEN 'observar_oc'            THEN 'Orden de compra observada'
+                           WHEN 'levantar_observacion_oc' THEN 'Observación levantada'
                            WHEN 'reemplazar_pdf_oc'      THEN 'Documento de la OC reemplazado'
                            WHEN 'exportar_auditoria_oc'  THEN 'Historial de auditoría descargado'
                            WHEN 'distribuir_oc'          THEN 'Saldo de la OC distribuido'

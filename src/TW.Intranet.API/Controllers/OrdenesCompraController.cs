@@ -30,6 +30,7 @@ public class OrdenesCompraController(
     PrepararValidacionOrdenCompraCasoDeUso       prepararValidacion,
     ValidarOrdenCompraCasoDeUso                  validar,
     ObservarOrdenCompraCasoDeUso                 observar,
+    LevantarObservacionOrdenCompraCasoDeUso      levantarObservacion,
     PrepararDistribucionOrdenCompraCasoDeUso     prepararDistribucion,
     DistribuirOrdenCompraCasoDeUso               distribuir,
     PrepararOcComplementariaCasoDeUso            prepararComplementaria,
@@ -254,6 +255,17 @@ public class OrdenesCompraController(
     [HttpPost("api/crm/ordenes-compra/{idOc:long}/observar")]
     public async Task<IActionResult> Observar(long idOc, [FromBody] ObservarOrdenCompraSolicitudDto datos, CancellationToken ct = default)
         => Responder(await observar.EjecutarAsync(idOc, datos, IdUsuarioActual, ct));
+
+    /// <summary>
+    /// HU-26 — Levantar la observación sin editar la OC: { sustento }. Solo jefes (oc_validar). La OC vuelve a
+    /// pendiente de validación, se desbloquean los expedientes y se notifica al responsable de corrección.
+    /// El id de la observación abierta viene en el detalle (idObservacionAbierta) y en /validacion (observaciones).
+    /// </summary>
+    [RequierePermiso("oc_validar")]
+    [HttpPost("api/crm/ordenes-compra/{idOc:long}/observaciones/{idObservacion:long}/levantar")]
+    public async Task<IActionResult> LevantarObservacion(long idOc, long idObservacion,
+        [FromBody] LevantarObservacionOrdenCompraSolicitudDto datos, CancellationToken ct = default)
+        => Responder(await levantarObservacion.EjecutarAsync(idOc, idObservacion, datos, IdUsuarioActual, ct));
 
     /// <summary>
     /// HU-27 — Modal "Distribuir Monto de OC": monto total, aplicado, saldo disponible y uso de fondos, aplicaciones

@@ -4,6 +4,8 @@
 -- verificación automática y si requiere que el validador lo confirme contra la OC física
 -- (razón social, RUC, moneda, monto y legibilidad del PDF).
 -- HU-27: el monto se compara contra el requerido neto (sin lo que ya cubren otras OC).
+-- bloqueante = 1: si no cumple, impide validar. El monto es informativo (bloqueante = 0): una OC que no
+--   cubre toda la propuesta se puede validar y queda en saldo insuficiente hasta validar su OC complementaria.
 DROP PROCEDURE IF EXISTS SP_EvaluarValidacionOrdenCompra;
 
 DELIMITER $$
@@ -91,10 +93,12 @@ BEGIN
         valor_referencia      VARCHAR(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
         cumple_auto           TINYINT,
         requiere_confirmacion TINYINT,
-        detalle               VARCHAR(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci
+        detalle               VARCHAR(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+        bloqueante            TINYINT DEFAULT 1
     );
 
-    INSERT INTO tmp_oc_check VALUES
+    INSERT INTO tmp_oc_check (orden, codigo, descripcion, valor_sistema, valor_referencia, cumple_auto,
+                              requiere_confirmacion, detalle) VALUES
     (1, 'razon_social', 'Razón Social del Cliente', v_razon, v_razon_prop,
         IF(v_id_cliente = v_prop_cliente, 1, 0), 1,
         IF(v_id_cliente = v_prop_cliente, 'Confirme que la OC física está emitida a esta razón social.',
@@ -113,12 +117,13 @@ BEGIN
         IF(v_otra_moneda = 0 AND v_id_moneda = v_prop_moneda, 1, 0), 1,
         IF(v_otra_moneda = 0 AND v_id_moneda = v_prop_moneda, 'Misma moneda que la propuesta. Confirme la moneda de la OC física.',
            CONCAT('La propuesta está en ', IFNULL(v_mon_prop, '-'), '.'))),
-    (5, 'monto', 'Monto total coincide',
+    (5, 'monto', 'Monto cubre la propuesta',
         CONCAT(IFNULL(v_sim_oc, ''), ' ', FORMAT(v_monto, 2)), CONCAT(IFNULL(v_sim_prop, ''), ' ', FORMAT(v_total, 2)),
         IF(v_otra_moneda = 0 AND v_monto >= ROUND(v_total * (1 - v_tolerancia / 100), 2), 1, 0), 1,
         CASE WHEN v_otra_moneda > 0 THEN 'No se puede comparar: las monedas son distintas.'
              WHEN v_monto >= ROUND(v_total * (1 - v_tolerancia / 100), 2) THEN 'El monto de la OC cubre la propuesta. Confirme el monto de la OC física.'
-             ELSE CONCAT('Faltan ', FORMAT(v_total - v_monto, 2), ' para cubrir la propuesta.') END),
+             ELSE CONCAT('Faltan ', FORMAT(v_total - v_monto, 2), ' para cubrir la propuesta. Se puede validar: ',
+                         'quedará con saldo insuficiente hasta validar una OC complementaria.') END),
     (6, 'numero_unico', 'N.° de OC no duplicado', v_numero_oc, NULL,
         IF(v_duplicadas = 0, 1, 0), 0,
         IF(v_duplicadas = 0, 'No hay otra OC del cliente con este número.', 'Existe otra OC del cliente con el mismo número.')),
@@ -128,6 +133,9 @@ BEGIN
     (8, 'oc_vigente', 'Orden de compra vigente', IFNULL(DATE_FORMAT(v_vig_hasta, '%d/%m/%Y'), 'Sin vigencia'), NULL,
         IF(v_vig_hasta IS NULL OR v_vig_hasta >= CURDATE(), 1, 0), 0,
         IF(v_vig_hasta IS NULL OR v_vig_hasta >= CURDATE(), 'La OC está vigente.', 'La vigencia de la OC ya venció.'));
+
+    -- El monto no impide validar (OC parcial: se completa con una OC complementaria)
+    UPDATE tmp_oc_check SET bloqueante = 0 WHERE codigo = 'monto';
 END$$
 
 DELIMITER ;

@@ -119,7 +119,7 @@ BEGIN
             WHEN accion IN ('envio_vb', 'solicitar_revocacion_vb')                                       THEN 'visto_bueno'
             WHEN accion IN ('envio_cliente', 'registrar_oc', 'registrar_oc_complementaria', 'validar_oc', 'editar_oc',
                             'editar_oc_revalidacion', 'distribuir_oc')                                     THEN 'orden_compra'
-            WHEN accion IN ('observar_oc', 'registrar_bloqueo', 'resolver_bloqueo', 'registrar_excepcion',
+            WHEN accion IN ('observar_oc', 'levantar_observacion_oc', 'registrar_bloqueo', 'resolver_bloqueo', 'registrar_excepcion',
                             'cerrar_excepcion')                                                            THEN 'bloqueo'
             WHEN accion IN ('liberar_oc', 'liberar_programacion', 'crear_y_liberar_programacion', 'avanzar_etapa') THEN 'etapa'
             WHEN accion IN ('adjuntar_documento', 'reemplazar_pdf_oc')                                     THEN 'documento'
@@ -142,6 +142,7 @@ BEGIN
             WHEN 'registrar_oc_complementaria'   THEN 'OC complementaria registrada'
             WHEN 'validar_oc'                    THEN 'OC validada'
             WHEN 'observar_oc'                   THEN 'OC observada'
+            WHEN 'levantar_observacion_oc'       THEN 'Observación de la OC levantada'
             WHEN 'editar_oc'                     THEN 'OC editada'
             WHEN 'editar_oc_revalidacion'        THEN 'OC corregida y enviada a revalidación'
             WHEN 'distribuir_oc'                 THEN 'Saldo de OC distribuido'

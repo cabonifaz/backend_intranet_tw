@@ -151,6 +151,7 @@ proc: BEGIN
                    WHEN 'editar_oc_revalidacion' THEN 'OC editada y enviada a revalidación'
                    WHEN 'validar_oc'             THEN 'Orden de compra validada'
                    WHEN 'observar_oc'            THEN 'Orden de compra observada'
+                   WHEN 'levantar_observacion_oc' THEN 'Observación levantada'
                    WHEN 'anular_oc'              THEN 'Orden de compra anulada'
                    WHEN 'distribuir_oc'          THEN 'Saldo de la OC distribuido'
                    WHEN 'liberar_oc'             THEN 'Expediente liberado para programación'
@@ -163,7 +164,7 @@ proc: BEGIN
                NULL, NULL, a.id_usuario
         FROM auditoria_evento a
         WHERE a.entidad_tipo = 'orden_compra' AND a.id_entidad = p_id_oc
-          AND a.accion IN ('editar_oc', 'editar_oc_revalidacion', 'validar_oc', 'observar_oc', 'anular_oc',
+          AND a.accion IN ('editar_oc', 'editar_oc_revalidacion', 'validar_oc', 'observar_oc', 'levantar_observacion_oc', 'anular_oc',
                            'distribuir_oc', 'registrar_oc_complementaria', 'liberar_oc')
         UNION ALL
         SELECT os.fecha_creacion, 'os_creada', 'Orden de servicio programada',

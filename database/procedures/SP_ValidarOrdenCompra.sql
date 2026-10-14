@@ -1,9 +1,11 @@
 -- HU-26 Validar definitivamente la orden de compra.
 -- Acción oc_validar, OC del área del usuario, pendiente de validación y sin observación abierta.
--- Todo el checklist debe ser conforme: las verificaciones automáticas deben cumplirse y el validador
--- debe confirmar contra la OC física los ítems que lo requieren (p_confirmados = códigos separados por coma:
--- razon_social,ruc,moneda,monto,pdf_legible).
--- Al validar: estado vigente (o cobertura_parcial si la OC deja saldo a favor), monto aplicado y saldo,
+-- Las verificaciones automáticas bloqueantes deben cumplirse y el validador debe confirmar contra la OC física
+-- los ítems que lo requieren (p_confirmados = códigos separados por coma: razon_social,ruc,moneda,monto,pdf_legible).
+-- El monto es informativo: una OC que no cubre toda la propuesta se valida y queda en saldo_insuficiente
+-- (se ve "bloqueada" y no se puede liberar) hasta que se valida su OC complementaria, que la pasa a vigente.
+-- Al validar: estado vigente (cobertura_parcial si la OC deja saldo a favor, saldo_insuficiente si no alcanza),
+-- monto aplicado y saldo,
 -- validador, bloqueos de la OC en el expediente resueltos, auditoría validar_oc con el checklist y
 -- notificación al responsable comercial y a Operaciones (OC lista para programación).
 -- HU-27: el monto aplicado es el requerido neto (lo que otras OC no cubren de sus propuestas).
@@ -83,7 +85,7 @@ proc: BEGIN
     CALL SP_EvaluarValidacionOrdenCompra(p_id_oc);
 
     SELECT GROUP_CONCAT(descripcion ORDER BY orden SEPARATOR ', ') INTO v_fallan
-    FROM tmp_oc_check WHERE cumple_auto = 0;
+    FROM tmp_oc_check WHERE cumple_auto = 0 AND bloqueante = 1;
 
     SELECT GROUP_CONCAT(descripcion ORDER BY orden SEPARATOR ', ') INTO v_sin_conf
     FROM tmp_oc_check WHERE requiere_confirmacion = 1 AND FIND_IN_SET(codigo, v_confirmados) = 0;
@@ -105,7 +107,9 @@ proc: BEGIN
         LEAVE proc;
     END IF;
 
-    SET v_estado_nuevo = IF(v_cobertura = 'con_saldo', 'cobertura_parcial', 'vigente');
+    SET v_estado_nuevo = CASE v_cobertura WHEN 'con_saldo'    THEN 'cobertura_parcial'
+                                          WHEN 'insuficiente' THEN 'saldo_insuficiente'
+                                          ELSE                     'vigente' END;
 
     START TRANSACTION;
 
@@ -118,11 +122,13 @@ proc: BEGIN
         modificado_por        = p_id_usuario
     WHERE id_oc = p_id_oc;
 
-    -- HU-27: si es una OC complementaria, la OC de origen deja de estar en saldo insuficiente
-    UPDATE orden_compra o
-    JOIN orden_compra c ON c.id_oc = p_id_oc AND c.tipo_oc = 'complementaria'
-    SET o.estado = 'vigente', o.modificado_por = p_id_usuario
-    WHERE o.id_oc = c.id_oc_origen AND o.estado = 'saldo_insuficiente';
+    -- HU-27: si es una OC complementaria que completa la propuesta, la OC de origen deja de estar en saldo insuficiente
+    IF v_estado_nuevo <> 'saldo_insuficiente' THEN
+        UPDATE orden_compra o
+        JOIN orden_compra c ON c.id_oc = p_id_oc AND c.tipo_oc = 'complementaria'
+        SET o.estado = 'vigente', o.modificado_por = p_id_usuario
+        WHERE o.id_oc = c.id_oc_origen AND o.estado = 'saldo_insuficiente';
+    END IF;
 
     -- Bloqueos de esta OC en los expedientes: resueltos (vinculados por id de OC)
     UPDATE expediente_bloqueador SET resuelto = 1, fecha_resolucion = NOW(), resuelto_por = p_id_usuario,
@@ -146,7 +152,10 @@ proc: BEGIN
     INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo,
                                   descripcion, id_usuario, registrado_en, metadata)
     VALUES ('orden_compra', p_id_oc, 'validar_oc', v_estado, v_estado_nuevo,
-            CONCAT('Orden de compra validada. Checklist conforme.',
+            CONCAT(IF(v_estado_nuevo = 'saldo_insuficiente',
+                      CONCAT('Orden de compra validada con saldo insuficiente: faltan ', FORMAT(v_total - v_monto, 2),
+                             ' para cubrir la propuesta (requiere OC complementaria).'),
+                      'Orden de compra validada. Checklist conforme.'),
                    IFNULL(CONCAT(' Comentario: ', NULLIF(TRIM(p_comentario), '')), '')),
             p_id_usuario, NOW(),
             JSON_OBJECT('checklist', v_checklist, 'comentario', NULLIF(TRIM(IFNULL(p_comentario, '')), ''),
@@ -157,18 +166,24 @@ proc: BEGIN
     INSERT INTO notificacion (id_usuario_destino, id_canal, titulo, cuerpo, entidad_tipo, id_entidad, fecha_creacion, creado_por)
     SELECT u.id_usuario, 5,
            LEFT(CONCAT('OC validada: ', v_numero), 150),
-           CONCAT(v_usuario, ' validó la OC ', v_numero, '. Lista para liberar a programación.'),
+           IF(v_estado_nuevo = 'saldo_insuficiente',
+              CONCAT(v_usuario, ' validó la OC ', v_numero, ' con saldo insuficiente: faltan ', FORMAT(v_total - v_monto, 2),
+                     '. Registre una OC complementaria para poder liberarla.'),
+              CONCAT(v_usuario, ' validó la OC ', v_numero, '. Lista para liberar a programación.')),
            'orden_compra', p_id_oc, NOW(), p_id_usuario
     FROM usuario u
     WHERE u.eliminado_en IS NULL AND u.estado = 'activo' AND u.id_usuario <> p_id_usuario
-      AND ((u.area = 'operaciones' AND u.rol_sistema IN ('supervisor', 'administrador'))
+      AND ((u.area = 'operaciones' AND u.rol_sistema IN ('supervisor', 'administrador') AND v_estado_nuevo <> 'saldo_insuficiente')
            OR u.id_usuario = v_id_resp);
 
     SET v_notificados = ROW_COUNT();
 
     COMMIT;
 
-    SELECT 2 AS IdTipoMensaje, 'Orden de compra validada.' AS Mensaje;
+    SELECT 2 AS IdTipoMensaje,
+           IF(v_estado_nuevo = 'saldo_insuficiente',
+              'Orden de compra validada con saldo insuficiente. Registre una OC complementaria para poder liberarla.',
+              'Orden de compra validada.') AS Mensaje;
     SELECT p_id_oc AS id_oc, v_numero AS numero_oc, v_estado_nuevo AS estado, v_cobertura AS estado_cobertura,
            NOW() AS fecha_validacion, v_usuario AS validado_por, v_notificados AS notificados;
 END$$
