@@ -44,8 +44,8 @@ public class ConsultarRucCasoDeUso(
         if (candidatos.Count == 0)
             return new(1, ValidadorRuc.EsPersonaJuridica(ruc)
                 ? "No hay un servicio de consulta de RUC configurado. Complete los datos manualmente."
-                : "La consulta automática solo cubre empresas (RUC que empieza con 20). " +
-                  "Para personas naturales con negocio (RUC 10) complete los datos manualmente.");
+                : "La consulta de RUC de personas naturales (RUC 10) no está configurada " +
+                  "(falta el token de Decolecta). Complete los datos manualmente.");
 
         bool algunoNoEncontro = false;
         foreach (var proveedor in candidatos)
