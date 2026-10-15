@@ -163,15 +163,13 @@ public record CabeceraDetalleSeguimientoDto
     public bool      PuedeReprogramar          { get; init; }
     /// <summary>HU-20 — veces que se reprogramó la próxima acción.</summary>
     public int       Reprogramaciones          { get; init; }
-    /// <summary>HU-21 — botón "Cerrar sin venta".</summary>
-    public bool      PuedeCerrarSinVenta       { get; init; }
-    /// <summary>HU-21 — el cierre sin venta permite reactivación futura (null si no está cerrado).</summary>
+    /// <summary>Histórico: el antiguo cierre sin venta permitía reactivación (el flujo se eliminó el 2026-10-15).</summary>
     public bool      PermiteReactivacion       { get; init; }
 }
 
 /// <summary>
 /// Evento del timeline. Tipo: propuesta_creada | vb_solicitado | vb_aprobado | vb_devuelto | vb_rechazado |
-/// vb_cancelado | enviada_cliente | seguimiento | cierre_aceptacion | cierre_rechazo | cierre_sin_venta |
+/// vb_cancelado | enviada_cliente | seguimiento | cierre_aceptacion | cierre_rechazo |
 /// accion_reprogramada (HU-20) | orden_compra.
 /// </summary>
 public record EventoTimelineSeguimientoDto(
@@ -245,6 +243,8 @@ public record ProximaAccionEntradaDto
     public long?     IdResponsable { get; init; }
     public int?      IdPrioridad   { get; init; }
     public string?   Detalle       { get; init; }
+    /// <summary>Notificación anticipada: 5, 10, 15, 20, 30 o 60 minutos antes (null = 15).</summary>
+    public int?      MinutosAntesNotificar { get; init; }
 }
 
 /// <summary>
@@ -414,6 +414,8 @@ public record ReprogramarAccionDto
     public long?     IdResponsable { get; init; }
     public int?      IdMotivo      { get; init; }
     public string?   Detalle       { get; init; }
+    /// <summary>Notificación anticipada: 5, 10, 15, 20, 30 o 60 minutos antes (null = 15).</summary>
+    public int?      MinutosAntesNotificar { get; init; }
 }
 
 /// <summary>
@@ -441,6 +443,8 @@ public record AccionActualSeguimientoDto
     public string    EstadoSeguimiento    { get; init; } = "";
     public int       Reprogramaciones     { get; init; }
     public DateTime? FechaServidor        { get; init; }
+    /// <summary>Aviso anticipado configurado para la acción actual (null = sin configurar, el modal usa 15).</summary>
+    public int?      MinutosAntesNotificar { get; init; }
 }
 
 public record ReprogramacionHistorialDto(
@@ -486,16 +490,13 @@ public record RegistrarRechazoDto
     public string?   Comentario { get; init; }
 }
 
-/// <summary>Cerrar sin Venta: motivo (MOTIVO_CIERRE_SIN_VENTA), detalle (mín. 20), reactivación y confirmación.</summary>
-public record CerrarSinVentaDto
-{
-    public int?    IdMotivo             { get; init; }
-    public string? Detalle              { get; init; }
-    public bool    PermitirReactivacion { get; init; }
-    public bool    ConfirmoCierre       { get; init; }
-}
+/// <summary>Archivo de evidencia ya guardado en el almacenamiento, que el SP registra junto con el cierre.</summary>
+public record EvidenciaCierreDto(string Nombre, string Ruta, string Tipo, long Tamano);
 
-/// <summary>Datos que el caso de uso envía al SP de cierre. Tipo: aceptacion | rechazo | sin_venta.</summary>
+/// <summary>
+/// Datos que el caso de uso envía al SP de cierre. Tipo: aceptacion | rechazo.
+/// Adjuntos: evidencia obligatoria de la aceptación (1 a 5 archivos, vacío en el rechazo).
+/// </summary>
 public record ComandoCierreSeguimiento(
     string    Tipo,
     int?      IdTipoAceptacion,
@@ -503,11 +504,13 @@ public record ComandoCierreSeguimiento(
     long?     IdContacto,
     DateTime? Fecha,
     string?   Comentario,
-    bool      PermiteReactivacion,
-    bool      Confirmado);
+    IReadOnlyList<EvidenciaCierreDto> Adjuntos);
 
-/// <summary>EstadoSeguimiento: aceptada | rechazada. SiguienteEtapa: ordenes_compra (aceptación) o null.</summary>
-public record ResultadoCierreSeguimientoDto(long IdSeguimiento, string EstadoSeguimiento, string? SiguienteEtapa);
+/// <summary>
+/// EstadoSeguimiento: aceptada | rechazada. SiguienteEtapa: ordenes_compra (aceptación) o null.
+/// Adjuntos: cantidad de archivos de evidencia registrados con la aceptación.
+/// </summary>
+public record ResultadoCierreSeguimientoDto(long IdSeguimiento, string EstadoSeguimiento, string? SiguienteEtapa, int Adjuntos = 0);
 
 public record CabeceraCierreSeguimientoDto
 {
@@ -537,5 +540,7 @@ public record PreparacionCierreSeguimientoDto(
     CabeceraCierreSeguimientoDto         Cabecera,
     List<OpcionSeguimientoDto>           TiposAceptacion,
     List<OpcionSeguimientoDto>           MotivosRechazo,
-    List<OpcionSeguimientoDto>           MotivosSinVenta,
     List<ContactoRegistroSeguimientoDto> Contactos);
+
+/// <summary>Resultado de una pasada del worker de recordatorios de seguimiento.</summary>
+public record ResultadoRecordatoriosSeguimientoDto(int Enviados, int Omitidos, int Cancelados);

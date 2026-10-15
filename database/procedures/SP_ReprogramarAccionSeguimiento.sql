@@ -8,6 +8,8 @@
 --   "Primer seguimiento" (queda en seguimiento_reprogramacion con id_seguimiento NULL).
 --   Siempre se guarda el historial con la acción anterior y la nueva.
 --   Si el nuevo responsable es otra persona, se le notifica.
+-- Observaciones 2026-10-15: p_minutos_antes = aviso anticipado (5, 10, 15, 20, 30 o 60 minutos, NULL = 15).
+--   Se cancela el recordatorio pendiente de la propuesta y se crea uno nuevo para la acción reprogramada.
 -- Resultados: 1 mensaje, 2 id_reprogramacion.
 DROP PROCEDURE IF EXISTS SP_ReprogramarAccionSeguimiento;
 
@@ -21,7 +23,8 @@ CREATE PROCEDURE SP_ReprogramarAccionSeguimiento(
     IN p_id_prioridad    INT,
     IN p_id_responsable  BIGINT,
     IN p_id_motivo       INT,
-    IN p_detalle         VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci
+    IN p_detalle         VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_minutos_antes   INT
 )
 proc: BEGIN
     DECLARE v_dias_sin_resp  INT;
@@ -43,6 +46,7 @@ proc: BEGIN
     DECLARE v_detalle        VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_usuario        VARCHAR(220) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_id_reprog      BIGINT;
+    DECLARE v_minutos        INT;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -56,6 +60,7 @@ proc: BEGIN
     END;
 
     SET v_detalle = NULLIF(TRIM(IFNULL(p_detalle, '')), '');
+    SET v_minutos = IFNULL(p_minutos_antes, 15);
 
     IF FN_PermisoAccion(p_id_usuario, 'propuesta_seguimiento_reprogramar') = 0 THEN
         SELECT 1 AS IdTipoMensaje, 'No tienes permiso para reprogramar acciones de seguimiento.' AS Mensaje;
@@ -130,6 +135,13 @@ proc: BEGIN
         LEAVE proc;
     END IF;
 
+    -- Aviso anticipado
+    IF v_minutos NOT IN (5, 10, 15, 20, 30, 60) THEN
+        SELECT 1 AS IdTipoMensaje,
+               'Seleccione con cuántos minutos de anticipación desea la notificación (5, 10, 15, 20, 30 o 60).' AS Mensaje;
+        LEAVE proc;
+    END IF;
+
     START TRANSACTION;
 
     -- Con seguimientos: se actualiza la acción del último seguimiento (siempre está activo si la propuesta está abierta)
@@ -139,6 +151,7 @@ proc: BEGIN
             id_tipo_proxima_accion = p_id_tipo_accion,
             id_prioridad_accion    = p_id_prioridad,
             id_responsable         = p_id_responsable,
+            minutos_antes_notificar = v_minutos,
             modificado_por         = p_id_usuario
         WHERE id_seguimiento = v_id_ult_seg;
     END IF;
@@ -146,15 +159,27 @@ proc: BEGIN
     INSERT INTO seguimiento_reprogramacion (
         id_propuesta, id_seguimiento,
         fecha_anterior, id_tipo_accion_anterior, id_prioridad_anterior, id_responsable_anterior,
-        fecha_nueva, id_tipo_accion_nueva, id_prioridad_nueva, id_responsable_nuevo,
+        fecha_nueva, id_tipo_accion_nueva, id_prioridad_nueva, id_responsable_nuevo, minutos_antes_notificar,
         id_motivo, detalle, creado_por)
     VALUES (
         p_id_propuesta, v_id_ult_seg,
         v_fecha_ant, v_tipo_ant, v_prioridad_ant, v_resp_ant,
-        p_fecha_nueva, p_id_tipo_accion, p_id_prioridad, p_id_responsable,
+        p_fecha_nueva, p_id_tipo_accion, p_id_prioridad, p_id_responsable, v_minutos,
         p_id_motivo, v_detalle, p_id_usuario);
 
     SET v_id_reprog = LAST_INSERT_ID();
+
+    -- Recordatorio de la acción reprogramada
+    UPDATE seguimiento_recordatorio
+    SET estado = 'cancelado', fecha_procesado = NOW(), modificado_por = p_id_usuario
+    WHERE id_propuesta = p_id_propuesta AND estado = 'pendiente';
+
+    INSERT INTO seguimiento_recordatorio (
+        id_propuesta, origen, id_origen, id_usuario_destino, id_tipo_accion,
+        fecha_accion, minutos_antes, fecha_notificar, creado_por)
+    VALUES (
+        p_id_propuesta, 'reprogramacion', v_id_reprog, p_id_responsable, p_id_tipo_accion,
+        p_fecha_nueva, v_minutos, p_fecha_nueva - INTERVAL v_minutos MINUTE, p_id_usuario);
 
     IF p_id_responsable <> p_id_usuario THEN
         SELECT CONCAT(nombre, ' ', apellido) INTO v_usuario FROM usuario WHERE id_usuario = p_id_usuario;

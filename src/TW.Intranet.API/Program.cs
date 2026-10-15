@@ -378,7 +378,9 @@ builder.Services.AddScoped<ReprogramarAccionSeguimientoCasoDeUso>();
 builder.Services.AddScoped<PrepararCierreSeguimientoCasoDeUso>();
 builder.Services.AddScoped<RegistrarAceptacionSeguimientoCasoDeUso>();
 builder.Services.AddScoped<RegistrarRechazoSeguimientoCasoDeUso>();
-builder.Services.AddScoped<CerrarSinVentaSeguimientoCasoDeUso>();
+builder.Services.AddScoped<ProcesarRecordatoriosSeguimientoCasoDeUso>();
+// Observaciones 2026-10-15: aviso anticipado de las acciones de seguimiento (Recordatorios:Habilitado / IntervaloSegundos)
+builder.Services.AddHostedService<TW.Intranet.API.Configuracion.RecordatoriosSeguimientoWorker>();
 
 // ── INYECCIÓN DE DEPENDENCIAS — Consulta de RUC (OpenRUC + Decolecta + caché) ─
 // Variables: ConsultaRuc__DiasVigenciaCache (30), ConsultaRuc__OpenRuc__Habilitado (true),

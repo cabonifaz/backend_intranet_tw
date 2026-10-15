@@ -8,7 +8,7 @@
 --     propuesta      propuesta en borrador, devuelta para corrección, rechazada en VB, revocada o vencida
 --     visto_bueno    propuesta pendiente de VB o de revocación
 --     orden_compra   VB aprobado (envío al cliente, aceptación y OC)
---     cerrado        RQ anulado o cerrado, o el cliente rechazó o cerró sin venta
+--     cerrado        RQ anulado o cerrado, o el cliente rechazó la propuesta
 --   Desde Programación (liberación de la OC, HU-28) la etapa es la guardada en el expediente y avanza
 --   desde el expediente (HU-34).
 --
@@ -162,7 +162,7 @@ BEGIN
         CASE
             WHEN c.etapa_guardada NOT IN ('requerimiento', 'propuesta', 'visto_bueno', 'orden_compra') THEN c.etapa_guardada
             WHEN c.estado_rq IN ('anulado', 'cerrado')                                              THEN 'cerrado'
-            WHEN c.estado_seguimiento IN ('cerrado_rechazo', 'cerrado_sin_venta')                    THEN 'cerrado'
+            WHEN c.estado_seguimiento = 'cerrado_rechazo'                    THEN 'cerrado'
             WHEN c.id_propuesta IS NULL OR c.estado_propuesta = 'anulado'                             THEN 'requerimiento'
             WHEN c.estado_propuesta IN ('pendiente_vb', 'pendiente_revocacion')                       THEN 'visto_bueno'
             WHEN c.estado_propuesta IN ('aprobado', 'enviado')                                        THEN 'orden_compra'

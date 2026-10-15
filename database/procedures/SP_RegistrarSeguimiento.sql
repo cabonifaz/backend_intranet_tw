@@ -12,6 +12,11 @@
 --   salvo que p_ejecuta_accion = 1 (se registró desde "Ejecutar ahora": la acción queda realizada).
 --   Si viene p_id_correo, el correo pasa a 'enviado' y queda enlazado al seguimiento.
 --   Si el responsable de la próxima acción es otra persona, se le notifica.
+-- Observaciones 2026-10-15: p_minutos_antes = aviso anticipado de la próxima acción (5, 10, 15, 20, 30
+--   o 60 minutos, NULL = 15). Al programar una acción se cancela el recordatorio pendiente y se crea uno
+--   nuevo (seguimiento_recordatorio, lo procesa el worker). "Ejecutar ahora" sin nueva acción cancela el
+--   pendiente. Sin seguimientos previos, la acción que se mantiene es la primera acción creada al enviar
+--   la propuesta (o su reprogramación).
 -- Resultados: 1 mensaje, 2 id_seguimiento (solo al guardar).
 DROP PROCEDURE IF EXISTS SP_RegistrarSeguimiento;
 
@@ -35,6 +40,7 @@ CREATE PROCEDURE SP_RegistrarSeguimiento(
     IN p_id_responsable_acc  BIGINT,
     IN p_id_prioridad        INT,
     IN p_detalle_accion      VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_minutos_antes       INT,
     IN p_id_correo           BIGINT,
     IN p_proveedor           VARCHAR(40)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_id_mensaje          VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
@@ -68,6 +74,8 @@ proc: BEGIN
     DECLARE v_ant_detalle    VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_ant_prioridad  INT;
     DECLARE v_ant_resp       BIGINT;
+    DECLARE v_ant_minutos    INT;
+    DECLARE v_minutos        INT;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -83,6 +91,7 @@ proc: BEGIN
     SET v_notas     = NULLIF(TRIM(IFNULL(p_notas, '')), '');
     SET v_asunto    = NULLIF(TRIM(IFNULL(p_asunto, '')), '');
     SET v_programar = IFNULL(p_programar, 0);
+    SET v_minutos   = IFNULL(p_minutos_antes, 15);
 
     -- Permiso
     IF FN_PermisoAccion(p_id_usuario, 'propuesta_seguimiento_registrar') = 0 THEN
@@ -203,6 +212,12 @@ proc: BEGIN
             SELECT 1 AS IdTipoMensaje, 'Seleccione un responsable activo del área para la próxima acción.' AS Mensaje;
             LEAVE proc;
         END IF;
+
+        IF v_minutos NOT IN (5, 10, 15, 20, 30, 60) THEN
+            SELECT 1 AS IdTipoMensaje,
+                   'Seleccione con cuántos minutos de anticipación desea la notificación (5, 10, 15, 20, 30 o 60).' AS Mensaje;
+            LEAVE proc;
+        END IF;
     END IF;
 
     IF IFNULL(p_solo_validar, 0) = 1 THEN
@@ -213,8 +228,8 @@ proc: BEGIN
     -- Acción pendiente del último seguimiento (se mantiene si no se programa otra)
     IF v_programar = 0 AND IFNULL(p_ejecuta_accion, 0) = 0 THEN
         SELECT s.proxima_accion_fecha, s.id_tipo_proxima_accion, s.proxima_accion_detalle,
-               s.id_prioridad_accion, s.id_responsable
-          INTO v_ant_fecha, v_ant_tipo, v_ant_detalle, v_ant_prioridad, v_ant_resp
+               s.id_prioridad_accion, s.id_responsable, s.minutos_antes_notificar
+          INTO v_ant_fecha, v_ant_tipo, v_ant_detalle, v_ant_prioridad, v_ant_resp, v_ant_minutos
         FROM seguimiento_comercial s
         WHERE s.id_propuesta = p_id_propuesta AND s.eliminado_en IS NULL
         ORDER BY s.fecha_interaccion DESC, s.id_seguimiento DESC
@@ -223,12 +238,22 @@ proc: BEGIN
         -- Sin seguimientos previos: la reprogramación del "Primer seguimiento" (HU-20), si existe
         IF NOT EXISTS (SELECT 1 FROM seguimiento_comercial
                        WHERE id_propuesta = p_id_propuesta AND eliminado_en IS NULL) THEN
-            SELECT r.fecha_nueva, r.id_tipo_accion_nueva, NULL, r.id_prioridad_nueva, r.id_responsable_nuevo
-              INTO v_ant_fecha, v_ant_tipo, v_ant_detalle, v_ant_prioridad, v_ant_resp
+            SELECT r.fecha_nueva, r.id_tipo_accion_nueva, NULL, r.id_prioridad_nueva, r.id_responsable_nuevo,
+                   r.minutos_antes_notificar
+              INTO v_ant_fecha, v_ant_tipo, v_ant_detalle, v_ant_prioridad, v_ant_resp, v_ant_minutos
             FROM seguimiento_reprogramacion r
             WHERE r.id_propuesta = p_id_propuesta AND r.id_seguimiento IS NULL AND r.eliminado_en IS NULL
             ORDER BY r.id_reprogramacion DESC
             LIMIT 1;
+
+            -- Sin reprogramación: la primera acción creada al enviar la propuesta
+            IF v_ant_fecha IS NULL THEN
+                SELECT p.primera_accion_fecha, p.id_tipo_primera_accion, NULL, p.id_prioridad_primera_accion,
+                       p.id_responsable_primera_accion, p.minutos_primera_accion
+                  INTO v_ant_fecha, v_ant_tipo, v_ant_detalle, v_ant_prioridad, v_ant_resp, v_ant_minutos
+                FROM propuesta_comercial p
+                WHERE p.id_propuesta = p_id_propuesta;
+            END IF;
         END IF;
     END IF;
 
@@ -245,7 +270,7 @@ proc: BEGIN
         id_propuesta, id_responsable, id_contacto, id_canal, id_resultado, notas, asunto, estado,
         fecha_interaccion, duracion_minutos,
         proxima_accion_fecha, id_tipo_proxima_accion, proxima_accion_detalle, id_prioridad_accion,
-        permite_reactivacion, creado_por)
+        minutos_antes_notificar, permite_reactivacion, creado_por)
     VALUES (
         p_id_propuesta, v_responsable, p_id_contacto, v_canal, v_resultado, v_notas, v_asunto, 'activo',
         IFNULL(p_fecha_interaccion, NOW()), IF(v_canal_cod = 'LLAMADA', p_duracion_minutos, NULL),
@@ -253,6 +278,7 @@ proc: BEGIN
         IF(v_programar = 1, p_id_tipo_accion, v_ant_tipo),
         IF(v_programar = 1, NULLIF(TRIM(IFNULL(p_detalle_accion, '')), ''), v_ant_detalle),
         IF(v_programar = 1, p_id_prioridad, v_ant_prioridad),
+        IF(v_programar = 1, v_minutos, v_ant_minutos),
         0, p_id_usuario);
 
     SET v_id_seguimiento = LAST_INSERT_ID();
@@ -262,6 +288,21 @@ proc: BEGIN
         SET estado = 'enviado', id_seguimiento = v_id_seguimiento, proveedor = p_proveedor,
             id_mensaje = p_id_mensaje, error = NULL, fecha_envio = NOW(), modificado_por = p_id_usuario
         WHERE id_correo = p_id_correo;
+    END IF;
+
+    -- Recordatorio de la próxima acción (aviso anticipado)
+    IF v_programar = 1 OR IFNULL(p_ejecuta_accion, 0) = 1 THEN
+        UPDATE seguimiento_recordatorio
+        SET estado = 'cancelado', fecha_procesado = NOW(), modificado_por = p_id_usuario
+        WHERE id_propuesta = p_id_propuesta AND estado = 'pendiente';
+    END IF;
+    IF v_programar = 1 THEN
+        INSERT INTO seguimiento_recordatorio (
+            id_propuesta, origen, id_origen, id_usuario_destino, id_tipo_accion,
+            fecha_accion, minutos_antes, fecha_notificar, creado_por)
+        VALUES (
+            p_id_propuesta, 'registro', v_id_seguimiento, p_id_responsable_acc, p_id_tipo_accion,
+            p_fecha_accion, v_minutos, p_fecha_accion - INTERVAL v_minutos MINUTE, p_id_usuario);
     END IF;
 
     IF v_programar = 1 AND p_id_responsable_acc <> p_id_usuario THEN

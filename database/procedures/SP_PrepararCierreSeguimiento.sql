@@ -1,12 +1,12 @@
--- HU-21 Datos de los modales Registrar Aceptación, Registrar Rechazo y Cerrar sin Venta.
+-- HU-21 Datos de los modales Registrar Aceptación y Registrar Rechazo.
+-- Observaciones 2026-10-15: se eliminó "Cerrar sin venta" (unificado con el Rechazo).
 -- Solo propuestas en seguimiento ABIERTO del área del usuario, con la acción propuesta_seguimiento_cerrar.
 -- Resultados:
 --   1 mensaje
 --   2 cabecera: propuesta, cliente, monto, RQ, responsable, contacto por defecto y fecha del servidor
 --   3 tipos de aceptación (TIPO_ACEPTACION_PROPUESTA)
 --   4 motivos de rechazo (MOTIVO_RECHAZO, tal cual)
---   5 motivos de cierre sin venta (MOTIVO_CIERRE_SIN_VENTA, tal cual)
---   6 contactos del cliente (el de la propuesta primero)
+--   5 contactos del cliente (el de la propuesta primero)
 DROP PROCEDURE IF EXISTS SP_PrepararCierreSeguimiento;
 
 DELIMITER $$
@@ -79,13 +79,7 @@ BEGIN
             WHERE IdMaestro = 10 AND IdEmpresa = 1 AND eliminado_en IS NULL
             ORDER BY Num1;
 
-            -- 5. Motivos de cierre sin venta (tal cual)
-            SELECT Num1 AS id, String1 AS nombre, String2 AS codigo
-            FROM tabla_maestra
-            WHERE IdMaestro = 12 AND IdEmpresa = 1 AND eliminado_en IS NULL
-            ORDER BY Num1;
-
-            -- 6. Contactos del cliente
+            -- 5. Contactos del cliente
             SELECT co.id_contacto, co.nombres, co.cargo, co.correo, co.telefono_movil, co.telefono_anexo,
                    (co.id_contacto = IFNULL(v_id_contacto, 0))  AS es_contacto_propuesta,
                    CAST(co.es_contacto_principal AS UNSIGNED)   AS es_contacto_principal

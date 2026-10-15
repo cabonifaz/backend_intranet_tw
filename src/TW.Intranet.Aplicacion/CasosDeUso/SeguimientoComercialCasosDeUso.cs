@@ -62,6 +62,14 @@ public class PrepararRegistroSeguimientoCasoDeUso(ISeguimientoComercialRepositor
 /// <summary>Validaciones de forma comunes (el SP vuelve a validar todo contra la BD).</summary>
 internal static class ValidacionSeguimiento
 {
+    /// <summary>Opciones del aviso anticipado (observación del cliente 2026-10-15). null = 15 minutos.</summary>
+    public static readonly int[] MinutosAvisoPermitidos = [5, 10, 15, 20, 30, 60];
+
+    public static string? MinutosAviso(int? minutos) =>
+        minutos is null || MinutosAvisoPermitidos.Contains(minutos.Value)
+            ? null
+            : "Seleccione con cuántos minutos de anticipación desea la notificación (5, 10, 15, 20, 30 o 60).";
+
     public static string? ProximaAccion(bool programar, ProximaAccionEntradaDto? a)
     {
         if (!programar) return null;
@@ -71,7 +79,7 @@ internal static class ValidacionSeguimiento
         if (a.IdResponsable is null or <= 0)           return "Seleccione el responsable de la próxima acción.";
         if (a.IdPrioridad is null or <= 0)             return "Seleccione la prioridad de la próxima acción.";
         if ((a.Detalle?.Trim().Length ?? 0) > 200)     return "El detalle de la próxima acción admite hasta 200 caracteres.";
-        return null;
+        return MinutosAviso(a.MinutosAntesNotificar);
     }
 
     public static string? Notas(string? notas) =>
@@ -278,14 +286,7 @@ public class SubirAdjuntosSeguimientoCasoDeUso(ISeguimientoComercialRepositorio 
         if (archivos.Count == 0)       return new(1, "Seleccione al menos un archivo.");
         if (archivos.Count > MaximoArchivos) return new(1, $"Máximo {MaximoArchivos} archivos por seguimiento.");
 
-        foreach (var a in archivos)
-        {
-            var ext = Path.GetExtension(a.NombreArchivo ?? "");
-            if (!Tipos.ContainsKey(ext))
-                return new(1, $"\"{a.NombreArchivo}\": tipo de archivo no permitido (PDF, imágenes, Word, Excel, correo o texto).");
-            if (a.TamanoBytes <= 0 || a.TamanoBytes > TamanoMaximoBytes)
-                return new(1, $"\"{a.NombreArchivo}\": el archivo debe pesar entre 1 byte y 10 MB.");
-        }
+        if (ValidarArchivos(archivos) is { } error) return new(1, error);
 
         var resultado = new List<AdjuntoSeguimientoDto>();
         foreach (var a in archivos)
@@ -312,7 +313,24 @@ public class SubirAdjuntosSeguimientoCasoDeUso(ISeguimientoComercialRepositorio 
         return new(2, resultado.Count == 1 ? "Adjunto guardado." : $"{resultado.Count} adjuntos guardados.", resultado);
     }
 
-    private static string NormalizarNombre(string nombreArchivo, string ext)
+    /// <summary>Cantidad, tipo y tamaño de los archivos. null = válidos.</summary>
+    public static string? ValidarArchivos(IReadOnlyList<ArchivoEntrada> archivos)
+    {
+        if (archivos.Count > MaximoArchivos) return $"Máximo {MaximoArchivos} archivos.";
+        foreach (var a in archivos)
+        {
+            var ext = Path.GetExtension(a.NombreArchivo ?? "");
+            if (!Tipos.ContainsKey(ext))
+                return $"\"{a.NombreArchivo}\": tipo de archivo no permitido (PDF, imágenes, Word, Excel, correo o texto).";
+            if (a.TamanoBytes <= 0 || a.TamanoBytes > TamanoMaximoBytes)
+                return $"\"{a.NombreArchivo}\": el archivo debe pesar entre 1 byte y 10 MB.";
+        }
+        return null;
+    }
+
+    public static string TipoContenido(string ext) => Tipos[ext];
+
+    public static string NormalizarNombre(string nombreArchivo, string ext)
     {
         var nombre = Path.GetFileName(nombreArchivo).Trim();
         foreach (var c in Path.GetInvalidFileNameChars())
@@ -373,6 +391,7 @@ public class ReprogramarAccionSeguimientoCasoDeUso(ISeguimientoComercialReposito
         var detalle = dto.Detalle?.Trim() ?? "";
         if (detalle.Length < 10)  return new(1, "Explique el motivo de la reprogramación (mínimo 10 caracteres).");
         if (detalle.Length > 500) return new(1, "El detalle admite hasta 500 caracteres.");
+        if (ValidacionSeguimiento.MinutosAviso(dto.MinutosAntesNotificar) is { } e) return new(1, e);
 
         var r = await repositorio.ReprogramarAccionAsync(idPropuesta, dto with { Detalle = detalle }, idUsuario, ct);
         return r.IdTipoMensaje == 2
@@ -394,22 +413,71 @@ public class PrepararCierreSeguimientoCasoDeUso(ISeguimientoComercialRepositorio
     }
 }
 
-/// <summary>Aceptación: tipo, contacto que confirma y fecha/hora. La propuesta pasa a la etapa Órdenes de Compra.</summary>
-public class RegistrarAceptacionSeguimientoCasoDeUso(ISeguimientoComercialRepositorio repositorio)
+/// <summary>
+/// Aceptación: tipo, contacto que confirma y fecha/hora. La propuesta pasa a Órdenes de Compra.
+/// Evidencia obligatoria (observación del cliente 2026-10-15), dos formas:
+///   - Con archivos (multipart): valida los archivos, valida en el SP sin guardar, guarda los archivos y
+///     registra el cierre con los adjuntos en una sola transacción (si falla, borra los archivos).
+///   - Sin archivos (JSON, flujo actual del front): registra el cierre y el front sube la evidencia
+///     enseguida con POST registros/{idSeguimiento}/adjuntos. El modal no deja guardar sin archivos.
+/// </summary>
+public class RegistrarAceptacionSeguimientoCasoDeUso(ISeguimientoComercialRepositorio repositorio, IAlmacenArchivos almacen)
 {
-    public Task<RespuestaDto<ResultadoCierreSeguimientoDto>> EjecutarAsync(
-        long idPropuesta, RegistrarAceptacionDto dto, long idUsuario, CancellationToken ct = default)
+    public async Task<RespuestaDto<ResultadoCierreSeguimientoDto>> EjecutarAsync(
+        long idPropuesta, RegistrarAceptacionDto dto, IReadOnlyList<SubirAdjuntosSeguimientoCasoDeUso.ArchivoEntrada> archivos,
+        long idUsuario, CancellationToken ct = default)
     {
         string? error = idPropuesta <= 0                 ? "Propuesta no válida."
                       : dto.IdTipoAceptacion is null or <= 0 ? "Seleccione el tipo de aceptación."
                       : dto.IdContacto is null or <= 0   ? "Seleccione el contacto que confirma la aceptación."
                       : (dto.Comentario?.Trim().Length ?? 0) > 2000 ? "El comentario admite hasta 2000 caracteres."
-                      : null;
-        if (error is not null) return Task.FromResult(new RespuestaDto<ResultadoCierreSeguimientoDto>(1, error));
+                      : SubirAdjuntosSeguimientoCasoDeUso.ValidarArchivos(archivos);
+        if (error is not null) return new(1, error);
 
-        return repositorio.CerrarAsync(idPropuesta, new ComandoCierreSeguimiento(
-            "aceptacion", dto.IdTipoAceptacion, null, dto.IdContacto, dto.Fecha, dto.Comentario?.Trim(), false, true),
-            idUsuario, ct);
+        var comando = new ComandoCierreSeguimiento(
+            "aceptacion", dto.IdTipoAceptacion, null, dto.IdContacto, dto.Fecha, dto.Comentario?.Trim(), []);
+
+        // Flujo actual del front: la evidencia llega después por el endpoint de adjuntos
+        if (archivos.Count == 0)
+            return await repositorio.CerrarAsync(idPropuesta, comando, idUsuario, false, ct);
+
+        // 1. Validar el cierre antes de guardar archivos
+        var validacion = await repositorio.CerrarAsync(idPropuesta, comando, idUsuario, true, ct);
+        if (validacion.IdTipoMensaje != 2) return validacion;
+
+        // 2. Guardar la evidencia
+        var guardados = new List<EvidenciaCierreDto>();
+        try
+        {
+            foreach (var a in archivos)
+            {
+                var ext  = Path.GetExtension(a.NombreArchivo!).ToLowerInvariant();
+                var ruta = $"seguimientos/aceptaciones/{idPropuesta}/{DateTime.UtcNow:yyyyMMddHHmmss}_{Guid.NewGuid():N}{ext}";
+                await almacen.GuardarAsync(ruta, a.Contenido, ct);
+                guardados.Add(new EvidenciaCierreDto(
+                    SubirAdjuntosSeguimientoCasoDeUso.NormalizarNombre(a.NombreArchivo!, ext), ruta,
+                    SubirAdjuntosSeguimientoCasoDeUso.TipoContenido(ext), a.TamanoBytes));
+            }
+
+            // 3. Registrar el cierre con los adjuntos (misma transacción en el SP)
+            var r = await repositorio.CerrarAsync(idPropuesta, comando with { Adjuntos = guardados }, idUsuario, false, ct);
+            if (r.IdTipoMensaje != 2) await EliminarAsync(guardados);
+            return r;
+        }
+        catch
+        {
+            await EliminarAsync(guardados);
+            throw;
+        }
+    }
+
+    private async Task EliminarAsync(IEnumerable<EvidenciaCierreDto> archivos)
+    {
+        foreach (var a in archivos)
+        {
+            try { await almacen.EliminarAsync(a.Ruta, CancellationToken.None); }
+            catch { /* el archivo huérfano no impide responder */ }
+        }
     }
 }
 
@@ -428,27 +496,20 @@ public class RegistrarRechazoSeguimientoCasoDeUso(ISeguimientoComercialRepositor
         if (error is not null) return Task.FromResult(new RespuestaDto<ResultadoCierreSeguimientoDto>(1, error));
 
         return repositorio.CerrarAsync(idPropuesta, new ComandoCierreSeguimiento(
-            "rechazo", null, dto.IdMotivo, null, dto.Fecha, comentario, false, true), idUsuario, ct);
+            "rechazo", null, dto.IdMotivo, null, dto.Fecha, comentario, []), idUsuario, false, ct);
     }
 }
 
-/// <summary>Cierre sin venta: motivo, detalle (mínimo 20), "Permitir reactivación futura" y check "Confirmo el cierre".</summary>
-public class CerrarSinVentaSeguimientoCasoDeUso(ISeguimientoComercialRepositorio repositorio)
-{
-    public Task<RespuestaDto<ResultadoCierreSeguimientoDto>> EjecutarAsync(
-        long idPropuesta, CerrarSinVentaDto dto, long idUsuario, CancellationToken ct = default)
-    {
-        var detalle = dto.Detalle?.Trim() ?? "";
-        string? error = idPropuesta <= 0           ? "Propuesta no válida."
-                      : dto.IdMotivo is null or <= 0 ? "Seleccione el motivo del cierre sin venta."
-                      : detalle.Length < 20         ? "Explique las razones del cierre sin venta (mínimo 20 caracteres)."
-                      : detalle.Length > 2000       ? "El detalle admite hasta 2000 caracteres."
-                      : !dto.ConfirmoCierre         ? "Debe confirmar el cierre de la oportunidad sin venta."
-                      : null;
-        if (error is not null) return Task.FromResult(new RespuestaDto<ResultadoCierreSeguimientoDto>(1, error));
+// ══════════════════════ Observaciones 2026-10-15 — Notificación anticipada ══════════════════════
 
-        return repositorio.CerrarAsync(idPropuesta, new ComandoCierreSeguimiento(
-            "sin_venta", null, dto.IdMotivo, null, null, detalle, dto.PermitirReactivacion, dto.ConfirmoCierre),
-            idUsuario, ct);
-    }
+/// <summary>
+/// Una pasada del worker: notifica en la plataforma las acciones de seguimiento cuyo aviso anticipado
+/// ya venció y limpia los recordatorios que dejaron de aplicar.
+/// </summary>
+public class ProcesarRecordatoriosSeguimientoCasoDeUso(ISeguimientoComercialRepositorio repositorio)
+{
+    public const int LimitePorPasada = 200;
+
+    public Task<RespuestaDto<ResultadoRecordatoriosSeguimientoDto>> EjecutarAsync(CancellationToken ct = default)
+        => repositorio.ProcesarRecordatoriosAsync(LimitePorPasada, ct);
 }

@@ -67,7 +67,8 @@ BEGIN
                    'calculada', 'programada')                    AS origen,
                 t.sla_estado, t.estado_seguimiento,
                 t.reprogramaciones,
-                NOW()                                            AS fecha_servidor
+                NOW()                                            AS fecha_servidor,
+                t.minutos_antes_notificar
             FROM tmp_seg t
             LEFT JOIN cliente c        ON c.id_cliente = t.id_cliente
             LEFT JOIN tabla_maestra pr ON pr.IdMaestro = 7 AND pr.IdEmpresa = 1 AND pr.Num1 = t.id_prioridad_accion;

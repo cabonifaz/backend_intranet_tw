@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Net.Http.Headers;
+using TW.Intranet.API.Configuracion;
 using TW.Intranet.API.Seguridad;
 using TW.Intranet.Aplicacion.CasosDeUso;
 using TW.Intranet.Aplicacion.Dtos;
@@ -28,8 +29,7 @@ public class SeguimientoComercialController(
     ReprogramarAccionSeguimientoCasoDeUso      reprogramarAccion,
     PrepararCierreSeguimientoCasoDeUso         prepararCierre,
     RegistrarAceptacionSeguimientoCasoDeUso    registrarAceptacion,
-    RegistrarRechazoSeguimientoCasoDeUso       registrarRechazo,
-    CerrarSinVentaSeguimientoCasoDeUso         cerrarSinVenta) : ControllerBase
+    RegistrarRechazoSeguimientoCasoDeUso       registrarRechazo) : ControllerBase
 {
     /// <summary>5 archivos de 10 MB + margen para el resto del multipart.</summary>
     private const long TamanoMaximoPeticion =
@@ -173,7 +173,7 @@ public class SeguimientoComercialController(
 
     /// <summary>
     /// HU-21 — Datos de los modales de cierre: cabecera (cliente, monto, RQ, responsable), tipos de aceptación,
-    /// motivos de rechazo y de cierre sin venta (tal cual) y contactos del cliente.
+    /// motivos de rechazo (tal cual) y contactos del cliente.
     /// </summary>
     [RequierePermiso("propuesta_seguimiento_cerrar")]
     [HttpGet("api/crm/seguimiento/{idPropuesta:long}/cierre/preparar")]
@@ -181,25 +181,55 @@ public class SeguimientoComercialController(
         => Responder(await prepararCierre.EjecutarAsync(idPropuesta, IdUsuarioActual, ct));
 
     /// <summary>
-    /// HU-21 — Registrar aceptación: { idTipoAceptacion, idContacto, fecha, comentario? }. La propuesta pasa a la
-    /// etapa Órdenes de Compra. La evidencia se sube con POST .../registros/{idSeguimiento}/adjuntos.
+    /// HU-21 — Registrar aceptación (JSON, flujo actual del front): { idTipoAceptacion, idContacto, fecha, comentario? }.
+    /// La evidencia es obligatoria (observación 2026-10-15): el modal no deja guardar sin archivos y los sube
+    /// enseguida con POST .../registros/{idSeguimiento}/adjuntos. La propuesta pasa a Órdenes de Compra.
     /// </summary>
     [RequierePermiso("propuesta_seguimiento_cerrar")]
     [HttpPost("api/crm/seguimiento/{idPropuesta:long}/aceptar")]
+    [Consumes("application/json")]
     public async Task<IActionResult> Aceptar(long idPropuesta, [FromBody] RegistrarAceptacionDto dto, CancellationToken ct = default)
-        => Responder(await registrarAceptacion.EjecutarAsync(idPropuesta, dto, IdUsuarioActual, ct));
+        => Responder(await registrarAceptacion.EjecutarAsync(idPropuesta, dto, [], IdUsuarioActual, ct));
+
+    /// <summary>
+    /// HU-21 — Registrar aceptación con la evidencia en la misma petición (opcional, atómico):
+    /// multipart/form-data con idTipoAceptacion, idContacto, fecha?, comentario? y "archivos" (1 a 5 archivos
+    /// de 10 MB). El cierre y los adjuntos se registran juntos.
+    /// </summary>
+    [RequierePermiso("propuesta_seguimiento_cerrar")]
+    [HttpPost("api/crm/seguimiento/{idPropuesta:long}/aceptar")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(TamanoMaximoPeticion)]
+    [RequestFormLimits(MultipartBodyLengthLimit = TamanoMaximoPeticion)]
+    public async Task<IActionResult> AceptarConEvidencia(long idPropuesta, [FromForm] RegistrarAceptacionDto dto,
+                                                         [FromForm] List<IFormFile>? archivos, CancellationToken ct = default)
+    {
+        var lista = (archivos ?? []).Where(a => a.Length > 0).ToList();
+        if (lista.Count == 0)
+            return BadRequest(new RespuestaDto<object>(1, "Adjunte al menos un archivo de evidencia de la aceptación."));
+
+        var entrada = dto with { Fecha = dto.Fecha is { } f ? ZonaHorariaLima.AHoraLima(f) : null };
+        var streams = new List<Stream>();
+        try
+        {
+            var entradas = new List<SubirAdjuntosSeguimientoCasoDeUso.ArchivoEntrada>();
+            foreach (var a in lista)
+            {
+                var s = a.OpenReadStream();
+                streams.Add(s);
+                entradas.Add(new(s, a.FileName, a.Length));
+            }
+            return Responder(await registrarAceptacion.EjecutarAsync(idPropuesta, entrada, entradas, IdUsuarioActual, ct));
+        }
+        finally
+        {
+            foreach (var s in streams) await s.DisposeAsync();
+        }
+    }
 
     /// <summary>HU-21 — Registrar rechazo: { idMotivo, fecha?, comentario (mín. 20) }. La propuesta queda rechazada.</summary>
     [RequierePermiso("propuesta_seguimiento_cerrar")]
     [HttpPost("api/crm/seguimiento/{idPropuesta:long}/rechazar")]
     public async Task<IActionResult> Rechazar(long idPropuesta, [FromBody] RegistrarRechazoDto dto, CancellationToken ct = default)
         => Responder(await registrarRechazo.EjecutarAsync(idPropuesta, dto, IdUsuarioActual, ct));
-
-    /// <summary>
-    /// HU-21 — Cerrar sin venta: { idMotivo, detalle (mín. 20), permitirReactivacion, confirmoCierre: true }.
-    /// </summary>
-    [RequierePermiso("propuesta_seguimiento_cerrar")]
-    [HttpPost("api/crm/seguimiento/{idPropuesta:long}/cerrar-sin-venta")]
-    public async Task<IActionResult> CerrarSinVenta(long idPropuesta, [FromBody] CerrarSinVentaDto dto, CancellationToken ct = default)
-        => Responder(await cerrarSinVenta.EjecutarAsync(idPropuesta, dto, IdUsuarioActual, ct));
 }

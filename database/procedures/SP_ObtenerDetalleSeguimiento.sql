@@ -102,7 +102,6 @@ BEGIN
             (v_abierta > 0 AND v_cerrar = 1)                  AS puede_registrar_aceptacion,
             (v_abierta > 0 AND v_cerrar = 1)                  AS puede_registrar_rechazo,
             (v_abierta > 0 AND v_reprogramar = 1)             AS puede_reprogramar,
-            (v_abierta > 0 AND v_cerrar = 1)                  AS puede_cerrar_sin_venta,
             s.permite_reactivacion                            AS permite_reactivacion
         FROM tmp_seg t
         LEFT JOIN seguimiento_comercial s ON s.id_seguimiento   = t.id_ult_seg
@@ -176,14 +175,12 @@ BEGIN
                    CASE s.estado
                        WHEN 'cerrado_aceptacion' THEN 'cierre_aceptacion'
                        WHEN 'cerrado_rechazo'    THEN 'cierre_rechazo'
-                       WHEN 'cerrado_sin_venta'  THEN 'cierre_sin_venta'
                        ELSE 'seguimiento'
                    END,
                    CASE s.estado
                        WHEN 'cerrado_aceptacion' THEN CONCAT('Propuesta aceptada por el cliente',
                                                              IFNULL(CONCAT(' (', tac.String1, ')'), ''))
                        WHEN 'cerrado_rechazo'    THEN 'Propuesta rechazada por el cliente'
-                       WHEN 'cerrado_sin_venta'  THEN 'Seguimiento cerrado sin venta'
                        ELSE IF(cn.String2 = 'CORREO' AND s.asunto IS NOT NULL,
                                CONCAT('Correo: ', s.asunto),
                                CONCAT(IFNULL(cn.String1, 'Seguimiento'),
@@ -194,9 +191,6 @@ BEGIN
                                                              IFNULL(CONCAT('. ', s.notas), ''))
                        WHEN 'cerrado_rechazo'    THEN CONCAT('Motivo: ', IFNULL(mr.String1, '-'),
                                                              IFNULL(CONCAT('. ', s.notas), ''))
-                       WHEN 'cerrado_sin_venta'  THEN CONCAT('Motivo: ', IFNULL(ms.String1, '-'),
-                                                             IFNULL(CONCAT('. ', s.notas), ''),
-                                                             IF(s.permite_reactivacion = 1, ' (permite reactivación futura)', ''))
                        ELSE s.notas
                    END,
                    p.version, COALESCE(s.creado_por, s.id_responsable), CONCAT(u.nombre, ' ', u.apellido),
@@ -210,7 +204,6 @@ BEGIN
             LEFT JOIN tabla_maestra rs ON rs.IdMaestro = 27 AND rs.IdEmpresa = 1 AND rs.Num1 = s.id_resultado
             LEFT JOIN tabla_maestra tac ON tac.Descripcion = 'TIPO_ACEPTACION_PROPUESTA' AND tac.IdEmpresa = 1 AND tac.Num1 = s.id_tipo_aceptacion
             LEFT JOIN tabla_maestra mr  ON mr.IdMaestro = 10 AND mr.IdEmpresa = 1 AND mr.Num1 = s.id_motivo_cierre AND s.estado = 'cerrado_rechazo'
-            LEFT JOIN tabla_maestra ms  ON ms.IdMaestro = 12 AND ms.IdEmpresa = 1 AND ms.Num1 = s.id_motivo_cierre AND s.estado = 'cerrado_sin_venta'
             LEFT JOIN contacto_cliente cc ON cc.id_contacto = s.id_contacto
             LEFT JOIN usuario u ON u.id_usuario = COALESCE(s.creado_por, s.id_responsable)
             WHERE p.numero = v_numero AND p.eliminado_en IS NULL AND s.eliminado_en IS NULL

@@ -32,5 +32,9 @@ public interface ISeguimientoComercialRepositorio
     // HU-21
     Task<RespuestaDto<PreparacionCierreSeguimientoDto>> PrepararCierreAsync(long idPropuesta, long idUsuario, CancellationToken ct);
 
-    Task<RespuestaDto<ResultadoCierreSeguimientoDto>> CerrarAsync(long idPropuesta, ComandoCierreSeguimiento comando, long idUsuario, CancellationToken ct);
+    Task<RespuestaDto<ResultadoCierreSeguimientoDto>> CerrarAsync(long idPropuesta, ComandoCierreSeguimiento comando, long idUsuario,
+                                                                bool soloValidar, CancellationToken ct);
+
+    // Observaciones 2026-10-15 — recordatorios de las acciones (worker)
+    Task<RespuestaDto<ResultadoRecordatoriosSeguimientoDto>> ProcesarRecordatoriosAsync(int limite, CancellationToken ct);
 }

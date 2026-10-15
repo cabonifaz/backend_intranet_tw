@@ -190,7 +190,6 @@ public class SeguimientoComercialRepositorio(CadenaConexionBd conexion)
                     PuedeRegistrarRechazo     = Booleano(r, "puede_registrar_rechazo"),
                     PuedeReprogramar          = Booleano(r, "puede_reprogramar"),
                     Reprogramaciones          = Ent(r, "reprogramaciones"),
-                    PuedeCerrarSinVenta       = Booleano(r, "puede_cerrar_sin_venta"),
                     PermiteReactivacion       = Booleano(r, "permite_reactivacion"),
                 };
 
@@ -397,6 +396,7 @@ public class SeguimientoComercialRepositorio(CadenaConexionBd conexion)
                 p.AddWithValue("p_id_responsable_acc", Valor(c.Programar ? a?.IdResponsable : null));
                 p.AddWithValue("p_id_prioridad",       Valor(c.Programar ? a?.IdPrioridad : null));
                 p.AddWithValue("p_detalle_accion",     Valor(c.Programar ? a?.Detalle : null));
+                p.AddWithValue("p_minutos_antes",      Valor(c.Programar ? a?.MinutosAntesNotificar : null));
                 p.AddWithValue("p_id_correo",          Valor(c.IdCorreo));
                 p.AddWithValue("p_proveedor",          Valor(c.Proveedor));
                 p.AddWithValue("p_id_mensaje",         Valor(c.IdMensaje));
@@ -514,6 +514,7 @@ public class SeguimientoComercialRepositorio(CadenaConexionBd conexion)
                     EstadoSeguimiento   = Texto(r, "estado_seguimiento") ?? "",
                     Reprogramaciones    = Ent(r, "reprogramaciones"),
                     FechaServidor       = FechaHora(r, "fecha_servidor"),
+                    MinutosAntesNotificar = EntNulo(r, "minutos_antes_notificar"),
                 };
 
                 // 3-4. Tipos de acción y prioridades
@@ -558,6 +559,7 @@ public class SeguimientoComercialRepositorio(CadenaConexionBd conexion)
                 p.AddWithValue("p_id_responsable", Valor(dto.IdResponsable));
                 p.AddWithValue("p_id_motivo",      Valor(dto.IdMotivo));
                 p.AddWithValue("p_detalle",        Valor(dto.Detalle));
+                p.AddWithValue("p_minutos_antes",  Valor(dto.MinutosAntesNotificar));
             },
             async (r, mensaje) =>
             {
@@ -605,12 +607,11 @@ public class SeguimientoComercialRepositorio(CadenaConexionBd conexion)
                     FechaServidor     = FechaHora(r, "fecha_servidor"),
                 };
 
-                // 3-5. Tipos de aceptación y motivos
+                // 3-4. Tipos de aceptación y motivos de rechazo
                 var tiposAceptacion = await LeerOpcionesAsync(r, ct);
                 var motivosRechazo  = await LeerOpcionesAsync(r, ct);
-                var motivosSinVenta = await LeerOpcionesAsync(r, ct);
 
-                // 6. Contactos
+                // 5. Contactos
                 await r.NextResultAsync(ct);
                 var contactos = new List<ContactoRegistroSeguimientoDto>();
                 while (await r.ReadAsync(ct))
@@ -620,11 +621,12 @@ public class SeguimientoComercialRepositorio(CadenaConexionBd conexion)
                         Ent(r, "es_contacto_propuesta") == 1, Ent(r, "es_contacto_principal") == 1));
 
                 return new RespuestaDto<PreparacionCierreSeguimientoDto>(2, mensaje,
-                    new PreparacionCierreSeguimientoDto(cabecera, tiposAceptacion, motivosRechazo, motivosSinVenta, contactos));
+                    new PreparacionCierreSeguimientoDto(cabecera, tiposAceptacion, motivosRechazo, contactos));
             },
             ct);
 
-    public Task<RespuestaDto<ResultadoCierreSeguimientoDto>> CerrarAsync(long idPropuesta, ComandoCierreSeguimiento c, long idUsuario, CancellationToken ct)
+    public Task<RespuestaDto<ResultadoCierreSeguimientoDto>> CerrarAsync(long idPropuesta, ComandoCierreSeguimiento c, long idUsuario,
+                                                                       bool soloValidar, CancellationToken ct)
         => EjecutarAsync("SP_CerrarSeguimiento",
             p =>
             {
@@ -636,17 +638,34 @@ public class SeguimientoComercialRepositorio(CadenaConexionBd conexion)
                 p.AddWithValue("p_id_contacto",          Valor(c.IdContacto));
                 p.AddWithValue("p_fecha",                Valor(c.Fecha));
                 p.AddWithValue("p_comentario",           Valor(c.Comentario));
-                p.AddWithValue("p_permite_reactivacion", Bit(c.PermiteReactivacion));
-                p.AddWithValue("p_confirmado",           Bit(c.Confirmado));
-                p.AddWithValue("p_solo_validar",         0);
+                p.AddWithValue("p_adjuntos",             c.Adjuntos.Count == 0 ? DBNull.Value
+                    : JsonSerializer.Serialize(c.Adjuntos.Select(a => new { nombre = a.Nombre, ruta = a.Ruta, tipo = a.Tipo, tamano = a.Tamano })));
+                p.AddWithValue("p_solo_validar",         Bit(soloValidar));
             },
             async (r, mensaje) =>
             {
+                if (soloValidar)
+                    return new RespuestaDto<ResultadoCierreSeguimientoDto>(2, mensaje, new ResultadoCierreSeguimientoDto(0, "", null));
                 await r.NextResultAsync(ct);
                 if (!await r.ReadAsync(ct))
                     return new RespuestaDto<ResultadoCierreSeguimientoDto>(3, "No se pudo leer el resultado del cierre.");
                 return new RespuestaDto<ResultadoCierreSeguimientoDto>(2, mensaje, new ResultadoCierreSeguimientoDto(
-                    EnteroLargo(r, "id_seguimiento"), Texto(r, "estado_seguimiento") ?? "", Texto(r, "siguiente_etapa")));
+                    EnteroLargo(r, "id_seguimiento"), Texto(r, "estado_seguimiento") ?? "", Texto(r, "siguiente_etapa"),
+                    Ent(r, "adjuntos")));
+            },
+            ct);
+
+    // ── Observaciones 2026-10-15 — recordatorios ─────────────────────────────
+    public Task<RespuestaDto<ResultadoRecordatoriosSeguimientoDto>> ProcesarRecordatoriosAsync(int limite, CancellationToken ct)
+        => EjecutarAsync("SP_ProcesarRecordatoriosSeguimiento",
+            p => p.AddWithValue("p_limite", limite),
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<ResultadoRecordatoriosSeguimientoDto>(2, mensaje, new(0, 0, 0));
+                return new RespuestaDto<ResultadoRecordatoriosSeguimientoDto>(2, mensaje, new(
+                    Ent(r, "enviados"), Ent(r, "omitidos"), Ent(r, "cancelados")));
             },
             ct);
 }

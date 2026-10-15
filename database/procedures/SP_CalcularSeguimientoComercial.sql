@@ -5,12 +5,12 @@
 -- p_id_propuesta NULL = todas. El que llama debe hacer DROP TEMPORARY TABLE tmp_seg al terminar.
 -- Universo: versión vigente de cada propuesta enviada al cliente (estado 'enviado'),
 -- más las aprobadas que ya tienen orden de compra (aceptadas) y las que pasaron a 'rechazado'
--- por un cierre de seguimiento (rechazo o sin venta, HU-21).
+-- por un cierre de seguimiento (rechazo, HU-21).
 -- ALCANCE: propuestas cuyo responsable es de la misma área del usuario.
 --   Con la acción propuesta_seguimiento_todas (admins de Gerencia y TI) todas las áreas.
 -- ESTADO VISUAL (estado_seguimiento):
 --   aceptada        : tiene OC (no anulada) o el último seguimiento cerró con aceptación
---   rechazada       : el último seguimiento cerró con rechazo o sin venta
+--   rechazada       : el último seguimiento cerró con rechazo
 --   requiere_ajuste : el último resultado registrado es SOLICITA_AJUSTE
 --   sin_respuesta   : N días (SEGUIMIENTO_DIAS_SIN_RESPUESTA) sin respuesta efectiva del cliente
 --   en_seguimiento  : resto de abiertas
@@ -20,6 +20,9 @@
 -- HU-20: si la acción se reprogramó, el seguimiento vigente ya trae los nuevos datos. Si todavía no hay
 --   seguimientos, se usa la última reprogramación del "Primer seguimiento" (seguimiento_reprogramacion
 --   con id_seguimiento NULL).
+-- Observaciones 2026-10-15: sin seguimientos ni reprogramaciones, la primera acción es la que creó el
+--   envío al cliente (propuesta_comercial.primera_accion_*: llamada a los 5 minutos). minutos_antes_notificar
+--   es el aviso anticipado de la acción vigente.
 -- SLA: en_plazo | proximo (dentro de las horas de alerta) | vencido | cumplido | cerrado.
 DROP PROCEDURE IF EXISTS SP_CalcularSeguimientoComercial;
 
@@ -63,6 +66,8 @@ BEGIN
     SELECT
         p.id_propuesta, p.numero, p.version, p.id_requerimiento, p.id_cliente, p.id_contacto,
         p.total, p.id_moneda, p.estado AS estado_propuesta,
+        p.primera_accion_fecha, p.id_tipo_primera_accion, p.id_prioridad_primera_accion,
+        p.id_responsable_primera_accion, p.minutos_primera_accion,
         -- fecha_envio_cliente la registra el envío al cliente (HU-10b). modificado_en es solo el último respaldo
         COALESCE(p.fecha_envio_cliente, p.fecha_envio, p.modificado_en, p.fecha_creacion) AS fecha_envio,
         COALESCE(p.id_responsable, p.id_creador)                   AS id_responsable,
@@ -136,7 +141,7 @@ BEGIN
         SELECT j.*,
             CASE
                 WHEN j.fecha_primera_oc IS NOT NULL OR j.estado_ult_seg = 'cerrado_aceptacion' THEN 'aceptada'
-                WHEN j.estado_ult_seg IN ('cerrado_rechazo', 'cerrado_sin_venta')             THEN 'rechazada'
+                WHEN j.estado_ult_seg = 'cerrado_rechazo'             THEN 'rechazada'
                 WHEN j.resultado_ult_codigo = 'SOLICITA_AJUSTE'                               THEN 'requiere_ajuste'
                 WHEN DATEDIFF(CURDATE(), DATE(COALESCE(j.fecha_ult_respuesta, j.fecha_envio))) >= v_dias_sin_resp
                                                                                                THEN 'sin_respuesta'
@@ -144,7 +149,7 @@ BEGIN
             END AS estado_seguimiento,
             COALESCE(j.fecha_primera_oc,
                      IF(j.estado_ult_seg = 'cerrado_aceptacion', j.fecha_ult_interaccion, NULL)) AS fecha_aceptacion,
-            IF(j.estado_ult_seg IN ('cerrado_rechazo', 'cerrado_sin_venta'), j.fecha_ult_interaccion, NULL) AS fecha_rechazo,
+            IF(j.estado_ult_seg = 'cerrado_rechazo', j.fecha_ult_interaccion, NULL) AS fecha_rechazo,
             DATEDIFF(CURDATE(), DATE(j.fecha_envio))                                   AS dias_transcurridos,
             DATEDIFF(CURDATE(), DATE(COALESCE(j.fecha_ult_respuesta, j.fecha_envio)))  AS dias_sin_respuesta,
             COALESCE(j.fecha_ult_interaccion, j.fecha_envio)                           AS inicio_sla,
@@ -161,14 +166,23 @@ BEGIN
             SELECT b.*,
                 s.estado                 AS estado_ult_seg,
                 s.fecha_interaccion      AS fecha_ult_interaccion,
-                IF(s.id_seguimiento IS NULL, r0.fecha_nueva,        s.proxima_accion_fecha)   AS proxima_accion_fecha,
-                IF(s.id_seguimiento IS NULL, r0.id_tipo_accion_nueva, s.id_tipo_proxima_accion) AS id_tipo_proxima_accion,
+                IF(s.id_seguimiento IS NULL, IF(r0.id_reprogramacion IS NULL, b.primera_accion_fecha, r0.fecha_nueva),
+                                             s.proxima_accion_fecha)                          AS proxima_accion_fecha,
+                IF(s.id_seguimiento IS NULL, IF(r0.id_reprogramacion IS NULL, b.id_tipo_primera_accion, r0.id_tipo_accion_nueva),
+                                             s.id_tipo_proxima_accion)                        AS id_tipo_proxima_accion,
                 IF(s.id_seguimiento IS NULL, NULL,                   s.proxima_accion_detalle) AS proxima_accion_detalle,
-                IF(s.id_seguimiento IS NULL, r0.id_prioridad_nueva,  s.id_prioridad_accion)    AS id_prioridad_accion,
+                IF(s.id_seguimiento IS NULL, IF(r0.id_reprogramacion IS NULL, b.id_prioridad_primera_accion, r0.id_prioridad_nueva),
+                                             s.id_prioridad_accion)                           AS id_prioridad_accion,
                 CASE
-                    WHEN s.id_seguimiento IS NULL THEN r0.id_responsable_nuevo
+                    WHEN s.id_seguimiento IS NULL THEN IF(r0.id_reprogramacion IS NULL, b.id_responsable_primera_accion,
+                                                          r0.id_responsable_nuevo)
                     WHEN s.estado = 'activo'      THEN s.id_responsable
                 END                                                                            AS id_responsable_accion,
+                CASE
+                    WHEN s.id_seguimiento IS NULL THEN IF(r0.id_reprogramacion IS NULL, b.minutos_primera_accion,
+                                                          r0.minutos_antes_notificar)
+                    WHEN s.estado = 'activo'      THEN s.minutos_antes_notificar
+                END                                                                            AS minutos_antes_notificar,
                 s.id_canal               AS id_canal_ult,
                 s.notas                  AS notas_ult,
                 rs.String2               AS resultado_ult_codigo,
@@ -180,10 +194,12 @@ BEGIN
             LEFT JOIN seguimiento_reprogramacion r0 ON r0.id_reprogramacion = b.id_reprog_inicial
             LEFT JOIN tabla_maestra rs ON rs.IdMaestro = 27 AND rs.IdEmpresa = 1 AND rs.Num1 = s.id_resultado
             LEFT JOIN tabla_maestra ta ON ta.Descripcion = 'TIPO_ACCION_SEGUIMIENTO' AND ta.IdEmpresa = 1
-                                      AND ta.Num1 = IF(s.id_seguimiento IS NULL, r0.id_tipo_accion_nueva, s.id_tipo_proxima_accion)
+                                      AND ta.Num1 = IF(s.id_seguimiento IS NULL,
+                                                       IF(r0.id_reprogramacion IS NULL, b.id_tipo_primera_accion, r0.id_tipo_accion_nueva),
+                                                       s.id_tipo_proxima_accion)
             WHERE b.estado_propuesta = 'enviado'
                OR (b.estado_propuesta = 'aprobado' AND b.fecha_primera_oc IS NOT NULL)
-               OR (b.estado_propuesta = 'rechazado' AND s.estado IN ('cerrado_rechazo', 'cerrado_sin_venta'))
+               OR (b.estado_propuesta = 'rechazado' AND s.estado = 'cerrado_rechazo')
         ) j
     ) k;
 

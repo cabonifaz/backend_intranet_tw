@@ -43,7 +43,7 @@ BEGIN
             SELECT 1 AS IdTipoMensaje, 'La propuesta ya tiene una orden de compra registrada.' AS Mensaje;
         ELSEIF v_estado = 'rechazada' THEN
             DROP TEMPORARY TABLE IF EXISTS tmp_seg;
-            SELECT 1 AS IdTipoMensaje, 'La propuesta fue rechazada o cerrada sin venta.' AS Mensaje;
+            SELECT 1 AS IdTipoMensaje, 'La propuesta fue rechazada por el cliente.' AS Mensaje;
         ELSEIF v_estado <> 'aceptada' THEN
             DROP TEMPORARY TABLE IF EXISTS tmp_seg;
             SELECT 1 AS IdTipoMensaje,

@@ -95,7 +95,7 @@ proc: BEGIN
     END IF;
     IF v_estado <> 'aceptada' THEN
         SELECT 1 AS IdTipoMensaje,
-               IF(v_estado = 'rechazada', 'La propuesta fue rechazada o cerrada sin venta.',
+               IF(v_estado = 'rechazada', 'La propuesta fue rechazada por el cliente.',
                   'Registre primero la aceptación del cliente para poder registrar la orden de compra.') AS Mensaje;
         LEAVE proc;
     END IF;
