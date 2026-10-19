@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TW.Intranet.API.Seguridad;
 using TW.Intranet.Aplicacion.CasosDeUso;
 
 namespace TW.Intranet.API.Controllers;
@@ -12,6 +13,7 @@ public class DashboardController(
     ObtenerAlertasOperativasCasoDeUso  alertasCasoDeUso) : ControllerBase
 {
     /// <summary>Devuelve los KPIs operativos del dashboard principal.</summary>
+    [RequierePermiso("dashboard_ver")]
     [HttpGet("resumen")]
     public async Task<IActionResult> ObtenerResumen(CancellationToken ct)
     {
@@ -26,6 +28,7 @@ public class DashboardController(
     }
 
     /// <summary>Devuelve las alertas operativas activas.</summary>
+    [RequierePermiso("dashboard_ver")]
     [HttpGet("alertas")]
     public async Task<IActionResult> ObtenerAlertas(CancellationToken ct)
     {

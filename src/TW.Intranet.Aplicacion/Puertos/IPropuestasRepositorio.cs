@@ -8,10 +8,52 @@ public interface IPropuestasRepositorio
         long idRequerimiento, CancellationToken ct);
 
     Task<RespuestaDto<PropuestasPaginadoDto>> ObtenerPropuestasAsync(
-        long? idRequerimiento, string? estado, string? busqueda, int pagina, int porPagina, CancellationToken ct);
+        FiltrosPropuestasDto filtros, CancellationToken ct);
+
+    Task<RespuestaDto<KpisPropuestasDto>> ObtenerKpisAsync(
+        int? anio, long? idComercial, CancellationToken ct);
 
     Task<RespuestaDto<PropuestaDetalleDto>> ObtenerPropuestaPorIdAsync(
         long idPropuesta, CancellationToken ct);
+
+    /// <summary>HU-09 — Workflow, SLA, documentos, versiones y actividad del detalle.</summary>
+    Task<RespuestaDto<PropuestaContextoDto>> ObtenerContextoPropuestaAsync(
+        long idPropuesta, CancellationToken ct);
+
+    /// <summary>HU-10 — Crea la siguiente versión (borrador) copiando los bloques elegidos.</summary>
+    Task<RespuestaDto<NuevaVersionPropuestaResultadoDto>> CrearNuevaVersionAsync(
+        long idPropuestaOrigen, CrearNuevaVersionPropuestaDto dto, long idUsuario, CancellationToken ct);
+
+    /// <summary>HU-11 — Aplica, previsualiza o quita el descuento global (tipo: porcentaje | monto | ninguno).</summary>
+    Task<RespuestaDto<DescuentoPropuestaResultadoDto>> AplicarDescuentoAsync(
+        long idPropuesta, string tipo, decimal valor, int? idMotivo, bool soloPrevisualizar,
+        long idUsuario, CancellationToken ct);
+
+    /// <summary>Migración 48 — Aplica/previsualiza/quita el descuento del bloque de Opcionales.</summary>
+    Task<RespuestaDto<DescuentoPropuestaResultadoDto>> AplicarDescuentoOpcionalesAsync(
+        long idPropuesta, string tipo, decimal valor, int? idMotivo, bool soloPrevisualizar,
+        long idUsuario, CancellationToken ct);
+
+    /// <summary>HU-12 — Prepara (soloPreparar) o realiza el envío a visto bueno.</summary>
+    Task<RespuestaDto<VistoBuenoPropuestaDto>> EnviarVistoBuenoAsync(
+        long idPropuesta, string? comentario, bool soloPreparar, long idUsuario, CancellationToken ct);
+
+    /// <summary>HU-12 — Prepara (soloPreparar) o realiza la anulación.</summary>
+    Task<RespuestaDto<AnulacionPropuestaDto>> AnularPropuestaAsync(
+        long idPropuesta, int? idMotivo, string? justificacion, bool confirmacion, bool soloPreparar,
+        long idUsuario, CancellationToken ct);
+
+    /// <summary>HU-10b — Datos para el modal "Enviar al Cliente" (contactos + plantillas).</summary>
+    Task<RespuestaDto<PreparacionEnvioClienteDto>> PrepararEnvioClienteAsync(
+        long idPropuesta, long idUsuario, CancellationToken ct);
+
+    /// <summary>HU-10b — Marca la propuesta como enviada (de 'aprobado' a 'enviado').</summary>
+    Task<RespuestaDto<EnvioPropuestaClienteDto>> EnviarPropuestaClienteAsync(
+        long idPropuesta, long idUsuario, CancellationToken ct);
+
+    /// <summary>HU-13b — Solicita al jefe VB revocar la aprobación (de 'aprobado' a 'pendiente_revocacion').</summary>
+    Task<RespuestaDto<ResultadoSolicitarRevocacionVbDto>> SolicitarRevocacionVbAsync(
+        long idPropuesta, string motivo, long idUsuario, CancellationToken ct);
 
     Task<RespuestaDto<GuardarPropuestaResultadoDto>> GuardarPropuestaAsync(
         GuardarPropuestaDto dto, long idUsuario, CancellationToken ct);

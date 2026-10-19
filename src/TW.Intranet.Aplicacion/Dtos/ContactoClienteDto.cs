@@ -15,5 +15,7 @@ public record ContactoClienteDto(
     bool    AutorizadoAprobarCotizaciones,
     bool    RecibeAlertasCalibracion,
     bool    AutorizadoRecepcionTecnica,
-    string  Estado
+    string  Estado,
+    List<ContactoSedeDto>? Sedes = null,
+    bool    EsPrincipalEmpresa = false
 );

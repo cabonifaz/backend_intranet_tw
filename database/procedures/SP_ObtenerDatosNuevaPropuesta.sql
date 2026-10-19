@@ -42,7 +42,11 @@ BEGIN
         LEFT JOIN tabla_maestra tm_prio ON tm_prio.IdMaestro = 65 AND tm_prio.IdEmpresa = 1 AND tm_prio.Num1 = r.id_prioridad
         WHERE r.id_requerimiento = p_id_requerimiento;
 
-        -- 3. Propuesta existente (última versión vinculada al RQ), si la hay
+        -- 3. Propuesta existente (última versión vinculada al RQ), si la hay.
+        -- Las anuladas se ignoran porque son terminales por acción interna:
+        -- el usuario ya no debe poder "retomarlas" ni generarles nueva versión.
+        -- Las rechazadas/vencidas sí cuentan porque el ciclo con el cliente terminó
+        -- pero aún se puede generar una nueva versión y reintentar la venta.
         SELECT
             p.id_propuesta,
             p.numero,
@@ -51,6 +55,7 @@ BEGIN
         FROM propuesta_comercial p
         WHERE p.id_requerimiento = p_id_requerimiento
           AND p.eliminado_en IS NULL
+          AND p.estado <> 'anulado'
         ORDER BY p.version DESC, p.id_propuesta DESC
         LIMIT 1;
     END IF;

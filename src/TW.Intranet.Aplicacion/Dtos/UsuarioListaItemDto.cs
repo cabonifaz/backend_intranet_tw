@@ -13,5 +13,9 @@ public record UsuarioListaItemDto(
     string?   Telefono,
     string    Estado,
     DateTime? UltimoAcceso,
-    DateTime? FechaCreacion
+    DateTime? FechaCreacion,
+    /// <summary>Anexo completo: troncal + interno (ej. "5699750207").</summary>
+    string?   Anexo = null,
+    /// <summary>Troncal del anexo (5699750 / 5699751).</summary>
+    string?   Troncal = null
 );

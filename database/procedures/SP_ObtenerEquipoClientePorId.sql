@@ -1,4 +1,3 @@
-
 DROP PROCEDURE IF EXISTS SP_ObtenerEquipoClientePorId;
 DELIMITER $$
 CREATE PROCEDURE SP_ObtenerEquipoClientePorId(
@@ -38,6 +37,8 @@ BEGIN
             IFNULL(ec.usuario_pre_revisor, '')        AS usuario_pre_revisor,
             ec.fecha_pre_revision,
             ec.bloqueado_para_servicios,
+            IFNULL(ec.usuario_bloqueo, '')            AS usuario_bloqueo,
+            ec.fecha_bloqueo,
 
             ec.id_suministro,
             IFNULL(
@@ -52,6 +53,8 @@ BEGIN
             IFNULL(ec.escala_graduacion, '')          AS escala_graduacion,
             IFNULL(ec.puntos_calibracion, '')         AS puntos_calibracion,
             IFNULL(ec.rango_operativo_real, '')       AS rango_operativo_real,
+            IFNULL(ec.material, '')                   AS material,
+            IFNULL(ec.valor_nominal, '')              AS valor_nominal,
             IFNULL(ec.observaciones, '')              AS observaciones,
 
             ec.estado_operativo,
@@ -65,7 +68,7 @@ BEGIN
         LEFT   JOIN cliente c       ON c.id_cliente = ec.id_cliente
         LEFT   JOIN sede_cliente s  ON s.id_sede    = ec.id_sede
         LEFT   JOIN tabla_maestra tm_cl
-                 ON tm_cl.IdMaestro = 81 AND tm_cl.IdEmpresa = 1 AND tm_cl.String2 = ec.clasificacion
+                 ON tm_cl.IdMaestro = 71 AND tm_cl.IdEmpresa = 1 AND tm_cl.String2 = ec.clasificacion
         LEFT   JOIN suministros ci   ON ci.id_suministro = ec.id_suministro
         LEFT   JOIN usuario u        ON u.correo = ec.usuario_registro
         WHERE  ec.id_equipo = p_id_equipo;

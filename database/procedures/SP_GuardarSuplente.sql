@@ -50,16 +50,12 @@ proc: BEGIN
     END IF;
 
     IF NOT EXISTS (
-        SELECT 1
-        FROM usuario u
-        JOIN tabla_maestra tm
-          ON tm.IdMaestro = 68 AND tm.IdEmpresa = 1
-         AND tm.String2 = u.rol_sistema AND tm.Num2 = 1
-        WHERE u.id_usuario = p_id_suplente
-          AND u.estado = 'activo'
-          AND u.eliminado_en IS NULL
+        SELECT 1 FROM usuario
+        WHERE id_usuario = p_id_suplente
+          AND estado = 'activo'
+          AND eliminado_en IS NULL
     ) THEN
-        SELECT 1 AS IdTipoMensaje, 'El suplente debe ser un usuario comercial activo.' AS Mensaje;
+        SELECT 1 AS IdTipoMensaje, 'El suplente debe ser un usuario activo.' AS Mensaje;
         LEAVE proc;
     END IF;
 

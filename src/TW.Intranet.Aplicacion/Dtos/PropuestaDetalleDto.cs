@@ -54,6 +54,7 @@ public class PropuestaDetalleDto
     public decimal? DescuentoPct        { get; set; }
     public decimal  DescuentoMonto      { get; set; }
     public int?     IdMotivoDescuento   { get; set; }
+    public string?  MotivoDescuento     { get; set; }   // HU-11
     public decimal  IgvMonto            { get; set; }
     public decimal  Total               { get; set; }
     public decimal  SubtotalOpcionales  { get; set; }
@@ -64,6 +65,13 @@ public class PropuestaDetalleDto
     public DateTime? FechaCreacion    { get; set; }
     public DateTime? FechaEnvio       { get; set; }
     public string?   FechaExpiracion  { get; set; }
+
+    // HU-10 — versión y última edición
+    public int?      IdMotivoNuevaVersion { get; set; }
+    public string?   MotivoNuevaVersion   { get; set; }
+    public string?   DescripcionCambios   { get; set; }
+    public DateTime? UltimaEdicionEn      { get; set; }
+    public string?   UltimaEdicionPor     { get; set; }
 
     public List<PropuestaItemDto>      Items      { get; set; } = new();
     public List<PropuestaTextoDto>     Textos     { get; set; } = new();

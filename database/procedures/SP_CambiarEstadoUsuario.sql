@@ -29,6 +29,8 @@ BEGIN
             modificado_por = p_id_usuario_ejecutor
         WHERE id_usuario = p_id_usuario;
 
+        -- NOTA: SP_RecalcularSupervisores eliminado en el refactor de VB (bandeja compartida por área + rol).
+
         SELECT 2 AS IdTipoMensaje, 'Estado actualizado correctamente.' AS Mensaje;
     END IF;
 END$$

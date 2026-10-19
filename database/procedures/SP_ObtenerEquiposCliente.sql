@@ -1,8 +1,5 @@
--- HU-88 — Listado paginado de equipos del cliente con filtros opcionales.
 DROP PROCEDURE IF EXISTS SP_ObtenerEquiposCliente;
-
 DELIMITER $$
-
 CREATE PROCEDURE SP_ObtenerEquiposCliente(
     IN p_busqueda                VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_id_cliente              BIGINT,
@@ -19,10 +16,8 @@ BEGIN
     SET v_por_pagina = IF(p_por_pagina IS NULL OR p_por_pagina < 1, 10, p_por_pagina);
     SET v_offset     = (GREATEST(IFNULL(p_pagina, 1), 1) - 1) * v_por_pagina;
 
-    -- 1. Header
     SELECT 2 AS IdTipoMensaje, 'Éxito.' AS Mensaje;
 
-    -- 2. Datos paginados
     SELECT ec.id_equipo,
            ec.num_serie,
            ec.id_cliente,
@@ -46,7 +41,7 @@ BEGIN
     LEFT   JOIN cliente c  ON c.id_cliente = ec.id_cliente
     LEFT   JOIN sede_cliente s ON s.id_sede = ec.id_sede
     LEFT   JOIN tabla_maestra tm_cl
-             ON tm_cl.IdMaestro = 81 AND tm_cl.IdEmpresa = 1 AND tm_cl.String2 = ec.clasificacion
+             ON tm_cl.IdMaestro = 71 AND tm_cl.IdEmpresa = 1 AND tm_cl.String2 = ec.clasificacion
     WHERE  ec.SoftDelete = 0
       AND  (p_busqueda IS NULL OR p_busqueda = ''
             OR ec.num_serie      LIKE CONCAT('%', p_busqueda, '%')
@@ -63,7 +58,6 @@ BEGIN
     ORDER  BY ec.FchCre DESC, ec.id_equipo DESC
     LIMIT  v_por_pagina OFFSET v_offset;
 
-    -- 3. Total sin paginar
     SELECT COUNT(*) AS total
     FROM   equipo_cliente ec
     WHERE  ec.SoftDelete = 0
@@ -80,5 +74,4 @@ BEGIN
       AND  (IFNULL(p_solo_vigentes_servicio, 0) = 0
             OR (ec.es_activo = 1 AND ec.bloqueado_para_servicios = 0));
 END$$
-
 DELIMITER ;

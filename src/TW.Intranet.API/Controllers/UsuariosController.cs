@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TW.Intranet.API.Seguridad;
 using TW.Intranet.Aplicacion.CasosDeUso;
 using TW.Intranet.Aplicacion.Dtos;
 
@@ -47,6 +48,7 @@ public class UsuariosController(
     // ══════════════════════════════════════════════════════════════════════════
 
     /// <summary>HU-82 — Listado paginado de usuarios (pestaña "Usuarios").</summary>
+    [RequierePermiso("usuario_ver")]
     [HttpGet("usuarios")]
     public async Task<IActionResult> ObtenerUsuarios(
         [FromQuery] string? busqueda,
@@ -58,11 +60,13 @@ public class UsuariosController(
         => Responder(await obtenerUsuarios.EjecutarAsync(busqueda, rol, estado, pagina, porPagina, ct));
 
     /// <summary>HU-83 — Usuarios con rol de jefatura (combo "Supervisor directo").</summary>
+    [RequierePermiso("usuario_ver")]
     [HttpGet("usuarios/jefes")]
     public async Task<IActionResult> ObtenerJefes(CancellationToken ct = default)
         => Responder(await obtenerJefes.EjecutarAsync(ct));
 
     /// <summary>HU-83 — Ficha completa del usuario.</summary>
+    [RequierePermiso("usuario_ver")]
     [HttpGet("usuarios/{id:long}")]
     public async Task<IActionResult> ObtenerUsuarioPorId(long id, CancellationToken ct = default)
         => Responder(await obtenerUsuarioPorId.EjecutarAsync(id, ct), noEncontradoComo404: true);
@@ -73,11 +77,13 @@ public class UsuariosController(
         => Responder(await obtenerSedesOperativas.EjecutarAsync(ct));
 
     /// <summary>HU-83 — Crea (IdUsuario = 0) o edita un usuario.</summary>
+    [RequierePermiso("usuario_guardar")]
     [HttpPost("usuarios")]
     public async Task<IActionResult> GuardarUsuario([FromBody] GuardarUsuarioDto dto, CancellationToken ct = default)
         => Responder(await guardarUsuario.EjecutarAsync(dto, IdUsuarioActual, ct));
 
     /// <summary>HU-82 — Activa o desactiva un usuario.</summary>
+    [RequierePermiso("usuario_cambiar_estado")]
     [HttpPatch("usuarios/{id:long}/estado")]
     public async Task<IActionResult> CambiarEstadoUsuario(
         long id, [FromBody] CambiarEstadoUsuarioDto dto, CancellationToken ct = default)
@@ -93,6 +99,7 @@ public class UsuariosController(
     // ══════════════════════════════════════════════════════════════════════════
 
     /// <summary>HU-82 / HU-84 — Maestro global de suplencias (pestaña "Suplentes").</summary>
+    [RequierePermiso("usuario_ver")]
     [HttpGet("suplentes")]
     public async Task<IActionResult> ObtenerSuplentes(
         [FromQuery] string? busqueda,
@@ -103,26 +110,31 @@ public class UsuariosController(
         => Responder(await obtenerSuplentes.EjecutarAsync(busqueda, estado, pagina, porPagina, ct));
 
     /// <summary>HU-84 — Una asignación de suplencia.</summary>
+    [RequierePermiso("usuario_ver")]
     [HttpGet("suplentes/{id:long}")]
     public async Task<IActionResult> ObtenerSuplentePorId(long id, CancellationToken ct = default)
         => Responder(await obtenerSuplentePorId.EjecutarAsync(id, ct), noEncontradoComo404: true);
 
     /// <summary>HU-83 — Ficha, sección 05: "Suplentes que lo cubren".</summary>
+    [RequierePermiso("usuario_ver")]
     [HttpGet("suplentes/titular/{idUsuario:long}")]
     public async Task<IActionResult> ObtenerSuplenciasComoTitular(long idUsuario, CancellationToken ct = default)
         => Responder(await obtenerSuplenciasPorUsuario.EjecutarAsync(idUsuario, "titular", ct));
 
     /// <summary>HU-83 — Ficha, sección 05: "Personas a las que suple" (solo lectura).</summary>
+    [RequierePermiso("usuario_ver")]
     [HttpGet("suplentes/suplente/{idUsuario:long}")]
     public async Task<IActionResult> ObtenerSuplenciasComoSuplente(long idUsuario, CancellationToken ct = default)
         => Responder(await obtenerSuplenciasPorUsuario.EjecutarAsync(idUsuario, "suplente", ct));
 
     /// <summary>HU-84 — Crea (IdAsignacion = 0) o edita una suplencia.</summary>
+    [RequierePermiso("suplencia_guardar")]
     [HttpPost("suplentes")]
     public async Task<IActionResult> GuardarSuplente([FromBody] GuardarSuplenteDto dto, CancellationToken ct = default)
         => Responder(await guardarSuplente.EjecutarAsync(dto, CorreoActual, ct));
 
     /// <summary>HU-82 / HU-84 — Activa o desactiva una suplencia.</summary>
+    [RequierePermiso("suplencia_guardar")]
     [HttpPatch("suplentes/{id:long}/estado")]
     public async Task<IActionResult> CambiarEstadoSuplente(
         long id, [FromBody] CambiarEstadoSuplenteDto dto, CancellationToken ct = default)

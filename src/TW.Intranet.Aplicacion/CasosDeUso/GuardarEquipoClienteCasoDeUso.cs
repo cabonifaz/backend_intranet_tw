@@ -17,8 +17,17 @@ public class GuardarEquipoClienteCasoDeUso(IEquiposClienteRepositorio repositori
         if (string.IsNullOrWhiteSpace(dto.Clasificacion))
             return new RespuestaDto<long>(1, "La clasificación es obligatoria.");
 
-        if (string.IsNullOrWhiteSpace(dto.Marca) || string.IsNullOrWhiteSpace(dto.Modelo))
-            return new RespuestaDto<long>(1, "La marca y el modelo son obligatorios.");
+        // Marca y modelo ya no se piden (reunión 02-oct): el SP los toma del suministro.
+        if (dto.IdEquipo == 0 && (dto.IdSuministro ?? 0) == 0
+            && (string.IsNullOrWhiteSpace(dto.Marca) || string.IsNullOrWhiteSpace(dto.Modelo)))
+            return new RespuestaDto<long>(1, "Seleccione el suministro del equipo.");
+
+        if (string.Equals(dto.ClaseExactitud?.Trim(), "IIII", StringComparison.OrdinalIgnoreCase))
+            dto.ClaseExactitud = "IV";
+
+        dto.Clasificacion = dto.Clasificacion.Trim().ToLowerInvariant();
+        if (dto.Clasificacion is not ("equipo" or "instrumento" or "pesa"))
+            return new RespuestaDto<long>(1, "La clasificación técnica debe ser Equipo, Instrumento o Pesa.");
 
         return await repositorio.GuardarEquipoAsync(dto, idUsuario, ct);
     }

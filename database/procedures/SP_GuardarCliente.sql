@@ -1,7 +1,7 @@
 -- ============================================================
 -- SP_GuardarCliente
 -- Inserta o actualiza un cliente.
--- Si p_id_cliente = 0 → INSERT; caso contrario → UPDATE.
+-- Si p_id_cliente = 0 → INSERT, caso contrario → UPDATE.
 -- ============================================================
 DROP PROCEDURE IF EXISTS SP_GuardarCliente;
 
@@ -33,6 +33,11 @@ CREATE PROCEDURE SP_GuardarCliente(
     IN p_usu_cre                 VARCHAR(100)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci
 )
 BEGIN
+    -- Las áreas del cliente ahora se manejan por su propio CRUD (SP_GuardarAreaCliente),
+    -- fuera de este SP (decisión migración 37). El SP ya no recibe p_areas ni llama a
+    -- SP_SincronizarAreasCliente.
+    DECLARE v_id BIGINT;
+
     IF EXISTS (
         SELECT 1 FROM cliente
         WHERE ruc = p_ruc
@@ -59,8 +64,10 @@ BEGIN
             'Activo', 0, p_usu_cre, NOW()
         );
 
+        SET v_id = LAST_INSERT_ID();
+
         SELECT 2 AS IdTipoMensaje, 'Cliente registrado correctamente.' AS Mensaje;
-        SELECT LAST_INSERT_ID() AS id_cliente;
+        SELECT v_id AS id_cliente;
     ELSE
         UPDATE cliente SET
             tipo_documento          = p_tipo_documento,

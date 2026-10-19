@@ -2,7 +2,7 @@
 -- SP_ObtenerRequerimientos
 -- Lista paginada de requerimientos con KPIs.
 -- RBAC: comercial ve solo sus RQs (y los de quien es suplente).
---       jefe_comercial y admin ven todos.
+--       administrador y supervisor ven todos (jefe_comercial/admin: tokens anteriores a la migración 34).
 -- ============================================================
 DROP PROCEDURE IF EXISTS SP_ObtenerRequerimientos;
 
@@ -29,7 +29,7 @@ BEGIN
     SELECT
         (SELECT COUNT(*) FROM requerimiento
          WHERE estado NOT IN ('cerrado','anulado') AND SoftDelete = 0
-           AND (p_rol IN ('jefe_comercial','admin')
+           AND (p_rol IN ('administrador','supervisor','jefe_comercial','admin')
                 OR id_responsable = p_id_usuario
                 OR EXISTS (
                     SELECT 1 FROM usuario_suplente us
@@ -41,7 +41,7 @@ BEGIN
                 ))) AS rq_activos,
         (SELECT COUNT(*) FROM requerimiento
          WHERE estado = 'nuevo' AND SoftDelete = 0
-           AND (p_rol IN ('jefe_comercial','admin')
+           AND (p_rol IN ('administrador','supervisor','jefe_comercial','admin')
                 OR id_responsable = p_id_usuario
                 OR EXISTS (
                     SELECT 1 FROM usuario_suplente us
@@ -54,7 +54,7 @@ BEGIN
         (SELECT COUNT(*) FROM requerimiento
          WHERE estado NOT IN ('cerrado','anulado') AND SoftDelete = 0
            AND id_prioridad = 1 AND DATEDIFF(NOW(), fecha_creacion) >= 7
-           AND (p_rol IN ('jefe_comercial','admin')
+           AND (p_rol IN ('administrador','supervisor','jefe_comercial','admin')
                 OR id_responsable = p_id_usuario
                 OR EXISTS (
                     SELECT 1 FROM usuario_suplente us
@@ -67,7 +67,7 @@ BEGIN
         (SELECT COUNT(*) FROM requerimiento
          WHERE estado IN ('nuevo','en_proceso','con_propuesta') AND SoftDelete = 0
            AND DATEDIFF(NOW(), fecha_creacion) > 15
-           AND (p_rol IN ('jefe_comercial','admin')
+           AND (p_rol IN ('administrador','supervisor','jefe_comercial','admin')
                 OR id_responsable = p_id_usuario
                 OR EXISTS (
                     SELECT 1 FROM usuario_suplente us
@@ -117,7 +117,7 @@ BEGIN
            OR c.razon_social  LIKE CONCAT('%', p_busqueda, '%')
            OR c.ruc           LIKE CONCAT('%', p_busqueda, '%'))
       AND (
-          p_rol IN ('jefe_comercial', 'admin')
+          p_rol IN ('administrador', 'supervisor', 'jefe_comercial', 'admin')
           OR r.id_responsable = p_id_usuario
           OR EXISTS (
               SELECT 1 FROM usuario_suplente us
@@ -143,7 +143,7 @@ BEGIN
            OR c.razon_social  LIKE CONCAT('%', p_busqueda, '%')
            OR c.ruc           LIKE CONCAT('%', p_busqueda, '%'))
       AND (
-          p_rol IN ('jefe_comercial', 'admin')
+          p_rol IN ('administrador', 'supervisor', 'jefe_comercial', 'admin')
           OR r.id_responsable = p_id_usuario
           OR EXISTS (
               SELECT 1 FROM usuario_suplente us

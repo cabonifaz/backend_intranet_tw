@@ -10,11 +10,12 @@ public class GuardarProcedimientoDto
     public int     Version             { get; set; } = 1;
     public string? AutorNorma          { get; set; }
     public string? NormaBase           { get; set; }
-    public string? TipoProcedimiento   { get; set; }
     public string? Descripcion         { get; set; }
-    public string? Alcance             { get; set; }
-    public string? AprobadoPor         { get; set; }
     public bool    EsFormatoDigitalIso { get; set; }
+    /// <summary>
+    /// IGNORADO: se mantiene por compatibilidad. El PDF aprobado se carga con
+    /// POST /api/maestros/procedimientos/{id}/pdf (acción procedimiento_pdf_cargar).
+    /// </summary>
     public string? UrlPdfAprobado      { get; set; }
     public bool    EsActivo            { get; set; } = true;
     public bool    GuardarComoBorrador { get; set; }

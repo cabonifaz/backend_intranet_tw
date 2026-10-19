@@ -1,4 +1,4 @@
--- HU-87 — Ficha del procedimiento (incluye trazabilidad)
+-- HU-87 — Ficha del procedimiento (incluye trazabilidad y datos del PDF aprobado cargado)
 DROP PROCEDURE IF EXISTS SP_ObtenerProcedimientoPorId;
 
 DELIMITER $$
@@ -30,17 +30,20 @@ BEGIN
             ELSE p.estado
         END                    AS estado,
         p.FchCre               AS fecha_registro,
-        p.tipo_procedimiento,
         IF(p.estado = 'activo', 1, 0)                    AS es_activo,
-        p.alcance,
-        p.aprobado_por,
         p.url_pdf_aprobado,
         COALESCE(CONCAT(u.nombre, ' ', u.apellido), p.UsuCre) AS usuario_registro,
         p.pc_registro,
         COALESCE(p.FchMod, p.FchCre)                     AS fecha_modificacion,
-        p.total_ediciones
+        p.total_ediciones,
+        (p.pdf_subido_en IS NOT NULL)                    AS tiene_pdf,
+        p.pdf_nombre_original,
+        p.pdf_tamano_bytes,
+        p.pdf_subido_en,
+        CONCAT(us.nombre, ' ', us.apellido)              AS pdf_subido_por
     FROM procedimiento_metrologico p
-    LEFT JOIN usuario u ON u.id_usuario = p.id_usuario_registro
+    LEFT JOIN usuario u  ON u.id_usuario  = p.id_usuario_registro
+    LEFT JOIN usuario us ON us.id_usuario = p.pdf_subido_por
     WHERE p.id_procedimiento = p_id_procedimiento;
     END IF;
 END$$

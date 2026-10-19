@@ -14,17 +14,11 @@ public class GuardarSuministroCasoDeUso(ISuministrosRepositorio repositorio)
         if (string.IsNullOrWhiteSpace(dto.Tipo) || string.IsNullOrWhiteSpace(dto.Subtipo))
             return new RespuestaDto<long>(1, "El tipo y el subtipo son obligatorios.");
 
-        if (string.IsNullOrWhiteSpace(dto.Unidad))
-            return new RespuestaDto<long>(1, "La unidad es obligatoria.");
-
         if (string.IsNullOrWhiteSpace(dto.DescripcionAuto))
             return new RespuestaDto<long>(1, "La descripción es obligatoria.");
 
-        bool esServicio = dto.Clase.Trim().Equals("servicio", StringComparison.OrdinalIgnoreCase);
-
-        // Regla de negocio: equipos, pesas e instrumentos llevan marca y modelo; los servicios no.
-        if (!esServicio && (string.IsNullOrWhiteSpace(dto.Marca) || string.IsNullOrWhiteSpace(dto.Modelo)))
-            return new RespuestaDto<long>(1, "La marca y el modelo son obligatorios para esta clase.");
+        // Reunión 02-oct: marca y modelo son opcionales (si no tiene, "Genérico" o vacío);
+        // en servicios el SP los deja vacíos junto con procedencia y alcance.
 
         if (dto.PrecioMinReferencia < 0 || (dto.Escalas ?? []).Any(e => e.Precio < 0))
             return new RespuestaDto<long>(1, "Los precios no pueden ser negativos.");

@@ -50,17 +50,20 @@ public class PropuestasRepositorio(CadenaConexionBd conexion)
                     descripcion, existente));
             }, ct);
 
-    // ── Listado ───────────────────────────────────────────────────────────────
-    public Task<RespuestaDto<PropuestasPaginadoDto>> ObtenerPropuestasAsync(
-        long? idRequerimiento, string? estado, string? busqueda, int pagina, int porPagina, CancellationToken ct)
+    // ── Listado (bandeja HU-08) ───────────────────────────────────────────────
+    public Task<RespuestaDto<PropuestasPaginadoDto>> ObtenerPropuestasAsync(FiltrosPropuestasDto f, CancellationToken ct)
         => EjecutarAsync("SP_ObtenerPropuestas",
             p =>
             {
-                p.AddWithValue("p_id_requerimiento", Valor(idRequerimiento));
-                p.AddWithValue("p_estado",           Valor(estado));
-                p.AddWithValue("p_busqueda",         Valor(busqueda));
-                p.AddWithValue("p_pagina",           pagina);
-                p.AddWithValue("p_por_pagina",       porPagina);
+                p.AddWithValue("p_id_requerimiento",    Valor(f.IdRequerimiento));
+                p.AddWithValue("p_estado",              Valor(f.Estado));
+                p.AddWithValue("p_busqueda",            Valor(f.Busqueda));
+                p.AddWithValue("p_pagina",              f.Pagina);
+                p.AddWithValue("p_por_pagina",          f.PorPagina);
+                p.AddWithValue("p_grupo_estado",        Valor(f.GrupoEstado));
+                p.AddWithValue("p_anio",                Valor(f.Anio));
+                p.AddWithValue("p_id_comercial",        Valor(f.IdComercial));
+                p.AddWithValue("p_solo_ultima_version", Bit(f.SoloUltimaVersion));
             },
             async (r, mensaje) =>
             {
@@ -73,11 +76,40 @@ public class PropuestasRepositorio(CadenaConexionBd conexion)
                         EnteroLargo(r, "id_requerimiento"), Texto(r, "numero_requerimiento") ?? "",
                         EnteroLargo(r, "id_cliente"), Texto(r, "razon_social") ?? "", Texto(r, "referencia"),
                         Texto(r, "moneda"), DecimalNulo(r, "total") ?? 0, DecimalNulo(r, "total_opcionales") ?? 0,
-                        Texto(r, "estado") ?? "", FechaHora(r, "fecha_creacion"), Texto(r, "responsable")));
+                        Texto(r, "estado") ?? "", FechaHora(r, "fecha_creacion"), Texto(r, "responsable"),
+                        Texto(r, "ruc"),
+                        Texto(r, "estado_grupo") ?? "",
+                        Texto(r, "accion") ?? "ver_detalle",
+                        EnteroNulo(r, "sla_dias_restantes"),
+                        FechaHora(r, "fecha_modificacion"),
+                        EnteroLargoNulo(r, "id_responsable")));
                 }
                 int total = await LeerTotalAsync(r, ct);
                 return new RespuestaDto<PropuestasPaginadoDto>(2, mensaje,
-                    new PropuestasPaginadoDto(items, total, pagina, porPagina));
+                    new PropuestasPaginadoDto(items, total, f.Pagina, f.PorPagina));
+            }, ct);
+
+    // ── KPIs (bandeja HU-08) ──────────────────────────────────────────────────
+    public Task<RespuestaDto<KpisPropuestasDto>> ObtenerKpisAsync(int? anio, long? idComercial, CancellationToken ct)
+        => EjecutarAsync("SP_ObtenerKpisPropuestas",
+            p =>
+            {
+                p.AddWithValue("p_anio",         Valor(anio));
+                p.AddWithValue("p_id_comercial", Valor(idComercial));
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<KpisPropuestasDto>(2, mensaje, new KpisPropuestasDto(0, 0, 0, 0, 0, 0));
+
+                return new RespuestaDto<KpisPropuestasDto>(2, mensaje, new KpisPropuestasDto(
+                    (int)(DecimalNulo(r, "pendientes")      ?? 0),
+                    DecimalNulo(r, "variacion_pendientes")  ?? 0,
+                    (int)(DecimalNulo(r, "por_visto_bueno") ?? 0),
+                    (int)(DecimalNulo(r, "por_enviar")      ?? 0),
+                    (int)(DecimalNulo(r, "en_seguimiento")  ?? 0),
+                    (int)(DecimalNulo(r, "sla_vencidos")    ?? 0)));
             }, ct);
 
     // ── Propuesta completa ────────────────────────────────────────────────────
@@ -135,6 +167,7 @@ public class PropuestasRepositorio(CadenaConexionBd conexion)
                     DescuentoPct          = DecimalNulo(r, "descuento_pct"),
                     DescuentoMonto        = DecimalNulo(r, "descuento_monto") ?? 0,
                     IdMotivoDescuento     = EnteroNulo(r, "id_motivo_descuento"),
+                    MotivoDescuento       = Texto(r, "motivo_descuento"),
                     IgvMonto              = DecimalNulo(r, "igv_monto") ?? 0,
                     Total                 = DecimalNulo(r, "total") ?? 0,
                     SubtotalOpcionales    = DecimalNulo(r, "subtotal_opcionales") ?? 0,
@@ -144,6 +177,11 @@ public class PropuestasRepositorio(CadenaConexionBd conexion)
                     FechaCreacion         = FechaHora(r, "fecha_creacion"),
                     FechaEnvio            = FechaHora(r, "fecha_envio"),
                     FechaExpiracion       = Fecha(r, "fecha_expiracion"),
+                    IdMotivoNuevaVersion  = EnteroNulo(r, "id_motivo_nueva_version"),
+                    MotivoNuevaVersion    = Texto(r, "motivo_nueva_version"),
+                    DescripcionCambios    = Texto(r, "descripcion_cambios"),
+                    UltimaEdicionEn       = FechaHora(r, "ultima_edicion_en"),
+                    UltimaEdicionPor      = Texto(r, "ultima_edicion_por"),
                 };
                 d.EsEditable = d.Estado == "borrador";
 
@@ -318,6 +356,398 @@ public class PropuestasRepositorio(CadenaConexionBd conexion)
                     DecimalNulo(r, "total_opcionales") ?? 0));
             }, ct);
     }
+
+    // ── HU-09: contexto del detalle ──────────────────────────────────────────
+    public Task<RespuestaDto<PropuestaContextoDto>> ObtenerContextoPropuestaAsync(long idPropuesta, CancellationToken ct)
+        => EjecutarAsync("SP_ObtenerContextoPropuesta",
+            p => p.AddWithValue("p_id_propuesta", idPropuesta),
+            async (r, mensaje) =>
+            {
+                // Situación
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<PropuestaContextoDto>(1, "Propuesta no encontrada.");
+
+                var c = new PropuestaContextoDto
+                {
+                    Estado              = Texto(r, "estado") ?? "",
+                    FechaEnvio          = FechaHora(r, "fecha_envio"),
+                    FechaExpiracion     = FechaHora(r, "fecha_expiracion"),
+                    EsUltimaVersion     = Booleano(r, "es_ultima_version"),
+                    TieneOc             = Booleano(r, "tiene_oc"),
+                    AceptadaCliente     = Booleano(r, "aceptada_cliente"),
+                    SlaTipo             = Texto(r, "sla_tipo"),
+                    SlaVenceEn          = FechaHora(r, "sla_vence_en"),
+                    NumeroContratoMarco = Texto(r, "numero_contrato_marco"),
+                    Ahora               = FechaHora(r, "ahora") ?? DateTime.Now,
+                };
+
+                // Documentos vinculados
+                await r.NextResultAsync(ct);
+                while (await r.ReadAsync(ct))
+                    c.Documentos.Add(new DocumentoVinculadoDto
+                    {
+                        Tipo        = Texto(r, "tipo") ?? "",
+                        IdEntidad   = EnteroLargoNulo(r, "id_entidad"),
+                        Codigo      = Texto(r, "codigo"),
+                        Descripcion = Texto(r, "descripcion"),
+                        Estado      = Texto(r, "estado"),
+                        Url         = Texto(r, "url"),
+                        Fecha       = FechaHora(r, "fecha"),
+                    });
+
+                // Versiones
+                await r.NextResultAsync(ct);
+                while (await r.ReadAsync(ct))
+                    c.Versiones.Add(new VersionPropuestaDto
+                    {
+                        IdPropuesta        = EnteroLargo(r, "id_propuesta"),
+                        Version            = Entero(r, "version"),
+                        Estado             = Texto(r, "estado") ?? "",
+                        Total              = DecimalNulo(r, "total") ?? 0,
+                        FechaCreacion      = FechaHora(r, "fecha_creacion"),
+                        FechaEnvio         = FechaHora(r, "fecha_envio"),
+                        NombreCreador      = Texto(r, "nombre_creador"),
+                        MotivoNuevaVersion = Texto(r, "motivo_nueva_version"),
+                    });
+
+                // Actividad
+                await r.NextResultAsync(ct);
+                while (await r.ReadAsync(ct))
+                    c.Actividad.Add(new ActividadPropuestaDto
+                    {
+                        IdAuditoria    = EnteroLargo(r, "id_auditoria"),
+                        Accion         = Texto(r, "accion") ?? "",
+                        EstadoAnterior = Texto(r, "estado_anterior"),
+                        EstadoNuevo    = Texto(r, "estado_nuevo"),
+                        Descripcion    = Texto(r, "descripcion"),
+                        RegistradoEn   = FechaHora(r, "registrado_en"),
+                        NombreUsuario  = Texto(r, "nombre_usuario"),
+                    });
+
+                return new RespuestaDto<PropuestaContextoDto>(2, mensaje, c);
+            }, ct);
+
+    // ── HU-10: nueva versión ────────────────────────────────────────────────
+    public Task<RespuestaDto<NuevaVersionPropuestaResultadoDto>> CrearNuevaVersionAsync(
+        long idPropuestaOrigen, CrearNuevaVersionPropuestaDto dto, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_CrearNuevaVersionPropuesta",
+            p =>
+            {
+                p.AddWithValue("p_id_propuesta_origen",  idPropuestaOrigen);
+                p.AddWithValue("p_id_motivo",            dto.IdMotivoNuevaVersion);
+                p.AddWithValue("p_descripcion_cambios",  dto.DescripcionCambios.Trim());
+                p.AddWithValue("p_copiar_configuracion", Bit(dto.Copiar.Configuracion));
+                p.AddWithValue("p_copiar_detalle",       Bit(dto.Copiar.DetalleDescriptivo));
+                p.AddWithValue("p_copiar_condiciones",   Bit(dto.Copiar.Condiciones));
+                p.AddWithValue("p_copiar_items",         Bit(dto.Copiar.Items));
+                p.AddWithValue("p_copiar_forma_pago",    Bit(dto.Copiar.FormaPago));
+                p.AddWithValue("p_copiar_equipos",       Bit(dto.Copiar.Equipos));
+                p.AddWithValue("p_id_usuario",           idUsuario);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<NuevaVersionPropuestaResultadoDto>(3, "El procedimiento no devolvió el resultado.");
+
+                return new RespuestaDto<NuevaVersionPropuestaResultadoDto>(2, mensaje, new NuevaVersionPropuestaResultadoDto(
+                    EnteroLargo(r, "id_propuesta"),
+                    Texto(r, "numero") ?? "",
+                    Entero(r, "version"),
+                    Booleano(r, "version_anterior_anulada")));
+            }, ct);
+
+    // ── HU-11: descuento global ──────────────────────────────────────────────
+    public Task<RespuestaDto<DescuentoPropuestaResultadoDto>> AplicarDescuentoAsync(
+        long idPropuesta, string tipo, decimal valor, int? idMotivo, bool soloPrevisualizar,
+        long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_AplicarDescuentoPropuesta",
+            p =>
+            {
+                p.AddWithValue("p_id_propuesta",       idPropuesta);
+                p.AddWithValue("p_tipo",               tipo);
+                p.AddWithValue("p_valor",              valor);
+                p.AddWithValue("p_id_motivo",          Valor(idMotivo));
+                p.AddWithValue("p_solo_previsualizar", Bit(soloPrevisualizar));
+                p.AddWithValue("p_id_usuario",         idUsuario);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<DescuentoPropuestaResultadoDto>(3, "El procedimiento no devolvió el resultado.");
+
+                return new RespuestaDto<DescuentoPropuestaResultadoDto>(2, mensaje, new DescuentoPropuestaResultadoDto
+                {
+                    SubtotalActual     = DecimalNulo(r, "subtotal_actual") ?? 0,
+                    DescuentoActual    = DecimalNulo(r, "descuento_actual") ?? 0,
+                    PorcentajeActual   = DecimalNulo(r, "porcentaje_actual"),
+                    IgvActual          = DecimalNulo(r, "igv_actual") ?? 0,
+                    TotalActual        = DecimalNulo(r, "total_actual") ?? 0,
+                    Tipo               = Texto(r, "tipo") ?? tipo,
+                    Porcentaje         = DecimalNulo(r, "porcentaje"),
+                    DescuentoNuevo     = DecimalNulo(r, "descuento_nuevo") ?? 0,
+                    SubtotalNuevo      = DecimalNulo(r, "subtotal_nuevo") ?? 0,
+                    IgvNuevo           = DecimalNulo(r, "igv_nuevo") ?? 0,
+                    TotalNuevo         = DecimalNulo(r, "total_nuevo") ?? 0,
+                    IgvPct             = DecimalNulo(r, "igv_pct") ?? 0,
+                    IdMotivoDescuento  = EnteroNulo(r, "id_motivo_descuento"),
+                    MotivoDescuento    = Texto(r, "motivo_descuento"),
+                    Guardado           = Booleano(r, "guardado"),
+                });
+            }, ct);
+
+    // ── Migración 48: descuento específico de Opcionales ─────────────────────
+    // Mismo shape de retorno que AplicarDescuentoAsync. El SP paralelo opera
+    // sobre descuento_opcionales / descuento_opcionales_pct / id_motivo_descuento_opcionales
+    // y recalcula total_opcionales (sin IGV, los opcionales no suman al facturable).
+    public Task<RespuestaDto<DescuentoPropuestaResultadoDto>> AplicarDescuentoOpcionalesAsync(
+        long idPropuesta, string tipo, decimal valor, int? idMotivo, bool soloPrevisualizar,
+        long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_AplicarDescuentoOpcionalesPropuesta",
+            p =>
+            {
+                p.AddWithValue("p_id_propuesta",       idPropuesta);
+                p.AddWithValue("p_tipo",               tipo);
+                p.AddWithValue("p_valor",              valor);
+                p.AddWithValue("p_id_motivo",          Valor(idMotivo));
+                p.AddWithValue("p_solo_previsualizar", Bit(soloPrevisualizar));
+                p.AddWithValue("p_id_usuario",         idUsuario);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<DescuentoPropuestaResultadoDto>(3, "El procedimiento no devolvió el resultado.");
+
+                return new RespuestaDto<DescuentoPropuestaResultadoDto>(2, mensaje, new DescuentoPropuestaResultadoDto
+                {
+                    SubtotalActual     = DecimalNulo(r, "subtotal_actual") ?? 0,
+                    DescuentoActual    = DecimalNulo(r, "descuento_actual") ?? 0,
+                    PorcentajeActual   = DecimalNulo(r, "porcentaje_actual"),
+                    IgvActual          = DecimalNulo(r, "igv_actual") ?? 0,
+                    TotalActual        = DecimalNulo(r, "total_actual") ?? 0,
+                    Tipo               = Texto(r, "tipo") ?? tipo,
+                    Porcentaje         = DecimalNulo(r, "porcentaje"),
+                    DescuentoNuevo     = DecimalNulo(r, "descuento_nuevo") ?? 0,
+                    SubtotalNuevo      = DecimalNulo(r, "subtotal_nuevo") ?? 0,
+                    IgvNuevo           = DecimalNulo(r, "igv_nuevo") ?? 0,
+                    TotalNuevo         = DecimalNulo(r, "total_nuevo") ?? 0,
+                    IgvPct             = DecimalNulo(r, "igv_pct") ?? 0,
+                    IdMotivoDescuento  = EnteroNulo(r, "id_motivo_descuento"),
+                    MotivoDescuento    = Texto(r, "motivo_descuento"),
+                    Guardado           = Booleano(r, "guardado"),
+                });
+            }, ct);
+
+    // ── HU-12: envío a visto bueno ───────────────────────────────────────────
+    public Task<RespuestaDto<VistoBuenoPropuestaDto>> EnviarVistoBuenoAsync(
+        long idPropuesta, string? comentario, bool soloPreparar, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_EnviarVistoBuenoPropuesta",
+            p =>
+            {
+                p.AddWithValue("p_id_propuesta",  idPropuesta);
+                p.AddWithValue("p_comentario",    Valor(comentario));
+                p.AddWithValue("p_solo_preparar", Bit(soloPreparar));
+                p.AddWithValue("p_id_usuario",    idUsuario);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<VistoBuenoPropuestaDto>(3, "El procedimiento no devolvió el resultado.");
+
+                var vb = new VistoBuenoPropuestaDto
+                {
+                    IdPropuesta                = EnteroLargo(r, "id_propuesta"),
+                    Numero                     = Texto(r, "numero") ?? "",
+                    Version                    = Entero(r, "version"),
+                    Estado                     = Texto(r, "estado") ?? "",
+                    Cliente                    = Texto(r, "cliente"),
+                    NumeroRequerimiento        = Texto(r, "numero_requerimiento"),
+                    Total                      = DecimalNulo(r, "total") ?? 0,
+                    MonedaSimbolo              = Texto(r, "moneda_simbolo"),
+                    AreaEquipoAprobador        = Texto(r, "area_equipo_aprobador"),
+                    SlaHoras                   = Entero(r, "sla_horas"),
+                    FechaLimite                = FechaHora(r, "fecha_limite"),
+                    RequiereAprobacionEspecial = Booleano(r, "requiere_aprobacion_especial"),
+                    MotivoAlerta               = Texto(r, "motivo_alerta"),
+                    DescuentoPct               = DecimalNulo(r, "descuento_pct") ?? 0,
+                    UmbralDescuentoPct         = DecimalNulo(r, "umbral_descuento_pct") ?? 0,
+                    PuedeEnviar                = Booleano(r, "puede_enviar"),
+                    IdVistoBueno               = EnteroLargoNulo(r, "id_visto_bueno"),
+                };
+
+                await r.NextResultAsync(ct);
+                while (await r.ReadAsync(ct))
+                    vb.Validaciones.Add(new ValidacionVistoBuenoDto
+                    {
+                        Codigo      = Texto(r, "codigo") ?? "",
+                        Etiqueta    = Texto(r, "etiqueta") ?? "",
+                        Cumple      = Booleano(r, "cumple"),
+                        Obligatoria = Booleano(r, "obligatoria"),
+                        Detalle     = Texto(r, "detalle"),
+                    });
+
+                return new RespuestaDto<VistoBuenoPropuestaDto>(2, mensaje, vb);
+            }, ct);
+
+    // ── HU-12: anulación ─────────────────────────────────────────────────────
+    public Task<RespuestaDto<AnulacionPropuestaDto>> AnularPropuestaAsync(
+        long idPropuesta, int? idMotivo, string? justificacion, bool confirmacion, bool soloPreparar,
+        long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_AnularPropuesta",
+            p =>
+            {
+                p.AddWithValue("p_id_propuesta",  idPropuesta);
+                p.AddWithValue("p_id_motivo",     Valor(idMotivo));
+                p.AddWithValue("p_justificacion", Valor(justificacion));
+                p.AddWithValue("p_confirmacion",  Bit(confirmacion));
+                p.AddWithValue("p_solo_preparar", Bit(soloPreparar));
+                p.AddWithValue("p_id_usuario",    idUsuario);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<AnulacionPropuestaDto>(3, "El procedimiento no devolvió el resultado.");
+
+                var a = new AnulacionPropuestaDto
+                {
+                    IdPropuesta            = EnteroLargo(r, "id_propuesta"),
+                    Numero                 = Texto(r, "numero") ?? "",
+                    Version                = Entero(r, "version"),
+                    Estado                 = Texto(r, "estado") ?? "",
+                    Cliente                = Texto(r, "cliente"),
+                    NumeroRequerimiento    = Texto(r, "numero_requerimiento"),
+                    NumeroExpediente       = Texto(r, "numero_expediente"),
+                    TieneVbPendiente       = Booleano(r, "tiene_vb_pendiente"),
+                    PuedeAnular            = Booleano(r, "puede_anular"),
+                    MotivoBloqueo          = Texto(r, "motivo_bloqueo"),
+                    Impacto                = Texto(r, "impacto"),
+                    MotivoAnulacion        = Texto(r, "motivo_anulacion"),
+                    JustificacionAnulacion = Texto(r, "justificacion_anulacion"),
+                    FechaAnulacion         = FechaHora(r, "fecha_anulacion"),
+                    MontoTotal             = DecimalNulo(r, "monto_total") ?? 0m,
+                    MonedaSimbolo          = Texto(r, "moneda_simbolo"),
+                    ImpactoCritico         = Booleano(r, "impacto_critico"),
+                    ImpactoCriticoMensaje  = Texto(r, "impacto_critico_mensaje"),
+                    OrdenesCompraAfectadas = Texto(r, "ordenes_compra_afectadas"),
+                    PropuestasAfectadas    = Texto(r, "propuestas_afectadas"),
+                    IdOsBloqueante         = EnteroLargoNulo(r, "id_os_bloqueante"),
+                    NumeroOsBloqueante     = Texto(r, "numero_os_bloqueante"),
+                    EstadoOsBloqueante     = Texto(r, "estado_os_bloqueante"),
+                    TextoConfirmacion      = Texto(r, "texto_confirmacion"),
+                };
+
+                if (soloPreparar && await r.NextResultAsync(ct))
+                    while (await r.ReadAsync(ct))
+                        a.Motivos.Add(new OpcionMotivoDto
+                        {
+                            Id     = Entero(r, "id"),
+                            Nombre = Texto(r, "nombre") ?? "",
+                        });
+
+                return new RespuestaDto<AnulacionPropuestaDto>(2, mensaje, a);
+            }, ct);
+
+    public Task<RespuestaDto<ResultadoSolicitarRevocacionVbDto>> SolicitarRevocacionVbAsync(
+        long idPropuesta, string motivo, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_SolicitarRevocacionVB",
+            p =>
+            {
+                p.AddWithValue("p_id_propuesta", idPropuesta);
+                p.AddWithValue("p_motivo",       Valor(motivo));
+                p.AddWithValue("p_id_usuario",   idUsuario);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<ResultadoSolicitarRevocacionVbDto>(3, "El procedimiento no devolvió el resultado.");
+                return new RespuestaDto<ResultadoSolicitarRevocacionVbDto>(2, mensaje,
+                    new ResultadoSolicitarRevocacionVbDto(
+                        EnteroLargo(r, "id_propuesta"),
+                        Texto(r, "numero") ?? "",
+                        Entero(r, "version"),
+                        Texto(r, "estado") ?? "",
+                        EnteroLargo(r, "id_vb"),
+                        EnteroLargoNulo(r, "id_vb_padre")));
+            }, ct);
+
+    public Task<RespuestaDto<PreparacionEnvioClienteDto>> PrepararEnvioClienteAsync(
+        long idPropuesta, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_PrepararEnvioCliente",
+            p =>
+            {
+                p.AddWithValue("p_id_propuesta", idPropuesta);
+                p.AddWithValue("p_id_usuario",   idUsuario);
+            },
+            async (r, mensaje) =>
+            {
+                // 2. Cabecera
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<PreparacionEnvioClienteDto>(3, "El procedimiento no devolvió la cabecera.");
+                var cab = new CabeceraEnvioClienteDto(
+                    EnteroLargo(r, "id_propuesta"), Texto(r, "numero") ?? "", Entero(r, "version"),
+                    EnteroLargo(r, "id_cliente"), Texto(r, "razon_social") ?? "", Texto(r, "ruc"),
+                    Texto(r, "referencia"),
+                    DecimalNulo(r, "total") ?? 0m, Entero(r, "id_moneda"),
+                    Texto(r, "moneda_simbolo"), Texto(r, "moneda"),
+                    EnteroLargoNulo(r, "id_contacto"), Texto(r, "contacto"), Texto(r, "correo_contacto"),
+                    EnteroLargo(r, "id_usuario"), Texto(r, "usuario"),
+                    Texto(r, "correo_usuario"), Texto(r, "cargo_usuario"),
+                    FechaHora(r, "fecha_servidor"));
+
+                // 3. Contactos
+                await r.NextResultAsync(ct);
+                var contactos = new List<ContactoEnvioClienteDto>();
+                while (await r.ReadAsync(ct))
+                    contactos.Add(new ContactoEnvioClienteDto(
+                        EnteroLargo(r, "id_contacto"), Texto(r, "nombres") ?? "",
+                        Texto(r, "cargo"), Texto(r, "correo"),
+                        Texto(r, "telefono_movil"), Texto(r, "telefono_anexo"),
+                        Booleano(r, "es_contacto_propuesta"), Booleano(r, "es_contacto_principal")));
+
+                // 4. Plantillas
+                await r.NextResultAsync(ct);
+                var plantillas = new List<PlantillaEnvioClienteDto>();
+                while (await r.ReadAsync(ct))
+                    plantillas.Add(new PlantillaEnvioClienteDto(
+                        Entero(r, "id_plantilla"), Texto(r, "codigo") ?? "", Texto(r, "nombre") ?? "",
+                        Texto(r, "asunto") ?? "", Texto(r, "cuerpo_html") ?? ""));
+
+                return new RespuestaDto<PreparacionEnvioClienteDto>(2, mensaje,
+                    new PreparacionEnvioClienteDto(cab, contactos, plantillas));
+            }, ct);
+
+    public Task<RespuestaDto<EnvioPropuestaClienteDto>> EnviarPropuestaClienteAsync(
+        long idPropuesta, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_EnviarPropuestaCliente",
+            p =>
+            {
+                p.AddWithValue("p_id_propuesta", idPropuesta);
+                p.AddWithValue("p_id_usuario",   idUsuario);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<EnvioPropuestaClienteDto>(3, "El procedimiento no devolvió el resultado.");
+
+                var dto = new EnvioPropuestaClienteDto
+                {
+                    IdPropuesta       = EnteroLargo(r, "id_propuesta"),
+                    Numero            = Texto(r, "numero") ?? "",
+                    Version           = Entero(r, "version"),
+                    Estado            = Texto(r, "estado") ?? "",
+                    FechaEnvioCliente = FechaHora(r, "fecha_envio_cliente"),
+                    EnviadoClientePor = EnteroLargoNulo(r, "enviado_cliente_por"),
+                };
+                return new RespuestaDto<EnvioPropuestaClienteDto>(2, mensaje, dto);
+            }, ct);
 
     private static List<string> LeerListaJson(string? json)
     {

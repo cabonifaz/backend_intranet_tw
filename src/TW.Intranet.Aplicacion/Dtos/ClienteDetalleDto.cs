@@ -24,5 +24,7 @@ public record ClienteDetalleDto(
     string?  SsomaNotas,
     int?     IdCategoria,
     string?  NombreCategoria,
-    string   Estado
+    string   Estado,
+    /// <summary>Códigos de AREA_USUARIO asignados al cliente.</summary>
+    List<string>? Areas = null
 );

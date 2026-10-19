@@ -25,4 +25,6 @@ public record GuardarClienteDto(
     bool     SsomaExamenMedico,
     [StringLength(1000)] string?  SsomaNotas,
     int?     IdCategoria
+    // Las áreas del cliente se manejan por su CRUD propio (POST /clientes/{id}/areas),
+    // ya no viajan en el DTO de guardar cliente (migración 37).
 );

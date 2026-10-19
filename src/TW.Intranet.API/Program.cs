@@ -1,11 +1,18 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using QuestPDF.Infrastructure;
 using Scalar.AspNetCore;
 using TW.Intranet.Aplicacion.CasosDeUso;
 using TW.Intranet.Aplicacion.Puertos;
 using TW.Intranet.Infraestructura.Adaptadores;
 using TW.Intranet.Infraestructura.Configuracion;
+
+// QuestPDF: licencia Community (gratuita hasta USD 1M revenue/año).
+QuestPDF.Settings.License = LicenseType.Community;
+// Permite usar fuentes del sistema (Helvetica, Arial, etc.). Sin esto, QuestPDF 2026.9+
+// solo acepta la fuente embebida "Lato" y falla con "font not available".
+QuestPDF.Settings.UseEnvironmentFonts = true;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -31,7 +38,13 @@ builder.Services.AddCors(options =>
 });
 
 // ── CONTROLLERS ───────────────────────────────────────────────────────────────
-builder.Services.AddControllers();
+// Permisos por rol + área en cada endpoint marcado con [RequierePermiso] (#4301).
+// Se apaga con la variable de entorno Permisos__ValidarEnBack=false.
+builder.Services.AddMemoryCache();
+builder.Services.AddScoped<TW.Intranet.API.Seguridad.PermisosFilter>();
+builder.Services.AddControllers(o => o.Filters.AddService<TW.Intranet.API.Seguridad.PermisosFilter>())
+    // Fechas en hora de Lima (UTC-5): ver Configuracion/ZonaHorariaLima.cs
+    .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new TW.Intranet.API.Configuracion.FechaHoraLimaJsonConverter()));
 
 // ── OPENAPI / SWAGGER ─────────────────────────────────────────────────────────
 builder.Services.AddOpenApi(options =>
@@ -64,6 +77,17 @@ var configuracionJwt = new ConfiguracionJwt(
 
 builder.Services.AddSingleton(new CadenaConexionBd(cadenaConexion));
 builder.Services.AddSingleton(configuracionJwt);
+
+// ── ALMACENAMIENTO DE ARCHIVOS (PDF de procedimientos, adjuntos) ──────────────
+// Railway: volumen persistente montado en /data y variable Almacenamiento__RutaBase=/data/archivos.
+// Local: si no se configura, carpeta "almacenamiento" junto a la API (ignorada por git).
+var rutaAlmacenamientoConfigurada = cfg["Almacenamiento:RutaBase"];
+var configuracionAlmacenamiento = new ConfiguracionAlmacenamiento(
+    string.IsNullOrWhiteSpace(rutaAlmacenamientoConfigurada)
+        ? Path.Combine(builder.Environment.ContentRootPath, "almacenamiento")
+        : rutaAlmacenamientoConfigurada);
+builder.Services.AddSingleton(configuracionAlmacenamiento);
+builder.Services.AddSingleton<IAlmacenArchivos, AlmacenArchivosLocal>();
 
 // ── AUTENTICACIÓN JWT ─────────────────────────────────────────────────────────
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -125,6 +149,7 @@ builder.Services.AddScoped<IVerificadorContrasena,    BcryptVerificadorContrasen
 // Casos de uso — Autenticación
 builder.Services.AddScoped<IniciarSesionCasoDeUso>();
 builder.Services.AddScoped<CambiarContrasenaCasoDeUso>();
+builder.Services.AddScoped<ObtenerMisDatosCasoDeUso>();
 
 // ── INYECCIÓN DE DEPENDENCIAS — Dashboard ─────────────────────────────────────
 builder.Services.AddScoped<IDashboardRepositorio,       DashboardRepositorio>();
@@ -210,6 +235,9 @@ builder.Services.AddScoped<ObtenerProcedimientoPorIdCasoDeUso>();
 builder.Services.AddScoped<ObtenerProcedimientosOpcionesCasoDeUso>();
 builder.Services.AddScoped<GuardarProcedimientoCasoDeUso>();
 builder.Services.AddScoped<CambiarEstadoProcedimientoCasoDeUso>();
+builder.Services.AddScoped<ObtenerPermisoPdfProcedimientoCasoDeUso>();
+builder.Services.AddScoped<SubirPdfProcedimientoCasoDeUso>();
+builder.Services.AddScoped<ObtenerPdfProcedimientoCasoDeUso>();
 
 // ── INYECCIÓN DE DEPENDENCIAS — Catálogos editables (HU-86) ──────────────────
 builder.Services.AddScoped<ICatalogosRepositorio, CatalogosRepositorio>();
@@ -222,15 +250,236 @@ builder.Services.AddScoped<ObtenerEquipoClientePorIdCasoDeUso>();
 builder.Services.AddScoped<GuardarEquipoClienteCasoDeUso>();
 builder.Services.AddScoped<CambiarEstadoEquipoClienteCasoDeUso>();
 
-// ── INYECCIÓN DE DEPENDENCIAS — Propuestas (HU-07) ───────────────────────────
+// ── INYECCIÓN DE DEPENDENCIAS — Propuestas (HU-07 / HU-08 / HU-09 / HU-10 / HU-11 / HU-12) ───────────────────
 builder.Services.AddScoped<IPropuestasRepositorio, PropuestasRepositorio>();
 builder.Services.AddScoped<ObtenerDatosNuevaPropuestaCasoDeUso>();
 builder.Services.AddScoped<ObtenerPropuestasCasoDeUso>();
 builder.Services.AddScoped<ObtenerPropuestaPorIdCasoDeUso>();
 builder.Services.AddScoped<GuardarPropuestaCasoDeUso>();
+builder.Services.AddScoped<ObtenerKpisPropuestasCasoDeUso>();
+builder.Services.AddScoped<ObtenerDetallePropuestaCasoDeUso>();
+builder.Services.AddScoped<CrearNuevaVersionPropuestaCasoDeUso>();
+builder.Services.AddScoped<PrevisualizarDescuentoPropuestaCasoDeUso>();
+builder.Services.AddScoped<AplicarDescuentoPropuestaCasoDeUso>();
+builder.Services.AddScoped<QuitarDescuentoPropuestaCasoDeUso>();
+builder.Services.AddScoped<PrevisualizarDescuentoOpcionalesCasoDeUso>();
+builder.Services.AddScoped<AplicarDescuentoOpcionalesCasoDeUso>();
+builder.Services.AddScoped<QuitarDescuentoOpcionalesCasoDeUso>();
+builder.Services.AddScoped<PrepararVistoBuenoPropuestaCasoDeUso>();
+builder.Services.AddScoped<EnviarVistoBuenoPropuestaCasoDeUso>();
+builder.Services.AddScoped<PrepararAnulacionPropuestaCasoDeUso>();
+builder.Services.AddScoped<AnularPropuestaCasoDeUso>();
+builder.Services.AddScoped<PrepararEnvioClienteCasoDeUso>();
+builder.Services.AddScoped<EnviarPropuestaClienteCasoDeUso>();
+builder.Services.AddScoped<SolicitarRevocacionVbCasoDeUso>();
+builder.Services.AddScoped<ResolverRevocacionVbCasoDeUso>();
+builder.Services.AddScoped<IPropuestaPdfGenerador, PropuestaPdfGeneradorQuestPdf>();
+builder.Services.AddScoped<GenerarPdfPropuestaCasoDeUso>();
+
+// ── INYECCIÓN DE DEPENDENCIAS — Ubigeo, áreas del cliente y formatos (reunión 02-oct) ──
+builder.Services.AddScoped<IMaestrosComplementariosRepositorio, MaestrosComplementariosRepositorio>();
+builder.Services.AddScoped<ObtenerUbigeoCasoDeUso>();
+builder.Services.AddScoped<ObtenerAreasClienteCasoDeUso>();
+builder.Services.AddScoped<GuardarAreaClienteCasoDeUso>();
+builder.Services.AddScoped<CambiarEstadoAreaClienteCasoDeUso>();
+builder.Services.AddScoped<ObtenerSiguienteCodigoCasoDeUso>();
+builder.Services.AddScoped<ObtenerFormatosVentanaCasoDeUso>();
+builder.Services.AddScoped<GuardarFormatoVentanaCasoDeUso>();
+builder.Services.AddScoped<ObtenerRequisitosDelClienteCasoDeUso>();
+builder.Services.AddScoped<SincronizarRequisitosClienteCasoDeUso>();
+
+// ── INYECCIÓN DE DEPENDENCIAS — Roles por niveles y permisos por área (reunión 02-oct) ──
+builder.Services.AddScoped<IPermisosRepositorio, PermisosRepositorio>();
+builder.Services.AddScoped<ObtenerMisPermisosCasoDeUso>();
+builder.Services.AddScoped<ObtenerPermisosAreaRolCasoDeUso>();
+builder.Services.AddScoped<GuardarPermisoCasoDeUso>();
+builder.Services.AddScoped<ObtenerMisAccionesCasoDeUso>();
+
+// ── INYECCIÓN DE DEPENDENCIAS — Directorio interno (#4303) y duplicados (#4290) ──
+builder.Services.AddScoped<IDirectorioRepositorio, DirectorioRepositorio>();
+builder.Services.AddScoped<ObtenerDirectorioCasoDeUso>();
+builder.Services.AddScoped<ObtenerCumpleanosCasoDeUso>();
+builder.Services.AddScoped<VerificarDuplicadosCasoDeUso>();
+
+// ── INYECCIÓN DE DEPENDENCIAS — Visto bueno (HU-13 / HU-14) ──────────────────
+builder.Services.AddScoped<IVistoBuenoRepositorio, VistoBuenoRepositorio>();
+builder.Services.AddScoped<ObtenerBandejaVistoBuenoCasoDeUso>();
+builder.Services.AddScoped<ResolverVistoBuenoCasoDeUso>();
+builder.Services.AddScoped<PrepararDecisionVistoBuenoCasoDeUso>();
+builder.Services.AddScoped<ObtenerCorreccionPropuestaCasoDeUso>();
+builder.Services.AddScoped<ObtenerValidacionesVistoBuenoCasoDeUso>();
+builder.Services.AddScoped<CompararVersionesPropuestaCasoDeUso>();
+builder.Services.AddScoped<ObtenerCostoSuministroCasoDeUso>();
+builder.Services.AddScoped<GuardarCostoSuministroCasoDeUso>();
+
+// ── INYECCIÓN DE DEPENDENCIAS — Órdenes de compra (HU-22) ────────────────────
+builder.Services.AddScoped<IOrdenCompraRepositorio, OrdenCompraRepositorio>();
+builder.Services.AddScoped<PrepararOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<CalcularCoberturaOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<RegistrarOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<ObtenerPdfOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<ObtenerBandejaOrdenesCompraCasoDeUso>();
+builder.Services.AddScoped<ObtenerDetalleOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<ObtenerPropuestasSinOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<EvaluarOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<PrepararEdicionOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<EditarOrdenCompraCasoDeUso>();
+builder.Services.AddSingleton<IGeneradorExcel, GeneradorExcelXlsx>();
+builder.Services.AddScoped<ObtenerDocumentosOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<ObtenerVersionDocumentoOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<ReemplazarDocumentoOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<ObtenerAuditoriaOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<ExportarAuditoriaOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<PrepararValidacionOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<ValidarOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<ObservarOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<LevantarObservacionOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<PrepararDistribucionOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<DistribuirOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<PrepararOcComplementariaCasoDeUso>();
+builder.Services.AddScoped<RegistrarOcComplementariaCasoDeUso>();
+builder.Services.AddScoped<PrepararLiberacionOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<LiberarOrdenCompraCasoDeUso>();
+
+// ── INYECCIÓN DE DEPENDENCIAS — Expediente Digital (HU-29 a HU-34) ───────────
+builder.Services.AddScoped<IExpedienteRepositorio, ExpedienteRepositorio>();
+builder.Services.AddScoped<ObtenerBandejaExpedientesCasoDeUso>();
+builder.Services.AddScoped<ObtenerDetalleExpedienteCasoDeUso>();
+builder.Services.AddScoped<ObtenerWorkflowExpedienteCasoDeUso>();
+builder.Services.AddScoped<ExportarWorkflowExpedienteCasoDeUso>();
+builder.Services.AddScoped<ExportarExpedienteCasoDeUso>();
+builder.Services.AddScoped<ObtenerDocumentosExpedienteCasoDeUso>();
+builder.Services.AddScoped<ObtenerArchivoExpedienteCasoDeUso>();
+builder.Services.AddScoped<AdjuntarDocumentoExpedienteCasoDeUso>();
+builder.Services.AddScoped<RegistrarBloqueoExpedienteCasoDeUso>();
+builder.Services.AddScoped<PrepararResolucionBloqueoCasoDeUso>();
+builder.Services.AddScoped<ResolverBloqueoExpedienteCasoDeUso>();
+builder.Services.AddScoped<ObtenerHistorialExpedienteCasoDeUso>();
+builder.Services.AddScoped<ExportarHistorialExpedienteCasoDeUso>();
+builder.Services.AddScoped<PrepararReasignacionExpedienteCasoDeUso>();
+builder.Services.AddScoped<BuscarResponsablesExpedienteCasoDeUso>();
+builder.Services.AddScoped<ReasignarResponsableExpedienteCasoDeUso>();
+builder.Services.AddScoped<PrepararAvanceExpedienteCasoDeUso>();
+builder.Services.AddScoped<AvanzarEtapaExpedienteCasoDeUso>();
+
+// ── INYECCIÓN DE DEPENDENCIAS — Seguimiento comercial (HU-17 / HU-18 / HU-19 / HU-20 / HU-21) ────────────────
+builder.Services.AddScoped<ISeguimientoComercialRepositorio, SeguimientoComercialRepositorio>();
+builder.Services.AddScoped<ObtenerBandejaSeguimientoCasoDeUso>();
+builder.Services.AddScoped<ObtenerDetalleSeguimientoCasoDeUso>();
+builder.Services.AddScoped<PrepararRegistroSeguimientoCasoDeUso>();
+builder.Services.AddScoped<RegistrarSeguimientoCasoDeUso>();
+builder.Services.AddScoped<RegistrarLlamadaSeguimientoCasoDeUso>();
+builder.Services.AddScoped<GuardarBorradorCorreoSeguimientoCasoDeUso>();
+builder.Services.AddScoped<EnviarCorreoSeguimientoCasoDeUso>();
+builder.Services.AddScoped<SubirAdjuntosSeguimientoCasoDeUso>();
+builder.Services.AddScoped<ObtenerAdjuntoSeguimientoCasoDeUso>();
+builder.Services.AddScoped<PrepararReprogramacionSeguimientoCasoDeUso>();
+builder.Services.AddScoped<ReprogramarAccionSeguimientoCasoDeUso>();
+builder.Services.AddScoped<PrepararCierreSeguimientoCasoDeUso>();
+builder.Services.AddScoped<RegistrarAceptacionSeguimientoCasoDeUso>();
+builder.Services.AddScoped<RegistrarRechazoSeguimientoCasoDeUso>();
+builder.Services.AddScoped<ProcesarRecordatoriosSeguimientoCasoDeUso>();
+// Observaciones 2026-10-15: aviso anticipado de las acciones de seguimiento (Recordatorios:Habilitado / IntervaloSegundos)
+builder.Services.AddHostedService<TW.Intranet.API.Configuracion.RecordatoriosSeguimientoWorker>();
+
+// ── INYECCIÓN DE DEPENDENCIAS — Consulta de RUC (OpenRUC + Decolecta + caché) ─
+// Variables: ConsultaRuc__DiasVigenciaCache (30), ConsultaRuc__OpenRuc__Habilitado (true),
+// ConsultaRuc__OpenRuc__UrlBase (https://openruc.com/), ConsultaRuc__OpenRuc__TimeoutSegundos (8).
+// Decolecta (RUC 10 y respaldo de RUC 20): ConsultaRuc__Decolecta__Token (obligatorio para usarlo),
+// ConsultaRuc__Decolecta__Habilitado (true), ConsultaRuc__Decolecta__UrlBase (https://api.decolecta.com/),
+// ConsultaRuc__Decolecta__TimeoutSegundos (8).
+// El orden de registro es el orden en que se prueban: primero OpenRUC (RUC 20, sin token) y luego Decolecta.
+// Cada proveedor usa un HttpClient con nombre propio (si no, compartirían la misma configuración).
+var seccionRuc = cfg.GetSection("ConsultaRuc");
+builder.Services.AddSingleton(new TW.Intranet.Aplicacion.Dtos.OpcionesConsultaRuc(
+    int.TryParse(seccionRuc["DiasVigenciaCache"], out var diasCacheRuc) && diasCacheRuc > 0 ? diasCacheRuc : 30));
+var configuracionOpenRuc = new ConfiguracionOpenRuc(
+    Habilitado:      !bool.TryParse(seccionRuc["OpenRuc:Habilitado"], out var openRucHabilitado) || openRucHabilitado,
+    UrlBase:         string.IsNullOrWhiteSpace(seccionRuc["OpenRuc:UrlBase"]) ? "https://openruc.com/" : seccionRuc["OpenRuc:UrlBase"]!.TrimEnd('/') + "/",
+    TimeoutSegundos: int.TryParse(seccionRuc["OpenRuc:TimeoutSegundos"], out var timeoutRuc) && timeoutRuc > 0 ? timeoutRuc : 8);
+if (configuracionOpenRuc.Habilitado)
+{
+    builder.Services.AddHttpClient<IProveedorRuc, OpenRucProveedor>("openruc", c =>
+    {
+        c.BaseAddress = new Uri(configuracionOpenRuc.UrlBase);
+        c.Timeout     = TimeSpan.FromSeconds(configuracionOpenRuc.TimeoutSegundos);
+        c.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+        c.DefaultRequestHeaders.UserAgent.ParseAdd("TW-Intranet/1.0");
+    });
+}
+var configuracionDecolecta = new ConfiguracionDecolecta(
+    Habilitado:      !bool.TryParse(seccionRuc["Decolecta:Habilitado"], out var decolectaHabilitado) || decolectaHabilitado,
+    UrlBase:         string.IsNullOrWhiteSpace(seccionRuc["Decolecta:UrlBase"]) ? "https://api.decolecta.com/" : seccionRuc["Decolecta:UrlBase"]!.TrimEnd('/') + "/",
+    Token:           seccionRuc["Decolecta:Token"]?.Trim() ?? "",
+    TimeoutSegundos: int.TryParse(seccionRuc["Decolecta:TimeoutSegundos"], out var timeoutDecolecta) && timeoutDecolecta > 0 ? timeoutDecolecta : 8);
+if (configuracionDecolecta.Habilitado && configuracionDecolecta.Token.Length > 0)
+{
+    builder.Services.AddHttpClient<IProveedorRuc, DecolectaRucProveedor>("decolecta", c =>
+    {
+        c.BaseAddress = new Uri(configuracionDecolecta.UrlBase);
+        c.Timeout     = TimeSpan.FromSeconds(configuracionDecolecta.TimeoutSegundos);
+        c.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+        c.DefaultRequestHeaders.UserAgent.ParseAdd("TW-Intranet/1.0");
+        DecolectaRucProveedor.ConfigurarToken(c, configuracionDecolecta.Token);
+    });
+}
+builder.Services.AddScoped<IConsultaRucRepositorio, ConsultaRucRepositorio>();
+builder.Services.AddScoped<ConsultarRucCasoDeUso>();
+builder.Services.AddScoped<ObtenerUsoConsultaRucCasoDeUso>();
+
+// ── INYECCIÓN DE DEPENDENCIAS — Servicio de correo (Brevo por API HTTPS) ─────
+// Variables: Correo__ApiKey, Correo__Remitente, Correo__NombreRemitente, Correo__UrlIntranet.
+// Sin ApiKey no se envía nada (los intentos quedan en correo_envio como "no_configurado").
+var seccionCorreo = cfg.GetSection("Correo");
+var configuracionCorreo = new ConfiguracionCorreo(
+    Proveedor:       string.IsNullOrWhiteSpace(seccionCorreo["Proveedor"]) ? "brevo" : seccionCorreo["Proveedor"]!.Trim().ToLowerInvariant(),
+    ApiKey:          seccionCorreo["ApiKey"]?.Trim() ?? "",
+    Remitente:       seccionCorreo["Remitente"]?.Trim() ?? "",
+    NombreRemitente: string.IsNullOrWhiteSpace(seccionCorreo["NombreRemitente"]) ? "Intranet Total Weight" : seccionCorreo["NombreRemitente"]!.Trim(),
+    UrlBase:         string.IsNullOrWhiteSpace(seccionCorreo["UrlBase"]) ? "https://api.brevo.com/" : seccionCorreo["UrlBase"]!.TrimEnd('/') + "/",
+    TimeoutSegundos: int.TryParse(seccionCorreo["TimeoutSegundos"], out var timeoutCorreo) && timeoutCorreo > 0 ? timeoutCorreo : 15);
+builder.Services.AddSingleton(configuracionCorreo);
+builder.Services.AddSingleton(new TW.Intranet.Aplicacion.Dtos.OpcionesCorreo(
+    // Si no se configura, se usa el primer origen de Cors:AllowedOrigins (la URL del front).
+    UrlIntranet:   !string.IsNullOrWhiteSpace(seccionCorreo["UrlIntranet"])
+                       ? seccionCorreo["UrlIntranet"]!.Trim()
+                       : (cfg["Cors:AllowedOrigins"] ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault() ?? "",
+    NombreSistema: "Intranet Total Weight"));
+if (configuracionCorreo.Configurado && configuracionCorreo.Proveedor == "brevo")
+{
+    builder.Services.AddHttpClient<IEnviadorCorreo, BrevoEnviadorCorreo>(c =>
+    {
+        c.BaseAddress = new Uri(configuracionCorreo.UrlBase);
+        c.Timeout     = TimeSpan.FromSeconds(configuracionCorreo.TimeoutSegundos);
+        c.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+    });
+}
+else
+{
+    builder.Services.AddSingleton<IEnviadorCorreo, EnviadorCorreoNoConfigurado>();
+}
+builder.Services.AddScoped<ICorreoRepositorio, CorreoRepositorio>();
+builder.Services.AddScoped<NotificadorCorreo>();
+builder.Services.AddScoped<ReenviarCredencialesCasoDeUso>();
+builder.Services.AddScoped<EnviarCorreoPruebaCasoDeUso>();
 
 // ─────────────────────────────────────────────────────────────────────────────
 var app = builder.Build();
+
+// El contenedor debe correr en hora de Lima (ENV TZ=America/Lima en el Dockerfile).
+if (TimeZoneInfo.Local.BaseUtcOffset != TW.Intranet.API.Configuracion.ZonaHorariaLima.Zona.BaseUtcOffset)
+    app.Logger.LogWarning(
+        "La zona horaria del servidor es {Zona} y no la de Lima (UTC-5). DateTime.Now no coincidirá con la hora de Perú. " +
+        "Configure TZ=America/Lima.", TimeZoneInfo.Local.Id);
+else
+    app.Logger.LogInformation("Zona horaria {Zona}, hora local {Hora:yyyy-MM-dd HH:mm:ss}", TimeZoneInfo.Local.Id, DateTime.Now);
+
+if (string.IsNullOrWhiteSpace(rutaAlmacenamientoConfigurada) && !app.Environment.IsDevelopment())
+    app.Logger.LogWarning(
+        "Almacenamiento:RutaBase no está configurado. Los archivos se guardan en {Ruta}, que NO persiste entre deploys. " +
+        "Configure un volumen y la variable Almacenamiento__RutaBase.", configuracionAlmacenamiento.RutaBase);
+else
+    app.Logger.LogInformation("Almacenamiento de archivos en {Ruta}", configuracionAlmacenamiento.RutaBase);
 
 if (!app.Environment.IsProduction())
 {

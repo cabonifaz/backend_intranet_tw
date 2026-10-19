@@ -1,0 +1,764 @@
+namespace TW.Intranet.Aplicacion.Dtos;
+
+// ══════════════════════ HU-22 — Registro de Orden de Compra recibida ══════════════════════
+
+/// <summary>Propuesta aceptada a la que se vincula la OC (base del indicador de cobertura).</summary>
+public record PropuestaOrdenCompraDto
+{
+    public long      IdPropuesta         { get; init; }
+    public string    Numero              { get; init; } = "";
+    public int       Version             { get; init; }
+    public long      IdCliente           { get; init; }
+    public string    RazonSocial         { get; init; } = "";
+    public string?   Ruc                 { get; init; }
+    public long?     IdRequerimiento     { get; init; }
+    public string?   NumeroRq            { get; init; }
+    /// <summary>Monto de la propuesta aprobada (se compara con el monto de la OC).</summary>
+    public decimal   Total               { get; init; }
+    public int       IdMoneda            { get; init; }
+    public string?   Moneda              { get; init; }
+    public string?   MonedaSimbolo       { get; init; }
+    public string?   MonedaNombre        { get; init; }
+    public DateTime? FechaAceptacion     { get; init; }
+    public string?   TipoAceptacion      { get; init; }
+    public long      IdResponsable       { get; init; }
+    public string?   Responsable         { get; init; }
+    public DateTime? FechaServidor       { get; init; }
+    public int       VigenciaDiasDefecto { get; init; }
+}
+
+public record MonedaOrdenCompraDto(int Id, string Nombre, string? Simbolo, string? Codigo);
+
+public record PreparacionOrdenCompraDto(PropuestaOrdenCompraDto Propuesta, List<MonedaOrdenCompraDto> Monedas);
+
+/// <summary>Datos de la OC (N° OC, fechas, moneda, monto, vigencia en días y observaciones).</summary>
+public record DatosOrdenCompraDto
+{
+    public string?   NumeroOc       { get; init; }
+    public DateTime? FechaOc        { get; init; }
+    public DateTime? FechaRecepcion { get; init; }
+    public int?      IdMoneda       { get; init; }
+    public decimal?  Monto          { get; init; }
+    public int?      VigenciaDias   { get; init; }
+    public string?   Observaciones  { get; init; }
+    /// <summary>HU-24 — Referencia / glosa de la OC (opcional, hasta 200 caracteres).</summary>
+    public string?   Referencia     { get; init; }
+}
+
+/// <summary>Datos que el caso de uso envía al SP (incluye el PDF ya guardado).</summary>
+public record ComandoOrdenCompra(
+    DatosOrdenCompraDto Datos,
+    string?             RutaPdf,
+    string?             NombrePdf,
+    long?               TamanoPdf,
+    string?             HashPdf);
+
+/// <summary>
+/// Indicador de cobertura. EstadoCobertura: completa | parcial | excede | moneda_diferente.
+/// Diferencia = monto OC − monto propuesta (null si las monedas son distintas).
+/// </summary>
+public record CoberturaOrdenCompraDto(
+    string   EstadoCobertura,
+    decimal  CoberturaPct,
+    decimal? Diferencia,
+    decimal  MontoPropuesta,
+    int      IdMonedaPropuesta,
+    string?  MonedaSimboloPropuesta,
+    decimal  MontoOc,
+    int      IdMonedaOc,
+    string?  MonedaSimboloOc);
+
+/// <summary>OC registrada. Estado: pendiente_validacion. SiguienteEtapa: validacion_oc.</summary>
+public record OrdenCompraRegistradaDto(
+    long      IdOc,
+    string    NumeroOc,
+    string    Estado,
+    string    EstadoCobertura,
+    decimal   CoberturaPct,
+    decimal?  Diferencia,
+    DateTime? VigenciaHasta,
+    string    SiguienteEtapa,
+    int       Notificados);
+
+public record RutaPdfOrdenCompraDto(string Ruta, string NombreArchivo);
+
+// ══════════════════════ HU-23 — Bandeja y Detalle de Órdenes de Compra ══════════════════════
+
+/// <summary>
+/// Filtros de la bandeja. Estado: activas (default) | vigentes | pendiente_validacion | validada | validada_parcial |
+/// observada | bloqueada | listas_programacion | vencida | anulada | todas.
+/// Cobertura: completa | con_saldo | insuficiente | moneda_diferente | pendiente. Fechas sobre la fecha de la OC.
+/// </summary>
+public record FiltrosBandejaOrdenesCompraDto
+{
+    public string?   Estado        { get; init; }
+    public string?   Cobertura     { get; init; }
+    public long?     IdCliente     { get; init; }
+    public long?     IdResponsable { get; init; }
+    public DateTime? FechaDesde    { get; init; }
+    public DateTime? FechaHasta    { get; init; }
+    /// <summary>Filtro "Archivo": true con PDF, false sin PDF, null todas.</summary>
+    public bool?     ConPdf        { get; init; }
+    public string?   Busqueda      { get; init; }
+    public int       Pagina        { get; init; } = 1;
+    public int       PorPagina     { get; init; } = 10;
+}
+
+/// <summary>Tarjetas superiores de la bandeja.</summary>
+public record KpisOrdenesCompraDto(
+    int Vigentes,
+    int CoberturaParcial,
+    int SaldoInsuficiente,
+    int PendientesValidacion,
+    int ListasProgramacion,
+    int Observadas,
+    int Vencidas,
+    /// <summary>Pendientes de validación cuyo monto no alcanza o están en otra moneda.</summary>
+    int PendientesConAlerta,
+    /// <summary>HU-28 — OC que ya liberaron su expediente a programación.</summary>
+    int Liberadas = 0);
+
+/// <summary>
+/// Fila de la bandeja. MontoAplicado = monto de la propuesta ya aplicado a la OC (0 mientras no se valida);
+/// Saldo = MontoOc − MontoAplicado (negativo = saldo insuficiente).
+/// CoberturaCodigo: pendiente | completa | con_saldo ("Parcial") | insuficiente | moneda_diferente.
+/// CoberturaProyectada: cómo quedará la cobertura al validar.
+/// Estado = valor guardado en BD, solo el resultado de la validación: pendiente_validacion | vigente |
+///   cobertura_parcial | saldo_insuficiente | vencida | anulada.
+/// EstadoVisual = lo que se muestra (considera además la observación abierta, la liberación y la cobertura):
+///   pendiente_validacion | observada | validada | validada_parcial | bloqueada | liberada | vencida | anulada.
+/// </summary>
+public record ItemBandejaOrdenCompraDto
+{
+    public long     IdOc                { get; init; }
+    public string   NumeroOc            { get; init; } = "";
+    public string?  FechaOc             { get; init; }
+    public string?  FechaRecepcion      { get; init; }
+    public long     IdCliente           { get; init; }
+    public string   RazonSocial         { get; init; } = "";
+    public string?  Ruc                 { get; init; }
+    public long?    IdRequerimiento     { get; init; }
+    public string?  NumeroRq            { get; init; }
+    public long?    IdPropuesta         { get; init; }
+    public string?  NumeroPropuesta     { get; init; }
+    public int?     VersionPropuesta    { get; init; }
+    public int      IdMoneda            { get; init; }
+    public string?  Moneda              { get; init; }
+    public string?  MonedaSimbolo       { get; init; }
+    public decimal  MontoOc             { get; init; }
+    public decimal  MontoPropuesta      { get; init; }
+    public decimal  MontoAplicado       { get; init; }
+    public decimal  Saldo               { get; init; }
+    public decimal? CoberturaPct        { get; init; }
+    public decimal  UtilizacionPct      { get; init; }
+    public string   CoberturaCodigo     { get; init; } = "";
+    public string   CoberturaProyectada { get; init; } = "";
+    public string   Estado              { get; init; } = "";
+    public string   EstadoVisual        { get; init; } = "";
+    public string?  VigenciaHasta       { get; init; }
+    public int?     DiasParaVencer      { get; init; }
+    public long     IdResponsable       { get; init; }
+    public string?  Responsable         { get; init; }
+    public bool     TienePdf            { get; init; }
+    public string?  UrlPdf              { get; init; }
+    public bool     ListaProgramacion   { get; init; }
+    public DateTime? FechaRegistro      { get; init; }
+    /// <summary>HU-27 — principal | complementaria, OC de origen, saldo disponible para distribuir y faltante.</summary>
+    public string   TipoOc              { get; init; } = "principal";
+    public long?    IdOcOrigen          { get; init; }
+    public string?  NumeroOcOrigen      { get; init; }
+    public decimal  SaldoDisponible     { get; init; }
+    public decimal  Faltante            { get; init; }
+    /// <summary>HU-28 — Fecha en que se liberó el expediente a programación.</summary>
+    public DateTime? FechaLiberacion    { get; init; }
+}
+
+public record BandejaOrdenesCompraDto(
+    KpisOrdenesCompraDto            Kpis,
+    List<ItemBandejaOrdenCompraDto> Items,
+    int                             Total,
+    int                             Pagina,
+    int                             PorPagina,
+    List<OpcionFiltroDto>           Clientes,
+    List<OpcionFiltroDto>           Responsables);
+
+/// <summary>Datos generales y cobertura económica (propuesta aprobada vs. OC recibida).</summary>
+public record ResumenOrdenCompraDto
+{
+    public long      IdOc                 { get; init; }
+    public string    NumeroOc             { get; init; } = "";
+    public string?   Referencia           { get; init; }
+    public string    Estado               { get; init; } = "";
+    public string    EstadoVisual         { get; init; } = "";
+    public string?   FechaOc              { get; init; }
+    public string?   FechaRecepcion       { get; init; }
+    public string?   VigenciaDesde        { get; init; }
+    public string?   VigenciaHasta        { get; init; }
+    public int?      VigenciaDias         { get; init; }
+    public int?      DiasParaVencer       { get; init; }
+    public string?   Observaciones        { get; init; }
+    public long      IdCliente            { get; init; }
+    public string    RazonSocial          { get; init; } = "";
+    public string?   Ruc                  { get; init; }
+    public long?     IdRequerimiento      { get; init; }
+    public string?   NumeroRq             { get; init; }
+    /// <summary>Descripción del requerimiento (referencia del servicio).</summary>
+    public string?   ReferenciaServicio   { get; init; }
+    public long?     IdPropuesta          { get; init; }
+    public string?   NumeroPropuesta      { get; init; }
+    public int?      VersionPropuesta     { get; init; }
+    public int       IdMoneda             { get; init; }
+    public string?   Moneda               { get; init; }
+    public string?   MonedaSimbolo        { get; init; }
+    public string?   MonedaNombre         { get; init; }
+    public decimal   MontoOc              { get; init; }
+    public decimal   MontoPropuesta       { get; init; }
+    /// <summary>Monto OC − monto propuesta (negativo = la OC no alcanza).</summary>
+    public decimal   Diferencia           { get; init; }
+    public decimal   MontoAplicado        { get; init; }
+    public decimal   Saldo                { get; init; }
+    public decimal?  CoberturaPct         { get; init; }
+    public decimal   UtilizacionPct       { get; init; }
+    public string    CoberturaCodigo      { get; init; } = "";
+    public string    CoberturaProyectada  { get; init; } = "";
+    public long      IdResponsable        { get; init; }
+    public string?   Responsable          { get; init; }
+    public long?     IdRegistradoPor      { get; init; }
+    public string?   RegistradoPor        { get; init; }
+    public DateTime? FechaRegistro        { get; init; }
+    public long?     IdValidadoPor        { get; init; }
+    public string?   ValidadoPor          { get; init; }
+    public DateTime? FechaValidacion      { get; init; }
+    public int?      IdMotivoObservacion  { get; init; }
+    public string?   MotivoObservacion    { get; init; }
+    /// <summary>HU-26 — Observación abierta: todos los motivos, detalle y responsable de corrección.</summary>
+    /// <summary>Observación abierta (para "Levantar observación"); null si no hay.</summary>
+    public long?     IdObservacionAbierta { get; init; }
+    public string?   MotivosObservacion   { get; init; }
+    public string?   DetalleObservacion   { get; init; }
+    public string?   ResponsableCorreccion { get; init; }
+    public string?   NombreArchivoPdf     { get; init; }
+    public long?     TamanoPdfBytes       { get; init; }
+    public string?   UrlPdf               { get; init; }
+    public bool      ListaProgramacion    { get; init; }
+    public int       OrdenesServicio      { get; init; }
+    /// <summary>HU-27 — Tipo de OC, OC de origen y montos de la distribución.</summary>
+    public string    TipoOc               { get; init; } = "principal";
+    public long?     IdOcOrigen           { get; init; }
+    public string?   NumeroOcOrigen       { get; init; }
+    /// <summary>Lo que esta OC debe cubrir (propuesta principal sin lo que cubren otras OC + lo distribuido).</summary>
+    public decimal   MontoRequeridoNeto   { get; init; }
+    public decimal   CoberturaOtros       { get; init; }
+    public decimal   MontoAsignadoOc      { get; init; }
+    public decimal   SaldoDisponible      { get; init; }
+    public decimal   Faltante             { get; init; }
+    /// <summary>HU-28 — Liberación del expediente a programación.</summary>
+    public DateTime? FechaLiberacion      { get; init; }
+    public string?   LiberadoPor          { get; init; }
+}
+
+/// <summary>Propuesta vinculada a la OC (pestaña Aplicaciones).</summary>
+public record AplicacionOrdenCompraDto(
+    long      IdPropuesta,
+    string    Numero,
+    int       Version,
+    string    Estado,
+    decimal   MontoPropuesta,
+    int       IdMoneda,
+    string?   Moneda,
+    string?   MonedaSimbolo,
+    decimal?  MontoAsignado,
+    DateTime? FechaAsignacion,
+    DateTime? FechaAceptacion,
+    bool      EsPrincipal,
+    /// <summary>HU-27 — Lo que otras OC cubren de la propuesta y lo que aún falta.</summary>
+    decimal   CubiertoOtrasOc = 0,
+    decimal   Pendiente       = 0);
+
+/// <summary>Ítem del checklist: cliente_coincide, moneda_coincide, propuesta_vigente, monto_suficiente, pdf_adjunto, numero_unico, oc_vigente.</summary>
+public record ItemChecklistOrdenCompraDto(string Codigo, string Descripcion, bool Cumple, string? Detalle);
+
+/// <summary>Vinculación del proceso: requerimiento | propuesta | expediente | orden_servicio (Disponible = false si aún no existe).</summary>
+public record VinculacionOrdenCompraDto(
+    string Tipo, long? IdEntidad, string? Codigo, string Descripcion, string? Estado, bool Disponible, string? Url);
+
+/// <summary>Documento: orden_compra_pdf | propuesta_pdf | evidencia_aceptacion.</summary>
+public record DocumentoOrdenCompraDto(string Tipo, string Nombre, long? TamanoBytes, DateTime? Fecha, string? Url);
+
+/// <summary>Etapa del flujo. Estado: completado | actual | observado | bloqueado | pendiente.</summary>
+public record EtapaWorkflowOrdenCompraDto(int Orden, string Codigo, string Etapa, string Estado, DateTime? Fecha);
+
+public record EventoHistorialOrdenCompraDto(
+    DateTime? Fecha, string Tipo, string Titulo, string? Descripcion, long? IdUsuario, string? Usuario);
+
+public record DetalleOrdenCompraDto(
+    ResumenOrdenCompraDto                Resumen,
+    List<AplicacionOrdenCompraDto>       Aplicaciones,
+    List<ItemChecklistOrdenCompraDto>    Checklist,
+    int                                  ChecklistCumplidos,
+    List<VinculacionOrdenCompraDto>      Vinculaciones,
+    List<DocumentoOrdenCompraDto>        Documentos,
+    List<EtapaWorkflowOrdenCompraDto>    Workflow,
+    List<EventoHistorialOrdenCompraDto>  Historial);
+
+/// <summary>Propuesta aceptada sin OC (selector del botón "+ Nueva Orden de Compra").</summary>
+public record PropuestaSinOrdenCompraDto(
+    long      IdPropuesta,
+    string    Numero,
+    int       Version,
+    long      IdCliente,
+    string    RazonSocial,
+    string?   Ruc,
+    long?     IdRequerimiento,
+    string?   NumeroRq,
+    decimal   Total,
+    int       IdMoneda,
+    string?   Moneda,
+    string?   MonedaSimbolo,
+    DateTime? FechaAceptacion,
+    long      IdResponsable,
+    string?   Responsable);
+
+// ══════════════════════ HU-24 — Registro y Edición de Orden de Compra ══════════════════════
+
+/// <summary>Datos que se van escribiendo en el formulario (panel en tiempo real). Todos opcionales.</summary>
+public record EvaluacionOrdenCompraSolicitudDto
+{
+    public string?  NumeroOc     { get; init; }
+    public int?     IdMoneda     { get; init; }
+    public decimal? Monto        { get; init; }
+    /// <summary>true si el usuario ya seleccionó el PDF (aún no subido).</summary>
+    public bool     TieneArchivo { get; init; }
+}
+
+/// <summary>
+/// Panel "Validación de Cobertura" + "Checklist de negocio".
+/// EstadoCobertura: sin_monto | completa | con_saldo | insuficiente | moneda_diferente.
+/// En edición: CambiaMontoMoneda, RequiereRevalidacion (la OC validada vuelve a validación) y
+/// CambioBloqueado (la OC ya tiene órdenes de servicio).
+/// </summary>
+public record EvaluacionOrdenCompraDto
+{
+    public string   EstadoCobertura         { get; init; } = "";
+    public string   EtiquetaCobertura       { get; init; } = "";
+    public decimal  CoberturaPct            { get; init; }
+    public decimal? Diferencia              { get; init; }
+    public decimal  MontoPropuesta          { get; init; }
+    public int      IdMonedaPropuesta       { get; init; }
+    public string?  MonedaSimboloPropuesta  { get; init; }
+    public decimal? MontoOc                 { get; init; }
+    public int?     IdMonedaOc              { get; init; }
+    public string?  MonedaSimboloOc         { get; init; }
+    public decimal  ToleranciaPct           { get; init; }
+    public bool     DentroTolerancia        { get; init; }
+    public bool     EsEdicion               { get; init; }
+    public decimal? MontoOcActual           { get; init; }
+    public int?     IdMonedaActual          { get; init; }
+    public bool     CambiaMontoMoneda       { get; init; }
+    public bool     RequiereRevalidacion    { get; init; }
+    public bool     CambioBloqueado         { get; init; }
+    public decimal  MontoAplicadoProyectado { get; init; }
+    public decimal  SaldoProyectado         { get; init; }
+    public List<ItemChecklistOrdenCompraDto> Checklist { get; init; } = [];
+    public int      ChecklistCumplidos      { get; init; }
+    public bool     TodoConforme            { get; init; }
+}
+
+/// <summary>OC a editar: datos editables, datos bloqueados (propuesta, RQ, cliente) y resumen de situación.</summary>
+public record OrdenCompraEdicionDto
+{
+    public long      IdOc                          { get; init; }
+    public string    NumeroOc                      { get; init; } = "";
+    public string?   Referencia                    { get; init; }
+    public string?   FechaOc                       { get; init; }
+    public string?   FechaRecepcion                { get; init; }
+    public int?      VigenciaDias                  { get; init; }
+    public string?   VigenciaHasta                 { get; init; }
+    public int       IdMoneda                      { get; init; }
+    public string?   Moneda                        { get; init; }
+    public string?   MonedaSimbolo                 { get; init; }
+    public string?   MonedaNombre                  { get; init; }
+    public decimal   MontoOc                       { get; init; }
+    public string?   Observaciones                 { get; init; }
+    public string?   NombreArchivoPdf              { get; init; }
+    public long?     TamanoPdfBytes                { get; init; }
+    public string?   UrlPdf                        { get; init; }
+    public long?     IdPropuesta                   { get; init; }
+    public string?   NumeroPropuesta               { get; init; }
+    public int?      VersionPropuesta              { get; init; }
+    public long?     IdRequerimiento               { get; init; }
+    public string?   NumeroRq                      { get; init; }
+    public long      IdCliente                     { get; init; }
+    public string    RazonSocial                   { get; init; } = "";
+    public string?   Ruc                           { get; init; }
+    public int?      IdMonedaPropuesta             { get; init; }
+    public string?   MonedaSimboloPropuesta        { get; init; }
+    public decimal   MontoPropuesta                { get; init; }
+    public decimal   MontoAplicado                 { get; init; }
+    public decimal   Saldo                         { get; init; }
+    public decimal?  CoberturaPct                  { get; init; }
+    public decimal   UtilizacionPct                { get; init; }
+    public string    CoberturaCodigo               { get; init; } = "";
+    public string    CoberturaProyectada           { get; init; } = "";
+    public string    Estado                        { get; init; } = "";
+    public string    EstadoVisual                  { get; init; } = "";
+    public int?      IdMotivoObservacion           { get; init; }
+    public string?   MotivoObservacion             { get; init; }
+    /// <summary>true si la OC está validada: cambiar monto o moneda la regresa a validación (alerta "Revalidación necesaria").</summary>
+    public bool      RequiereRevalidacionAlCambiar { get; init; }
+    /// <summary>false si la OC ya tiene órdenes de servicio (no se puede cambiar monto ni moneda).</summary>
+    public bool      PuedeCambiarMonto             { get; init; }
+    public int       OrdenesServicio               { get; init; }
+    public string?   FechaServidor                 { get; init; }
+}
+
+public record EdicionOrdenCompraDto(OrdenCompraEdicionDto OrdenCompra, List<MonedaOrdenCompraDto> Monedas);
+
+/// <summary>Formulario de edición: los datos de la OC + Revalidar ("Guardar y revalidar").</summary>
+public record EditarOrdenCompraSolicitudDto : DatosOrdenCompraDto
+{
+    public bool Revalidar { get; init; }
+}
+
+public record ComandoEdicionOrdenCompra(
+    DatosOrdenCompraDto Datos,
+    bool                Revalidar,
+    string?             RutaPdf,
+    string?             NombrePdf,
+    long?               TamanoPdf,
+    string?             HashPdf);
+
+/// <summary>Resultado de la edición. RequiereRevalidacion = la OC volvió a 'pendiente_validacion'.</summary>
+public record OrdenCompraEditadaDto(
+    long     IdOc,
+    string   NumeroOc,
+    string   Estado,
+    string   EstadoCobertura,
+    decimal  CoberturaPct,
+    decimal? Diferencia,
+    bool     RequiereRevalidacion,
+    string?  Cambios,
+    int      Notificados);
+
+// ══════════════════════ HU-25 — Gestión de Documento y Auditoría de OC ══════════════════════
+
+/// <summary>Versión del PDF de la OC. IdDocumento null = OC antigua sin historial (se muestra su PDF vigente como v1).</summary>
+public record VersionDocumentoOrdenCompraDto(
+    long?     IdDocumento,
+    int       Version,
+    string    NombreArchivo,
+    long?     TamanoBytes,
+    string?   Motivo,
+    string?   Hash,
+    DateTime? FechaCarga,
+    long?     IdSubidoPor,
+    string?   SubidoPor,
+    bool      EsActual,
+    string?   Url);
+
+/// <summary>Modal "Documento de Orden de Compra": documento actual (Versiones[0]) e historial.</summary>
+public record DocumentosOrdenCompraDto(
+    long                                  IdOc,
+    string                                NumeroOc,
+    string                                Estado,
+    bool                                  PuedeReemplazar,
+    int                                   TotalVersiones,
+    VersionDocumentoOrdenCompraDto?       Actual,
+    List<VersionDocumentoOrdenCompraDto>  Versiones);
+
+public record DocumentoReemplazadoDto(long IdDocumento, int Version, string? NombreArchivo, long? TamanoBytes, string? Motivo, string? Url);
+
+public record CabeceraAuditoriaOrdenCompraDto
+{
+    public long      IdOc              { get; init; }
+    public string    NumeroOc          { get; init; } = "";
+    public string    Estado            { get; init; } = "";
+    public string?   EstadoVisual      { get; init; }
+    public long?     IdExpediente      { get; init; }
+    public string?   NumeroExpediente  { get; init; }
+    public string?   EstadoExpediente  { get; init; }
+    public string?   EtapaExpediente   { get; init; }
+    public long?     IdPropuesta       { get; init; }
+    public string?   NumeroPropuesta   { get; init; }
+    public int?      VersionPropuesta  { get; init; }
+    public long?     IdRequerimiento   { get; init; }
+    public string?   NumeroRq          { get; init; }
+    public long      IdCliente         { get; init; }
+    public string?   RazonSocial       { get; init; }
+    public string?   Ruc               { get; init; }
+    public DateTime? GeneradoEn        { get; init; }
+    public string?   GeneradoPor       { get; init; }
+}
+
+/// <summary>Evento del timeline. Nivel: exito | info | alerta | documento | neutro.</summary>
+public record EventoTimelineAuditoriaDto(
+    DateTime? Fecha, string Codigo, string Titulo, string? Descripcion, string Nivel,
+    string? Referencia, string? Url, long? IdUsuario, string? Usuario, string? Area, string? Rol);
+
+public record RegistroAuditoriaCrmDto(
+    DateTime? Fecha, string Entidad, long IdEntidad, string? Referencia, string Accion,
+    string? EstadoAnterior, string? EstadoNuevo, string? Descripcion, long? IdUsuario, string? Usuario);
+
+public record AplicacionAuditoriaDto(
+    long IdPropuesta, string Numero, int Version, string Estado, decimal MontoPropuesta,
+    string? MonedaSimbolo, decimal MontoAsignado, DateTime? FechaAsignacion, string? AsignadoPor);
+
+public record DocumentoSsomaAuditoriaDto(
+    string NumeroOs, long IdSsomaDoc, string? Requisito, string? Trabajador, string Estado, int Version,
+    DateTime? FechaCarga, string? FechaVencimiento, string? MotivoObservacion);
+
+/// <summary>Historial de Expediente Industrial: pestañas Timeline, Registro de Auditoría (CRM), Aplicaciones y SSOMA.</summary>
+public record AuditoriaOrdenCompraDto(
+    CabeceraAuditoriaOrdenCompraDto        Cabecera,
+    List<EventoTimelineAuditoriaDto>       Timeline,
+    List<RegistroAuditoriaCrmDto>          RegistroCrm,
+    List<AplicacionAuditoriaDto>           Aplicaciones,
+    List<DocumentoSsomaAuditoriaDto>       DocumentacionSsoma,
+    List<VersionDocumentoOrdenCompraDto>   VersionesPdf);
+
+// ══════════════════════ HU-26 — Validación y Observación de Orden de Compra ══════════════════════
+
+/// <summary>
+/// Resumen comparativo del modal "Validar Orden de Compra".
+/// Dictamen: aprobable | con_alertas | no_aprobable. PuedeValidar exige checklist automático conforme.
+/// </summary>
+public record ResumenValidacionOrdenCompraDto
+{
+    public long      IdOc                { get; init; }
+    public string    NumeroOc            { get; init; } = "";
+    public string    Estado              { get; init; } = "";
+    public string    EstadoVisual        { get; init; } = "";
+    public long?     IdPropuesta         { get; init; }
+    public string?   NumeroPropuesta     { get; init; }
+    public int?      VersionPropuesta    { get; init; }
+    public long?     IdRequerimiento     { get; init; }
+    public string?   NumeroRq            { get; init; }
+    public long      IdCliente           { get; init; }
+    public string?   RazonSocial         { get; init; }
+    public string?   Ruc                 { get; init; }
+    public decimal   MontoOc             { get; init; }
+    public decimal   MontoPropuesta      { get; init; }
+    public int       IdMoneda            { get; init; }
+    public string?   MonedaSimbolo       { get; init; }
+    public string?   MonedaNombre        { get; init; }
+    public decimal?  CoberturaPct        { get; init; }
+    public string?   CoberturaProyectada { get; init; }
+    public string?   FechaOc             { get; init; }
+    public string?   FechaRecepcion      { get; init; }
+    public string?   VigenciaHasta       { get; init; }
+    public string?   NombreArchivoPdf    { get; init; }
+    public string?   UrlPdf              { get; init; }
+    public long      IdResponsable       { get; init; }
+    public string?   Responsable         { get; init; }
+    public string    Dictamen            { get; init; } = "";
+    public string?   DictamenMensaje     { get; init; }
+    public int       Inconsistencias     { get; init; }
+    public bool      PuedeValidar        { get; init; }
+    public bool      PuedeObservar       { get; init; }
+    public string?   MotivoNoDisponible  { get; init; }
+}
+
+/// <summary>
+/// Ítem del checklist: razon_social, ruc, propuesta_aceptada, moneda, monto, numero_unico, pdf_legible, oc_vigente.
+/// RequiereConfirmacion = el validador lo confirma contra la OC física (se envía en "confirmados").
+/// Bloqueante = si no cumple, impide validar. "monto" no es bloqueante: una OC que no cubre toda la propuesta
+/// se valida y queda en saldo insuficiente (EstadoVisual "bloqueada") hasta validar su OC complementaria.
+/// </summary>
+public record ItemValidacionOrdenCompraDto(
+    int Orden, string Codigo, string Descripcion, string? ValorSistema, string? ValorReferencia,
+    bool CumpleAuto, bool RequiereConfirmacion, string? Detalle, bool Bloqueante = true);
+
+public record ResponsableCorreccionDto(long Id, string Nombre, string Etiqueta, bool EsResponsablePropuesta);
+
+public record ObservacionOrdenCompraDto(
+    long IdObservacion, string Estado, string Detalle, DateTime? FechaObservacion, DateTime? FechaLevantamiento,
+    string? ObservadoPor, string? ResponsableCorreccion, string? Motivos);
+
+public record PreparacionValidacionOrdenCompraDto(
+    ResumenValidacionOrdenCompraDto     Resumen,
+    List<ItemValidacionOrdenCompraDto>  Checklist,
+    List<OpcionFiltroDto>               Motivos,
+    List<ResponsableCorreccionDto>      Responsables,
+    List<ObservacionOrdenCompraDto>     Observaciones);
+
+/// <summary>Confirmados: códigos del checklist confirmados contra la OC física (razon_social, ruc, moneda, monto, pdf_legible).</summary>
+public record ValidarOrdenCompraSolicitudDto
+{
+    public List<string>? Confirmados { get; init; }
+    public string?       Comentario  { get; init; }
+}
+
+public record OrdenCompraValidadaDto(
+    long IdOc, string NumeroOc, string Estado, string EstadoCobertura, DateTime? FechaValidacion, string? ValidadoPor, int Notificados);
+
+/// <summary>Motivos: ids de MOTIVO_OBSERVACION_OC. Detalle obligatorio. IdResponsable: responsable de corrección.</summary>
+public record ObservarOrdenCompraSolicitudDto
+{
+    public List<int>? Motivos       { get; init; }
+    public string?    Detalle       { get; init; }
+    public long?      IdResponsable { get; init; }
+}
+
+public record ObservacionRegistradaDto(
+    long IdObservacion, long IdOc, string NumeroOc, string Estado, string? Motivos,
+    long IdResponsable, string? Responsable, bool ExpedienteBloqueado, int Notificados);
+
+/// <summary>Sustento obligatorio (10 a 1000 caracteres): por qué se levanta la observación sin editar la OC.</summary>
+public record LevantarObservacionOrdenCompraSolicitudDto
+{
+    public string? Sustento { get; init; }
+}
+
+/// <summary>Observación levantada: la OC queda pendiente de validación (EstadoVisual = pendiente_validacion).</summary>
+public record ObservacionLevantadaDto(
+    long IdObservacion, long IdOc, string NumeroOc, string Estado, string EstadoVisual,
+    DateTime? FechaLevantamiento, string? LevantadaPor, int ExpedientesDesbloqueados, int Notificados);
+
+// ══════════════════════ HU-27 — Distribución de Saldos y OC Complementaria ══════════════════════
+
+public record OcDistribucionDto
+{
+    public long     IdOc               { get; init; }
+    public string   NumeroOc           { get; init; } = "";
+    public string   TipoOc             { get; init; } = "";
+    public string   Estado             { get; init; } = "";
+    public string   EstadoVisual       { get; init; } = "";
+    public long     IdCliente          { get; init; }
+    public string?  RazonSocial        { get; init; }
+    public string?  Ruc                { get; init; }
+    public int      IdMoneda           { get; init; }
+    public string?  Moneda             { get; init; }
+    public string?  MonedaSimbolo      { get; init; }
+    public decimal  MontoTotal         { get; init; }
+    public decimal  MontoAplicado      { get; init; }
+    public decimal  SaldoDisponible    { get; init; }
+    public decimal  UsoPct             { get; init; }
+    public bool     PuedeDistribuir    { get; init; }
+    public string?  MotivoNoDisponible { get; init; }
+}
+
+/// <summary>Propuesta vinculada (Vinculada = true) o destino posible. EstadoCobertura: cubierto | parcial | pendiente.</summary>
+public record AplicacionDistribucionDto(
+    long    IdPropuesta,
+    string  Documento,
+    string  Tipo,
+    string  Numero,
+    int     Version,
+    string? Cliente,
+    string? Concepto,
+    decimal Requerido,
+    decimal Aplicado,
+    decimal AplicadoOtrasOc,
+    decimal Pendiente,
+    string  EstadoCobertura,
+    bool    Vinculada,
+    bool    EsPrincipal,
+    long?   IdResponsable,
+    string? Responsable);
+
+public record DistribucionOrdenCompraDto(OcDistribucionDto OrdenCompra, List<AplicacionDistribucionDto> Aplicaciones);
+
+/// <summary>Monto = 0 quita la aplicación (salvo la propuesta principal).</summary>
+public record DistribuirOrdenCompraSolicitudDto
+{
+    public long?    IdPropuesta { get; init; }
+    public decimal? Monto       { get; init; }
+}
+
+public record ResultadoDistribucionDto(
+    long IdOc, long IdPropuesta, string Propuesta, decimal SaldoAntes, decimal SaldoDespues,
+    decimal AplicadoAntes, decimal AplicadoDespues, decimal PendientePropuesta, string EstadoCobertura);
+
+/// <summary>Propuesta, cobertura actual y resultado "OC existente + Nueva OC = Cobertura total".
+/// EstadoResultado: sin_monto | completa | con_saldo | insuficiente.</summary>
+public record PropuestaOcComplementariaDto
+{
+    public long      IdPropuesta         { get; init; }
+    public string    Numero              { get; init; } = "";
+    public int       Version             { get; init; }
+    public long      IdCliente           { get; init; }
+    public string?   RazonSocial         { get; init; }
+    public string?   Ruc                 { get; init; }
+    public long?     IdRequerimiento     { get; init; }
+    public string?   NumeroRq            { get; init; }
+    public int       IdMoneda            { get; init; }
+    public string?   Moneda              { get; init; }
+    public string?   MonedaSimbolo       { get; init; }
+    public string?   MonedaNombre        { get; init; }
+    public decimal   MontoPropuesta      { get; init; }
+    public decimal   MontoCubierto       { get; init; }
+    public decimal   Faltante            { get; init; }
+    public decimal   CoberturaPct        { get; init; }
+    public int       VigenciaDiasDefecto { get; init; }
+    public string?   FechaServidor       { get; init; }
+    public decimal?  MontoNuevaOc        { get; init; }
+    public decimal   CoberturaTotal      { get; init; }
+    public decimal   CoberturaTotalPct   { get; init; }
+    public string    EstadoResultado     { get; init; } = "";
+    public decimal   SaldoNuevaOc        { get; init; }
+    public decimal   FaltanteDespues     { get; init; }
+}
+
+public record OcExistenteDto(long IdOc, string NumeroOc, string TipoOc, string Estado, decimal MontoTotal, decimal MontoAsignado, string? FechaOc);
+
+public record PreparacionOcComplementariaDto(PropuestaOcComplementariaDto Propuesta, List<OcExistenteDto> OrdenesExistentes);
+
+/// <summary>Datos de la OC complementaria. La moneda es la de la propuesta. VigenciaDias opcional (parámetro por defecto).</summary>
+public record RegistrarOcComplementariaSolicitudDto
+{
+    public string?   NumeroOc       { get; init; }
+    public DateTime? FechaOc        { get; init; }
+    public DateTime? FechaRecepcion { get; init; }
+    public decimal?  Monto          { get; init; }
+    public int?      VigenciaDias   { get; init; }
+    public string?   Observaciones  { get; init; }
+    public string?   Referencia     { get; init; }
+}
+
+public record OcComplementariaRegistradaDto(
+    long? IdOc, string NumeroOc, string Estado, long IdOcOrigen, string? NumeroOcOrigen,
+    decimal MontoExistente, decimal MontoNuevaOc, decimal CoberturaTotal, decimal CoberturaTotalPct,
+    string EstadoResultado, decimal SaldoNuevaOc, int Notificados);
+
+// ══════════════════════ HU-28 — Liberación para Programación ══════════════════════
+
+public record CabeceraLiberacionDto
+{
+    public long    IdOc                      { get; init; }
+    public string  NumeroOc                  { get; init; } = "";
+    public long    IdCliente                 { get; init; }
+    public string? RazonSocial               { get; init; }
+    public long?   IdExpediente              { get; init; }
+    public string? NumeroExpediente          { get; init; }
+    public string? EtapaExpediente           { get; init; }
+    public string? EstadoExpediente          { get; init; }
+    /// <summary>true si el expediente no existe y se creará al liberar.</summary>
+    public bool    CreaExpediente            { get; init; }
+    public bool    PuedeLiberar              { get; init; }
+    /// <summary>true si hay requisitos pendientes (alertas): se debe confirmar el impacto.</summary>
+    public bool    RequiereConfirmacion      { get; init; }
+    public int     Bloqueantes               { get; init; }
+    public int     Alertas                   { get; init; }
+    public string? Impacto                   { get; init; }
+    public string? InformacionProceso        { get; init; }
+    public string  SiguienteEtapaCodigo      { get; init; } = "programacion";
+    public string  SiguienteEtapa            { get; init; } = "Programación";
+    public string  ResponsableSiguienteEtapa { get; init; } = "Operaciones";
+    public int     SlaHoras                  { get; init; }
+}
+
+/// <summary>Validación de cumplimiento. Estado: cumple | alerta (no impide liberar) | bloqueante.</summary>
+public record ValidacionLiberacionDto(int Orden, string Codigo, string Descripcion, string Estado, DateTime? Fecha, string? Detalle);
+
+public record PreparacionLiberacionDto(CabeceraLiberacionDto Cabecera, List<ValidacionLiberacionDto> Validaciones);
+
+/// <summary>ConfirmaImpacto: obligatorio si hay alertas (la responsabilidad pasa a Operaciones).</summary>
+public record LiberarOrdenCompraSolicitudDto
+{
+    public bool    ConfirmaImpacto { get; init; }
+    public string? Comentario      { get; init; }
+}
+
+public record OrdenCompraLiberadaDto(
+    long IdOc, string NumeroOc, long IdExpediente, string NumeroExpediente, bool ExpedienteCreado,
+    string Etapa, string EstadoExpediente, int AlertasPendientes, int SlaHoras, DateTime? FechaLimiteProgramacion, int Notificados);

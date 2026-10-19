@@ -394,12 +394,15 @@ VALUES
 (1, 47, 'METODO_CALIBRACION', 4, 3, NULL, 'Calibración volumétrica',     'CAL-VOLUM',  NULL),
 
 -- ── 48 REQUISITO_SSOMA ────────────────────────────────────────────────────────
--- Num1=id · Num2=vencimiento_dias · Num3=es_obligatorio · String1=nombre · String2=aplica_rol · String3=bloquea_servicio
-(1, 48, 'REQUISITO_SSOMA', 1, 365, 1, 'Seguro Complementario de Trabajo de Riesgo (SCTR)', 'ambos',   '1'),
-(1, 48, 'REQUISITO_SSOMA', 2, 365, 1, 'Examen médico ocupacional',                         'ambos',   '1'),
-(1, 48, 'REQUISITO_SSOMA', 3, 365, 1, 'Certificado de aptitud para trabajo en altura',     'tecnico', '1'),
-(1, 48, 'REQUISITO_SSOMA', 4, 180, 1, 'EPP actualizado (foto)',                            'ambos',   '0'),
-(1, 48, 'REQUISITO_SSOMA', 5,   0, 0, 'Inducción SSOMA cliente',                          'ambos',   '0'),
+-- Convencion estandar: String2 = codigo estable unico (lo que viaja en los DTOs
+-- y usan los joins). String3 = aplica_rol (ambos/tecnico/comercial) como metadata.
+-- Num1=id · Num2=vencimiento_dias · Num3=es_obligatorio
+-- String1=nombre · String2=codigo (unico) · String3=aplica_rol
+(1, 48, 'REQUISITO_SSOMA', 1, 365, 1, 'Seguro Complementario de Trabajo de Riesgo (SCTR)', 'sctr',             'ambos'),
+(1, 48, 'REQUISITO_SSOMA', 2, 365, 1, 'Examen médico ocupacional',                         'examen_medico',    'ambos'),
+(1, 48, 'REQUISITO_SSOMA', 3, 365, 1, 'Certificado de aptitud para trabajo en altura',     'altura',           'tecnico'),
+(1, 48, 'REQUISITO_SSOMA', 4, 180, 1, 'EPP actualizado (foto)',                            'epp',              'ambos'),
+(1, 48, 'REQUISITO_SSOMA', 5,   0, 0, 'Inducción SSOMA cliente',                           'induccion_ssoma',  'ambos'),
 
 -- ── 49 CONFIG_SLA ─────────────────────────────────────────────────────────────
 -- Num1=id · Num2=horas_limite · Num3=horas_alerta · String1=entidad · String2=etapa · String3=aplica_dias_habiles

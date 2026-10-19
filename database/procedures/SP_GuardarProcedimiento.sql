@@ -3,6 +3,9 @@
 --   * Al editar (si hubo cambios): copia la versión anterior al historial
 --     y la versión sube automáticamente (o toma la indicada si es mayor).
 --   * Auditoría con los campos modificados.
+--   * p_url_pdf_aprobado se IGNORA (se mantiene por compatibilidad).
+--     El PDF aprobado solo se carga con POST /procedimientos/{id}/pdf
+--     (SP_RegistrarPdfProcedimiento), con la acción procedimiento_pdf_cargar.
 DROP PROCEDURE IF EXISTS SP_GuardarProcedimiento;
 
 DELIMITER $$
@@ -14,10 +17,7 @@ CREATE PROCEDURE SP_GuardarProcedimiento(
     IN p_version                INT,
     IN p_autor_norma            VARCHAR(150) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_norma_base             VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
-    IN p_tipo_procedimiento     VARCHAR(30)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_descripcion            TEXT         CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
-    IN p_alcance                VARCHAR(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
-    IN p_aprobado_por           VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_es_formato_digital_iso TINYINT,
     IN p_url_pdf_aprobado       VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_es_activo              TINYINT,
@@ -45,13 +45,6 @@ proc: BEGIN
     END;
 
     -- ── Validaciones ─────────────────────────────────────────────────────
-    IF p_tipo_procedimiento IS NOT NULL AND p_tipo_procedimiento <> '' AND NOT EXISTS (
-        SELECT 1 FROM tabla_maestra WHERE IdMaestro = 76 AND IdEmpresa = 1 AND String2 = p_tipo_procedimiento
-    ) THEN
-        SELECT 1 AS IdTipoMensaje, 'El tipo de procedimiento no es válido.' AS Mensaje;
-        LEAVE proc;
-    END IF;
-
     IF p_id_procedimiento <> 0 AND NOT EXISTS (
         SELECT 1 FROM procedimiento_metrologico WHERE id_procedimiento = p_id_procedimiento AND SoftDelete = 0
     ) THEN
@@ -83,15 +76,14 @@ proc: BEGIN
     IF p_id_procedimiento = 0 THEN
         -- ── Crear ────────────────────────────────────────────────────────
         INSERT INTO procedimiento_metrologico (
-            codigo, anio, version, autor_norma, norma_base, tipo_procedimiento,
-            descripcion, alcance, aprobado_por, es_formato_digital_iso, url_pdf_aprobado,
+            codigo, anio, version, autor_norma, norma_base,
+            descripcion, es_formato_digital_iso, url_pdf_aprobado,
             estado, total_ediciones, id_usuario_registro, pc_registro,
             SoftDelete, UsuCre, FchCre
         ) VALUES (
             p_codigo, p_anio, GREATEST(IFNULL(p_version, 1), 1), p_autor_norma, p_norma_base,
-            NULLIF(p_tipo_procedimiento, ''),
-            p_descripcion, p_alcance, p_aprobado_por, IFNULL(p_es_formato_digital_iso, 0),
-            NULLIF(p_url_pdf_aprobado, ''),
+            p_descripcion, IFNULL(p_es_formato_digital_iso, 0),
+            NULL,
             v_estado, 0, p_id_usuario, p_pc_registro,
             0, v_usu, NOW()
         );
@@ -115,12 +107,8 @@ proc: BEGIN
                IF(NOT (anio                   <=> p_anio),                            'Año', NULL),
                IF(NOT (autor_norma            <=> p_autor_norma),                     'Autor/organismo', NULL),
                IF(NOT (norma_base             <=> p_norma_base),                      'Norma base', NULL),
-               IF(NOT (tipo_procedimiento     <=> NULLIF(p_tipo_procedimiento, '')),  'Tipo', NULL),
                IF(NOT (descripcion            <=> p_descripcion),                     'Descripción', NULL),
-               IF(NOT (alcance                <=> p_alcance),                         'Alcance', NULL),
-               IF(NOT (aprobado_por           <=> p_aprobado_por),                    'Aprobado por', NULL),
                IF(NOT (es_formato_digital_iso <=> IFNULL(p_es_formato_digital_iso, 0)), 'Formato digital', NULL),
-               IF(NOT (url_pdf_aprobado       <=> NULLIF(p_url_pdf_aprobado, '')),    'PDF aprobado', NULL),
                IF(NOT (estado                 <=> v_estado),                          'Estado', NULL),
                IF(IFNULL(p_version, version) > version,                               'Versión', NULL)
            )
@@ -145,10 +133,7 @@ proc: BEGIN
                'version',             version,
                'autorNorma',          autor_norma,
                'normaBase',           norma_base,
-               'tipoProcedimiento',   tipo_procedimiento,
                'descripcion',         descripcion,
-               'alcance',             alcance,
-               'aprobadoPor',         aprobado_por,
                'esFormatoDigitalIso', es_formato_digital_iso,
                'urlPdfAprobado',      url_pdf_aprobado,
                'estado',              estado
@@ -162,12 +147,8 @@ proc: BEGIN
         version                = v_version_new,
         autor_norma            = p_autor_norma,
         norma_base             = p_norma_base,
-        tipo_procedimiento     = NULLIF(p_tipo_procedimiento, ''),
         descripcion            = p_descripcion,
-        alcance                = p_alcance,
-        aprobado_por           = p_aprobado_por,
         es_formato_digital_iso = IFNULL(p_es_formato_digital_iso, 0),
-        url_pdf_aprobado       = NULLIF(p_url_pdf_aprobado, ''),
         estado                 = v_estado,
         total_ediciones        = total_ediciones + 1,
         UsuMod                 = v_usu,

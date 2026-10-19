@@ -26,6 +26,10 @@ BEGIN
         FROM tabla_maestra
         WHERE Descripcion = p_descripcion
           AND IdEmpresa   = 1
+          -- Algunos nombres existen también en los catálogos antiguos de la migración 01
+          -- (ej. ORIGEN_REQUERIMIENTO 6 y 63): se usa siempre el catálogo más reciente.
+          AND IdMaestro   = (SELECT MAX(t.IdMaestro) FROM tabla_maestra t
+                             WHERE t.Descripcion = p_descripcion AND t.IdEmpresa = 1)
         ORDER BY Num1;
     END IF;
 END$$
