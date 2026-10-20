@@ -312,34 +312,51 @@ builder.Services.AddScoped<CompararVersionesPropuestaCasoDeUso>();
 builder.Services.AddScoped<ObtenerCostoSuministroCasoDeUso>();
 builder.Services.AddScoped<GuardarCostoSuministroCasoDeUso>();
 
-// ── INYECCIÓN DE DEPENDENCIAS — Órdenes de compra (HU-22) ────────────────────
+// ── INYECCIÓN DE DEPENDENCIAS — Órdenes de compra (Sprint 4, HU-22 a HU-28) ──
 builder.Services.AddScoped<IOrdenCompraRepositorio, OrdenCompraRepositorio>();
-builder.Services.AddScoped<PrepararOrdenCompraCasoDeUso>();
-builder.Services.AddScoped<CalcularCoberturaOrdenCompraCasoDeUso>();
-builder.Services.AddScoped<RegistrarOrdenCompraCasoDeUso>();
-builder.Services.AddScoped<ObtenerPdfOrdenCompraCasoDeUso>();
+builder.Services.AddSingleton<IGeneradorExcel, GeneradorExcelXlsx>();
 builder.Services.AddScoped<ObtenerBandejaOrdenesCompraCasoDeUso>();
 builder.Services.AddScoped<ObtenerDetalleOrdenCompraCasoDeUso>();
-builder.Services.AddScoped<ObtenerPropuestasSinOrdenCompraCasoDeUso>();
-builder.Services.AddScoped<EvaluarOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<ObtenerValidacionOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<ObtenerTimelineOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<ExportarTimelineOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<ObtenerPdfOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<PrepararOrdenCompraCasoDeUso>();
 builder.Services.AddScoped<PrepararEdicionOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<ObtenerPropuestasDisponiblesOcCasoDeUso>();
+builder.Services.AddScoped<ExtraerOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<CompararOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<RegistrarOrdenCompraCasoDeUso>();
 builder.Services.AddScoped<EditarOrdenCompraCasoDeUso>();
-builder.Services.AddSingleton<IGeneradorExcel, GeneradorExcelXlsx>();
-builder.Services.AddScoped<ObtenerDocumentosOrdenCompraCasoDeUso>();
-builder.Services.AddScoped<ObtenerVersionDocumentoOrdenCompraCasoDeUso>();
 builder.Services.AddScoped<ReemplazarDocumentoOrdenCompraCasoDeUso>();
-builder.Services.AddScoped<ObtenerAuditoriaOrdenCompraCasoDeUso>();
-builder.Services.AddScoped<ExportarAuditoriaOrdenCompraCasoDeUso>();
-builder.Services.AddScoped<PrepararValidacionOrdenCompraCasoDeUso>();
-builder.Services.AddScoped<ValidarOrdenCompraCasoDeUso>();
-builder.Services.AddScoped<ObservarOrdenCompraCasoDeUso>();
-builder.Services.AddScoped<LevantarObservacionOrdenCompraCasoDeUso>();
-builder.Services.AddScoped<PrepararDistribucionOrdenCompraCasoDeUso>();
-builder.Services.AddScoped<DistribuirOrdenCompraCasoDeUso>();
-builder.Services.AddScoped<PrepararOcComplementariaCasoDeUso>();
-builder.Services.AddScoped<RegistrarOcComplementariaCasoDeUso>();
-builder.Services.AddScoped<PrepararLiberacionOrdenCompraCasoDeUso>();
-builder.Services.AddScoped<LiberarOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<RevalidarOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<AutogenerarOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<PrepararAnulacionOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<AnularOrdenCompraCasoDeUso>();
+
+// IA de órdenes de compra (Google Gemini, nivel gratuito de AI Studio).
+// Variables: Gemini__ApiKey, Gemini__Modelo (gemini-2.5-flash), Gemini__UrlBase, Gemini__TimeoutSegundos (60).
+// Sin ApiKey el módulo funciona igual: la ficha se llena a mano y la validación usa solo las reglas.
+var seccionGemini = cfg.GetSection("Gemini");
+var configuracionGemini = new ConfiguracionGemini(
+    ApiKey:          seccionGemini["ApiKey"]?.Trim() ?? "",
+    Modelo:          string.IsNullOrWhiteSpace(seccionGemini["Modelo"]) ? "gemini-2.5-flash" : seccionGemini["Modelo"]!.Trim(),
+    UrlBase:         string.IsNullOrWhiteSpace(seccionGemini["UrlBase"]) ? "https://generativelanguage.googleapis.com/" : seccionGemini["UrlBase"]!.TrimEnd('/') + "/",
+    TimeoutSegundos: int.TryParse(seccionGemini["TimeoutSegundos"], out var timeoutGemini) && timeoutGemini > 0 ? timeoutGemini : 60);
+builder.Services.AddSingleton(configuracionGemini);
+if (configuracionGemini.Configurado)
+{
+    builder.Services.AddHttpClient<IAsistenteIaOrdenCompra, GeminiAsistenteOrdenCompra>(c =>
+    {
+        c.BaseAddress = new Uri(configuracionGemini.UrlBase);
+        c.Timeout     = TimeSpan.FromSeconds(configuracionGemini.TimeoutSegundos);
+        c.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+    });
+}
+else
+{
+    builder.Services.AddSingleton<IAsistenteIaOrdenCompra, AsistenteIaOrdenCompraNoConfigurado>();
+}
 
 // ── INYECCIÓN DE DEPENDENCIAS — Expediente Digital (HU-29 a HU-34) ───────────
 builder.Services.AddScoped<IExpedienteRepositorio, ExpedienteRepositorio>();

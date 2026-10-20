@@ -77,7 +77,7 @@ proc: BEGIN
     IF v_manual = 0 THEN
         DROP TEMPORARY TABLE IF EXISTS tmp_exp;
         SELECT 1 AS IdTipoMensaje,
-               IF(v_etapa = 'orden_compra', 'El expediente pasa a Programación al liberar la orden de compra.',
+               IF(v_etapa = 'orden_compra', 'El expediente pasa a Programación cuando se valida la orden de compra (o se autogenera una OC provisional).',
                   'Esta etapa avanza sola con la gestión comercial.') AS Mensaje;
         LEAVE proc;
     END IF;

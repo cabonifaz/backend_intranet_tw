@@ -48,7 +48,7 @@ proc: BEGIN
         WHEN v_etapa = 'cerrado'      THEN 'El expediente está cerrado.'
         WHEN v_etapa IN ('requerimiento', 'propuesta', 'visto_bueno')
                                       THEN 'Esta etapa avanza sola con la gestión comercial (requerimiento, propuesta y visto bueno).'
-        WHEN v_etapa = 'orden_compra' THEN 'Pasa a Programación al liberar la orden de compra desde Órdenes de Compra.'
+        WHEN v_etapa = 'orden_compra' THEN 'Pasa a Programación cuando se valida la orden de compra (o se autogenera una OC provisional) en Órdenes de Compra.'
         WHEN v_fallan > 0             THEN 'NO ES POSIBLE AVANZAR: existen requisitos críticos pendientes que deben resolverse antes de cambiar de etapa.'
         WHEN FN_PermisoAccion(p_id_usuario, 'expediente_avanzar') = 0
                                       THEN 'Expediente listo para avanzar, pero no tienes permiso para avanzar expedientes.'

@@ -6,7 +6,7 @@
 --   inicio/fin, responsable, área, horas de espera (etapa en curso: desde que empezó) y de proceso
 --   (etapa terminada: de inicio a fin), SLA en horas y si se cumple, y el resultado.
 -- Fechas de las etapas comerciales: RQ (registro), Propuesta (primera propuesta), VB (primera solicitud de VB),
---   OC (aprobación del VB), fin de OC = liberación. Desde Programación, el historial de expediente_etapa.
+--   OC (aprobación del VB), fin de OC = validación de la OC (o OC autogenerada). Desde Programación, el historial de expediente_etapa.
 DROP PROCEDURE IF EXISTS SP_CargarEtapasExpediente;
 
 DELIMITER $$

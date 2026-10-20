@@ -100,19 +100,18 @@ BEGIN
     JOIN seguimiento_comercial s ON s.id_seguimiento = a.id_seguimiento AND s.eliminado_en IS NULL
     WHERE s.id_propuesta IN (SELECT id_propuesta FROM tmp_exp_props) AND a.eliminado_en IS NULL;
 
-    -- PDF de las órdenes de compra (todas las versiones)
+    -- PDF de las órdenes de compra (el vigente y los reemplazados, que quedan como HISTÓRICO)
     INSERT INTO tmp_exp_doc
     SELECT CONCAT('doc-', d.id_documento), CONCAT('OC-', oc.numero_oc, '.pdf'), d.nombre_archivo,
-           IF(oc.tipo_oc = 'complementaria', 'Orden de Compra complementaria', 'Orden de Compra'),
+           IF(oc.es_autogenerada = 1, 'Orden de Compra provisional', 'Orden de Compra'),
            'comerciales', 'CRM', 'orden_compra', d.version,
            CASE
                WHEN d.version < (SELECT MAX(d2.version) FROM documento_adjunto d2
                                  WHERE d2.entidad_tipo = 'orden_compra' AND d2.id_entidad = oc.id_oc AND d2.eliminado_en IS NULL) THEN 'HISTÓRICO'
                WHEN oc.estado = 'anulada'                                   THEN 'ANULADO'
-               WHEN oc.estado = 'vencida'                                   THEN 'VENCIDO'
-               WHEN EXISTS (SELECT 1 FROM orden_compra_observacion ob
-                            WHERE ob.id_oc = oc.id_oc AND ob.estado = 'abierta' AND ob.eliminado_en IS NULL) THEN 'OBSERVADO'
-               WHEN oc.estado = 'pendiente_validacion'                      THEN 'PENDIENTE'
+               WHEN oc.estado = 'observada'                                 THEN 'OBSERVADO'
+               WHEN oc.estado = 'validada_parcial'                          THEN 'VALIDADO PARCIAL'
+               WHEN oc.estado = 'recibida'                                  THEN 'PENDIENTE'
                ELSE 'VALIDADO'
            END,
            d.fecha_carga, d.subido_por,
@@ -126,8 +125,8 @@ BEGIN
     INSERT INTO tmp_exp_doc
     SELECT CONCAT('ocpdf-', oc.id_oc), CONCAT('OC-', oc.numero_oc, '.pdf'), IFNULL(oc.nombre_archivo_pdf, CONCAT('OC-', oc.numero_oc, '.pdf')),
            'Orden de Compra', 'comerciales', 'CRM', 'orden_compra', 1,
-           CASE oc.estado WHEN 'anulada' THEN 'ANULADO' WHEN 'vencida' THEN 'VENCIDO'
-                          WHEN 'pendiente_validacion' THEN 'PENDIENTE' ELSE 'VALIDADO' END,
+           CASE oc.estado WHEN 'anulada' THEN 'ANULADO' WHEN 'observada' THEN 'OBSERVADO'
+                          WHEN 'validada_parcial' THEN 'VALIDADO PARCIAL' WHEN 'recibida' THEN 'PENDIENTE' ELSE 'VALIDADO' END,
            oc.fecha_registro, oc.creado_por, oc.tamano_pdf_bytes, 'application/pdf', NULL, NULL, 0, oc.url_archivo_pdf, NULL
     FROM orden_compra oc
     WHERE oc.id_oc IN (SELECT id_oc FROM tmp_exp_ocs) AND oc.url_archivo_pdf IS NOT NULL

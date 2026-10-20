@@ -74,7 +74,8 @@ BEGIN
                WHEN 'propuesta'    THEN (SELECT CONCAT(p.numero, ' v', p.version) FROM propuesta_comercial p WHERE p.id_propuesta = a.id_entidad)
                WHEN 'orden_compra' THEN (SELECT CONCAT('OC ', oc.numero_oc) FROM orden_compra oc WHERE oc.id_oc = a.id_entidad)
            END,
-           (a.accion IN ('observar_oc', 'registrar_bloqueo'))
+           (a.accion IN ('observar_oc', 'registrar_bloqueo', 'anular_oc')
+            OR (a.accion = 'decision_oc' AND a.estado_nuevo = 'correccion_cliente'))
     FROM auditoria_evento a
     WHERE ((a.entidad_tipo = 'expediente' AND a.id_entidad = p_id_expediente
             AND (a.accion <> 'adjuntar_documento'
@@ -86,7 +87,9 @@ BEGIN
                               AND v.Num1 = CAST(JSON_UNQUOTE(JSON_EXTRACT(a.metadata, '$.id_visibilidad')) AS UNSIGNED))))
        OR (a.entidad_tipo = 'propuesta' AND a.id_entidad IN (SELECT id_propuesta FROM tmp_exp_props)))
        OR (a.entidad_tipo = 'orden_compra' AND a.id_entidad IN (SELECT id_oc FROM tmp_exp_ocs)
-           AND a.accion <> 'exportar_auditoria_oc');
+           -- El detalle fino de la OC (cada validación, extracción o corrección) queda en el timeline de la OC
+           AND a.accion NOT IN ('exportar_auditoria_oc', 'validacion_ia', 'extraccion_ia', 'corregir_campo_oc',
+                                'editar_vinculacion', 'cargar_pdf_oc', 'cambio_estado_oc'));
 
     -- RQ (historial propio del requerimiento)
     INSERT INTO tmp_exp_evt
@@ -118,14 +121,16 @@ BEGIN
             WHEN accion IN ('crear_expediente', 'creacion', 'nueva_version', 'nueva_version_por_revocacion') THEN 'creacion'
             WHEN accion IN ('envio_vb', 'solicitar_revocacion_vb')                                       THEN 'visto_bueno'
             WHEN accion IN ('envio_cliente', 'registrar_oc', 'registrar_oc_complementaria', 'validar_oc', 'editar_oc',
-                            'editar_oc_revalidacion', 'distribuir_oc')                                     THEN 'orden_compra'
+                            'editar_oc_revalidacion', 'distribuir_oc', 'autogenerar_oc', 'reemplazar_oc_auto',
+                            'decision_oc', 'vincular_propuesta', 'desvincular_propuesta', 'nueva_version_propuesta') THEN 'orden_compra'
             WHEN accion IN ('observar_oc', 'levantar_observacion_oc', 'registrar_bloqueo', 'resolver_bloqueo', 'registrar_excepcion',
                             'cerrar_excepcion')                                                            THEN 'bloqueo'
-            WHEN accion IN ('liberar_oc', 'liberar_programacion', 'crear_y_liberar_programacion', 'avanzar_etapa') THEN 'etapa'
-            WHEN accion IN ('adjuntar_documento', 'reemplazar_pdf_oc')                                     THEN 'documento'
+            WHEN accion IN ('liberar_oc', 'liberar_programacion', 'crear_y_liberar_programacion', 'avanzar_etapa',
+                            'pasar_programacion', 'volver_orden_compra')                                   THEN 'etapa'
+            WHEN accion IN ('adjuntar_documento', 'reemplazar_pdf_oc', 'reemplazar_pdf', 'subir_oc_corregida') THEN 'documento'
             WHEN accion = 'reasignar_responsable'                                                          THEN 'reasignacion'
             WHEN accion IN ('anulacion', 'anulacion_por_version', 'cerrar_por_anulacion', 'propuesta_anulada',
-                            'anular_proceso')                                                              THEN 'anulacion'
+                            'anular_proceso', 'anular_oc')                                                 THEN 'anulacion'
             ELSE 'otro' END),
         titulo = IFNULL(titulo, CASE accion
             WHEN 'crear_expediente'              THEN 'Expediente creado'
@@ -148,6 +153,17 @@ BEGIN
             WHEN 'distribuir_oc'                 THEN 'Saldo de OC distribuido'
             WHEN 'reemplazar_pdf_oc'             THEN 'PDF de la OC reemplazado'
             WHEN 'liberar_oc'                    THEN 'OC liberada a programación'
+            WHEN 'autogenerar_oc'                THEN 'OC provisional autogenerada'
+            WHEN 'reemplazar_oc_auto'            THEN 'OC provisional reemplazada por la OC del cliente'
+            WHEN 'decision_oc'                   THEN 'Decisión sobre la OC'
+            WHEN 'vincular_propuesta'            THEN 'Propuesta vinculada a la OC'
+            WHEN 'desvincular_propuesta'         THEN 'Propuesta desvinculada de la OC'
+            WHEN 'nueva_version_propuesta'       THEN 'Nueva versión de propuesta por la OC'
+            WHEN 'reemplazar_pdf'                THEN 'PDF de la OC reemplazado'
+            WHEN 'subir_oc_corregida'            THEN 'OC corregida por el cliente'
+            WHEN 'anular_oc'                     THEN 'OC anulada'
+            WHEN 'pasar_programacion'            THEN 'Expediente pasa a Programación'
+            WHEN 'volver_orden_compra'           THEN 'Expediente vuelve a la etapa Orden de Compra'
             WHEN 'liberar_programacion'          THEN 'Expediente liberado a programación'
             WHEN 'crear_y_liberar_programacion'  THEN 'Expediente creado y liberado a programación'
             WHEN 'cerrar_por_anulacion'          THEN 'Expediente cerrado por anulación'

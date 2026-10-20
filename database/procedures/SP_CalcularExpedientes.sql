@@ -9,7 +9,7 @@
 --     visto_bueno    propuesta pendiente de VB o de revocación
 --     orden_compra   VB aprobado (envío al cliente, aceptación y OC)
 --     cerrado        RQ anulado o cerrado, o el cliente rechazó la propuesta
---   Desde Programación (liberación de la OC, HU-28) la etapa es la guardada en el expediente y avanza
+--   Desde Programación (OC validada o autogenerada, Sprint 4) la etapa es la guardada en el expediente y avanza
 --   desde el expediente (HU-34).
 --
 -- Estado (estado), por prioridad: cerrado, bloqueado (bloqueos abiertos), sla_vencido,
@@ -68,27 +68,24 @@ BEGIN
          WHERE v.id_propuesta = b.id_propuesta AND v.tipo = 'aprobacion' AND v.eliminado_en IS NULL)  AS fecha_solicitud_vb,
         (SELECT MAX(v.fecha_respuesta) FROM visto_bueno v
          WHERE v.id_propuesta = b.id_propuesta AND v.tipo = 'aprobacion' AND v.estado = 'aprobado' AND v.eliminado_en IS NULL) AS fecha_aprobacion_vb,
-        -- OC que cubren la propuesta (principal, complementaria o distribuida)
+        -- OC que cubren la propuesta (vinculaciones activas de OC no anuladas)
         (SELECT GROUP_CONCAT(DISTINCT oc.numero_oc ORDER BY oc.id_oc SEPARATOR ', ')
          FROM orden_compra oc
-         WHERE oc.eliminado_en IS NULL AND oc.estado <> 'anulada'
-           AND (oc.id_propuesta = b.id_propuesta
-                OR oc.id_oc IN (SELECT op.id_oc FROM oc_propuesta op WHERE op.id_propuesta = b.id_propuesta AND op.eliminado_en IS NULL)))
-                                                                                                    AS numeros_oc,
+         JOIN oc_propuesta op ON op.id_oc = oc.id_oc AND op.id_propuesta = b.id_propuesta AND op.eliminado_en IS NULL
+         WHERE oc.eliminado_en IS NULL AND oc.estado <> 'anulada')                                  AS numeros_oc,
         (SELECT MIN(oc.fecha_registro) FROM orden_compra oc
-         WHERE oc.eliminado_en IS NULL AND oc.estado <> 'anulada' AND oc.id_propuesta = b.id_propuesta) AS fecha_primera_oc,
-        (SELECT MAX(oc.fecha_liberacion) FROM orden_compra oc
+         JOIN oc_propuesta op ON op.id_oc = oc.id_oc AND op.id_propuesta = b.id_propuesta AND op.eliminado_en IS NULL
+         WHERE oc.eliminado_en IS NULL AND oc.estado <> 'anulada')                                  AS fecha_primera_oc,
+        -- Fin de la etapa OC: la vinculación validada (o la OC autogenerada) que habilitó la programación
+        (SELECT MIN(IF(oc.es_autogenerada = 1, oc.fecha_registro, op.fecha_decision)) FROM orden_compra oc
+         JOIN oc_propuesta op ON op.id_oc = oc.id_oc AND op.id_propuesta = b.id_propuesta AND op.eliminado_en IS NULL
          WHERE oc.eliminado_en IS NULL AND oc.estado <> 'anulada'
-           AND (oc.id_propuesta = b.id_propuesta
-                OR oc.id_oc IN (SELECT op.id_oc FROM oc_propuesta op WHERE op.id_propuesta = b.id_propuesta AND op.eliminado_en IS NULL)))
+           AND (op.estado_validacion = 'validada' OR (oc.es_autogenerada = 1 AND oc.reemplazada_por IS NULL)))
                                                                                                     AS fecha_liberacion_oc,
         EXISTS (SELECT 1 FROM orden_compra oc
-                WHERE oc.eliminado_en IS NULL AND oc.estado IN ('vigente', 'cobertura_parcial')
-                  AND (oc.vigencia_hasta IS NULL OR oc.vigencia_hasta >= CURDATE())
-                  AND NOT EXISTS (SELECT 1 FROM orden_compra_observacion ob
-                                  WHERE ob.id_oc = oc.id_oc AND ob.estado = 'abierta' AND ob.eliminado_en IS NULL)
-                  AND (oc.id_propuesta = b.id_propuesta
-                       OR oc.id_oc IN (SELECT op.id_oc FROM oc_propuesta op WHERE op.id_propuesta = b.id_propuesta AND op.eliminado_en IS NULL)))
+                JOIN oc_propuesta op ON op.id_oc = oc.id_oc AND op.id_propuesta = b.id_propuesta AND op.eliminado_en IS NULL
+                WHERE oc.eliminado_en IS NULL AND oc.estado <> 'anulada'
+                  AND (op.estado_validacion = 'validada' OR (oc.es_autogenerada = 1 AND oc.reemplazada_por IS NULL)))
                                                                                                     AS oc_valida,
         (SELECT GROUP_CONCAT(os.numero ORDER BY os.id_os SEPARATOR ', ') FROM orden_servicio os
          WHERE os.id_expediente = b.id_expediente AND os.eliminado_en IS NULL AND os.estado <> 'anulada')   AS numeros_os,
