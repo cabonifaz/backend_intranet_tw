@@ -162,7 +162,7 @@ BEGIN
             WHEN c.estado_seguimiento = 'cerrado_rechazo'                    THEN 'cerrado'
             WHEN c.id_propuesta IS NULL OR c.estado_propuesta = 'anulado'                             THEN 'requerimiento'
             WHEN c.estado_propuesta IN ('pendiente_vb', 'pendiente_revocacion')                       THEN 'visto_bueno'
-            WHEN c.estado_propuesta IN ('aprobado', 'enviado')                                        THEN 'orden_compra'
+            WHEN c.estado_propuesta IN ('aprobado', 'enviado', 'aceptado')                                        THEN 'orden_compra'
             ELSE 'propuesta'
         END AS etapa
     FROM tmp_exp_2 c;

@@ -98,7 +98,7 @@ BEGIN
     FROM propuesta_comercial p
     JOIN usuario u ON u.id_usuario = COALESCE(p.id_responsable, p.id_creador)
     WHERE p.eliminado_en IS NULL
-      AND p.estado IN ('enviado', 'aprobado', 'rechazado')
+      AND p.estado IN ('enviado', 'aceptado', 'aprobado', 'rechazado')
       AND p.version = (SELECT MAX(p2.version) FROM propuesta_comercial p2
                        WHERE p2.numero = p.numero AND p2.eliminado_en IS NULL)
       AND (v_todas = 1 OR u.area = v_area)
@@ -197,7 +197,7 @@ BEGIN
                                       AND ta.Num1 = IF(s.id_seguimiento IS NULL,
                                                        IF(r0.id_reprogramacion IS NULL, b.id_tipo_primera_accion, r0.id_tipo_accion_nueva),
                                                        s.id_tipo_proxima_accion)
-            WHERE b.estado_propuesta = 'enviado'
+            WHERE b.estado_propuesta IN ('enviado', 'aceptado')
                OR (b.estado_propuesta = 'aprobado' AND b.fecha_primera_oc IS NOT NULL)
                OR (b.estado_propuesta = 'rechazado' AND s.estado = 'cerrado_rechazo')
         ) j

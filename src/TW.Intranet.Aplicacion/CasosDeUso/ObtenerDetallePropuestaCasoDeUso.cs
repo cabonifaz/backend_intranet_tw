@@ -27,9 +27,9 @@ public class ObtenerDetallePropuestaCasoDeUso(IPropuestasRepositorio repositorio
 
     /// <summary>
     /// Estados desde los que se puede generar una nueva versión (HU-10, igual que SP_CrearNuevaVersionPropuesta).
-    /// pendiente_vb / aprobado: la versión actual se anula. enviado / rechazado / vencido: queda como historial.
+    /// pendiente_vb / aprobado: la versión actual se anula. enviado / aceptado / rechazado / vencido: queda como historial.
     /// </summary>
-    private static readonly string[] EstadosParaNuevaVersion = ["pendiente_vb", "aprobado", "enviado", "rechazado", "vencido"];
+    private static readonly string[] EstadosParaNuevaVersion = ["pendiente_vb", "aprobado", "enviado", "aceptado", "rechazado", "vencido"];
 
     public async Task<RespuestaDto<PropuestaDetalleModalDto>> EjecutarAsync(long idPropuesta, CancellationToken ct = default)
     {
@@ -76,6 +76,7 @@ public class ObtenerDetallePropuestaCasoDeUso(IPropuestasRepositorio repositorio
                 case "pendiente_vb": indice = PasoVistoBueno;  break;
                 case "aprobado":     indice = PasoEnvio;       break;
                 case "enviado":      indice = PasoSeguimiento; break;
+                case "aceptado":     indice = PasoAceptacion;  break;
                 default:
                     // rechazado | anulado | vencido: se marca el paso donde se detuvo
                     terminal = c.Estado;
@@ -133,8 +134,8 @@ public class ObtenerDetallePropuestaCasoDeUso(IPropuestasRepositorio repositorio
     {
         var documentos = c.Documentos;
 
-        // Marcador "OC (Pendiente)" desde que la propuesta está aprobada o enviada
-        var esperaOc = c.Estado is "aprobado" or "enviado";
+        // Marcador "OC (Pendiente)" desde que la propuesta está aprobada, enviada o aceptada
+        var esperaOc = c.Estado is "aprobado" or "enviado" or "aceptado";
         if (esperaOc && documentos.All(d => d.Tipo != "orden_compra"))
             documentos.Add(new DocumentoVinculadoDto
             {

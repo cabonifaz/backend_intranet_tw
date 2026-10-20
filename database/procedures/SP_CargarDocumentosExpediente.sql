@@ -81,6 +81,7 @@ BEGIN
                WHEN p.estado = 'anulado'                                                   THEN 'ANULADO'
                WHEN EXISTS (SELECT 1 FROM propuesta_comercial p2
                             WHERE p2.numero = p.numero AND p2.version > p.version AND p2.eliminado_en IS NULL) THEN 'HISTÓRICO'
+               WHEN p.estado = 'aceptado'                                                   THEN 'ACEPTADO'
                WHEN p.estado IN ('aprobado', 'enviado')                                     THEN 'APROBADO'
                WHEN p.estado IN ('pendiente_vb', 'pendiente_revocacion')                    THEN 'EN REVISIÓN'
                WHEN p.estado = 'rechazado'                                                  THEN 'RECHAZADO'

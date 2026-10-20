@@ -11,8 +11,8 @@
 -- Reglas comunes: acción propuesta_seguimiento_cerrar, propuesta en seguimiento ABIERTO y del área
 --   del usuario. Fecha del cierre (NULL = ahora) no futura ni anterior al envío de la propuesta.
 -- Aceptación: tipo de aceptación (TIPO_ACEPTACION_PROPUESTA) y contacto que confirma obligatorios.
---   El seguimiento queda cerrado_aceptacion y la propuesta pasa a la etapa de Órdenes de Compra
---   (próxima acción "Generar orden de compra").
+--   El seguimiento queda cerrado_aceptacion, la propuesta pasa a 'aceptado' y entra a la etapa de
+--   Órdenes de Compra (próxima acción "Generar orden de compra").
 -- Rechazo: motivo (MOTIVO_RECHAZO) y comentario de al menos 20 caracteres. La propuesta pasa a 'rechazado'.
 -- Notifica a los supervisores y administradores del área del comercial (y al responsable).
 -- Resultados: 1 mensaje, 2 id_seguimiento y estado del seguimiento (solo al guardar).
@@ -204,12 +204,11 @@ proc: BEGIN
     SET estado = 'cancelado', fecha_procesado = NOW(), modificado_por = p_id_usuario
     WHERE id_propuesta = p_id_propuesta AND estado = 'pendiente';
 
-    -- Rechazo: la propuesta queda rechazada (sale del pipeline y queda para auditoría)
-    IF p_tipo = 'rechazo' THEN
-        UPDATE propuesta_comercial
-        SET estado = 'rechazado', modificado_por = p_id_usuario
-        WHERE id_propuesta = p_id_propuesta;
-    END IF;
+    -- La propuesta refleja la respuesta del cliente:
+    --   aceptación → 'aceptado' (habilita el registro de la OC); rechazo → 'rechazado' (sale del pipeline)
+    UPDATE propuesta_comercial
+    SET estado = IF(p_tipo = 'aceptacion', 'aceptado', 'rechazado'), modificado_por = p_id_usuario
+    WHERE id_propuesta = p_id_propuesta;
 
     -- Notificación a supervisores y administradores del área del comercial, y al responsable
     SELECT CONCAT(nombre, ' ', apellido) INTO v_usuario FROM usuario WHERE id_usuario = p_id_usuario;
