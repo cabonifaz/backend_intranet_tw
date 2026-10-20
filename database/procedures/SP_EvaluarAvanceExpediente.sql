@@ -11,7 +11,7 @@
 --   conformidad   acta de conformidad cargada
 --   facturacion   factura registrada
 --   En todas: sin bloqueos abiertos. Las excepciones abiertas se informan, pero no impiden avanzar.
--- La etapa orden_compra muestra si la OC está validada (avanza con la liberación de la OC, HU-28).
+-- La etapa orden_compra muestra si la OC está validada (pasa a Programación al validarse la OC, Sprint 4).
 DROP PROCEDURE IF EXISTS SP_EvaluarAvanceExpediente;
 
 DELIMITER $$
@@ -113,10 +113,10 @@ BEGIN
     IF v_etapa = 'orden_compra' THEN
         INSERT INTO tmp_exp_check VALUES
         (1, 'oc_valida', 'OC validada', IFNULL(v_oc_valida, 0), 1, 0,
-            IF(v_oc_valida = 1, CONCAT('OC ', IFNULL(v_numeros_oc, ''), ' validada. Lista para liberar a programación.'),
+            IF(v_oc_valida = 1, CONCAT('OC ', IFNULL(v_numeros_oc, ''), ' validada.'),
                IF(v_numeros_oc IS NULL, 'Aún no se registra la orden de compra del cliente.',
                   CONCAT('La OC ', v_numeros_oc, ' aún no está validada.'))),
-            IF(v_numeros_oc IS NULL, 'Registrar la orden de compra', 'Validar y liberar la OC desde Órdenes de Compra'));
+            IF(v_numeros_oc IS NULL, 'Registrar la orden de compra', 'Validar la OC desde Órdenes de Compra'));
     END IF;
 
     -- En todas las etapas abiertas: bloqueos (impiden avanzar) y excepciones (se informan)

@@ -85,11 +85,11 @@ BEGIN
            AND (oc.id_propuesta = p.id_propuesta
                 OR oc.id_oc IN (SELECT op.id_oc FROM oc_propuesta op
                                 WHERE op.id_propuesta = p.id_propuesta AND op.eliminado_en IS NULL))) AS fecha_primera_oc,
+        -- OC con la vinculación de esta propuesta aún sin validar (observada o pendiente)
         (SELECT COUNT(*) FROM orden_compra oc
-         WHERE oc.eliminado_en IS NULL AND oc.estado = 'pendiente_validacion'
-           AND (oc.id_propuesta = p.id_propuesta
-                OR oc.id_oc IN (SELECT op.id_oc FROM oc_propuesta op
-                                WHERE op.id_propuesta = p.id_propuesta AND op.eliminado_en IS NULL))) AS oc_por_validar,
+         JOIN oc_propuesta op ON op.id_oc = oc.id_oc AND op.id_propuesta = p.id_propuesta AND op.eliminado_en IS NULL
+         WHERE oc.eliminado_en IS NULL AND oc.estado NOT IN ('anulada', 'recibida')
+           AND op.estado_validacion <> 'validada')                                  AS oc_por_validar,
         (SELECT MAX(r.id_reprogramacion) FROM seguimiento_reprogramacion r
          WHERE r.id_propuesta = p.id_propuesta AND r.id_seguimiento IS NULL
            AND r.eliminado_en IS NULL)                                               AS id_reprog_inicial,
