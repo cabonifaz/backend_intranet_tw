@@ -335,12 +335,12 @@ builder.Services.AddScoped<PrepararAnulacionOrdenCompraCasoDeUso>();
 builder.Services.AddScoped<AnularOrdenCompraCasoDeUso>();
 
 // IA de órdenes de compra (Google Gemini, nivel gratuito de AI Studio).
-// Variables: Gemini__ApiKey, Gemini__Modelo (gemini-2.5-flash), Gemini__UrlBase, Gemini__TimeoutSegundos (60).
+// Variables: Gemini__ApiKey, Gemini__Modelo (gemini-3.5-flash-lite), Gemini__UrlBase, Gemini__TimeoutSegundos (60).
 // Sin ApiKey el módulo funciona igual: la ficha se llena a mano y la validación usa solo las reglas.
 var seccionGemini = cfg.GetSection("Gemini");
 var configuracionGemini = new ConfiguracionGemini(
     ApiKey:          seccionGemini["ApiKey"]?.Trim() ?? "",
-    Modelo:          string.IsNullOrWhiteSpace(seccionGemini["Modelo"]) ? "gemini-2.5-flash" : seccionGemini["Modelo"]!.Trim(),
+    Modelo:          string.IsNullOrWhiteSpace(seccionGemini["Modelo"]) ? "gemini-3.5-flash-lite" : seccionGemini["Modelo"]!.Trim(),
     UrlBase:         string.IsNullOrWhiteSpace(seccionGemini["UrlBase"]) ? "https://generativelanguage.googleapis.com/" : seccionGemini["UrlBase"]!.TrimEnd('/') + "/",
     TimeoutSegundos: int.TryParse(seccionGemini["TimeoutSegundos"], out var timeoutGemini) && timeoutGemini > 0 ? timeoutGemini : 60);
 builder.Services.AddSingleton(configuracionGemini);

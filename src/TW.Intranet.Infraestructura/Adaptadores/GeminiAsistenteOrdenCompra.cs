@@ -245,8 +245,10 @@ public class GeminiAsistenteOrdenCompra(HttpClient http, ConfiguracionGemini con
             ["responseMimeType"] = "application/json",
             ["responseSchema"]   = esquema,
         };
-        // Los modelos "flash" permiten desactivar el razonamiento (más rápido y no consume la cuota de tokens).
-        if (configuracion.Modelo.Contains("flash", StringComparison.OrdinalIgnoreCase))
+        // Solo la familia 2.5 acepta thinkingBudget = 0 (desactiva el razonamiento). Los modelos 3.x usan su
+        // configuración por defecto: enviarles thinkingBudget puede devolver error.
+        if (configuracion.Modelo.StartsWith("gemini-2.5", StringComparison.OrdinalIgnoreCase)
+            && configuracion.Modelo.Contains("flash", StringComparison.OrdinalIgnoreCase))
             configGeneracion["thinkingConfig"] = new JsonObject { ["thinkingBudget"] = 0 };
 
         var cuerpo = new JsonObject
@@ -277,6 +279,7 @@ public class GeminiAsistenteOrdenCompra(HttpClient http, ConfiguracionGemini con
             if (!respuesta.IsSuccessStatusCode)
                 return (null, respuesta.StatusCode switch
                 {
+                    HttpStatusCode.NotFound => $"El modelo de IA \"{configuracion.Modelo}\" no está disponible en Gemini. Configure un modelo vigente en Gemini__Modelo (por ejemplo gemini-3.5-flash-lite).",
                     HttpStatusCode.TooManyRequests => "Se alcanzó el límite gratuito de la IA (Gemini). Intente en un minuto o continúe con la carga manual.",
                     HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => "La API key de Gemini no es válida o no tiene permiso.",
                     HttpStatusCode.BadRequest when texto.Contains("API key", StringComparison.OrdinalIgnoreCase)

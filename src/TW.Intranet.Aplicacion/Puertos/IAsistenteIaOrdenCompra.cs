@@ -12,7 +12,7 @@ public interface IAsistenteIaOrdenCompra
     /// <summary>false si no hay API key configurada (Gemini__ApiKey): el módulo funciona con carga manual.</summary>
     bool Disponible { get; }
 
-    /// <summary>Nombre del motor para el historial (ej. "gemini-2.5-flash").</summary>
+    /// <summary>Nombre del motor para el historial (ej. "gemini-3.5-flash-lite").</summary>
     string Motor { get; }
 
     /// <summary>Lee los datos de la OC desde el PDF. Si la IA no está disponible o falla, devuelve Error (no lanza excepción).</summary>
