@@ -53,7 +53,7 @@ proc: BEGIN
         oc.ruc_cliente_oc, oc.razon_social_oc, oc.numero_propuesta_ref,
         oc.id_condicion_pago,
         (SELECT MAX(cp.String1) FROM tabla_maestra cp WHERE cp.IdMaestro = 39 AND cp.IdEmpresa = 1 AND cp.Num1 = oc.id_condicion_pago) AS condicion_pago,
-        oc.forma_pago, oc.igv_incluido, oc.igv_pct, oc.descuento_monto,
+        oc.forma_pago, oc.igv_incluido, oc.igv_pct, oc.descuento_monto, oc.tipo_cambio,
         oc.fecha_oc, oc.fecha_recepcion, oc.vigencia_hasta, oc.factura_igual_oc,
         oc.referencia, oc.observaciones, oc.conceptos, oc.campos_ia, oc.campos_manuales,
         t.tiene_pdf, oc.nombre_archivo_pdf, oc.tamano_pdf_bytes,
@@ -88,7 +88,8 @@ proc: BEGIN
     -- 3. Propuestas vinculadas
     SELECT op.id_propuesta, p.numero, p.version, p.estado AS estado_propuesta,
            (p.estado NOT IN ('anulado', 'revocada'))                                                      AS aceptada,
-           p.total AS monto_propuesta, op.monto_asignado,
+           p.total AS monto_propuesta, op.monto_asignado, op.monto_cubierto, p.id_moneda AS id_moneda_propuesta,
+           (SELECT MAX(m.String2) FROM tabla_maestra m WHERE m.IdMaestro = 1 AND m.IdEmpresa = 1 AND m.Num1 = p.id_moneda) AS moneda_simbolo_propuesta,
            IF(oc.monto_total > 0, ROUND(op.monto_asignado * 100 / oc.monto_total, 2), 0)                 AS pct_oc,
            FN_SaldoPropuestaOc(op.id_propuesta, NULL)                                                    AS saldo_propuesta,
            p.id_contacto, ct.nombres AS contacto, ct.cargo AS cargo_contacto,

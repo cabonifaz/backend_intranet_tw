@@ -7,17 +7,23 @@
 --   correccion_cliente  "Solicitar corrección al cliente"   → OBSERVADA pendiente de corrección del cliente
 --   nueva_version       "Generar nueva versión de propuesta" → OBSERVADA hasta validar contra la versión nueva
 --                       (la versión nueva la crea el back después, con SP_CrearNuevaVersionPropuesta)
--- p_id_oc_reemplaza: OC que esta OC reemplaza (debe estar vinculada a la propuesta de origen):
+-- p_id_oc_reemplaza (opcional): OC que esta OC reemplaza (debe estar vinculada a alguna de las propuestas vinculadas):
 --   autogenerada         su vinculación pasa a esta OC y la OC-AUTO queda dada de baja (no tiene PDF que conservar)
 --   pendiente_reemplazo  la OC observada por diferencias críticas queda con reemplazada_por = esta OC; conserva su
 --                        PDF, vinculaciones y timeline para auditoría, pero deja de contar en el saldo de las propuestas
 --                        (FN_SaldoPropuestaOc) y se oculta de la bandeja
+-- Multi-propuesta (ticket B): además, las OC autogeneradas (OC-AUTO) vigentes de TODAS las propuestas vinculadas se
+--   dan de baja solas (no hace falta indicarlas). Mientras se registra, no descuentan el saldo (ticket A).
+-- p_datos.tipoCambio (ticket E): soles por 1 unidad de moneda extranjera; obligatorio si alguna propuesta vinculada
+--   está en otra moneda que la OC. Se guarda en orden_compra.tipo_cambio y el monto en la moneda de cada propuesta en
+--   oc_propuesta.monto_cubierto.
 -- Reglas: acción oc_registrar; la propuesta de origen debe estar vinculada; todas las propuestas del mismo cliente,
 --   aceptadas y con saldo; lo asignado no supera el monto de la OC; PDF obligatorio; N° OC único por cliente.
 -- Efectos: orden_compra + oc_propuesta + una corrida de validación por propuesta + PDF versión 1 + timeline,
 --   estado consolidado, expedientes con vinculación validada a Programación y notificación a Contabilidad,
 --   Operaciones y al responsable comercial.
--- Resultados: 1 mensaje, 2 OC registrada, 3 vinculaciones (estado y resultado de la validación).
+-- Resultados: 1 mensaje, 2 OC registrada (ocs_reemplazadas: JSON con las OC que reemplazó), 3 vinculaciones
+--   (estado y resultado de la validación).
 DROP PROCEDURE IF EXISTS SP_RegistrarOrdenCompraInterno;
 
 DELIMITER $$
@@ -41,7 +47,7 @@ proc: BEGIN
     DECLARE v_numero_prop VARCHAR(40)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_error       VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_numero_oc   VARCHAR(50)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
-    DECLARE v_numero_auto VARCHAR(50)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_numero_auto VARCHAR(1000) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_estado_reemp VARCHAR(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_monto       DECIMAL(14,2);
     DECLARE v_simbolo     VARCHAR(10)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
@@ -58,6 +64,11 @@ proc: BEGIN
     DECLARE v_cliente     VARCHAR(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_estado      VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_notificados INT DEFAULT 0;
+    DECLARE v_id_reemp    BIGINT;
+    DECLARE v_num_reemp   VARCHAR(50)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_est_reemp   VARCHAR(30)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_ocs_reemp   JSON;
+    DECLARE v_id_primera  BIGINT;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -65,6 +76,7 @@ proc: BEGIN
         DROP TEMPORARY TABLE IF EXISTS tmp_oc_eval;
         DROP TEMPORARY TABLE IF EXISTS tmp_oc_cmp;
         DROP TEMPORARY TABLE IF EXISTS tmp_oc_disp;
+        DROP TEMPORARY TABLE IF EXISTS tmp_oc_reemp;
         GET DIAGNOSTICS CONDITION 1 @err_msg = MESSAGE_TEXT, @err_code = MYSQL_ERRNO;
         SELECT 3 AS IdTipoMensaje, CONCAT('[MySQL ', @err_code, '] ', @err_msg) AS Mensaje;
     END;
@@ -95,11 +107,12 @@ proc: BEGIN
         WHERE oc.id_oc = p_id_oc_reemplaza AND oc.reemplazada_por IS NULL
           AND oc.estado IN ('autogenerada', 'pendiente_reemplazo') AND oc.eliminado_en IS NULL
           AND oc.id_cliente = v_id_cliente
-          AND EXISTS (SELECT 1 FROM oc_propuesta op WHERE op.id_oc = oc.id_oc AND op.id_propuesta = p_id_propuesta
-                        AND op.eliminado_en IS NULL);
+          AND EXISTS (SELECT 1 FROM oc_propuesta op
+                      JOIN JSON_TABLE(p_vinculaciones, '$[*]' COLUMNS (id BIGINT PATH '$.idPropuesta')) jv ON jv.id = op.id_propuesta
+                      WHERE op.id_oc = oc.id_oc AND op.eliminado_en IS NULL);
         IF v_numero_auto IS NULL THEN
             SELECT 1 AS IdTipoMensaje,
-                   'La OC a reemplazar no existe, ya fue reemplazada, está anulada, no está pendiente de reemplazo o no corresponde a la propuesta.' AS Mensaje;
+                   'La OC a reemplazar no existe, ya fue reemplazada, está anulada, no está pendiente de reemplazo o no corresponde a las propuestas vinculadas.' AS Mensaje;
             LEAVE proc;
         END IF;
     END IF;
@@ -126,20 +139,49 @@ proc: BEGIN
     SET v_numero_oc = FN_JsonTexto(p_datos, '$.numeroOc');
     SET v_monto     = CAST(FN_JsonTexto(p_datos, '$.montoTotal') AS DECIMAL(14,2));
 
+    -- OC que se reemplazan: la indicada y las OC-AUTO vigentes de las propuestas vinculadas (ticket B)
+    DROP TEMPORARY TABLE IF EXISTS tmp_oc_reemp;
+    CREATE TEMPORARY TABLE tmp_oc_reemp (
+        orden     INT AUTO_INCREMENT PRIMARY KEY,
+        id_oc     BIGINT,
+        numero_oc VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+        estado    VARCHAR(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci
+    );
+    IF v_numero_auto IS NOT NULL THEN
+        INSERT INTO tmp_oc_reemp (id_oc, numero_oc, estado) VALUES (p_id_oc_reemplaza, v_numero_auto, v_estado_reemp);
+    END IF;
+    INSERT INTO tmp_oc_reemp (id_oc, numero_oc, estado)
+    SELECT DISTINCT oc.id_oc, oc.numero_oc, oc.estado
+    FROM orden_compra oc
+    JOIN oc_propuesta op ON op.id_oc = oc.id_oc AND op.eliminado_en IS NULL
+    JOIN tmp_oc_eval e   ON e.id_propuesta = op.id_propuesta
+    WHERE oc.estado = 'autogenerada' AND oc.reemplazada_por IS NULL AND oc.eliminado_en IS NULL
+      AND oc.id_cliente = v_id_cliente AND oc.id_oc <> IFNULL(p_id_oc_reemplaza, 0)
+    ORDER BY oc.id_oc;
+
+    SELECT MIN(orden) INTO v_i FROM tmp_oc_reemp;
+    SELECT id_oc INTO v_id_primera FROM tmp_oc_reemp WHERE orden = v_i;
+    SELECT JSON_ARRAYAGG(JSON_OBJECT('idOc', id_oc, 'numeroOc', numero_oc, 'estado', estado)) INTO v_ocs_reemp
+    FROM tmp_oc_reemp;
+    SELECT GROUP_CONCAT(numero_oc ORDER BY orden SEPARATOR ', ') INTO v_numero_auto FROM tmp_oc_reemp;
+    SET v_i = 1;
+
     START TRANSACTION;
 
     INSERT INTO orden_compra (
         numero_oc, es_autogenerada, id_oc_reemplazada, referencia, id_propuesta, id_cliente,
-        ruc_cliente_oc, razon_social_oc, numero_propuesta_ref, id_moneda, monto_total,
+        ruc_cliente_oc, razon_social_oc, numero_propuesta_ref, id_moneda, monto_total, tipo_cambio,
         id_condicion_pago, forma_pago, igv_incluido, igv_pct, descuento_monto, factura_igual_oc,
         fecha_oc, fecha_recepcion, vigencia_hasta, observaciones, conceptos, campos_ia, campos_manuales,
         url_archivo_pdf, nombre_archivo_pdf, tamano_pdf_bytes, hash_pdf,
         estado, fecha_registro, creado_por)
     VALUES (
-        v_numero_oc, 0, NULLIF(p_id_oc_reemplaza, 0), FN_JsonTexto(p_datos, '$.referencia'), p_id_propuesta, v_id_cliente,
+        v_numero_oc, 0, v_id_primera, FN_JsonTexto(p_datos, '$.referencia'), p_id_propuesta, v_id_cliente,
         NULLIF(REGEXP_REPLACE(IFNULL(FN_JsonTexto(p_datos, '$.ruc'), ''), '[^0-9]', ''), ''),
         FN_JsonTexto(p_datos, '$.razonSocial'), FN_JsonTexto(p_datos, '$.numeroPropuesta'),
         CAST(FN_JsonTexto(p_datos, '$.idMoneda') AS SIGNED), v_monto,
+        IF(EXISTS (SELECT 1 FROM tmp_oc_eval WHERE monto_cubierto IS NOT NULL),
+           CAST(FN_JsonTexto(p_datos, '$.tipoCambio') AS DECIMAL(12,6)), NULL),
         CAST(FN_JsonTexto(p_datos, '$.idCondicionPago') AS SIGNED), FN_JsonTexto(p_datos, '$.formaPago'),
         CASE LOWER(IFNULL(FN_JsonTexto(p_datos, '$.igvIncluido'), '')) WHEN 'true' THEN 1 WHEN '1' THEN 1
                                                                        WHEN 'false' THEN 0 WHEN '0' THEN 0 END,
@@ -160,8 +202,9 @@ proc: BEGIN
                                   id_usuario, registrado_en, metadata)
     VALUES ('orden_compra', v_id_oc, 'registrar_oc', NULL, 'registrada',
             CONCAT('Orden de compra ', v_numero_oc, ' registrada a partir de la propuesta ', v_numero_prop,
-                   IF(v_numero_auto IS NULL, '', CONCAT(', en reemplazo de la OC ', IF(v_estado_reemp = 'autogenerada', 'autogenerada ', ''), v_numero_auto)), '.'),
-            p_id_usuario, NOW(), JSON_OBJECT('id_propuesta', p_id_propuesta, 'id_oc_reemplazada', p_id_oc_reemplaza));
+                   IF(v_numero_auto IS NULL, '', CONCAT(', en reemplazo de ', v_numero_auto)), '.'),
+            p_id_usuario, NOW(), JSON_OBJECT('id_propuesta', p_id_propuesta, 'id_oc_reemplazada', v_id_primera,
+                                             'ocs_reemplazadas', v_ocs_reemp));
 
     -- PDF (versión 1)
     INSERT INTO documento_adjunto (entidad_tipo, id_entidad, id_tipo_documento, nombre_archivo, url_archivo,
@@ -197,29 +240,37 @@ proc: BEGIN
                 valor_nuevo VARCHAR(400) PATH '$.valorNuevo')) j;
     END IF;
 
-    -- Reemplazo de la OC autogenerada (baja lógica) o de la OC pendiente de reemplazo (se conserva para auditoría)
-    IF v_numero_auto IS NOT NULL THEN
-        IF v_estado_reemp = 'autogenerada' THEN
+    -- Reemplazo de las OC autogeneradas (baja lógica) y de la OC pendiente de reemplazo (se conserva para auditoría)
+    SELECT COUNT(*) INTO v_n FROM tmp_oc_reemp;
+    WHILE v_i <= v_n DO
+        SELECT id_oc, numero_oc, estado INTO v_id_reemp, v_num_reemp, v_est_reemp FROM tmp_oc_reemp WHERE orden = v_i;
+        IF v_est_reemp = 'autogenerada' THEN
             UPDATE oc_propuesta SET eliminado_en = NOW(), eliminado_por = p_id_usuario
-            WHERE id_oc = p_id_oc_reemplaza AND eliminado_en IS NULL;
+            WHERE id_oc = v_id_reemp AND eliminado_en IS NULL;
         END IF;
         UPDATE orden_compra
         SET reemplazada_por = v_id_oc, fecha_reemplazo = NOW(), modificado_por = p_id_usuario,
-            eliminado_en = IF(v_estado_reemp = 'autogenerada', NOW(), eliminado_en)
-        WHERE id_oc = p_id_oc_reemplaza;
-        CALL SP_SincronizarBloqueosOrdenCompra(p_id_oc_reemplaza, p_id_usuario);
+            eliminado_en = IF(v_est_reemp = 'autogenerada', NOW(), eliminado_en)
+        WHERE id_oc = v_id_reemp;
+        CALL SP_SincronizarBloqueosOrdenCompra(v_id_reemp, p_id_usuario);
+        -- El expediente que apuntaba a la OC reemplazada pasa a apuntar a la OC del cliente
+        UPDATE expediente_digital SET id_orden_compra = v_id_oc, modificado_por = p_id_usuario
+        WHERE id_orden_compra = v_id_reemp AND eliminado_en IS NULL;
         INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion,
                                       id_usuario, registrado_en, metadata)
-        VALUES ('orden_compra', p_id_oc_reemplaza,
-                IF(v_estado_reemp = 'autogenerada', 'reemplazar_oc_auto', 'reemplazar_oc'), v_estado_reemp, 'reemplazada',
-                CONCAT(IF(v_estado_reemp = 'autogenerada', 'OC autogenerada', 'OC pendiente de reemplazo'),
+        VALUES ('orden_compra', v_id_reemp,
+                IF(v_est_reemp = 'autogenerada', 'reemplazar_oc_auto', 'reemplazar_oc'), v_est_reemp, 'reemplazada',
+                CONCAT(IF(v_est_reemp = 'autogenerada', 'OC autogenerada', 'OC pendiente de reemplazo'),
                        ' reemplazada por la OC del cliente ', v_numero_oc, '.'),
                 p_id_usuario, NOW(), JSON_OBJECT('id_oc_real', v_id_oc));
-    END IF;
+        SET v_i = v_i + 1;
+    END WHILE;
+    DROP TEMPORARY TABLE IF EXISTS tmp_oc_reemp;
+    SET v_i = 1;
 
     -- Vinculaciones (todas primero) y luego una corrida de validación por propuesta
-    INSERT INTO oc_propuesta (id_oc, id_propuesta, monto_asignado, estado_validacion, creado_por)
-    SELECT v_id_oc, id_propuesta, monto_asignado, 'pendiente', p_id_usuario FROM tmp_oc_eval ORDER BY orden;
+    INSERT INTO oc_propuesta (id_oc, id_propuesta, monto_asignado, monto_cubierto, estado_validacion, creado_por)
+    SELECT v_id_oc, id_propuesta, monto_asignado, monto_cubierto, 'pendiente', p_id_usuario FROM tmp_oc_eval ORDER BY orden;
 
     INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion,
                                   id_usuario, registrado_en, metadata)
@@ -274,7 +325,7 @@ proc: BEGIN
            CONCAT('Orden de compra registrada (', UPPER(REPLACE(v_estado, '_', ' ')), '). Se notificó a Contabilidad y Operaciones.') AS Mensaje;
 
     SELECT oc.id_oc, oc.numero_oc, oc.estado, oc.monto_total, oc.id_oc_reemplazada, v_numero_auto AS numero_oc_reemplazada,
-           v_notificados AS notificados
+           v_notificados AS notificados, v_ocs_reemp AS ocs_reemplazadas, oc.tipo_cambio
     FROM orden_compra oc WHERE oc.id_oc = v_id_oc;
 
     SELECT op.id_propuesta, p.numero, p.version, op.monto_asignado, op.estado_validacion, op.tipo_observacion,

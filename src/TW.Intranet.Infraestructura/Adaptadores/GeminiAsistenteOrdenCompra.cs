@@ -144,6 +144,9 @@ public class GeminiAsistenteOrdenCompra(HttpClient http, ConfiguracionGemini con
           Si "facturaIgualOc" es true y solo difieren los conceptos, la acción recomendada es "Generar nueva versión de la propuesta";
           si difieren datos que el cliente debe corregir, "Solicitar corrección al cliente".
           campo: conceptos, monto, moneda, cliente, forma_pago, igv, fecha o null.
+        - Si la OC y la propuesta están en monedas distintas, los montos de la OC están en monedaOc y los de la propuesta
+          en monedaPropuesta: compáralos convirtiendo con tipoCambio (soles por 1 unidad de la moneda extranjera). No
+          marques monto_distinto solo por la diferencia de moneda.
         - Montos con punto decimal, sin separador de miles. confianza: de 0 a 100.
         """;
 
@@ -174,7 +177,10 @@ public class GeminiAsistenteOrdenCompra(HttpClient http, ConfiguracionGemini con
 
         var contexto = new
         {
-            propuesta = new { numero = s.NumeroPropuesta, moneda = s.MonedaSimbolo },
+            propuesta = new { numero = s.NumeroPropuesta, moneda = s.MonedaPropuestaSimbolo ?? s.MonedaSimbolo },
+            monedaOc = s.MonedaSimbolo,
+            monedaPropuesta = s.MonedaPropuestaSimbolo ?? s.MonedaSimbolo,
+            tipoCambio = s.TipoCambio,
             facturaIgualOc = s.FacturaIgualOc,
             ocCubreVariasPropuestas = s.OcCubreVariasPropuestas,
             conceptosOc = s.ConceptosOc.Select(c => new { c.Descripcion, c.Cantidad, c.PrecioUnitario, c.Subtotal }),

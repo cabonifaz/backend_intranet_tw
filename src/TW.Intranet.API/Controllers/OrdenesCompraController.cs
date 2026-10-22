@@ -96,12 +96,15 @@ public class OrdenesCompraController(
 
     /// <summary>
     /// Propuestas aceptadas con saldo por cubrir. Sin idCliente: selector de "+ Nueva OC". Con idCliente (e idOc al editar):
-    /// "Agregar propuesta vinculada".
+    /// "Agregar propuesta vinculada". incluirConAutogenerada=true en la ficha de registro de la OC real: también trae
+    /// las propuestas cubiertas por su OC-AUTO (que se da de baja sola al registrar).
     /// </summary>
     [HttpGet("api/crm/ordenes-compra/propuestas-disponibles")]
     public async Task<IActionResult> PropuestasDisponibles([FromQuery] long? idCliente, [FromQuery] long? idOc,
-                                                           [FromQuery] string? busqueda, CancellationToken ct = default)
-        => Responder(await obtenerDisponibles.EjecutarAsync(idCliente, idOc, busqueda, IdUsuarioActual, ct));
+                                                           [FromQuery] string? busqueda,
+                                                           [FromQuery] bool incluirConAutogenerada = false,
+                                                           CancellationToken ct = default)
+        => Responder(await obtenerDisponibles.EjecutarAsync(idCliente, idOc, busqueda, incluirConAutogenerada, IdUsuarioActual, ct));
 
     /// <summary>Detalle: cabecera con datos extraídos, propuestas vinculadas con su validación, diferencias y acciones permitidas.</summary>
     [RequierePermiso("oc_bandeja")]

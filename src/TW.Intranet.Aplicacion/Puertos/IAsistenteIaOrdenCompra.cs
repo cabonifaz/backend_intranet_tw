@@ -58,4 +58,6 @@ public record SolicitudEvaluacionIaDto(
     IReadOnlyList<ItemPropuestaIaDto>     ItemsPropuesta,
     IReadOnlyList<CampoComparadoOcDto>    Diferencias,
     bool                          FacturaIgualOc,
-    bool                          OcCubreVariasPropuestas);
+    bool                          OcCubreVariasPropuestas,
+    string?                       MonedaPropuestaSimbolo = null,
+    decimal?                      TipoCambio             = null);

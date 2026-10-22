@@ -38,7 +38,7 @@ proc: BEGIN
         LEAVE proc;
     END IF;
 
-    CALL SP_CalcularPropuestasDisponiblesOc(p_id_usuario, NULL, NULL);
+    CALL SP_CalcularPropuestasDisponiblesOc(p_id_usuario, NULL, NULL, 0);
     SELECT COUNT(*), MAX(total), MAX(saldo), MAX(id_cliente), MAX(id_moneda), MAX(id_responsable),
            MAX(CONCAT(numero, ' v', version)), MAX(moneda_simbolo), MAX(razon_social)
       INTO v_existe, v_total, v_saldo, v_id_cliente, v_id_moneda, v_id_resp, v_numero_prop, v_simbolo, v_cliente

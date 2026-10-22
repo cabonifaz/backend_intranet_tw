@@ -3,11 +3,15 @@
 -- p_id_oc_reemplaza: OC que se reemplazará por la OC del cliente: una OC autogenerada o una OC en estado
 --   PENDIENTE_REEMPLAZO (se pidió la corrección al cliente). Debe estar vinculada a la propuesta, no anulada ni ya
 --   reemplazada. Su asignación no descuenta el saldo de la propuesta.
+-- Multi-propuesta (tickets A y B): las OC autogeneradas (OC-AUTO) no descuentan el saldo de ninguna propuesta: al
+--   registrar la OC real se dan de baja solas las OC-AUTO de todas las propuestas vinculadas. Sin p_id_oc_reemplaza, el
+--   resultado 3 trae la OC-AUTO vigente de la propuesta de origen (si tiene).
 -- Resultados:
 --   1 mensaje
 --   2 propuesta de origen (cliente, RQ, contacto, total, saldo, moneda, condición de pago, IGV, vencimiento)
 --   3 OC a reemplazar (vacío si no aplica): id_oc, numero_oc, monto_total, fecha_registro, es_autogenerada, estado
---   4 otras propuestas aceptadas del mismo cliente con saldo ("Agregar propuesta vinculada")
+--   4 otras propuestas aceptadas del mismo cliente con saldo ("Agregar propuesta vinculada"), con su OC-AUTO
+--     vigente (id_oc_autogenerada, numero_oc_autogenerada) si tienen
 --   5 monedas   6 condiciones de pago
 DROP PROCEDURE IF EXISTS SP_PrepararOrdenCompra;
 
@@ -55,7 +59,7 @@ proc: BEGIN
         END IF;
     END IF;
 
-    CALL SP_CalcularPropuestasDisponiblesOc(p_id_usuario, NULL, p_id_oc_reemplaza);
+    CALL SP_CalcularPropuestasDisponiblesOc(p_id_usuario, NULL, p_id_oc_reemplaza, 1);
 
     SELECT COUNT(*), MAX(id_cliente), MAX(saldo) INTO v_existe, v_id_cliente, v_saldo
     FROM tmp_oc_disp WHERE id_propuesta = p_id_propuesta;
@@ -87,14 +91,16 @@ proc: BEGIN
     JOIN propuesta_comercial p ON p.id_propuesta = d.id_propuesta
     WHERE d.id_propuesta = p_id_propuesta;
 
-    -- 3. OC a reemplazar
+    -- 3. OC a reemplazar (la indicada o, si no se indicó, la OC-AUTO vigente de la propuesta de origen)
     SELECT oc.id_oc, oc.numero_oc, oc.monto_total, oc.fecha_registro, oc.es_autogenerada, oc.estado
     FROM orden_compra oc
-    WHERE oc.id_oc = IFNULL(p_id_oc_reemplaza, 0);
+    WHERE oc.id_oc = IF(IFNULL(p_id_oc_reemplaza, 0) > 0, p_id_oc_reemplaza,
+                        IFNULL((SELECT id_oc_autogenerada FROM tmp_oc_disp WHERE id_propuesta = p_id_propuesta), 0));
 
     -- 4. Otras propuestas del mismo cliente
     SELECT id_propuesta, numero, version, id_requerimiento, numero_rq, id_contacto, contacto,
-           total, saldo, id_moneda, moneda, moneda_simbolo, fecha_aceptacion, responsable, tipo_servicio
+           total, saldo, id_moneda, moneda, moneda_simbolo, fecha_aceptacion, responsable, tipo_servicio,
+           id_oc_autogenerada, numero_oc_autogenerada
     FROM tmp_oc_disp
     WHERE id_cliente = v_id_cliente AND id_propuesta <> p_id_propuesta
     ORDER BY fecha_aceptacion DESC;

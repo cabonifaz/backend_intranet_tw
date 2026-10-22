@@ -30,6 +30,7 @@ BEGIN
     DECLARE v_dictamen TEXT;
     DECLARE v_numero  VARCHAR(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_datos   JSON;
+    DECLARE v_cubierto DECIMAL(14,2);
 
     -- Números de las propuestas vinculadas a la OC (la OC puede referenciar cualquiera de ellas)
     SET v_datos = JSON_SET(IFNULL(p_datos, JSON_OBJECT()), '$._propuestasVinculadas',
@@ -37,8 +38,8 @@ BEGIN
                             FROM oc_propuesta op JOIN propuesta_comercial px ON px.id_propuesta = op.id_propuesta
                             WHERE op.id_oc = p_id_oc AND op.eliminado_en IS NULL));
 
-    CALL SP_CompararOcPropuesta(p_id_propuesta, p_id_oc, v_datos, p_monto_asignado, p_eval_ia,
-                                p_resultado, v_coinc, v_adv, v_crit, v_total, p_sugerencia);
+    CALL SP_CompararOcPropuesta(p_id_propuesta, p_id_oc, 0, v_datos, p_monto_asignado, p_eval_ia,
+                                p_resultado, v_coinc, v_adv, v_crit, v_total, p_sugerencia, v_cubierto);
 
     SELECT JSON_ARRAYAGG(JSON_OBJECT('orden', orden, 'campo', campo, 'etiqueta', etiqueta, 'valorOc', valor_oc,
                                      'valorPropuesta', valor_propuesta, 'severidad', severidad,
@@ -80,8 +81,17 @@ BEGIN
             IFNULL(FN_JsonTexto(p_eval_ia, '$.motor'), 'reglas'), p_sugerencia, NOW(), p_id_usuario, p_id_usuario);
     SET p_id_validacion = LAST_INSERT_ID();
 
-    UPDATE oc_propuesta SET resultado_ia = p_resultado, id_validacion = p_id_validacion, modificado_por = p_id_usuario
-    WHERE id_oc = p_id_oc AND id_propuesta = p_id_propuesta AND eliminado_en IS NULL;
+    -- monto_cubierto: lo asignado en la moneda de la propuesta (tipo de cambio de la OC, migración 78)
+    --   (si no se pudo convertir, se conserva el último valor; misma moneda = NULL)
+    UPDATE oc_propuesta op
+    JOIN orden_compra oc         ON oc.id_oc = op.id_oc
+    JOIN propuesta_comercial pc  ON pc.id_propuesta = op.id_propuesta
+    SET op.resultado_ia = p_resultado, op.id_validacion = p_id_validacion,
+        op.monto_cubierto = CASE WHEN v_cubierto IS NOT NULL THEN v_cubierto
+                                 WHEN oc.id_moneda = pc.id_moneda THEN NULL
+                                 ELSE op.monto_cubierto END,
+        op.modificado_por = p_id_usuario
+    WHERE op.id_oc = p_id_oc AND op.id_propuesta = p_id_propuesta AND op.eliminado_en IS NULL;
 
     INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion,
                                   id_usuario, registrado_en, metadata)

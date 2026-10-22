@@ -96,6 +96,7 @@ internal static class DatosOrdenCompra
             Referencia      = d.Referencia?.Trim() is { Length: > 0 } r ? r : null,
             Observaciones   = d.Observaciones?.Trim() is { Length: > 0 } o ? o : null,
             FacturaIgualOc  = d.FacturaIgualOc,
+            TipoCambio      = d.TipoCambio is > 0 ? Math.Round(d.TipoCambio.Value, 6) : null,
             Conceptos       = (d.Conceptos ?? [])
                 .Where(c => !string.IsNullOrWhiteSpace(c.Descripcion))
                 .Take(200)
@@ -126,13 +127,14 @@ internal static class DatosOrdenCompra
 /// </summary>
 internal static class EvaluacionIaOrdenCompra
 {
-    public sealed record PropuestaAEvaluar(long IdPropuesta, string Numero);
+    /// <param name="MonedaSimbolo">Moneda de la propuesta (si difiere de la OC, la IA convierte con el tipo de cambio).</param>
+    public sealed record PropuestaAEvaluar(long IdPropuesta, string Numero, string? MonedaSimbolo = null);
 
     public static async Task<(List<EvaluacionIaPropuestaDto>? Evaluaciones, string? Aviso)> EvaluarAsync(
         IOrdenCompraRepositorio repositorio, IAsistenteIaOrdenCompra ia,
         IReadOnlyList<ConceptoOrdenCompraDto> conceptos, int? idMoneda, bool facturaIgualOc,
         IReadOnlyList<PropuestaAEvaluar> propuestas, IReadOnlyList<CampoComparadoOcDto> diferencias,
-        long idUsuario, CancellationToken ct)
+        long idUsuario, CancellationToken ct, decimal? tipoCambio = null)
     {
         if (!ia.Disponible)       return (null, "IA no configurada: la OC se validó solo con reglas.");
         if (conceptos.Count == 0) return (null, null);
@@ -150,7 +152,8 @@ internal static class EvaluacionIaOrdenCompra
             var items = datos.Datos.Items.Where(i => i.IdPropuesta == p.IdPropuesta).ToList();
             if (items.Count == 0) return (p, new ResultadoIa<EvaluacionIaPropuestaDto>(null, null));
             var solicitud = new SolicitudEvaluacionIaDto(p.IdPropuesta, p.Numero, simbolo, conceptos, items,
-                diferencias.Where(d => d.IdPropuesta == p.IdPropuesta).ToList(), facturaIgualOc, varias);
+                diferencias.Where(d => d.IdPropuesta == p.IdPropuesta).ToList(), facturaIgualOc, varias,
+                p.MonedaSimbolo, tipoCambio);
             return (p, await ia.EvaluarAsync(solicitud, ct));
         });
         var resultados = await Task.WhenAll(tareas);
@@ -359,13 +362,16 @@ public class PrepararEdicionOrdenCompraCasoDeUso(IOrdenCompraRepositorio reposit
 /// <summary>Propuestas aceptadas con saldo: "+ Nueva OC" (sin cliente) y "Agregar propuesta vinculada" (del cliente).</summary>
 public class ObtenerPropuestasDisponiblesOcCasoDeUso(IOrdenCompraRepositorio repositorio)
 {
+    /// <param name="incluirConAutogenerada">true en la ficha de registro de la OC real: también trae las propuestas
+    /// cubiertas por su OC-AUTO (su saldo no cuenta la OC-AUTO, que se da de baja al registrar).</param>
     public Task<RespuestaDto<List<PropuestaDisponibleOcDto>>> EjecutarAsync(long? idCliente, long? idOc, string? busqueda,
-                                                                             long idUsuario, CancellationToken ct = default)
+                                                                             bool incluirConAutogenerada, long idUsuario,
+                                                                             CancellationToken ct = default)
     {
         var texto = string.IsNullOrWhiteSpace(busqueda) ? null : busqueda.Trim();
         if (texto is { Length: > 200 }) texto = texto[..200];
         return repositorio.ObtenerPropuestasDisponiblesAsync(idCliente is > 0 ? idCliente : null, idOc is > 0 ? idOc : null,
-                                                             texto, idUsuario, ct);
+                                                             texto, incluirConAutogenerada, idUsuario, ct);
     }
 }
 
@@ -494,17 +500,30 @@ public class CompararOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio, I
 
         var reglas = await repositorio.CompararAsync(solicitud, null, idUsuario, ct);
         if (!conIa || reglas.IdTipoMensaje != 2 || reglas.Datos is null || !ia.Disponible || solicitud.Datos.Conceptos.Count == 0)
-            return reglas;
+            return await ConsolidarAsync(reglas, solicitud.Datos.Conceptos, idUsuario, ct);
 
         var (evaluaciones, aviso) = await EvaluacionIaOrdenCompra.EvaluarAsync(repositorio, ia, solicitud.Datos.Conceptos,
             solicitud.Datos.IdMoneda, solicitud.Datos.FacturaIgualOc,
-            reglas.Datos.Propuestas.Select(p => new EvaluacionIaOrdenCompra.PropuestaAEvaluar(p.IdPropuesta, p.Numero)).ToList(),
-            reglas.Datos.Campos, idUsuario, ct);
+            reglas.Datos.Propuestas.Select(p => new EvaluacionIaOrdenCompra.PropuestaAEvaluar(p.IdPropuesta, p.Numero, p.MonedaSimbolo)).ToList(),
+            reglas.Datos.Campos, idUsuario, ct, solicitud.Datos.TipoCambio);
         if (evaluaciones is null)
-            return aviso is null ? reglas : reglas with { Mensaje = aviso };
+            return await ConsolidarAsync(aviso is null ? reglas : reglas with { Mensaje = aviso }, solicitud.Datos.Conceptos, idUsuario, ct);
 
         var conIaResultado = await repositorio.CompararAsync(solicitud, evaluaciones, idUsuario, ct);
-        return aviso is null || conIaResultado.IdTipoMensaje != 2 ? conIaResultado : conIaResultado with { Mensaje = aviso };
+        return await ConsolidarAsync(aviso is null || conIaResultado.IdTipoMensaje != 2 ? conIaResultado : conIaResultado with { Mensaje = aviso },
+                                     solicitud.Datos.Conceptos, idUsuario, ct);
+    }
+
+    /// <summary>Ticket C: pool consolidado de ítems de las propuestas vinculadas contra los conceptos de la OC.</summary>
+    private async Task<RespuestaDto<ComparacionOrdenCompraDto>> ConsolidarAsync(
+        RespuestaDto<ComparacionOrdenCompraDto> r, IReadOnlyList<ConceptoOrdenCompraDto> conceptos, long idUsuario, CancellationToken ct)
+    {
+        if (r.IdTipoMensaje != 2 || r.Datos is null || r.Datos.Propuestas.Count == 0) return r;
+        var ids = r.Datos.Propuestas.Select(p => p.IdPropuesta).ToList();
+        var datos = await repositorio.ObtenerDatosIaAsync(ids, idUsuario, ct);
+        if (datos.IdTipoMensaje != 2 || datos.Datos is null) return r;
+        var pool = ConsolidacionConceptosOrdenCompra.Calcular(conceptos, datos.Datos.Items, ids, r.Datos.EvaluacionesIa);
+        return r with { Datos = r.Datos with { ItemsConsolidados = pool } };
     }
 }
 
@@ -552,8 +571,8 @@ public class RegistrarOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio, 
         // 2. IA por propuesta (si falla, se sigue con las reglas)
         var (evaluaciones, avisoIa) = await EvaluacionIaOrdenCompra.EvaluarAsync(repositorio, ia, solicitud.Datos.Conceptos,
             solicitud.Datos.IdMoneda, solicitud.Datos.FacturaIgualOc,
-            reglas.Datos.Propuestas.Select(p => new EvaluacionIaOrdenCompra.PropuestaAEvaluar(p.IdPropuesta, p.Numero)).ToList(),
-            reglas.Datos.Campos, idUsuario, ct);
+            reglas.Datos.Propuestas.Select(p => new EvaluacionIaOrdenCompra.PropuestaAEvaluar(p.IdPropuesta, p.Numero, p.MonedaSimbolo)).ToList(),
+            reglas.Datos.Campos, idUsuario, ct, solicitud.Datos.TipoCambio);
 
         // 3. Validar la decisión con el resultado final, antes de escribir en disco
         comparar.Decision = solicitud.Decision;
@@ -615,8 +634,8 @@ public class EditarOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio, IAs
 
         var (evaluaciones, avisoIa) = await EvaluacionIaOrdenCompra.EvaluarAsync(repositorio, ia, solicitud.Datos.Conceptos,
             solicitud.Datos.IdMoneda, solicitud.Datos.FacturaIgualOc,
-            reglas.Datos.Propuestas.Select(p => new EvaluacionIaOrdenCompra.PropuestaAEvaluar(p.IdPropuesta, p.Numero)).ToList(),
-            reglas.Datos.Campos, idUsuario, ct);
+            reglas.Datos.Propuestas.Select(p => new EvaluacionIaOrdenCompra.PropuestaAEvaluar(p.IdPropuesta, p.Numero, p.MonedaSimbolo)).ToList(),
+            reglas.Datos.Campos, idUsuario, ct, solicitud.Datos.TipoCambio);
 
         comparar.Decision = solicitud.Decision;
         var decision = await repositorio.CompararAsync(comparar, evaluaciones, idUsuario, ct);
@@ -668,6 +687,8 @@ public class ReemplazarDocumentoOrdenCompraCasoDeUso(IOrdenCompraRepositorio rep
         {
             var detalle = await repositorio.ObtenerDetalleAsync(idOc, idUsuario, ct);
             if (detalle.IdTipoMensaje != 2 || detalle.Datos is null) return new(detalle.IdTipoMensaje, detalle.Mensaje);
+            // El PDF nuevo no trae el tipo de cambio: se conserva el de la OC
+            normalizados.TipoCambio ??= detalle.Datos.Cabecera.TipoCambio;
             var vinculaciones = detalle.Datos.Propuestas
                 .Select(p => new VinculacionOrdenCompraDto { IdPropuesta = p.IdPropuesta, MontoAsignado = p.MontoAsignado }).ToList();
 
@@ -679,8 +700,8 @@ public class ReemplazarDocumentoOrdenCompraCasoDeUso(IOrdenCompraRepositorio rep
 
             (evaluaciones, avisoIa) = await EvaluacionIaOrdenCompra.EvaluarAsync(repositorio, ia, normalizados.Conceptos,
                 normalizados.IdMoneda, normalizados.FacturaIgualOc,
-                reglas.Datos.Propuestas.Select(p => new EvaluacionIaOrdenCompra.PropuestaAEvaluar(p.IdPropuesta, p.Numero)).ToList(),
-                reglas.Datos.Campos, idUsuario, ct);
+                reglas.Datos.Propuestas.Select(p => new EvaluacionIaOrdenCompra.PropuestaAEvaluar(p.IdPropuesta, p.Numero, p.MonedaSimbolo)).ToList(),
+                reglas.Datos.Campos, idUsuario, ct, normalizados.TipoCambio);
         }
 
         // 3. Guardar el PDF y registrar el cambio
@@ -714,9 +735,9 @@ public class RevalidarOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio, 
             var c = detalle.Datos.Cabecera;
             var aEvaluar = detalle.Datos.Propuestas
                 .Where(p => idPropuesta is null || p.IdPropuesta == idPropuesta)
-                .Select(p => new EvaluacionIaOrdenCompra.PropuestaAEvaluar(p.IdPropuesta, p.Numero)).ToList();
+                .Select(p => new EvaluacionIaOrdenCompra.PropuestaAEvaluar(p.IdPropuesta, p.Numero, p.MonedaSimboloPropuesta)).ToList();
             (evaluaciones, avisoIa) = await EvaluacionIaOrdenCompra.EvaluarAsync(repositorio, ia, c.Conceptos, c.IdMoneda,
-                c.FacturaIgualOc, aEvaluar, detalle.Datos.Diferencias, idUsuario, ct);
+                c.FacturaIgualOc, aEvaluar, detalle.Datos.Diferencias, idUsuario, ct, c.TipoCambio);
         }
 
         var r = await repositorio.RevalidarAsync(idOc, idPropuesta, evaluaciones, idUsuario, ct);

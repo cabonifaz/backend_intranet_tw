@@ -8,6 +8,9 @@
 --   2 resumen: resultado global, sugerencia y decisiones permitidas (los botones de la ficha)
 --   3 por propuesta: resultado, coincidencias, advertencias, críticas y sugerencia
 --   4 detalle por propuesta y campo: valor en la OC, valor en la propuesta, severidad, mensaje y acción
+--   5 hitos de pago de cada propuesta (ticket D): porcentaje, condición y días de crédito
+-- p_id_oc_reemplaza ya no es necesario para las OC autogeneradas: al registrar, las OC-AUTO de las propuestas
+--   vinculadas no descuentan el saldo (tickets A y B). Sigue sirviendo para la OC pendiente de reemplazo.
 DROP PROCEDURE IF EXISTS SP_CompararOrdenCompra;
 
 DELIMITER $$
@@ -79,9 +82,12 @@ proc: BEGIN
            (v_criticas = 0 AND v_no_ok > 0 AND v_factura = 1)                                       AS puede_nueva_version;
 
     -- 3. Por propuesta
-    SELECT orden, id_propuesta, numero, monto_asignado, resultado, coincidencias, advertencias, criticas,
-           total_campos, sugerencia
-    FROM tmp_oc_eval ORDER BY orden;
+    SELECT e.orden, e.id_propuesta, e.numero, e.monto_asignado, e.monto_cubierto, e.resultado, e.coincidencias,
+           e.advertencias, e.criticas, e.total_campos, e.sugerencia, p.id_moneda, m.String3 AS moneda, m.String2 AS moneda_simbolo
+    FROM tmp_oc_eval e
+    JOIN propuesta_comercial p ON p.id_propuesta = e.id_propuesta
+    LEFT JOIN tabla_maestra m  ON m.IdMaestro = 1 AND m.IdEmpresa = 1 AND m.Num1 = p.id_moneda
+    ORDER BY e.orden;
 
     -- 4. Detalle por campo
     SELECT e.id_propuesta, d.orden, d.campo, d.etiqueta, d.valor_oc, d.valor_propuesta, d.severidad, d.mensaje, d.accion
@@ -96,6 +102,17 @@ proc: BEGIN
             mensaje         VARCHAR(400) PATH '$.mensaje',
             accion          VARCHAR(200) PATH '$.accion')) d
     ORDER BY e.orden, d.orden;
+
+    -- 5. Hitos de pago (CREDITO_NN → NN días; CONTADO → 0)
+    SELECT f.id_propuesta, f.porcentaje,
+           IFNULL((SELECT MAX(tm.String1) FROM tabla_maestra tm WHERE tm.IdMaestro = 39 AND tm.IdEmpresa = 1
+                     AND tm.String2 = f.condicion AND tm.eliminado_en IS NULL), f.condicion) AS condicion,
+           f.condicion AS codigo,
+           CASE WHEN f.condicion = 'CONTADO' THEN 0
+                WHEN f.condicion REGEXP '^CREDITO_[0-9]+$' THEN CAST(SUBSTRING(f.condicion, 9) AS UNSIGNED) END AS dias_credito
+    FROM propuesta_forma_pago f
+    WHERE f.id_propuesta IN (SELECT id_propuesta FROM tmp_oc_eval)
+    ORDER BY f.id_propuesta, f.orden, f.id;
 
     DROP TEMPORARY TABLE IF EXISTS tmp_oc_eval;
 END$$

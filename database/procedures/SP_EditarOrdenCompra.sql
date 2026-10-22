@@ -23,6 +23,7 @@ CREATE PROCEDURE SP_EditarOrdenCompraInterno(
     IN p_hash_pdf         CHAR(64)     CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci
 )
 proc: BEGIN
+    DECLARE v_tc          DECIMAL(12,6);
     DECLARE v_existe     INT DEFAULT 0;
     DECLARE v_estado     VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_auto       TINYINT;
@@ -106,6 +107,9 @@ proc: BEGIN
     SET v_numero_oc = FN_JsonTexto(p_datos, '$.numeroOc');
     SET v_monto     = CAST(FN_JsonTexto(p_datos, '$.montoTotal') AS DECIMAL(14,2));
     SET v_viejos    = FN_DatosOrdenCompraJson(p_id_oc);
+    -- Tipo de cambio: solo se guarda si alguna propuesta vinculada está en otra moneda (ticket E)
+    SET v_tc        = IF(EXISTS (SELECT 1 FROM tmp_oc_eval WHERE monto_cubierto IS NOT NULL),
+                         CAST(FN_JsonTexto(p_datos, '$.tipoCambio') AS DECIMAL(12,6)), NULL);
 
     START TRANSACTION;
 
@@ -116,6 +120,8 @@ proc: BEGIN
                IF(NOT (FN_JsonTexto(v_viejos, '$.numeroOc')       <=> v_numero_oc), 'N° OC', NULL),
                IF(NOT (CAST(FN_JsonTexto(v_viejos, '$.montoTotal') AS DECIMAL(14,2)) <=> v_monto), 'monto', NULL),
                IF(NOT (FN_JsonTexto(v_viejos, '$.idMoneda')       <=> FN_JsonTexto(p_datos, '$.idMoneda')), 'moneda', NULL),
+               IF(NOT (CAST(FN_JsonTexto(v_viejos, '$.tipoCambio') AS DECIMAL(12,6))
+                       <=> v_tc), 'tipo de cambio', NULL),
                IF(NOT (FN_JsonTexto(v_viejos, '$.ruc')            <=> NULLIF(REGEXP_REPLACE(IFNULL(FN_JsonTexto(p_datos, '$.ruc'), ''), '[^0-9]', ''), '')), 'RUC', NULL),
                IF(NOT (FN_JsonTexto(v_viejos, '$.razonSocial')    <=> FN_JsonTexto(p_datos, '$.razonSocial')), 'razón social', NULL),
                IF(NOT (JSON_LENGTH(IFNULL(JSON_EXTRACT(v_viejos, '$.conceptos'), JSON_ARRAY()))
@@ -135,6 +141,7 @@ proc: BEGIN
         numero_propuesta_ref = FN_JsonTexto(p_datos, '$.numeroPropuesta'),
         id_moneda            = CAST(FN_JsonTexto(p_datos, '$.idMoneda') AS SIGNED),
         monto_total          = v_monto,
+        tipo_cambio          = v_tc,
         id_condicion_pago    = CAST(FN_JsonTexto(p_datos, '$.idCondicionPago') AS SIGNED),
         forma_pago           = FN_JsonTexto(p_datos, '$.formaPago'),
         igv_incluido         = CASE LOWER(IFNULL(FN_JsonTexto(p_datos, '$.igvIncluido'), '')) WHEN 'true' THEN 1 WHEN '1' THEN 1
@@ -226,8 +233,9 @@ proc: BEGIN
 
     UPDATE oc_propuesta op
     JOIN tmp_oc_eval e ON e.id_propuesta = op.id_propuesta
-    SET op.monto_asignado = e.monto_asignado, op.modificado_por = p_id_usuario
-    WHERE op.id_oc = p_id_oc AND op.eliminado_en IS NULL AND ABS(op.monto_asignado - e.monto_asignado) >= 0.01;
+    SET op.monto_asignado = e.monto_asignado, op.monto_cubierto = e.monto_cubierto, op.modificado_por = p_id_usuario
+    WHERE op.id_oc = p_id_oc AND op.eliminado_en IS NULL
+      AND (ABS(op.monto_asignado - e.monto_asignado) >= 0.01 OR NOT (op.monto_cubierto <=> e.monto_cubierto));
 
     INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion,
                                   id_usuario, registrado_en, metadata)
@@ -239,8 +247,8 @@ proc: BEGIN
     WHERE NOT EXISTS (SELECT 1 FROM oc_propuesta op WHERE op.id_oc = p_id_oc AND op.id_propuesta = e.id_propuesta
                         AND op.eliminado_en IS NULL);
 
-    INSERT INTO oc_propuesta (id_oc, id_propuesta, monto_asignado, estado_validacion, creado_por)
-    SELECT p_id_oc, e.id_propuesta, e.monto_asignado, 'pendiente', p_id_usuario
+    INSERT INTO oc_propuesta (id_oc, id_propuesta, monto_asignado, monto_cubierto, estado_validacion, creado_por)
+    SELECT p_id_oc, e.id_propuesta, e.monto_asignado, e.monto_cubierto, 'pendiente', p_id_usuario
     FROM tmp_oc_eval e
     WHERE NOT EXISTS (SELECT 1 FROM oc_propuesta op WHERE op.id_oc = p_id_oc AND op.id_propuesta = e.id_propuesta
                         AND op.eliminado_en IS NULL)

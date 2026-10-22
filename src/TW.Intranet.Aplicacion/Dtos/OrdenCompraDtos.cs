@@ -44,6 +44,9 @@ public class DatosOrdenCompraDto
     public DateTime? FechaRecepcion  { get; set; }
     public int?      IdMoneda        { get; set; }
     public decimal?  MontoTotal      { get; set; }
+    /// <summary>Soles por 1 unidad de la moneda extranjera (ej. 3.75). Obligatorio si alguna propuesta vinculada está en
+    /// otra moneda que la OC: los montos asignados (en la moneda de la OC) se convierten a la moneda de cada propuesta.</summary>
+    public decimal?  TipoCambio      { get; set; }
     /// <summary>Num1 del catálogo CONDICION_PAGO (39).</summary>
     public int?      IdCondicionPago { get; set; }
     /// <summary>Forma de pago tal como la dice la OC (texto libre).</summary>
@@ -84,6 +87,8 @@ public class ConceptoEvaluadoDto
     public decimal? MontoPropuesta { get; set; }
     /// <summary>coincide · falta_en_oc · adicional_en_oc · monto_distinto</summary>
     public string   Estado         { get; set; } = "coincide";
+    /// <summary>Otras propuestas vinculadas que tienen el mismo ítem (descripción normalizada), en multi-propuesta.</summary>
+    public List<long> CompartidoConPropuestas { get; set; } = [];
 }
 
 public class InsightIaDto
@@ -196,7 +201,9 @@ public record PropuestaDisponibleOcDto(
     DateTime? FechaAceptacion,
     string?   Responsable,
     string?   TipoServicio,
-    bool      TieneOc);
+    bool      TieneOc,
+    long?     IdOcAutogenerada     = null,
+    string?   NumeroOcAutogenerada = null);
 
 /// <summary>Propuesta de origen de la ficha de registro.</summary>
 public record PropuestaOrigenOcDto(
@@ -260,7 +267,11 @@ public record VinculacionEdicionOcDto(
     string?   NumeroNuevaVersion,
     int?      VersionNuevaVersion,
     string?   EstadoNuevaVersion,
-    bool      NuevaVersionAceptada);
+    bool      NuevaVersionAceptada)
+{
+    /// <summary>Lo asignado en la moneda de la propuesta (null = misma moneda que la OC).</summary>
+    public decimal? MontoCubierto { get; init; }
+}
 
 /// <summary>Datos de la OC en la ficha de edición.</summary>
 public record OrdenCompraEdicionDto(
@@ -320,7 +331,36 @@ public record ComparacionPropuestaOcDto(
     int     Advertencias,
     int     Criticas,
     int     TotalCampos,
-    string  Sugerencia);
+    string  Sugerencia)
+{
+    /// <summary>MontoAsignado (moneda de la OC) convertido a la moneda de la propuesta con el tipo de cambio; null si es
+    /// la misma moneda o falta el tipo de cambio.</summary>
+    public decimal? MontoCubierto { get; init; }
+    public int      IdMoneda      { get; init; }
+    public string?  Moneda        { get; init; }
+    public string?  MonedaSimbolo { get; init; }
+    /// <summary>Hitos de pago de la propuesta (ej. 50% Contado + 50% Crédito 60 días).</summary>
+    public List<HitoPagoPropuestaDto> HitosPago { get; init; } = [];
+}
+
+/// <summary>Hito de pago de la propuesta. DiasCredito: 0 al contado, N en CREDITO_N, null en otras condiciones.</summary>
+public record HitoPagoPropuestaDto(decimal Porcentaje, string Condicion, int? DiasCredito, string? Codigo);
+
+/// <summary>
+/// Ítem del pool consolidado de la OC multi-propuesta (pestaña "Resumen"): cada ítem distinto de las propuestas
+/// vinculadas (deduplicado por descripción normalizada) y cada concepto de la OC que no está en ninguna.
+/// Severidad: ok (está en la OC y la cantidad coincide o no se puede comparar) · advertencia (falta en la OC, adicional
+/// en la OC o cantidad distinta).
+/// </summary>
+public record ItemConsolidadoOcDto(
+    string     DescripcionNormalizada,
+    string     Descripcion,
+    List<long> EnPropuestas,
+    decimal    CantidadTotal,
+    bool       EnOc,
+    decimal?   CantidadOc,
+    string     Severidad,
+    string?    Mensaje);
 
 /// <summary>Fila de la comparación campo por campo. Severidad: ok · advertencia · critico · sin_dato.</summary>
 public record CampoComparadoOcDto(
@@ -338,7 +378,11 @@ public record ComparacionOrdenCompraDto(
     ResumenComparacionOcDto          Resumen,
     List<ComparacionPropuestaOcDto>  Propuestas,
     List<CampoComparadoOcDto>        Campos,
-    List<EvaluacionIaPropuestaDto>   EvaluacionesIa);
+    List<EvaluacionIaPropuestaDto>   EvaluacionesIa)
+{
+    /// <summary>Pool consolidado de ítems de todas las propuestas vinculadas contra los conceptos de la OC.</summary>
+    public List<ItemConsolidadoOcDto> ItemsConsolidados { get; init; } = [];
+}
 
 // ── Resultado de registrar / editar / reemplazar PDF ──
 
@@ -349,7 +393,14 @@ public record OrdenCompraGuardadaDto(
     decimal MontoTotal,
     long?   IdOcReemplazada,
     string? NumeroOcReemplazada,
-    int     Notificados);
+    int     Notificados)
+{
+    /// <summary>Al registrar: todas las OC que reemplazó (las OC-AUTO de las propuestas vinculadas y la indicada).</summary>
+    public List<OcReemplazadaDto> OcsReemplazadas { get; init; } = [];
+    public decimal? TipoCambio { get; init; }
+}
+
+public record OcReemplazadaDto(long IdOc, string NumeroOc, string Estado);
 
 public record VinculacionGuardadaOcDto(
     long    IdPropuesta,
@@ -498,6 +549,8 @@ public record CabeceraDetalleOcDto
     public bool?     IgvIncluido             { get; init; }
     public decimal?  IgvPct                  { get; init; }
     public decimal?  DescuentoMonto          { get; init; }
+    /// <summary>Soles por 1 unidad de moneda extranjera (solo si cubre propuestas en otra moneda).</summary>
+    public decimal?  TipoCambio              { get; init; }
     public string?   FechaOc                 { get; init; }
     public string?   FechaRecepcion          { get; init; }
     public string?   VigenciaHasta           { get; init; }
@@ -539,6 +592,10 @@ public record PropuestaVinculadaOcDto
     public bool      Aceptada                { get; init; }
     public decimal   MontoPropuesta          { get; init; }
     public decimal   MontoAsignado           { get; init; }
+    /// <summary>Lo asignado en la moneda de la propuesta (null = misma moneda que la OC).</summary>
+    public decimal?  MontoCubierto           { get; init; }
+    public int?      IdMonedaPropuesta       { get; init; }
+    public string?   MonedaSimboloPropuesta  { get; init; }
     public decimal   PctOc                   { get; init; }
     public decimal   SaldoPropuesta          { get; init; }
     public long?     IdContacto              { get; init; }

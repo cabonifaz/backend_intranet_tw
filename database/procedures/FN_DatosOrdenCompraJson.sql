@@ -15,6 +15,7 @@ BEGIN
                'numeroPropuesta', numero_propuesta_ref,
                'idMoneda',        id_moneda,
                'montoTotal',      monto_total,
+               'tipoCambio',      tipo_cambio,
                'idCondicionPago', id_condicion_pago,
                'formaPago',       forma_pago,
                'igvIncluido',     CASE igv_incluido WHEN 1 THEN CAST('true' AS JSON) WHEN 0 THEN CAST('false' AS JSON) END,

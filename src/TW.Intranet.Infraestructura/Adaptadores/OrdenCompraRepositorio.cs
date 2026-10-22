@@ -91,7 +91,9 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
         EnteroLargoNulo(r, "id_contacto"), Texto(r, "contacto"),
         Dec(r, "total"), Dec(r, "saldo"), Ent(r, "id_moneda"), Texto(r, "moneda"), Texto(r, "moneda_simbolo"),
         FechaHora(r, "fecha_aceptacion"), Texto(r, "responsable"), Texto(r, "tipo_servicio"),
-        TieneColumna(r, "tiene_oc") && Booleano(r, "tiene_oc"));
+        TieneColumna(r, "tiene_oc") && Booleano(r, "tiene_oc"),
+        TieneColumna(r, "id_oc_autogenerada") ? EnteroLargoNulo(r, "id_oc_autogenerada") : null,
+        TieneColumna(r, "numero_oc_autogenerada") ? Texto(r, "numero_oc_autogenerada") : null);
 
     private static bool TieneColumna(MySqlDataReader r, string c)
     {
@@ -216,6 +218,7 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
                     IgvIncluido             = BoolNulo(r, "igv_incluido"),
                     IgvPct                  = DecimalNulo(r, "igv_pct"),
                     DescuentoMonto          = DecimalNulo(r, "descuento_monto"),
+                    TipoCambio              = TieneColumna(r, "tipo_cambio") ? DecimalNulo(r, "tipo_cambio") : null,
                     FechaOc                 = Fecha(r, "fecha_oc"),
                     FechaRecepcion          = Fecha(r, "fecha_recepcion"),
                     VigenciaHasta           = Fecha(r, "vigencia_hasta"),
@@ -258,6 +261,9 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
                         Aceptada                = Booleano(r, "aceptada"),
                         MontoPropuesta          = Dec(r, "monto_propuesta"),
                         MontoAsignado           = Dec(r, "monto_asignado"),
+                        MontoCubierto           = TieneColumna(r, "monto_cubierto") ? DecimalNulo(r, "monto_cubierto") : null,
+                        IdMonedaPropuesta       = TieneColumna(r, "id_moneda_propuesta") ? EntNulo(r, "id_moneda_propuesta") : null,
+                        MonedaSimboloPropuesta  = TieneColumna(r, "moneda_simbolo_propuesta") ? Texto(r, "moneda_simbolo_propuesta") : null,
                         PctOc                   = Dec(r, "pct_oc"),
                         SaldoPropuesta          = Dec(r, "saldo_propuesta"),
                         IdContacto              = EnteroLargoNulo(r, "id_contacto"),
@@ -512,6 +518,7 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
                     IgvIncluido     = BoolNulo(r, "igv_incluido"),
                     IgvPct          = DecimalNulo(r, "igv_pct"),
                     Descuento       = DecimalNulo(r, "descuento_monto"),
+                    TipoCambio      = TieneColumna(r, "tipo_cambio") ? DecimalNulo(r, "tipo_cambio") : null,
                     Ruc             = Texto(r, "ruc_cliente_oc"),
                     RazonSocial     = Texto(r, "razon_social_oc"),
                     NumeroPropuesta = Texto(r, "numero_propuesta_ref"),
@@ -538,7 +545,10 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
                         Texto(r, "resultado_ia"), EnteroLargoNulo(r, "id_contacto"), Texto(r, "contacto"),
                         EnteroLargoNulo(r, "id_requerimiento"), Texto(r, "numero_rq"),
                         EnteroLargoNulo(r, "id_propuesta_nueva_version"), Texto(r, "numero_nueva_version"),
-                        EntNulo(r, "version_nueva_version"), Texto(r, "estado_nueva_version"), Booleano(r, "nueva_version_aceptada")));
+                        EntNulo(r, "version_nueva_version"), Texto(r, "estado_nueva_version"), Booleano(r, "nueva_version_aceptada"))
+                    {
+                        MontoCubierto = TieneColumna(r, "monto_cubierto") ? DecimalNulo(r, "monto_cubierto") : null,
+                    });
 
                 await r.NextResultAsync(ct);
                 var otras = new List<PropuestaDisponibleOcDto>();
@@ -553,7 +563,7 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
             ct);
 
     public Task<RespuestaDto<List<PropuestaDisponibleOcDto>>> ObtenerPropuestasDisponiblesAsync(
-        long? idCliente, long? idOc, string? busqueda, long idUsuario, CancellationToken ct)
+        long? idCliente, long? idOc, string? busqueda, bool incluirConAutogenerada, long idUsuario, CancellationToken ct)
         => EjecutarAsync("SP_ObtenerPropuestasDisponiblesOc",
             p =>
             {
@@ -561,6 +571,7 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
                 p.AddWithValue("p_id_cliente", Valor(idCliente));
                 p.AddWithValue("p_id_oc",      Valor(idOc));
                 p.AddWithValue("p_busqueda",   Valor(busqueda));
+                p.AddWithValue("p_incluir_con_autogenerada", incluirConAutogenerada ? 1 : 0);
             },
             async (r, mensaje) =>
             {
@@ -628,11 +639,27 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
                     props.Add(new ComparacionPropuestaOcDto(
                         Ent(r, "orden"), EnteroLargo(r, "id_propuesta"), Texto(r, "numero") ?? "", Dec(r, "monto_asignado"),
                         Texto(r, "resultado") ?? "ok", Ent(r, "coincidencias"), Ent(r, "advertencias"), Ent(r, "criticas"),
-                        Ent(r, "total_campos"), Texto(r, "sugerencia") ?? "validar"));
+                        Ent(r, "total_campos"), Texto(r, "sugerencia") ?? "validar")
+                    {
+                        MontoCubierto = DecimalNulo(r, "monto_cubierto"),
+                        IdMoneda      = Ent(r, "id_moneda"),
+                        Moneda        = Texto(r, "moneda"),
+                        MonedaSimbolo = Texto(r, "moneda_simbolo"),
+                    });
 
                 await r.NextResultAsync(ct);
                 var campos = new List<CampoComparadoOcDto>();
                 while (await r.ReadAsync(ct)) campos.Add(LeerCampo(r, EnteroLargo(r, "id_propuesta")));
+
+                // 5. Hitos de pago por propuesta
+                var hitos = new List<(long IdPropuesta, HitoPagoPropuestaDto Hito)>();
+                if (await r.NextResultAsync(ct))
+                    while (await r.ReadAsync(ct))
+                        hitos.Add((EnteroLargo(r, "id_propuesta"),
+                                   new HitoPagoPropuestaDto(Dec(r, "porcentaje"), Texto(r, "condicion") ?? "", EntNulo(r, "dias_credito"),
+                                                            Texto(r, "codigo"))));
+                props = props.Select(x => x with { HitosPago = hitos.Where(h => h.IdPropuesta == x.IdPropuesta).Select(h => h.Hito).ToList() })
+                             .ToList();
 
                 return new RespuestaDto<ComparacionOrdenCompraDto>(2, mensaje,
                     new ComparacionOrdenCompraDto(resumen, props, campos, evaluaciones?.ToList() ?? []));
@@ -648,7 +675,13 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
             return new RespuestaDto<ResultadoGuardarOrdenCompraDto>(3, "No se pudo leer la orden de compra guardada.");
         var oc = new OrdenCompraGuardadaDto(
             EnteroLargo(r, "id_oc"), Texto(r, "numero_oc") ?? "", Texto(r, "estado") ?? "", Dec(r, "monto_total"),
-            EnteroLargoNulo(r, "id_oc_reemplazada"), Texto(r, "numero_oc_reemplazada"), Ent(r, "notificados"));
+            EnteroLargoNulo(r, "id_oc_reemplazada"), Texto(r, "numero_oc_reemplazada"), Ent(r, "notificados"))
+        {
+            OcsReemplazadas = TieneColumna(r, "ocs_reemplazadas")
+                ? LeerJson<List<OcReemplazadaDto>>(r, "ocs_reemplazadas") ?? []
+                : [],
+            TipoCambio = TieneColumna(r, "tipo_cambio") ? DecimalNulo(r, "tipo_cambio") : null,
+        };
 
         await r.NextResultAsync(ct);
         var vinc = new List<VinculacionGuardadaOcDto>();

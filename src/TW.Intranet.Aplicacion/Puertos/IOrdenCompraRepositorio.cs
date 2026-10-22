@@ -15,7 +15,7 @@ public interface IOrdenCompraRepositorio
     // Ficha de registro y edición
     Task<RespuestaDto<PreparacionOrdenCompraDto>> PrepararAsync(long idPropuesta, long? idOcReemplaza, long idUsuario, CancellationToken ct);
     Task<RespuestaDto<PreparacionEdicionOrdenCompraDto>> PrepararEdicionAsync(long idOc, long idUsuario, CancellationToken ct);
-    Task<RespuestaDto<List<PropuestaDisponibleOcDto>>> ObtenerPropuestasDisponiblesAsync(long? idCliente, long? idOc, string? busqueda, long idUsuario, CancellationToken ct);
+    Task<RespuestaDto<List<PropuestaDisponibleOcDto>>> ObtenerPropuestasDisponiblesAsync(long? idCliente, long? idOc, string? busqueda, bool incluirConAutogenerada, long idUsuario, CancellationToken ct);
     Task<RespuestaDto<DatosIaOrdenCompraDto>> ObtenerDatosIaAsync(IReadOnlyList<long> idsPropuesta, long idUsuario, CancellationToken ct);
 
     // Validación y guardado

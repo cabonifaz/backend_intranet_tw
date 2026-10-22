@@ -2,10 +2,13 @@
 -- Lo usan la comparación en vivo, el registro y la edición. Deja el resultado por propuesta en tmp_oc_eval.
 --
 -- p_id_oc: OC que se edita (NULL al registrar). p_excluir_oc: OC cuya asignación no descuenta el saldo de las
---   propuestas (la que se edita o la autogenerada que se reemplaza).
+--   propuestas (la que se edita o la que se reemplaza).
+-- Al registrar (p_id_oc NULL) las OC autogeneradas (OC-AUTO) vigentes no descuentan el saldo de ninguna propuesta
+--   vinculada: SP_RegistrarOrdenCompra las da de baja (tickets A y B, multi-propuesta).
+-- tmp_oc_eval.monto_cubierto: el monto asignado en la moneda de la propuesta (con el tipo de cambio, ticket E).
 -- p_datos: numeroOc, fechaEmision, fechaRecepcion, idMoneda, montoTotal, idCondicionPago, formaPago, igvIncluido,
 --   igvPct, descuento, ruc, razonSocial, numeroPropuesta, vigenciaHasta, referencia, observaciones,
---   facturaIgualOc, conceptos [...]
+--   facturaIgualOc, tipoCambio (soles por 1 unidad de moneda extranjera), conceptos [...]
 -- p_vinculaciones: [{idPropuesta, montoAsignado}] (al menos una; la primera es la propuesta de origen).
 --   Sin p_decision (validación en vivo) se acepta monto 0; al registrar o editar debe ser mayor a 0.
 -- p_evaluaciones_ia: [{idPropuesta, conceptos, dictamen, insights, confianza, motor}] (opcional)
@@ -55,8 +58,12 @@ proc: BEGIN
     DECLARE v_criticas    INT;
     DECLARE v_no_ok       INT;
     DECLARE v_datos       JSON;
+    DECLARE v_sin_auto    TINYINT;
+    DECLARE v_cubierto    DECIMAL(14,2);
+    DECLARE v_tc_txt      VARCHAR(40);
 
     SET p_error = NULL;
+    SET v_sin_auto = IF(IFNULL(p_id_oc, 0) = 0, 1, 0);
 
     DROP TEMPORARY TABLE IF EXISTS tmp_oc_eval;
     CREATE TEMPORARY TABLE tmp_oc_eval (
@@ -64,6 +71,7 @@ proc: BEGIN
         id_propuesta    BIGINT,
         numero          VARCHAR(40),
         monto_asignado  DECIMAL(14,2),
+        monto_cubierto  DECIMAL(14,2),
         resultado       VARCHAR(20),
         coincidencias   INT,
         advertencias    INT,
@@ -133,6 +141,11 @@ proc: BEGIN
        OR CHAR_LENGTH(IFNULL(FN_JsonTexto(p_datos, '$.numeroPropuesta'), '')) > 50 THEN
         SET p_error = 'Algún dato extraído de la OC es demasiado largo (forma de pago, razón social o N° de propuesta).'; LEAVE proc;
     END IF;
+    SET v_tc_txt = FN_JsonTexto(p_datos, '$.tipoCambio');
+    IF v_tc_txt IS NOT NULL AND (v_tc_txt NOT REGEXP '^[0-9]+(\\.[0-9]+)?$' OR CAST(v_tc_txt AS DECIMAL(12,6)) <= 0
+                                 OR CAST(v_tc_txt AS DECIMAL(12,6)) > 100000) THEN
+        SET p_error = 'El tipo de cambio debe ser un número mayor a 0 (soles por 1 unidad de la moneda extranjera).'; LEAVE proc;
+    END IF;
     IF JSON_EXTRACT(p_datos, '$.conceptos') IS NOT NULL AND JSON_TYPE(JSON_EXTRACT(p_datos, '$.conceptos')) NOT IN ('ARRAY', 'NULL') THEN
         SET p_error = 'Los conceptos de la OC deben ser una lista.'; LEAVE proc;
     END IF;
@@ -145,7 +158,7 @@ proc: BEGIN
         SET p_error = 'Una orden de compra admite hasta 20 propuestas vinculadas.'; LEAVE proc;
     END IF;
 
-    CALL SP_CalcularPropuestasDisponiblesOc(p_id_usuario, p_id_cliente, p_excluir_oc);
+    CALL SP_CalcularPropuestasDisponiblesOc(p_id_usuario, p_id_cliente, p_excluir_oc, v_sin_auto);
 
     -- Números de las propuestas vinculadas (la OC puede referenciar cualquiera de ellas)
     SET v_datos = JSON_SET(IFNULL(p_datos, JSON_OBJECT()), '$._propuestasVinculadas',
@@ -192,13 +205,13 @@ proc: BEGIN
             LIMIT 1;
         END IF;
 
-        CALL SP_CompararOcPropuesta(v_id_prop, p_excluir_oc, v_datos, v_asignado, v_eval,
-                                    v_res, v_coinc, v_adv, v_crit, v_tot, v_sug);
+        CALL SP_CompararOcPropuesta(v_id_prop, p_excluir_oc, v_sin_auto, v_datos, v_asignado, v_eval,
+                                    v_res, v_coinc, v_adv, v_crit, v_tot, v_sug, v_cubierto);
 
         SELECT CONCAT(numero, ' v', version) INTO v_numero_prop FROM propuesta_comercial WHERE id_propuesta = v_id_prop;
 
         INSERT INTO tmp_oc_eval
-        SELECT v_i + 1, v_id_prop, v_numero_prop, v_asignado, v_res, v_coinc, v_adv, v_crit, v_tot, v_sug,
+        SELECT v_i + 1, v_id_prop, v_numero_prop, v_asignado, v_cubierto, v_res, v_coinc, v_adv, v_crit, v_tot, v_sug,
                (SELECT JSON_ARRAYAGG(JSON_OBJECT('orden', orden, 'campo', campo, 'etiqueta', etiqueta, 'valorOc', valor_oc,
                                                  'valorPropuesta', valor_propuesta, 'severidad', severidad,
                                                  'mensaje', mensaje, 'accion', accion))
@@ -224,6 +237,10 @@ proc: BEGIN
 
         IF p_decision NOT IN ('validar', 'observar', 'correccion_cliente', 'nueva_version') THEN
             SET p_error = 'Indique qué hacer con la orden de compra: validar, guardar con observaciones, solicitar corrección o generar nueva versión.';
+        -- Moneda distinta sin conversión: no se puede guardar (el saldo de la propuesta quedaría en otra moneda)
+        ELSEIF EXISTS (SELECT 1 FROM tmp_oc_eval e JOIN propuesta_comercial p ON p.id_propuesta = e.id_propuesta
+                       WHERE p.id_moneda <> v_id_moneda AND e.monto_cubierto IS NULL) THEN
+            SET p_error = 'Hay propuestas vinculadas en otra moneda que la OC: indique el tipo de cambio (soles por 1 unidad de la moneda extranjera). Entre dos monedas extranjeras no se puede convertir.';
         ELSEIF p_decision IN ('validar', 'observar', 'nueva_version') AND v_criticas > 0 THEN
             SET p_error = 'Hay diferencias críticas con la propuesta: solo se puede solicitar la corrección al cliente.';
         ELSEIF p_decision = 'nueva_version' AND v_factura = 0 THEN

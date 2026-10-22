@@ -54,7 +54,7 @@ proc: BEGIN
     -- 2. OC
     SELECT oc.id_oc, oc.numero_oc, oc.estado, oc.id_cliente, c.razon_social, c.ruc,
            oc.id_propuesta, oc.ruc_cliente_oc, oc.razon_social_oc, oc.numero_propuesta_ref,
-           oc.id_moneda, oc.monto_total, oc.id_condicion_pago, oc.forma_pago, oc.igv_incluido, oc.igv_pct,
+           oc.id_moneda, oc.monto_total, oc.tipo_cambio, oc.id_condicion_pago, oc.forma_pago, oc.igv_incluido, oc.igv_pct,
            oc.descuento_monto, oc.factura_igual_oc, oc.fecha_oc, oc.fecha_recepcion, oc.vigencia_hasta,
            oc.referencia, oc.observaciones, oc.conceptos, oc.campos_ia, oc.campos_manuales,
            oc.nombre_archivo_pdf, oc.tamano_pdf_bytes, (oc.url_archivo_pdf IS NOT NULL) AS tiene_pdf,
@@ -67,7 +67,7 @@ proc: BEGIN
     WHERE oc.id_oc = p_id_oc;
 
     -- 3. Propuestas vinculadas
-    SELECT op.id_propuesta, p.numero, p.version, p.total, FN_SaldoPropuestaOc(op.id_propuesta, p_id_oc) AS saldo,
+    SELECT op.id_propuesta, p.numero, p.version, p.total, FN_SaldoPropuestaOc(op.id_propuesta, p_id_oc) AS saldo, op.monto_cubierto,
            p.id_moneda, op.monto_asignado, op.estado_validacion, op.tipo_observacion, op.resultado_ia,
            p.id_contacto, ct.nombres AS contacto, p.id_requerimiento, r.numero AS numero_rq,
            op.id_propuesta_nueva_version, nv.numero AS numero_nueva_version, nv.version AS version_nueva_version,
@@ -84,7 +84,7 @@ proc: BEGIN
     ORDER BY op.id;
 
     -- 4. Otras propuestas del mismo cliente con saldo
-    CALL SP_CalcularPropuestasDisponiblesOc(p_id_usuario, v_id_cliente, p_id_oc);
+    CALL SP_CalcularPropuestasDisponiblesOc(p_id_usuario, v_id_cliente, p_id_oc, 0);
     SELECT d.id_propuesta, d.numero, d.version, d.id_requerimiento, d.numero_rq, d.id_contacto, d.contacto,
            d.total, d.saldo, d.id_moneda, d.moneda, d.moneda_simbolo, d.fecha_aceptacion, d.responsable, d.tipo_servicio
     FROM tmp_oc_disp d

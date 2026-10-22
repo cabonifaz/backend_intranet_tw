@@ -122,6 +122,7 @@ proc: BEGIN
                                           igv_incluido),
             igv_pct              = IFNULL(CAST(FN_JsonTexto(p_datos, '$.igvPct') AS DECIMAL(5,2)), igv_pct),
             descuento_monto      = IFNULL(CAST(FN_JsonTexto(p_datos, '$.descuento') AS DECIMAL(14,2)), descuento_monto),
+            tipo_cambio          = IFNULL(CAST(FN_JsonTexto(p_datos, '$.tipoCambio') AS DECIMAL(12,6)), tipo_cambio),
             fecha_oc             = IFNULL(STR_TO_DATE(LEFT(FN_JsonTexto(p_datos, '$.fechaEmision'), 10), '%Y-%m-%d'), fecha_oc),
             vigencia_hasta       = IFNULL(STR_TO_DATE(LEFT(FN_JsonTexto(p_datos, '$.vigenciaHasta'), 10), '%Y-%m-%d'), vigencia_hasta),
             conceptos            = IFNULL(JSON_EXTRACT(p_datos, '$.conceptos'), conceptos),
