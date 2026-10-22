@@ -35,4 +35,35 @@ public class JwtServicio(ConfiguracionJwt config) : IJwtServicio
 
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
+
+    /// <summary>
+    /// JWT de la app móvil (App Mobile HU-01). El claim "canal" = "movil" hace que la validación
+    /// revise la sesión en sesion_usuario (1 equipo a la vez) y no el sesion_token de la intranet.
+    /// </summary>
+    public string GenerarTokenMovil(Usuario usuario, string sesionToken, DateTime expiraUtc)
+    {
+        var clave        = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(config.Secret));
+        var credenciales = new SigningCredentials(clave, SecurityAlgorithms.HmacSha256);
+
+        var claims = new[]
+        {
+            new Claim(JwtRegisteredClaimNames.Sub, usuario.IdUsuario.ToString()),
+            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new Claim("usuario",      usuario.NombreUsuario),
+            new Claim("nombre",       usuario.Nombre),
+            new Claim("apellido",     usuario.Apellido),
+            new Claim("rol",          usuario.RolSistema),
+            new Claim("canal",        "movil"),
+            new Claim("sesion_token", sesionToken),
+        };
+
+        var token = new JwtSecurityToken(
+            issuer:             config.Issuer,
+            audience:           config.Audience,
+            claims:             claims,
+            expires:            expiraUtc,
+            signingCredentials: credenciales);
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
 }

@@ -127,11 +127,37 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                     return;
                 }
 
-                var repositorio = context.HttpContext.RequestServices
-                    .GetRequiredService<IAutenticacionRepositorio>();
-
-                var esValido = await repositorio.VerificarSesionTokenAsync(
-                    idUsuario, tokenClaim.Value, context.HttpContext.RequestAborted);
+                // App móvil (App Mobile HU-01): su sesión vive en sesion_usuario (1 equipo a la vez)
+                // y es independiente de la sesión de la intranet (usuario.sesion_token).
+                var canalClaim = claims?.FirstOrDefault(c => c.Type == "canal");
+                var rutaPedida = context.HttpContext.Request.Path;
+                bool esValido;
+                if (canalClaim?.Value == "movil")
+                {
+                    // Desarrollo seguro: el token de la app solo sirve en las rutas que usa la app.
+                    if (!TW.Intranet.API.Seguridad.SeguridadAppMovil.EsRutaPermitidaTokenMovil(rutaPedida))
+                    {
+                        context.Fail("El token de la app no tiene acceso a este recurso.");
+                        return;
+                    }
+                    var repositorioMovil = context.HttpContext.RequestServices
+                        .GetRequiredService<IAutenticacionMovilRepositorio>();
+                    esValido = await repositorioMovil.VerificarSesionAsync(
+                        idUsuario, tokenClaim.Value, context.HttpContext.RequestAborted);
+                }
+                else if (TW.Intranet.API.Seguridad.SeguridadAppMovil.EsRutaApp(rutaPedida))
+                {
+                    // Un token de la intranet no se usa en api/movil/* (la intranet nunca llama a esas rutas).
+                    context.Fail("Este recurso es solo para la app móvil.");
+                    return;
+                }
+                else
+                {
+                    var repositorio = context.HttpContext.RequestServices
+                        .GetRequiredService<IAutenticacionRepositorio>();
+                    esValido = await repositorio.VerificarSesionTokenAsync(
+                        idUsuario, tokenClaim.Value, context.HttpContext.RequestAborted);
+                }
 
                 if (!esValido)
                     context.Fail("Sesión invalidada. Por favor inicia sesión nuevamente.");
@@ -150,6 +176,35 @@ builder.Services.AddScoped<IVerificadorContrasena,    BcryptVerificadorContrasen
 builder.Services.AddScoped<IniciarSesionCasoDeUso>();
 builder.Services.AddScoped<CambiarContrasenaCasoDeUso>();
 builder.Services.AddScoped<ObtenerMisDatosCasoDeUso>();
+
+// ── APP MÓVIL DE CAMPO — acceso con usuario y 1 equipo a la vez (App Mobile HU-01) ──
+// Variables (opcionales): AppMovil__HorasExpiracion (12), AppMovil__ReemplazarSesionAnterior (false).
+//   false = si el usuario ya tiene sesión en otro equipo, el nuevo ingreso se rechaza.
+//   true  = el nuevo equipo cierra la sesión del anterior.
+builder.Services.AddSingleton(new TW.Intranet.Aplicacion.Dtos.OpcionesSesionMovil(
+    HorasExpiracion:          int.TryParse(cfg["AppMovil:HorasExpiracion"], out var horasSesionMovil) ? horasSesionMovil : 12,
+    ReemplazarSesionAnterior: bool.TryParse(cfg["AppMovil:ReemplazarSesionAnterior"], out var reemplazarSesionMovil) && reemplazarSesionMovil));
+// Desarrollo seguro (opcionales): AppMovil__MaxIntentosFallidos (5), AppMovil__MinutosBloqueo (15),
+// AppMovil__IngresosPorMinutoPorIp (10). Solo afectan al ingreso de la app, no al de la intranet.
+var opcionesSeguridadMovil = new TW.Intranet.Aplicacion.Dtos.OpcionesSeguridadMovil(
+    MaxIntentosFallidos:    int.TryParse(cfg["AppMovil:MaxIntentosFallidos"], out var maxIntentosMovil) ? maxIntentosMovil : 5,
+    MinutosBloqueo:         int.TryParse(cfg["AppMovil:MinutosBloqueo"], out var minutosBloqueoMovil) ? minutosBloqueoMovil : 15,
+    IngresosPorMinutoPorIp: int.TryParse(cfg["AppMovil:IngresosPorMinutoPorIp"], out var ingresosIpMovil) ? ingresosIpMovil : 10);
+builder.Services.AddSingleton(opcionesSeguridadMovil);
+builder.Services.AddSingleton<IControlIntentosIngreso, ControlIntentosIngresoMemoria>();
+TW.Intranet.API.Seguridad.SeguridadAppMovil.AgregarSeguridadAppMovil(builder.Services, opcionesSeguridadMovil);
+builder.Services.AddScoped<IAutenticacionMovilRepositorio, AutenticacionMovilRepositorio>();
+builder.Services.AddScoped<IniciarSesionMovilCasoDeUso>();
+builder.Services.AddScoped<CerrarSesionMovilCasoDeUso>();
+builder.Services.AddScoped<LiberarSesionMovilCasoDeUso>();
+builder.Services.AddScoped<AsignarAccesoMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerAccesoMovilCasoDeUso>();
+// App Mobile HU-02 — menú principal
+builder.Services.AddScoped<IMenuMovilRepositorio, MenuMovilRepositorio>();
+builder.Services.AddScoped<ObtenerResumenMenuMovilCasoDeUso>();
+// App Mobile HU-03 — agenda de servicios programados
+builder.Services.AddScoped<IServiciosMovilRepositorio, ServiciosMovilRepositorio>();
+builder.Services.AddScoped<ObtenerServiciosProgramadosMovilCasoDeUso>();
 
 // ── INYECCIÓN DE DEPENDENCIAS — Dashboard ─────────────────────────────────────
 builder.Services.AddScoped<IDashboardRepositorio,       DashboardRepositorio>();
@@ -510,6 +565,10 @@ if (!app.Environment.IsProduction())
 
 app.UseHttpsRedirection();
 app.UseCors("PoliticaCors");
+// App móvil — desarrollo seguro: cabeceras en api/movil/* y límite de ingresos por IP
+// (solo en los endpoints marcados con [EnableRateLimiting]; la intranet no cambia).
+TW.Intranet.API.Seguridad.SeguridadAppMovil.UsarCabecerasSeguridadAppMovil(app);
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
