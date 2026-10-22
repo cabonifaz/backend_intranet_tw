@@ -207,6 +207,7 @@ proc: BEGIN
         SET reemplazada_por = v_id_oc, fecha_reemplazo = NOW(), modificado_por = p_id_usuario,
             eliminado_en = IF(v_estado_reemp = 'autogenerada', NOW(), eliminado_en)
         WHERE id_oc = p_id_oc_reemplaza;
+        CALL SP_SincronizarBloqueosOrdenCompra(p_id_oc_reemplaza, p_id_usuario);
         INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion,
                                       id_usuario, registrado_en, metadata)
         VALUES ('orden_compra', p_id_oc_reemplaza,

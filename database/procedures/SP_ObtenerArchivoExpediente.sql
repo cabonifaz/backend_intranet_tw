@@ -1,7 +1,8 @@
 -- HU-31 Archivo de un documento del expediente para verlo o descargarlo.
 -- Acción expediente_bandeja y que el usuario pueda ver el documento (misma regla del repositorio).
 -- Cada descarga queda registrada en descarga_documento (trazabilidad ISO 9001).
--- Resultados: 1 mensaje · 2 ruta (o id_propuesta si es el PDF de una propuesta, que se genera), nombre y tipo
+-- Resultados: 1 mensaje · 2 ruta (o id_propuesta si es el PDF de una propuesta, que se genera; o los datos del correo de
+--   seguimiento, que se arma como .eml), nombre y tipo
 DROP PROCEDURE IF EXISTS SP_ObtenerArchivoExpediente;
 
 DELIMITER $$
@@ -16,6 +17,7 @@ proc: BEGIN
     DECLARE v_nombre  VARCHAR(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_tipo    VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_id_prop BIGINT;
+    DECLARE v_id_mail BIGINT;
     DECLARE v_existe  INT DEFAULT 0;
 
     IF FN_PermisoAccion(p_id_usuario, 'expediente_bandeja') = 0 THEN
@@ -29,8 +31,8 @@ proc: BEGIN
     END IF;
 
     CALL SP_CargarDocumentosExpediente(p_id_usuario, p_id_expediente);
-    SELECT COUNT(*), MAX(ruta), MAX(nombre_archivo), MAX(tipo_contenido), MAX(id_propuesta)
-      INTO v_existe, v_ruta, v_nombre, v_tipo, v_id_prop
+    SELECT COUNT(*), MAX(ruta), MAX(nombre_archivo), MAX(tipo_contenido), MAX(id_propuesta), MAX(id_correo)
+      INTO v_existe, v_ruta, v_nombre, v_tipo, v_id_prop, v_id_mail
     FROM tmp_exp_doc WHERE clave = p_clave;
     DROP TEMPORARY TABLE IF EXISTS tmp_exp_doc;
 
@@ -38,16 +40,21 @@ proc: BEGIN
         SELECT 1 AS IdTipoMensaje, 'El documento no existe en este expediente o no tienes acceso a él.' AS Mensaje;
         LEAVE proc;
     END IF;
-    IF v_ruta IS NULL AND v_id_prop IS NULL THEN
+    IF v_ruta IS NULL AND v_id_prop IS NULL AND v_id_mail IS NULL THEN
         SELECT 1 AS IdTipoMensaje, 'El documento no tiene un archivo adjunto.' AS Mensaje;
         LEAVE proc;
     END IF;
 
     INSERT INTO descarga_documento (id_usuario, entidad_tipo, id_entidad, url_archivo, canal, registrado_en)
-    VALUES (p_id_usuario, 'expediente', p_id_expediente, IFNULL(v_ruta, CONCAT('propuesta:', v_id_prop)), 'intranet', NOW());
+    VALUES (p_id_usuario, 'expediente', p_id_expediente, COALESCE(v_ruta, CONCAT('propuesta:', v_id_prop), CONCAT('correo:', v_id_mail)), 'intranet', NOW());
 
     SELECT 2 AS IdTipoMensaje, 'Éxito.' AS Mensaje;
-    SELECT v_ruta AS ruta, v_nombre AS nombre_archivo, v_tipo AS tipo_contenido, v_id_prop AS id_propuesta;
+    SELECT v_ruta AS ruta, v_nombre AS nombre_archivo, v_tipo AS tipo_contenido, v_id_prop AS id_propuesta,
+           v_id_mail AS id_correo, sc.asunto AS correo_asunto, CAST(sc.para AS CHAR) AS correo_para, CAST(sc.cc AS CHAR) AS correo_cc,
+           sc.cuerpo_html AS correo_cuerpo, sc.fecha_envio AS correo_fecha,
+           (SELECT u.correo FROM usuario u WHERE u.id_usuario = sc.id_usuario) AS correo_remitente
+    FROM (SELECT 1) d
+    LEFT JOIN seguimiento_correo sc ON sc.id_correo = v_id_mail;
 END$$
 
 DELIMITER ;

@@ -153,14 +153,17 @@ proc: BEGIN
     END LOOP;
     CLOSE cur_auto;
 
-    -- Expedientes que pasaron a Programación por esta OC, sin OS y sin otra OC válida: vuelven a la etapa de OC
+    -- Bloqueos y excepciones que dejó esta OC en los expedientes: se resuelven (OC anulada)
+    CALL SP_SincronizarBloqueosOrdenCompra(p_id_oc, p_id_usuario);
+
+    -- Expedientes que pasaron a Orden de Servicio por esta OC, sin OS y sin otra OC válida: vuelven a la etapa de OC
     DROP TEMPORARY TABLE IF EXISTS tmp_oc_anu_exp;
     CREATE TEMPORARY TABLE tmp_oc_anu_exp AS
     SELECT DISTINCT e.id_expediente, op.id_propuesta
     FROM oc_propuesta op
     JOIN expediente_digital e ON e.id_expediente = FN_ExpedienteDePropuesta(op.id_propuesta)
     WHERE op.id_oc = p_id_oc AND op.eliminado_en IS NULL
-      AND e.eliminado_en IS NULL AND e.etapa_actual = 'programacion'
+      AND e.eliminado_en IS NULL AND e.etapa_actual IN ('orden_servicio', 'programacion')
       AND NOT EXISTS (SELECT 1 FROM orden_servicio os WHERE os.id_expediente = e.id_expediente
                         AND os.eliminado_en IS NULL AND os.estado <> 'anulada')
       AND NOT EXISTS (SELECT 1 FROM oc_propuesta o2
@@ -186,7 +189,7 @@ proc: BEGIN
 
         INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion,
                                       id_usuario, registrado_en, metadata)
-        SELECT 'expediente', t.id_expediente, 'volver_orden_compra', 'programacion', 'orden_compra',
+        SELECT 'expediente', t.id_expediente, 'volver_orden_compra', 'orden_servicio', 'orden_compra',
                CONCAT('El expediente vuelve a la etapa Orden de Compra por la anulación de la OC ', v_numero, '.'),
                p_id_usuario, NOW(), JSON_OBJECT('id_oc', p_id_oc)
         FROM tmp_oc_anu_exp t;

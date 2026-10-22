@@ -1,4 +1,4 @@
--- HU-30 Exportación del expediente completo (estructura y documentos en un ZIP).
+-- HU-30 Exportar Expediente Completo (estructura y documentos en un ZIP).
 -- Acción expediente_bandeja. Devuelve los documentos descargables que el usuario puede ver, con su carpeta
 -- (categoría) y la ruta interna o el id de la propuesta (su PDF se genera). Registra la exportación en la auditoría.
 -- Resultados: 1 mensaje · 2 archivos
@@ -28,10 +28,13 @@ proc: BEGIN
 
     SELECT 2 AS IdTipoMensaje, 'Éxito.' AS Mensaje;
     SELECT d.clave, d.categoria, IFNULL(c.String1, d.categoria) AS carpeta, d.nombre_archivo, d.version, d.estado,
-           d.ruta, d.id_propuesta
+           d.ruta, d.id_propuesta, d.id_correo, sc.asunto AS correo_asunto, CAST(sc.para AS CHAR) AS correo_para,
+           CAST(sc.cc AS CHAR) AS correo_cc, sc.cuerpo_html AS correo_cuerpo, sc.fecha_envio AS correo_fecha,
+           (SELECT u.correo FROM usuario u WHERE u.id_usuario = sc.id_usuario) AS correo_remitente
     FROM tmp_exp_doc d
     LEFT JOIN tabla_maestra c ON c.IdMaestro = 101 AND c.IdEmpresa = 1 AND c.String2 = d.categoria
-    WHERE d.ruta IS NOT NULL OR d.id_propuesta IS NOT NULL
+    LEFT JOIN seguimiento_correo sc ON sc.id_correo = d.id_correo
+    WHERE d.ruta IS NOT NULL OR d.id_propuesta IS NOT NULL OR d.id_correo IS NOT NULL
     ORDER BY d.categoria, d.fecha;
 
     DROP TEMPORARY TABLE IF EXISTS tmp_exp_doc;

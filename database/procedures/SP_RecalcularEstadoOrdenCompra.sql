@@ -7,7 +7,8 @@
 --   validada             todas las vinculaciones validadas
 --   validada_parcial     al menos una vinculación validada y al menos una pendiente u observada
 --   observada            ninguna validada: diferencias aceptadas por TW ("Guardar con observaciones") o nueva versión
--- Si el estado cambia, lo registra en la auditoría (cambio_estado_oc).
+-- Si el estado cambia, lo registra en la auditoría (cambio_estado_oc). Al final sincroniza los bloqueos del expediente
+-- (SP_SincronizarBloqueosOrdenCompra).
 DROP PROCEDURE IF EXISTS SP_RecalcularEstadoOrdenCompra;
 
 DELIMITER $$
@@ -28,6 +29,7 @@ proc: BEGIN
     FROM orden_compra WHERE id_oc = p_id_oc AND eliminado_en IS NULL;
 
     IF v_estado IS NULL OR v_estado = 'anulada' THEN
+        CALL SP_SincronizarBloqueosOrdenCompra(p_id_oc, p_id_usuario);
         LEAVE proc;
     END IF;
 
@@ -53,6 +55,9 @@ proc: BEGIN
                 CONCAT('La orden de compra pasó de ', UPPER(REPLACE(v_estado, '_', ' ')), ' a ', UPPER(REPLACE(v_nuevo, '_', ' ')), '.'),
                 p_id_usuario, NOW());
     END IF;
+
+    -- Bloqueos y excepciones del expediente por la OC observada (HU-32)
+    CALL SP_SincronizarBloqueosOrdenCompra(p_id_oc, p_id_usuario);
 END$$
 
 DELIMITER ;

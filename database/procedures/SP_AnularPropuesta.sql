@@ -93,7 +93,7 @@ proc: BEGIN
     WHERE op.eliminado_en IS NULL AND op.id_propuesta <> p_id_propuesta;
 
     -- Expediente del RQ (nace con el RQ, migración 71)
-    SELECT MAX(e.id_expediente), MAX(e.etapa_actual NOT IN ('requerimiento', 'propuesta', 'visto_bueno', 'orden_compra'))
+    SELECT MAX(e.id_expediente), MAX(e.etapa_actual NOT IN ('requerimiento', 'propuesta', 'visto_bueno', 'seguimiento', 'orden_compra'))
       INTO v_id_exp, v_exp_liberado
     FROM expediente_digital e
     WHERE e.eliminado_en IS NULL AND e.estado <> 'cerrado'

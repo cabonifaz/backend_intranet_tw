@@ -413,26 +413,33 @@ else
     builder.Services.AddSingleton<IAsistenteIaOrdenCompra, AsistenteIaOrdenCompraNoConfigurado>();
 }
 
-// ── INYECCIÓN DE DEPENDENCIAS — Expediente Digital (HU-29 a HU-34) ───────────
+// ── INYECCIÓN DE DEPENDENCIAS — Expediente Digital (Sprint 4, HU-29 a HU-33) ───
 builder.Services.AddScoped<IExpedienteRepositorio, ExpedienteRepositorio>();
+builder.Services.AddSingleton<IGeneradorPdfTabla, GeneradorPdfTablaQuestPdf>();
 builder.Services.AddScoped<ObtenerBandejaExpedientesCasoDeUso>();
+builder.Services.AddScoped<ExportarBandejaExpedientesCasoDeUso>();
 builder.Services.AddScoped<ObtenerDetalleExpedienteCasoDeUso>();
-builder.Services.AddScoped<ObtenerWorkflowExpedienteCasoDeUso>();
-builder.Services.AddScoped<ExportarWorkflowExpedienteCasoDeUso>();
+builder.Services.AddScoped<ObtenerTabRqExpedienteCasoDeUso>();
+builder.Services.AddScoped<ObtenerTabPropuestasExpedienteCasoDeUso>();
+builder.Services.AddScoped<CompararVersionesExpedienteCasoDeUso>();
+builder.Services.AddScoped<ObtenerTabVistoBuenoExpedienteCasoDeUso>();
+builder.Services.AddScoped<ObtenerTabSeguimientoExpedienteCasoDeUso>();
+builder.Services.AddScoped<ObtenerTabOrdenesCompraExpedienteCasoDeUso>();
+builder.Services.AddScoped<ObtenerTabOrdenServicioExpedienteCasoDeUso>();
+builder.Services.AddScoped<ObtenerTabProgramacionExpedienteCasoDeUso>();
+builder.Services.AddScoped<ObtenerTabSsomaExpedienteCasoDeUso>();
+builder.Services.AddScoped<ObtenerTabEjecucionExpedienteCasoDeUso>();
+builder.Services.AddScoped<ObtenerTabCierreExpedienteCasoDeUso>();
 builder.Services.AddScoped<ExportarExpedienteCasoDeUso>();
 builder.Services.AddScoped<ObtenerDocumentosExpedienteCasoDeUso>();
+builder.Services.AddScoped<ExportarDocumentosExpedienteCasoDeUso>();
 builder.Services.AddScoped<ObtenerArchivoExpedienteCasoDeUso>();
-builder.Services.AddScoped<AdjuntarDocumentoExpedienteCasoDeUso>();
-builder.Services.AddScoped<RegistrarBloqueoExpedienteCasoDeUso>();
-builder.Services.AddScoped<PrepararResolucionBloqueoCasoDeUso>();
-builder.Services.AddScoped<ResolverBloqueoExpedienteCasoDeUso>();
 builder.Services.AddScoped<ObtenerHistorialExpedienteCasoDeUso>();
 builder.Services.AddScoped<ExportarHistorialExpedienteCasoDeUso>();
 builder.Services.AddScoped<PrepararReasignacionExpedienteCasoDeUso>();
+builder.Services.AddScoped<ObtenerCarteraComercialExpedienteCasoDeUso>();
 builder.Services.AddScoped<BuscarResponsablesExpedienteCasoDeUso>();
 builder.Services.AddScoped<ReasignarResponsableExpedienteCasoDeUso>();
-builder.Services.AddScoped<PrepararAvanceExpedienteCasoDeUso>();
-builder.Services.AddScoped<AvanzarEtapaExpedienteCasoDeUso>();
 
 // ── INYECCIÓN DE DEPENDENCIAS — Seguimiento comercial (HU-17 / HU-18 / HU-19 / HU-20 / HU-21) ────────────────
 builder.Services.AddScoped<ISeguimientoComercialRepositorio, SeguimientoComercialRepositorio>();
