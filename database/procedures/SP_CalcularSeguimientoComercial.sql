@@ -88,7 +88,7 @@ BEGIN
         -- OC con la vinculación de esta propuesta aún sin validar (observada o pendiente)
         (SELECT COUNT(*) FROM orden_compra oc
          JOIN oc_propuesta op ON op.id_oc = oc.id_oc AND op.id_propuesta = p.id_propuesta AND op.eliminado_en IS NULL
-         WHERE oc.eliminado_en IS NULL AND oc.estado NOT IN ('anulada', 'recibida')
+         WHERE oc.eliminado_en IS NULL AND oc.estado NOT IN ('anulada', 'autogenerada') AND oc.reemplazada_por IS NULL
            AND op.estado_validacion <> 'validada')                                  AS oc_por_validar,
         (SELECT MAX(r.id_reprogramacion) FROM seguimiento_reprogramacion r
          WHERE r.id_propuesta = p.id_propuesta AND r.id_seguimiento IS NULL

@@ -116,16 +116,17 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
                 p.AddWithValue("p_busqueda",       Valor(f.Busqueda));
                 p.AddWithValue("p_pagina",         f.Pagina);
                 p.AddWithValue("p_por_pagina",     f.PorPagina);
+                p.AddWithValue("p_incluir_reemplazadas", Bit(f.IncluirReemplazadas));
             },
             async (r, mensaje) =>
             {
                 await r.NextResultAsync(ct);
-                var tarjetas = new TarjetasOrdenesCompraDto(0, 0, 0, 0, 0, 0, 0, 0, 0);
+                var tarjetas = new TarjetasOrdenesCompraDto(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
                 if (await r.ReadAsync(ct))
                     tarjetas = new TarjetasOrdenesCompraDto(
                         Ent(r, "total"), Ent(r, "registradas_mes"), Ent(r, "validadas"), Ent(r, "validadas_parcial"),
                         Ent(r, "observadas"), Ent(r, "parcial_u_observadas"), Ent(r, "autogeneradas_pendientes"),
-                        Ent(r, "sin_asignar"), Ent(r, "anuladas"));
+                        Ent(r, "pendientes_reemplazo"), Ent(r, "sin_asignar"), Ent(r, "anuladas"));
 
                 await r.NextResultAsync(ct);
                 var montos = new List<MontoMonedaDto>();
@@ -147,7 +148,7 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
                         Dec(r, "monto_oc"), Dec(r, "monto_asignado"), Dec(r, "saldo_oc"), Dec(r, "asignado_pct"),
                         Texto(r, "estado") ?? "", Texto(r, "estado_visual") ?? "", Texto(r, "resultado_ia"), Ent(r, "alertas_ia"),
                         EnteroLargoNulo(r, "id_responsable"), Texto(r, "responsable"),
-                        Booleano(r, "tiene_pdf"), Texto(r, "url_pdf"), Booleano(r, "puede_anular")));
+                        Booleano(r, "tiene_pdf"), Texto(r, "url_pdf"), Booleano(r, "puede_anular"), Booleano(r, "puede_reemplazar")));
 
                 var total        = await LeerTotalAsync(r, ct);
                 var clientes     = await LeerOpcionesAsync(r, ct);
@@ -242,6 +243,7 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
                     PuedeRevalidar          = Booleano(r, "puede_revalidar"),
                     PuedeAnular             = Booleano(r, "puede_anular"),
                     PuedeReemplazarAuto     = Booleano(r, "puede_reemplazar_auto"),
+                    PuedeReemplazar         = Booleano(r, "puede_reemplazar"),
                 };
 
                 await r.NextResultAsync(ct);
@@ -472,7 +474,7 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
                 OcAReemplazarDto? auto = null;
                 if (await r.ReadAsync(ct))
                     auto = new OcAReemplazarDto(EnteroLargo(r, "id_oc"), Texto(r, "numero_oc") ?? "", Dec(r, "monto_total"),
-                                                FechaHora(r, "fecha_registro"));
+                                                FechaHora(r, "fecha_registro"), Booleano(r, "es_autogenerada"), Texto(r, "estado") ?? "");
 
                 await r.NextResultAsync(ct);
                 var otras = new List<PropuestaDisponibleOcDto>();
@@ -798,7 +800,8 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
                 var props = new List<PropuestaAfectadaOcDto>();
                 while (await r.ReadAsync(ct))
                     props.Add(new PropuestaAfectadaOcDto(EnteroLargo(r, "id_propuesta"), Texto(r, "numero") ?? "", Ent(r, "version"),
-                        Dec(r, "monto_asignado"), Texto(r, "estado_validacion"), Dec(r, "saldo_actual"), Dec(r, "saldo_despues")));
+                        Dec(r, "monto_asignado"), Texto(r, "estado_validacion"), Dec(r, "saldo_actual"), Dec(r, "saldo_despues"),
+                        Booleano(r, "generara_oc_autogenerada")));
 
                 await r.NextResultAsync(ct);
                 var os = new List<OsEnEjecucionDto>();
@@ -837,7 +840,8 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
                 var props = new List<PropuestaSaldoOcDto>();
                 while (await r.ReadAsync(ct))
                     props.Add(new PropuestaSaldoOcDto(EnteroLargo(r, "id_propuesta"), Texto(r, "numero") ?? "", Ent(r, "version"),
-                        Dec(r, "monto_asignado"), Dec(r, "saldo")));
+                        Dec(r, "monto_asignado"), Dec(r, "saldo"),
+                        EnteroLargoNulo(r, "id_oc_autogenerada"), Texto(r, "numero_oc_autogenerada")));
 
                 return new RespuestaDto<AnulacionOrdenCompraDto>(2, mensaje,
                     new AnulacionOrdenCompraDto(idOcLeido, numero, estado, fecha, motivo, just, props));

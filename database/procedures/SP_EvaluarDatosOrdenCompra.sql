@@ -6,7 +6,8 @@
 -- p_datos: numeroOc, fechaEmision, fechaRecepcion, idMoneda, montoTotal, idCondicionPago, formaPago, igvIncluido,
 --   igvPct, descuento, ruc, razonSocial, numeroPropuesta, vigenciaHasta, referencia, observaciones,
 --   facturaIgualOc, conceptos [...]
--- p_vinculaciones: [{idPropuesta, montoAsignado}] (al menos una; la primera es la propuesta de origen)
+-- p_vinculaciones: [{idPropuesta, montoAsignado}] (al menos una; la primera es la propuesta de origen).
+--   Sin p_decision (validación en vivo) se acepta monto 0; al registrar o editar debe ser mayor a 0.
 -- p_evaluaciones_ia: [{idPropuesta, conceptos, dictamen, insights, confianza, motor}] (opcional)
 -- p_decision (opcional, valida que se pueda tomar):
 --   validar             sin diferencias críticas
@@ -94,7 +95,8 @@ proc: BEGIN
     END IF;
     IF EXISTS (SELECT 1 FROM orden_compra
                WHERE id_cliente = p_id_cliente AND numero_oc = v_numero_oc AND estado <> 'anulada'
-                 AND eliminado_en IS NULL AND id_oc <> IFNULL(p_id_oc, 0)) THEN
+                 AND eliminado_en IS NULL AND reemplazada_por IS NULL
+                 AND id_oc <> IFNULL(p_id_oc, 0) AND id_oc <> IFNULL(p_excluir_oc, 0)) THEN
         SET p_error = CONCAT('Ya existe la orden de compra ', v_numero_oc, ' registrada para este cliente.'); LEAVE proc;
     END IF;
     IF v_fecha_emi IS NULL OR v_fecha_emi > CURDATE() THEN
@@ -168,14 +170,18 @@ proc: BEGIN
             SET p_error = CONCAT('La propuesta ',
                                  IFNULL((SELECT CONCAT(numero, ' v', version) FROM propuesta_comercial WHERE id_propuesta = v_id_prop), v_id_prop),
                                  ' no está aceptada por el cliente, es de otro cliente o ya está cubierta por órdenes de compra.');
-        ELSEIF v_asignado IS NULL OR v_asignado <= 0 THEN
+        -- En la validación en vivo (sin decisión) el monto 0 es válido: el comercial aún lo está repartiendo
+        ELSEIF p_decision IS NOT NULL AND (v_asignado IS NULL OR v_asignado <= 0) THEN
             SET p_error = 'Indique el monto asignado a cada propuesta vinculada (mayor a 0).';
+        ELSEIF v_asignado < 0 THEN
+            SET p_error = 'El monto asignado a una propuesta no puede ser negativo.';
         END IF;
         IF p_error IS NOT NULL THEN
             DROP TEMPORARY TABLE IF EXISTS tmp_oc_disp;
             LEAVE proc;
         END IF;
 
+        SET v_asignado = IFNULL(v_asignado, 0);
         SET v_suma = v_suma + v_asignado;
 
         SET v_eval = NULL;

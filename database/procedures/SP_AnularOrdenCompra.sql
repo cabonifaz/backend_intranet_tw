@@ -6,8 +6,11 @@
 --   deja de contar en la cobertura de todas las propuestas vinculadas (FN_SaldoPropuestaOc recalcula los saldos), así una
 --   propuesta que quedaba cerrada solo por esta OC vuelve a ACEPTADA con saldo por cubrir. Los expedientes que pasaron a
 --   Programación por esta OC y aún no tienen OS ni otra OC válida vuelven a la etapa Orden de Compra.
+--   Toda propuesta ACEPTADA debe tener una OC vigente: si al anular una propuesta aceptada (última versión) queda sin
+--   ninguna OC, se genera automáticamente una OC autogenerada nueva por su saldo (SP_CrearOcAutogenerada).
+--   La OC autogenerada no se anula aquí: se reemplaza por la OC del cliente o se anula junto con la propuesta.
 --   Timeline con usuario, motivo y justificación; notificación a Operaciones, Contabilidad y responsables comerciales.
--- Resultados: 1 mensaje, 2 OC anulada, 3 propuestas afectadas con su saldo.
+-- Resultados: 1 mensaje, 2 OC anulada, 3 propuestas afectadas con su saldo y la OC autogenerada creada (si aplica).
 DROP PROCEDURE IF EXISTS SP_AnularOrdenCompraInterno;
 
 DELIMITER $$
@@ -29,12 +32,22 @@ proc: BEGIN
     DECLARE v_os       INT DEFAULT 0;
     DECLARE v_usuario  VARCHAR(220) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_revert   INT DEFAULT 0;
+    DECLARE v_auto     TINYINT DEFAULT 0;
+    DECLARE v_autos    INT DEFAULT 0;
+    DECLARE v_id_prop  BIGINT;
+    DECLARE v_saldo    DECIMAL(14,2);
+    DECLARE v_id_auto  BIGINT;
+    DECLARE v_num_auto VARCHAR(50);
+    DECLARE v_fin      INT DEFAULT 0;
+    DECLARE cur_auto CURSOR FOR SELECT id_propuesta FROM tmp_oc_anu_auto ORDER BY id_propuesta;
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET v_fin = 1;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
         ROLLBACK;
         DROP TEMPORARY TABLE IF EXISTS tmp_oc;
         DROP TEMPORARY TABLE IF EXISTS tmp_oc_anu_exp;
+        DROP TEMPORARY TABLE IF EXISTS tmp_oc_anu_auto;
         GET DIAGNOSTICS CONDITION 1 @err_msg = MESSAGE_TEXT, @err_code = MYSQL_ERRNO;
         SELECT 3 AS IdTipoMensaje, CONCAT('[MySQL ', @err_code, '] ', @err_msg) AS Mensaje;
     END;
@@ -45,7 +58,8 @@ proc: BEGIN
     END IF;
 
     CALL SP_CalcularOrdenesCompra(p_id_usuario, p_id_oc);
-    SELECT COUNT(*), MAX(estado), MAX(reemplazada_por), MAX(numero_oc) INTO v_existe, v_estado, v_reemp, v_numero FROM tmp_oc;
+    SELECT COUNT(*), MAX(estado), MAX(reemplazada_por), MAX(numero_oc), MAX(es_autogenerada)
+      INTO v_existe, v_estado, v_reemp, v_numero, v_auto FROM tmp_oc;
     DROP TEMPORARY TABLE IF EXISTS tmp_oc;
 
     IF v_existe = 0 THEN
@@ -55,7 +69,12 @@ proc: BEGIN
         SELECT 1 AS IdTipoMensaje, 'La orden de compra ya está anulada.' AS Mensaje; LEAVE proc;
     END IF;
     IF v_reemp IS NOT NULL THEN
-        SELECT 1 AS IdTipoMensaje, 'La OC autogenerada ya fue reemplazada por la OC del cliente.' AS Mensaje; LEAVE proc;
+        SELECT 1 AS IdTipoMensaje, 'La orden de compra ya fue reemplazada por la OC del cliente.' AS Mensaje; LEAVE proc;
+    END IF;
+    IF v_auto = 1 THEN
+        SELECT 1 AS IdTipoMensaje,
+               'La OC autogenerada no se anula: reemplázala por la OC del cliente o anula la propuesta.' AS Mensaje;
+        LEAVE proc;
     END IF;
 
     SELECT MAX(String1) INTO v_motivo FROM tabla_maestra
@@ -99,6 +118,40 @@ proc: BEGIN
                    IF(v_os > 0, CONCAT(' (con ', v_os, ' OS en ejecución, impacto confirmado)'), '')),
             p_id_usuario, NOW(),
             JSON_OBJECT('id_motivo', p_id_motivo, 'motivo', v_motivo, 'justificacion', v_just, 'os_en_ejecucion', v_os));
+
+    -- Propuestas aceptadas que quedan sin ninguna OC vigente: se les genera una OC autogenerada nueva
+    DROP TEMPORARY TABLE IF EXISTS tmp_oc_anu_auto;
+    CREATE TEMPORARY TABLE tmp_oc_anu_auto (id_propuesta BIGINT PRIMARY KEY, id_oc_auto BIGINT, numero_oc_auto VARCHAR(50));
+    INSERT INTO tmp_oc_anu_auto (id_propuesta)
+    SELECT DISTINCT op.id_propuesta
+    FROM oc_propuesta op
+    JOIN propuesta_comercial p ON p.id_propuesta = op.id_propuesta
+    WHERE op.id_oc = p_id_oc AND op.eliminado_en IS NULL
+      AND p.eliminado_en IS NULL AND p.estado = 'aceptado'
+      AND NOT EXISTS (SELECT 1 FROM propuesta_comercial pn
+                      WHERE pn.numero = p.numero AND pn.version > p.version AND pn.eliminado_en IS NULL
+                        AND pn.estado NOT IN ('anulado', 'revocada'))
+      AND NOT EXISTS (SELECT 1 FROM oc_propuesta o2
+                      JOIN orden_compra c2 ON c2.id_oc = o2.id_oc
+                      WHERE o2.id_propuesta = op.id_propuesta AND o2.eliminado_en IS NULL AND o2.id_oc <> p_id_oc
+                        AND c2.eliminado_en IS NULL AND c2.estado <> 'anulada' AND c2.reemplazada_por IS NULL);
+
+    SET v_fin = 0;
+    OPEN cur_auto;
+    bucle_auto: LOOP
+        FETCH cur_auto INTO v_id_prop;
+        IF v_fin = 1 THEN LEAVE bucle_auto; END IF;
+        SET v_saldo = FN_SaldoPropuestaOc(v_id_prop, NULL);
+        IF v_saldo > 0 THEN
+            CALL SP_CrearOcAutogenerada(v_id_prop, v_saldo,
+                                        CONCAT('OC provisional generada al anular la OC ', v_numero,
+                                               ' para mantener la cobertura de la propuesta aceptada.'),
+                                        p_id_usuario, v_id_auto, v_num_auto);
+            UPDATE tmp_oc_anu_auto SET id_oc_auto = v_id_auto, numero_oc_auto = v_num_auto WHERE id_propuesta = v_id_prop;
+            SET v_autos = v_autos + 1;
+        END IF;
+    END LOOP;
+    CLOSE cur_auto;
 
     -- Expedientes que pasaron a Programación por esta OC, sin OS y sin otra OC válida: vuelven a la etapa de OC
     DROP TEMPORARY TABLE IF EXISTS tmp_oc_anu_exp;
@@ -158,15 +211,23 @@ proc: BEGIN
 
     SELECT 2 AS IdTipoMensaje,
            CONCAT('Orden de compra ', v_numero, ' anulada. Se recalcularon los saldos de las propuestas vinculadas',
-                  IF(v_revert > 0, CONCAT(' y ', v_revert, ' expediente(s) volvieron a la etapa Orden de Compra'), ''), '.') AS Mensaje;
+                  IF(v_revert > 0, CONCAT(' y ', v_revert, ' expediente(s) volvieron a la etapa Orden de Compra'), ''), '.',
+                  IF(v_autos > 0, CONCAT(' Se generó la OC provisional ',
+                                         (SELECT GROUP_CONCAT(numero_oc_auto ORDER BY id_propuesta SEPARATOR ', ')
+                                          FROM tmp_oc_anu_auto WHERE id_oc_auto IS NOT NULL),
+                                         ' para mantener la cobertura de la propuesta aceptada.'), '')) AS Mensaje;
 
     SELECT oc.id_oc, oc.numero_oc, oc.estado, oc.fecha_anulacion, v_motivo AS motivo, oc.justificacion_anulacion
     FROM orden_compra oc WHERE oc.id_oc = p_id_oc;
 
-    SELECT op.id_propuesta, p.numero, p.version, op.monto_asignado, FN_SaldoPropuestaOc(op.id_propuesta, NULL) AS saldo
+    SELECT op.id_propuesta, p.numero, p.version, op.monto_asignado, FN_SaldoPropuestaOc(op.id_propuesta, NULL) AS saldo,
+           a.id_oc_auto AS id_oc_autogenerada, a.numero_oc_auto AS numero_oc_autogenerada
     FROM oc_propuesta op JOIN propuesta_comercial p ON p.id_propuesta = op.id_propuesta
+    LEFT JOIN tmp_oc_anu_auto a ON a.id_propuesta = op.id_propuesta
     WHERE op.id_oc = p_id_oc AND op.eliminado_en IS NULL
     ORDER BY op.id;
+
+    DROP TEMPORARY TABLE IF EXISTS tmp_oc_anu_auto;
 END$$
 
 DELIMITER ;

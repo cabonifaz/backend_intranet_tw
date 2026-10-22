@@ -53,6 +53,10 @@ proc: BEGIN
     IF v_estado = 'anulada' THEN
         SELECT 1 AS IdTipoMensaje, 'La orden de compra está anulada.' AS Mensaje; LEAVE proc;
     END IF;
+    IF EXISTS (SELECT 1 FROM orden_compra WHERE id_oc = p_id_oc AND reemplazada_por IS NOT NULL) THEN
+        SELECT 1 AS IdTipoMensaje, 'La orden de compra fue reemplazada por otra OC del cliente: es de solo lectura.' AS Mensaje;
+        LEAVE proc;
+    END IF;
     IF v_auto = 1 THEN
         SELECT 1 AS IdTipoMensaje, 'La OC autogenerada no se valida: reemplázala por la OC del cliente.' AS Mensaje; LEAVE proc;
     END IF;

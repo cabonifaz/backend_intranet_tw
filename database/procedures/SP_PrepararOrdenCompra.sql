@@ -1,10 +1,12 @@
 -- HU-23 (Sprint 4) Datos de la ficha "Registrar Orden de Compra".
 -- La propuesta de origen debe estar ACEPTADA por el cliente, ser del área del usuario y tener saldo por cubrir.
--- p_id_oc_reemplaza (HU-27): OC autogenerada que se reemplazará por la OC del cliente; su vinculación se conserva.
+-- p_id_oc_reemplaza: OC que se reemplazará por la OC del cliente: una OC autogenerada o una OC en estado
+--   PENDIENTE_REEMPLAZO (se pidió la corrección al cliente). Debe estar vinculada a la propuesta, no anulada ni ya
+--   reemplazada. Su asignación no descuenta el saldo de la propuesta.
 -- Resultados:
 --   1 mensaje
 --   2 propuesta de origen (cliente, RQ, contacto, total, saldo, moneda, condición de pago, IGV, vencimiento)
---   3 OC autogenerada a reemplazar (vacío si no aplica)
+--   3 OC a reemplazar (vacío si no aplica): id_oc, numero_oc, monto_total, fecha_registro, es_autogenerada, estado
 --   4 otras propuestas aceptadas del mismo cliente con saldo ("Agregar propuesta vinculada")
 --   5 monedas   6 condiciones de pago
 DROP PROCEDURE IF EXISTS SP_PrepararOrdenCompra;
@@ -21,6 +23,8 @@ proc: BEGIN
     DECLARE v_id_cliente BIGINT;
     DECLARE v_saldo      DECIMAL(14,2);
     DECLARE v_auto_ok    INT DEFAULT 0;
+    DECLARE v_estado_r   VARCHAR(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_reemp_r    BIGINT;
 
     IF FN_PermisoAccion(p_id_usuario, 'oc_registrar') = 0 THEN
         SELECT 1 AS IdTipoMensaje, 'No tienes permiso para registrar órdenes de compra.' AS Mensaje;
@@ -28,14 +32,25 @@ proc: BEGIN
     END IF;
 
     IF IFNULL(p_id_oc_reemplaza, 0) > 0 THEN
-        SELECT COUNT(*) INTO v_auto_ok
+        SELECT COUNT(*), MAX(oc.estado), MAX(oc.reemplazada_por) INTO v_auto_ok, v_estado_r, v_reemp_r
         FROM orden_compra oc
         JOIN oc_propuesta op ON op.id_oc = oc.id_oc AND op.id_propuesta = p_id_propuesta AND op.eliminado_en IS NULL
-        WHERE oc.id_oc = p_id_oc_reemplaza AND oc.es_autogenerada = 1 AND oc.reemplazada_por IS NULL
-          AND oc.estado <> 'anulada' AND oc.eliminado_en IS NULL;
+        WHERE oc.id_oc = p_id_oc_reemplaza AND oc.eliminado_en IS NULL;
         IF v_auto_ok = 0 THEN
+            SELECT 1 AS IdTipoMensaje, 'La OC a reemplazar no existe o no está vinculada a esta propuesta.' AS Mensaje;
+            LEAVE proc;
+        END IF;
+        IF v_reemp_r IS NOT NULL THEN
+            SELECT 1 AS IdTipoMensaje, 'La OC ya fue reemplazada por otra orden de compra.' AS Mensaje;
+            LEAVE proc;
+        END IF;
+        IF v_estado_r = 'anulada' THEN
+            SELECT 1 AS IdTipoMensaje, 'La OC está anulada: no se puede reemplazar.' AS Mensaje;
+            LEAVE proc;
+        END IF;
+        IF v_estado_r NOT IN ('autogenerada', 'pendiente_reemplazo') THEN
             SELECT 1 AS IdTipoMensaje,
-                   'La OC autogenerada no existe, ya fue reemplazada o no corresponde a la propuesta.' AS Mensaje;
+                   'Solo se reemplaza una OC autogenerada o una OC pendiente de reemplazo (corrección solicitada al cliente).' AS Mensaje;
             LEAVE proc;
         END IF;
     END IF;
@@ -72,8 +87,8 @@ proc: BEGIN
     JOIN propuesta_comercial p ON p.id_propuesta = d.id_propuesta
     WHERE d.id_propuesta = p_id_propuesta;
 
-    -- 3. OC autogenerada a reemplazar
-    SELECT oc.id_oc, oc.numero_oc, oc.monto_total, oc.fecha_registro
+    -- 3. OC a reemplazar
+    SELECT oc.id_oc, oc.numero_oc, oc.monto_total, oc.fecha_registro, oc.es_autogenerada, oc.estado
     FROM orden_compra oc
     WHERE oc.id_oc = IFNULL(p_id_oc_reemplaza, 0);
 

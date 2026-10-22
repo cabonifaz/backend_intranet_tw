@@ -9,8 +9,10 @@
 --   monto_asignado = suma de lo asignado a las propuestas vinculadas (vinculaciones activas)
 --   saldo_oc       = monto de la OC - monto asignado (lo que aún se puede vincular a otra propuesta)
 --
--- estado (BD): recibida, validada, validada_parcial, observada, anulada (ver SP_RecalcularEstadoOrdenCompra).
--- estado_visual: igual al estado, salvo la OC autogenerada ya reemplazada por la OC del cliente (reemplazada).
+-- estado (BD): autogenerada, validada, validada_parcial, observada, pendiente_reemplazo, anulada
+--   (ver SP_RecalcularEstadoOrdenCompra). estado_visual = estado (se mantiene por compatibilidad).
+-- reemplazada_por: OC del cliente que la reemplazó (la OC reemplazada se conserva para auditoría).
+-- pendiente_reemplazo (bandera): OC autogenerada o con corrección pendiente que todavía no se reemplazó.
 -- resultado_ia: el peor resultado de la última validación de cada vinculación (critico, advertencia, ok o NULL).
 DROP PROCEDURE IF EXISTS SP_CalcularOrdenesCompra;
 
@@ -70,8 +72,8 @@ BEGIN
     SELECT b.*,
         b.monto_oc - b.monto_asignado                                          AS saldo_oc,
         IF(b.monto_oc > 0, ROUND(b.monto_asignado * 100 / b.monto_oc, 2), 0)   AS asignado_pct,
-        IF(b.es_autogenerada = 1 AND b.reemplazada_por IS NOT NULL, 'reemplazada', b.estado) AS estado_visual,
-        (b.es_autogenerada = 1 AND b.reemplazada_por IS NULL AND b.estado <> 'anulada')     AS pendiente_reemplazo
+        b.estado                                                               AS estado_visual,
+        (b.estado IN ('autogenerada', 'pendiente_reemplazo') AND b.reemplazada_por IS NULL) AS pendiente_reemplazo
     FROM tmp_oc_base b;
 
     DROP TEMPORARY TABLE IF EXISTS tmp_oc_base;

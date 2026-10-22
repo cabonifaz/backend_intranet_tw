@@ -7,8 +7,11 @@
 --   correccion_cliente  "Solicitar corrección al cliente"   → OBSERVADA pendiente de corrección del cliente
 --   nueva_version       "Generar nueva versión de propuesta" → OBSERVADA hasta validar contra la versión nueva
 --                       (la versión nueva la crea el back después, con SP_CrearNuevaVersionPropuesta)
--- p_id_oc_reemplaza (HU-27): OC autogenerada que esta OC reemplaza. Su vinculación pasa a esta OC y queda
---   marcada como reemplazada (solo en el timeline).
+-- p_id_oc_reemplaza: OC que esta OC reemplaza (debe estar vinculada a la propuesta de origen):
+--   autogenerada         su vinculación pasa a esta OC y la OC-AUTO queda dada de baja (no tiene PDF que conservar)
+--   pendiente_reemplazo  la OC observada por diferencias críticas queda con reemplazada_por = esta OC; conserva su
+--                        PDF, vinculaciones y timeline para auditoría, pero deja de contar en el saldo de las propuestas
+--                        (FN_SaldoPropuestaOc) y se oculta de la bandeja
 -- Reglas: acción oc_registrar; la propuesta de origen debe estar vinculada; todas las propuestas del mismo cliente,
 --   aceptadas y con saldo; lo asignado no supera el monto de la OC; PDF obligatorio; N° OC único por cliente.
 -- Efectos: orden_compra + oc_propuesta + una corrida de validación por propuesta + PDF versión 1 + timeline,
@@ -39,6 +42,7 @@ proc: BEGIN
     DECLARE v_error       VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_numero_oc   VARCHAR(50)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_numero_auto VARCHAR(50)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_estado_reemp VARCHAR(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_monto       DECIMAL(14,2);
     DECLARE v_simbolo     VARCHAR(10)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_id_oc       BIGINT;
@@ -86,12 +90,16 @@ proc: BEGIN
     END IF;
 
     IF IFNULL(p_id_oc_reemplaza, 0) > 0 THEN
-        SELECT numero_oc INTO v_numero_auto
-        FROM orden_compra
-        WHERE id_oc = p_id_oc_reemplaza AND es_autogenerada = 1 AND reemplazada_por IS NULL
-          AND estado <> 'anulada' AND eliminado_en IS NULL AND id_cliente = v_id_cliente;
+        SELECT oc.numero_oc, oc.estado INTO v_numero_auto, v_estado_reemp
+        FROM orden_compra oc
+        WHERE oc.id_oc = p_id_oc_reemplaza AND oc.reemplazada_por IS NULL
+          AND oc.estado IN ('autogenerada', 'pendiente_reemplazo') AND oc.eliminado_en IS NULL
+          AND oc.id_cliente = v_id_cliente
+          AND EXISTS (SELECT 1 FROM oc_propuesta op WHERE op.id_oc = oc.id_oc AND op.id_propuesta = p_id_propuesta
+                        AND op.eliminado_en IS NULL);
         IF v_numero_auto IS NULL THEN
-            SELECT 1 AS IdTipoMensaje, 'La OC autogenerada no existe, ya fue reemplazada o es de otro cliente.' AS Mensaje;
+            SELECT 1 AS IdTipoMensaje,
+                   'La OC a reemplazar no existe, ya fue reemplazada, está anulada, no está pendiente de reemplazo o no corresponde a la propuesta.' AS Mensaje;
             LEAVE proc;
         END IF;
     END IF;
@@ -152,7 +160,7 @@ proc: BEGIN
                                   id_usuario, registrado_en, metadata)
     VALUES ('orden_compra', v_id_oc, 'registrar_oc', NULL, 'registrada',
             CONCAT('Orden de compra ', v_numero_oc, ' registrada a partir de la propuesta ', v_numero_prop,
-                   IF(v_numero_auto IS NULL, '', CONCAT(', en reemplazo de la OC autogenerada ', v_numero_auto)), '.'),
+                   IF(v_numero_auto IS NULL, '', CONCAT(', en reemplazo de la OC ', IF(v_estado_reemp = 'autogenerada', 'autogenerada ', ''), v_numero_auto)), '.'),
             p_id_usuario, NOW(), JSON_OBJECT('id_propuesta', p_id_propuesta, 'id_oc_reemplazada', p_id_oc_reemplaza));
 
     -- PDF (versión 1)
@@ -189,16 +197,22 @@ proc: BEGIN
                 valor_nuevo VARCHAR(400) PATH '$.valorNuevo')) j;
     END IF;
 
-    -- Reemplazo de la OC autogenerada: su vinculación pasa a esta OC
+    -- Reemplazo de la OC autogenerada (baja lógica) o de la OC pendiente de reemplazo (se conserva para auditoría)
     IF v_numero_auto IS NOT NULL THEN
-        UPDATE oc_propuesta SET eliminado_en = NOW(), eliminado_por = p_id_usuario
-        WHERE id_oc = p_id_oc_reemplaza AND eliminado_en IS NULL;
-        UPDATE orden_compra SET reemplazada_por = v_id_oc, fecha_reemplazo = NOW(), modificado_por = p_id_usuario
+        IF v_estado_reemp = 'autogenerada' THEN
+            UPDATE oc_propuesta SET eliminado_en = NOW(), eliminado_por = p_id_usuario
+            WHERE id_oc = p_id_oc_reemplaza AND eliminado_en IS NULL;
+        END IF;
+        UPDATE orden_compra
+        SET reemplazada_por = v_id_oc, fecha_reemplazo = NOW(), modificado_por = p_id_usuario,
+            eliminado_en = IF(v_estado_reemp = 'autogenerada', NOW(), eliminado_en)
         WHERE id_oc = p_id_oc_reemplaza;
         INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion,
                                       id_usuario, registrado_en, metadata)
-        VALUES ('orden_compra', p_id_oc_reemplaza, 'reemplazar_oc_auto', 'recibida', 'reemplazada',
-                CONCAT('OC autogenerada reemplazada por la OC del cliente ', v_numero_oc, '.'),
+        VALUES ('orden_compra', p_id_oc_reemplaza,
+                IF(v_estado_reemp = 'autogenerada', 'reemplazar_oc_auto', 'reemplazar_oc'), v_estado_reemp, 'reemplazada',
+                CONCAT(IF(v_estado_reemp = 'autogenerada', 'OC autogenerada', 'OC pendiente de reemplazo'),
+                       ' reemplazada por la OC del cliente ', v_numero_oc, '.'),
                 p_id_usuario, NOW(), JSON_OBJECT('id_oc_real', v_id_oc));
     END IF;
 
@@ -245,7 +259,7 @@ proc: BEGIN
            CONCAT('Nueva orden de compra: ', v_numero_oc),
            CONCAT(v_usuario, ' registró la OC ', v_numero_oc, ' de ', IFNULL(v_cliente, 'el cliente'),
                   ' por ', IFNULL(v_simbolo, ''), ' ', FORMAT(v_monto, 2), ' (propuesta ', v_numero_prop, '). Estado: ',
-                  UPPER(v_estado), '.'),
+                  UPPER(REPLACE(v_estado, '_', ' ')), '.'),
            'orden_compra', v_id_oc, NOW(), p_id_usuario
     FROM usuario u
     WHERE u.eliminado_en IS NULL AND u.estado = 'activo' AND u.id_usuario <> p_id_usuario
@@ -256,7 +270,7 @@ proc: BEGIN
     COMMIT;
 
     SELECT 2 AS IdTipoMensaje,
-           CONCAT('Orden de compra registrada (', UPPER(v_estado), '). Se notificó a Contabilidad y Operaciones.') AS Mensaje;
+           CONCAT('Orden de compra registrada (', UPPER(REPLACE(v_estado, '_', ' ')), '). Se notificó a Contabilidad y Operaciones.') AS Mensaje;
 
     SELECT oc.id_oc, oc.numero_oc, oc.estado, oc.monto_total, oc.id_oc_reemplazada, v_numero_auto AS numero_oc_reemplazada,
            v_notificados AS notificados

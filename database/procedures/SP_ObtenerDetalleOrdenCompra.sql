@@ -73,8 +73,10 @@ proc: BEGIN
         (t.estado <> 'anulada' AND t.es_autogenerada = 0 AND t.saldo_oc > 0
          AND FN_PermisoAccion(p_id_usuario, 'oc_editar') = 1)                                                  AS puede_agregar_propuesta,
         (t.estado <> 'anulada' AND t.es_autogenerada = 0 AND FN_PermisoAccion(p_id_usuario, 'oc_validar') = 1)   AS puede_revalidar,
-        (t.estado <> 'anulada' AND t.reemplazada_por IS NULL AND FN_PermisoAccion(p_id_usuario, 'oc_anular') = 1) AS puede_anular,
-        (t.pendiente_reemplazo = 1 AND FN_PermisoAccion(p_id_usuario, 'oc_registrar') = 1)                     AS puede_reemplazar_auto
+        (t.estado NOT IN ('anulada', 'autogenerada') AND t.reemplazada_por IS NULL AND FN_PermisoAccion(p_id_usuario, 'oc_anular') = 1) AS puede_anular,
+        (t.pendiente_reemplazo = 1 AND FN_PermisoAccion(p_id_usuario, 'oc_registrar') = 1)                     AS puede_reemplazar_auto,
+        -- Registrar la OC del cliente que reemplaza a esta (OC autogenerada o pendiente de reemplazo)
+        (t.pendiente_reemplazo = 1 AND FN_PermisoAccion(p_id_usuario, 'oc_registrar') = 1)                     AS puede_reemplazar
     FROM tmp_oc t
     JOIN orden_compra oc  ON oc.id_oc       = t.id_oc
     JOIN cliente c        ON c.id_cliente   = t.id_cliente

@@ -1,8 +1,9 @@
 -- HU-22 (Sprint 4) Bandeja consolidada de Órdenes de Compra.
 -- El cálculo (alcance, montos y estado) vive en SP_CalcularOrdenesCompra (tmp_oc).
 -- Filtros:
---   p_estado: vacío o todas, recibida, validada, validada_parcial, observada, anulada, reemplazada,
---             autogeneradas (OC-AUTO pendientes de reemplazo), sin_asignar (con saldo de OC por asignar)
+--   p_estado: vacío o todas, autogenerada, validada, validada_parcial, observada, pendiente_reemplazo, anulada,
+--             autogeneradas (alias de autogenerada), sin_asignar (con saldo de OC por asignar)
+--   p_incluir_reemplazadas: 1 = incluye las OC ya reemplazadas por la OC del cliente (auditoría). Por defecto se ocultan.
 --   p_id_cliente, p_id_responsable, p_id_propuesta (OC vinculadas a esa propuesta),
 --   p_fecha_desde / p_fecha_hasta (fecha de emisión de la OC),
 --   p_busqueda (N° OC, cliente, RUC, RQ o N° de cualquier propuesta vinculada)
@@ -23,7 +24,8 @@ CREATE PROCEDURE SP_ObtenerBandejaOrdenesCompra(
     IN p_fecha_hasta    DATE,
     IN p_busqueda       VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_pagina         INT,
-    IN p_por_pagina     INT
+    IN p_por_pagina     INT,
+    IN p_incluir_reemplazadas TINYINT
 )
 BEGIN
     DECLARE v_por_pagina INT;
@@ -56,7 +58,8 @@ BEGIN
         LEFT JOIN requerimiento r ON r.id_requerimiento = t.id_requerimiento
         LEFT JOIN usuario u       ON u.id_usuario       = t.id_responsable
         LEFT JOIN tabla_maestra m ON m.IdMaestro = 1 AND m.IdEmpresa = 1 AND m.Num1 = t.id_moneda
-        WHERE (IFNULL(p_id_cliente, 0) = 0     OR t.id_cliente     = p_id_cliente)
+        WHERE (IFNULL(p_incluir_reemplazadas, 0) = 1 OR t.reemplazada_por IS NULL)
+          AND (IFNULL(p_id_cliente, 0) = 0     OR t.id_cliente     = p_id_cliente)
           AND (IFNULL(p_id_responsable, 0) = 0 OR t.id_responsable = p_id_responsable)
           AND (IFNULL(p_id_propuesta, 0) = 0
                OR EXISTS (SELECT 1 FROM oc_propuesta op WHERE op.id_oc = t.id_oc AND op.id_propuesta = p_id_propuesta
@@ -83,8 +86,9 @@ BEGIN
             IFNULL(SUM(estado_visual = 'validada_parcial'), 0)                                  AS validadas_parcial,
             IFNULL(SUM(estado_visual = 'observada'), 0)                                         AS observadas,
             IFNULL(SUM(estado_visual IN ('validada_parcial', 'observada')), 0)                  AS parcial_u_observadas,
-            IFNULL(SUM(pendiente_reemplazo = 1), 0)                                             AS autogeneradas_pendientes,
-            IFNULL(SUM(estado_visual NOT IN ('anulada', 'reemplazada') AND saldo_oc > 0), 0)    AS sin_asignar,
+            IFNULL(SUM(estado = 'autogenerada' AND reemplazada_por IS NULL), 0)                AS autogeneradas_pendientes,
+            IFNULL(SUM(estado = 'pendiente_reemplazo' AND reemplazada_por IS NULL), 0)         AS pendientes_reemplazo,
+            IFNULL(SUM(estado <> 'anulada' AND reemplazada_por IS NULL AND saldo_oc > 0), 0)   AS sin_asignar,
             IFNULL(SUM(estado_visual = 'anulada'), 0)                                           AS anuladas
         FROM tmp_oc_filtro;
 
@@ -99,10 +103,10 @@ BEGIN
         CREATE TEMPORARY TABLE tmp_oc_lista AS
         SELECT t.* FROM tmp_oc_filtro t
         WHERE v_estado = 'todas'
-           OR (v_estado = 'autogeneradas' AND t.pendiente_reemplazo = 1)
-           OR (v_estado = 'sin_asignar'   AND t.estado_visual NOT IN ('anulada', 'reemplazada') AND t.saldo_oc > 0)
-           OR (v_estado IN ('recibida', 'validada', 'validada_parcial', 'observada', 'anulada', 'reemplazada')
-               AND t.estado_visual = v_estado);
+           OR (v_estado = 'autogeneradas' AND t.estado = 'autogenerada')
+           OR (v_estado = 'sin_asignar'   AND t.estado <> 'anulada' AND t.reemplazada_por IS NULL AND t.saldo_oc > 0)
+           OR (v_estado IN ('autogenerada', 'validada', 'validada_parcial', 'observada', 'pendiente_reemplazo', 'anulada')
+               AND t.estado = v_estado);
 
         -- 4. Filas
         SELECT
@@ -119,12 +123,13 @@ BEGIN
             t.id_responsable, t.responsable,
             t.tiene_pdf,
             IF(t.tiene_pdf = 1, CONCAT('/api/crm/ordenes-compra/', t.id_oc, '/pdf'), NULL)   AS url_pdf,
-            (t.estado <> 'anulada' AND t.reemplazada_por IS NULL
-             AND FN_PermisoAccion(p_id_usuario, 'oc_anular') = 1)                              AS puede_anular
+            (t.estado NOT IN ('anulada', 'autogenerada') AND t.reemplazada_por IS NULL
+             AND FN_PermisoAccion(p_id_usuario, 'oc_anular') = 1)                              AS puede_anular,
+            (t.pendiente_reemplazo = 1 AND FN_PermisoAccion(p_id_usuario, 'oc_registrar') = 1)  AS puede_reemplazar
         FROM tmp_oc_lista t
         ORDER BY CASE t.estado_visual
-                     WHEN 'observada' THEN 1 WHEN 'recibida' THEN 2 WHEN 'validada_parcial' THEN 3
-                     WHEN 'validada'  THEN 4 WHEN 'reemplazada' THEN 5 ELSE 6 END,
+                     WHEN 'pendiente_reemplazo' THEN 1 WHEN 'observada' THEN 2 WHEN 'autogenerada' THEN 3
+                     WHEN 'validada_parcial' THEN 4 WHEN 'validada' THEN 5 ELSE 6 END,
                  t.fecha_registro DESC, t.id_oc DESC
         LIMIT v_por_pagina OFFSET v_offset;
 

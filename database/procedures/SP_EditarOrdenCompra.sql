@@ -72,6 +72,10 @@ proc: BEGIN
         SELECT 1 AS IdTipoMensaje, 'La orden de compra está anulada: no se puede editar.' AS Mensaje;
         LEAVE proc;
     END IF;
+    IF EXISTS (SELECT 1 FROM orden_compra WHERE id_oc = p_id_oc AND reemplazada_por IS NOT NULL) THEN
+        SELECT 1 AS IdTipoMensaje, 'La orden de compra fue reemplazada por otra OC del cliente: es de solo lectura.' AS Mensaje;
+        LEAVE proc;
+    END IF;
     IF v_auto = 1 THEN
         SELECT 1 AS IdTipoMensaje, 'La OC autogenerada no se edita: reemplázala por la OC del cliente.' AS Mensaje;
         LEAVE proc;
@@ -261,7 +265,7 @@ proc: BEGIN
     COMMIT;
 
     SELECT estado INTO v_estado FROM orden_compra WHERE id_oc = p_id_oc;
-    SELECT 2 AS IdTipoMensaje, CONCAT('Orden de compra actualizada (', UPPER(v_estado), ').') AS Mensaje;
+    SELECT 2 AS IdTipoMensaje, CONCAT('Orden de compra actualizada (', UPPER(REPLACE(v_estado, '_', ' ')), ').') AS Mensaje;
 
     SELECT oc.id_oc, oc.numero_oc, oc.estado, oc.monto_total, NULL AS id_oc_reemplazada, NULL AS numero_oc_reemplazada,
            0 AS notificados

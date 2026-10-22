@@ -112,7 +112,9 @@ BEGIN
                WHEN oc.estado = 'anulada'                                   THEN 'ANULADO'
                WHEN oc.estado = 'observada'                                 THEN 'OBSERVADO'
                WHEN oc.estado = 'validada_parcial'                          THEN 'VALIDADO PARCIAL'
-               WHEN oc.estado = 'recibida'                                  THEN 'PENDIENTE'
+               WHEN oc.reemplazada_por IS NOT NULL                          THEN 'REEMPLAZADO'
+               WHEN oc.estado = 'pendiente_reemplazo'                       THEN 'PENDIENTE CORRECCIÓN'
+               WHEN oc.estado = 'autogenerada'                              THEN 'PENDIENTE'
                ELSE 'VALIDADO'
            END,
            d.fecha_carga, d.subido_por,
@@ -127,7 +129,8 @@ BEGIN
     SELECT CONCAT('ocpdf-', oc.id_oc), CONCAT('OC-', oc.numero_oc, '.pdf'), IFNULL(oc.nombre_archivo_pdf, CONCAT('OC-', oc.numero_oc, '.pdf')),
            'Orden de Compra', 'comerciales', 'CRM', 'orden_compra', 1,
            CASE oc.estado WHEN 'anulada' THEN 'ANULADO' WHEN 'observada' THEN 'OBSERVADO'
-                          WHEN 'validada_parcial' THEN 'VALIDADO PARCIAL' WHEN 'recibida' THEN 'PENDIENTE' ELSE 'VALIDADO' END,
+                          WHEN 'validada_parcial' THEN 'VALIDADO PARCIAL' WHEN 'autogenerada' THEN 'PENDIENTE'
+                          WHEN 'pendiente_reemplazo' THEN 'PENDIENTE CORRECCIÓN' ELSE 'VALIDADO' END,
            oc.fecha_registro, oc.creado_por, oc.tamano_pdf_bytes, 'application/pdf', NULL, NULL, 0, oc.url_archivo_pdf, NULL
     FROM orden_compra oc
     WHERE oc.id_oc IN (SELECT id_oc FROM tmp_exp_ocs) AND oc.url_archivo_pdf IS NOT NULL

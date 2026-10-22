@@ -3,13 +3,18 @@ namespace TW.Intranet.Aplicacion.Dtos;
 // ═════════════════════════════════════════════════════════════════════════════
 // Órdenes de Compra — Sprint 4 (refinamiento HU-22 a HU-28)
 //   Estado de la OC (consolidado de sus vinculaciones con propuestas):
-//     recibida (OC autogenerada) · validada · validada_parcial · observada · anulada
-//   EstadoVisual: igual al estado, salvo la OC autogenerada ya reemplazada (reemplazada).
+//     autogenerada (OC-AUTO sin PDF) · validada · validada_parcial · observada (diferencias aceptadas por TW)
+//     · pendiente_reemplazo (corrección solicitada al cliente) · anulada
+//   EstadoVisual: igual al estado (se mantiene por compatibilidad).
+//   ReemplazadaPor: OC del cliente que reemplazó a esta (autogenerada o pendiente_reemplazo). Las reemplazadas
+//     se ocultan de la bandeja salvo con IncluirReemplazadas.
 //   Estado de cada vinculación OC ↔ propuesta: pendiente · validada · observada
 //     (TipoObservacion: informativa · correccion_cliente · nueva_version)
 //   Resultado de la validación (IA + reglas): ok · advertencia · critico
-//   Decisión del comercial al guardar la ficha:
-//     validar · observar ("Guardar con observaciones") · correccion_cliente · nueva_version
+//   Decisión del comercial al guardar la ficha → estado de la OC:
+//     validar → validada (validada_parcial si hay varias propuestas y alguna no quedó validada)
+//     observar ("Guardar con observaciones") → observada · correccion_cliente → pendiente_reemplazo
+//     nueva_version → observada hasta validar contra la versión nueva
 // ═════════════════════════════════════════════════════════════════════════════
 
 // ── Datos de la ficha (los extrae la IA del PDF; el comercial puede corregirlos) ──
@@ -109,7 +114,7 @@ public class CompararOrdenCompraSolicitudDto
     public long?   IdOc          { get; set; }
     /// <summary>Propuesta de origen (al registrar).</summary>
     public long?   IdPropuesta   { get; set; }
-    /// <summary>OC autogenerada que se reemplaza (al registrar).</summary>
+    /// <summary>OC que se reemplaza al registrar (autogenerada o pendiente_reemplazo): no cuenta en el saldo de la propuesta.</summary>
     public long?   IdOcReemplaza { get; set; }
     public DatosOrdenCompraDto Datos { get; set; } = new();
     public List<VinculacionOrdenCompraDto> Vinculaciones { get; set; } = [];
@@ -152,8 +157,10 @@ public class AnularOrdenCompraSolicitudDto
 
 public class FiltrosBandejaOrdenesCompraDto
 {
-    /// <summary>todas (defecto), recibida, validada, validada_parcial, observada, anulada, reemplazada, autogeneradas, sin_asignar</summary>
+    /// <summary>todas (defecto), autogenerada, validada, validada_parcial, observada, pendiente_reemplazo, anulada, sin_asignar</summary>
     public string?   Estado        { get; set; }
+    /// <summary>true = incluye las OC ya reemplazadas por la OC del cliente (auditoría).</summary>
+    public bool      IncluirReemplazadas { get; set; }
     public long?     IdCliente     { get; set; }
     public long?     IdResponsable { get; set; }
     public long?     IdPropuesta   { get; set; }
@@ -221,7 +228,8 @@ public record PropuestaOrigenOcDto(
     int       Items,
     DateTime? FechaServidor);
 
-public record OcAReemplazarDto(long IdOc, string NumeroOc, decimal MontoTotal, DateTime? FechaRegistro);
+/// <summary>OC que se reemplaza al registrar: autogenerada o pendiente_reemplazo.</summary>
+public record OcAReemplazarDto(long IdOc, string NumeroOc, decimal MontoTotal, DateTime? FechaRegistro, bool EsAutogenerada, string Estado);
 
 /// <summary>GET /api/crm/propuestas/{id}/orden-compra/preparar — ficha de registro.</summary>
 public record PreparacionOrdenCompraDto(
@@ -391,6 +399,7 @@ public record TarjetasOrdenesCompraDto(
     int Observadas,
     int ParcialUObservadas,
     int AutogeneradasPendientes,
+    int PendientesReemplazo,
     int SinAsignar,
     int Anuladas);
 
@@ -430,7 +439,9 @@ public record ItemBandejaOrdenCompraDto(
     string?   Responsable,
     bool      TienePdf,
     string?   UrlPdf,
-    bool      PuedeAnular);
+    bool      PuedeAnular,
+    /// <summary>Se puede registrar la OC del cliente que la reemplaza (autogenerada o pendiente_reemplazo).</summary>
+    bool      PuedeReemplazar);
 
 public record BandejaOrdenesCompraDto(
     TarjetasOrdenesCompraDto        Tarjetas,
@@ -513,7 +524,10 @@ public record CabeceraDetalleOcDto
     public bool      PuedeAgregarPropuesta   { get; init; }
     public bool      PuedeRevalidar          { get; init; }
     public bool      PuedeAnular             { get; init; }
+    /// <summary>Igual a PuedeReemplazar (nombre anterior, se mantiene por compatibilidad).</summary>
     public bool      PuedeReemplazarAuto     { get; init; }
+    /// <summary>"Registrar OC del cliente" en reemplazo de esta (autogenerada o pendiente_reemplazo).</summary>
+    public bool      PuedeReemplazar         { get; init; }
 }
 
 public record PropuestaVinculadaOcDto
@@ -671,8 +685,10 @@ public record ImpactoAnulacionOcDto(
     bool     ImpactoCritico,
     DateTime? FechaServidor);
 
+/// <summary>GeneraraOcAutogenerada: la propuesta aceptada queda sin OC vigente y al anular se le generará una OC-AUTO.</summary>
 public record PropuestaAfectadaOcDto(long IdPropuesta, string Numero, int Version, decimal MontoAsignado,
-                                     string? EstadoValidacion, decimal SaldoActual, decimal SaldoDespues);
+                                     string? EstadoValidacion, decimal SaldoActual, decimal SaldoDespues,
+                                     bool GeneraraOcAutogenerada);
 
 public record OsEnEjecucionDto(long IdOs, string Numero, string Estado, DateTime? FechaEjecucion, string? NumeroExpediente);
 
@@ -682,7 +698,9 @@ public record PreparacionAnulacionOcDto(
     List<OsEnEjecucionDto>       OrdenesServicio,
     List<OpcionFiltroDto>        Motivos);
 
-public record PropuestaSaldoOcDto(long IdPropuesta, string Numero, int Version, decimal MontoAsignado, decimal Saldo);
+/// <summary>IdOcAutogenerada / NumeroOcAutogenerada: OC-AUTO generada al anular para mantener la cobertura (si aplica).</summary>
+public record PropuestaSaldoOcDto(long IdPropuesta, string Numero, int Version, decimal MontoAsignado, decimal Saldo,
+                                  long? IdOcAutogenerada, string? NumeroOcAutogenerada);
 
 public record AnulacionOrdenCompraDto(
     long      IdOc,

@@ -1,5 +1,5 @@
 -- HU-27 (Sprint 4) OC autogenerada: "No, autogenerar OC provisional" al aceptar la propuesta.
--- Crea la OC OC-AUTO-NNNN-AAAA sin PDF, en estado RECIBIDA, por el saldo de la propuesta (100% de cobertura),
+-- Crea la OC OC-AUTO-NNNN-AAAA sin PDF, en estado AUTOGENERADA (SP_CrearOcAutogenerada), por el saldo de la propuesta (100% de cobertura),
 -- para que Operaciones pueda programar y ejecutar el servicio. Se reemplaza después por la OC del cliente
 -- (SP_RegistrarOrdenCompra con p_id_oc_reemplaza).
 -- Reglas: acción oc_registrar; propuesta aceptada, del área del usuario y sin órdenes de compra.
@@ -20,10 +20,8 @@ proc: BEGIN
     DECLARE v_id_moneda  INT;
     DECLARE v_id_resp    BIGINT;
     DECLARE v_numero_prop VARCHAR(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
-    DECLARE v_correl     INT;
     DECLARE v_numero_oc  VARCHAR(50)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_id_oc      BIGINT;
-    DECLARE v_usuario    VARCHAR(220) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_cliente    VARCHAR(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_simbolo    VARCHAR(10)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 
@@ -62,56 +60,15 @@ proc: BEGIN
 
     START TRANSACTION;
 
-    -- Correlativo del año: OC-AUTO-0001-2026
-    SELECT IFNULL(MAX(CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(numero_oc, '-', 3), '-', -1) AS UNSIGNED)), 0) + 1
-      INTO v_correl
-    FROM orden_compra
-    WHERE es_autogenerada = 1 AND numero_oc LIKE CONCAT('OC-AUTO-%-', YEAR(CURDATE()))
-    FOR UPDATE;
-    SET v_numero_oc = CONCAT('OC-AUTO-', LPAD(v_correl, 4, '0'), '-', YEAR(CURDATE()));
-
-    INSERT INTO orden_compra (
-        numero_oc, es_autogenerada, id_propuesta, id_cliente, id_moneda, monto_total,
-        id_condicion_pago, igv_incluido, igv_pct, factura_igual_oc,
-        fecha_oc, fecha_recepcion, observaciones, estado, fecha_registro, creado_por)
-    SELECT v_numero_oc, 1, p.id_propuesta, p.id_cliente, p.id_moneda, v_saldo,
-           p.id_condicion_pago, p.aplica_igv, IF(p.aplica_igv = 1, p.igv_pct, NULL), 1,
-           CURDATE(), CURDATE(),
-           'OC provisional generada automáticamente al aceptar la propuesta. Debe reemplazarse por la OC del cliente antes de facturar.',
-           'recibida', NOW(), p_id_usuario
-    FROM propuesta_comercial p WHERE p.id_propuesta = p_id_propuesta;
-
-    SET v_id_oc = LAST_INSERT_ID();
-
-    INSERT INTO oc_propuesta (id_oc, id_propuesta, monto_asignado, estado_validacion, creado_por)
-    VALUES (v_id_oc, p_id_propuesta, v_saldo, 'pendiente', p_id_usuario);
-
-    INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion,
-                                  id_usuario, registrado_en, metadata)
-    VALUES ('orden_compra', v_id_oc, 'autogenerar_oc', NULL, 'recibida',
-            CONCAT('OC provisional ', v_numero_oc, ' generada al aceptar la propuesta ', v_numero_prop,
-                   ' por ', IFNULL(v_simbolo, ''), ' ', FORMAT(v_saldo, 2), ' (100% de cobertura).'),
-            p_id_usuario, NOW(), JSON_OBJECT('id_propuesta', p_id_propuesta, 'monto', v_saldo));
-
-    CALL SP_PasarExpedientesAProgramacion(v_id_oc, p_id_usuario);
-
-    SELECT CONCAT(nombre, ' ', apellido) INTO v_usuario FROM usuario WHERE id_usuario = p_id_usuario;
-    INSERT INTO notificacion (id_usuario_destino, id_canal, titulo, cuerpo, entidad_tipo, id_entidad, fecha_creacion, creado_por)
-    SELECT u.id_usuario, 5,
-           CONCAT('OC provisional: ', v_numero_oc),
-           CONCAT(v_usuario, ' generó la OC provisional ', v_numero_oc, ' de ', IFNULL(v_cliente, 'el cliente'),
-                  ' (propuesta ', v_numero_prop, '). Permite ejecutar el servicio; se reemplazará por la OC del cliente.'),
-           'orden_compra', v_id_oc, NOW(), p_id_usuario
-    FROM usuario u
-    WHERE u.eliminado_en IS NULL AND u.estado = 'activo' AND u.id_usuario <> p_id_usuario
-      AND ((u.area IN ('operaciones', 'administracion') AND u.rol_sistema IN ('supervisor', 'administrador'))
-           OR u.id_usuario = v_id_resp);
+    CALL SP_CrearOcAutogenerada(p_id_propuesta, v_saldo,
+                                'OC provisional generada automáticamente al aceptar la propuesta.',
+                                p_id_usuario, v_id_oc, v_numero_oc);
 
     COMMIT;
 
     SELECT 2 AS IdTipoMensaje,
            CONCAT('OC provisional ', v_numero_oc, ' generada. Reemplázala por la OC del cliente cuando llegue.') AS Mensaje;
-    SELECT v_id_oc AS id_oc, v_numero_oc AS numero_oc, 'recibida' AS estado, v_saldo AS monto_total, v_id_moneda AS id_moneda;
+    SELECT v_id_oc AS id_oc, v_numero_oc AS numero_oc, 'autogenerada' AS estado, v_saldo AS monto_total, v_id_moneda AS id_moneda;
 END$$
 
 DELIMITER ;

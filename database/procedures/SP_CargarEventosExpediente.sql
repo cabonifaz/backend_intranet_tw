@@ -121,7 +121,7 @@ BEGIN
             WHEN accion IN ('crear_expediente', 'creacion', 'nueva_version', 'nueva_version_por_revocacion') THEN 'creacion'
             WHEN accion IN ('envio_vb', 'solicitar_revocacion_vb')                                       THEN 'visto_bueno'
             WHEN accion IN ('envio_cliente', 'registrar_oc', 'registrar_oc_complementaria', 'validar_oc', 'editar_oc',
-                            'editar_oc_revalidacion', 'distribuir_oc', 'autogenerar_oc', 'reemplazar_oc_auto',
+                            'editar_oc_revalidacion', 'distribuir_oc', 'autogenerar_oc', 'reemplazar_oc_auto', 'reemplazar_oc',
                             'decision_oc', 'vincular_propuesta', 'desvincular_propuesta', 'nueva_version_propuesta') THEN 'orden_compra'
             WHEN accion IN ('observar_oc', 'levantar_observacion_oc', 'registrar_bloqueo', 'resolver_bloqueo', 'registrar_excepcion',
                             'cerrar_excepcion')                                                            THEN 'bloqueo'
@@ -155,6 +155,7 @@ BEGIN
             WHEN 'liberar_oc'                    THEN 'OC liberada a programación'
             WHEN 'autogenerar_oc'                THEN 'OC provisional autogenerada'
             WHEN 'reemplazar_oc_auto'            THEN 'OC provisional reemplazada por la OC del cliente'
+            WHEN 'reemplazar_oc'                 THEN 'OC reemplazada por la OC corregida del cliente'
             WHEN 'decision_oc'                   THEN 'Decisión sobre la OC'
             WHEN 'vincular_propuesta'            THEN 'Propuesta vinculada a la OC'
             WHEN 'desvincular_propuesta'         THEN 'Propuesta desvinculada de la OC'

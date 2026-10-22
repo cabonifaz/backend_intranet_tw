@@ -85,8 +85,9 @@ public class OrdenesCompraController(
     /// <summary>
     /// Bandeja: tarjetas (registradas en el mes, validadas, parcial u observadas, OC autogeneradas pendientes, sin asignar),
     /// monto validado del mes por moneda, filas y opciones de filtro.
-    /// ?estado=todas|recibida|validada|validada_parcial|observada|anulada|reemplazada|autogeneradas|sin_asignar
+    /// ?estado=todas|autogenerada|validada|validada_parcial|observada|pendiente_reemplazo|anulada|sin_asignar
     /// &amp;idCliente=&amp;idResponsable=&amp;idPropuesta=&amp;fechaDesde=&amp;fechaHasta=&amp;busqueda=&amp;pagina=1&amp;porPagina=10
+    /// &amp;incluirReemplazadas=false (true = muestra también las OC ya reemplazadas, para auditoría)
     /// </summary>
     [RequierePermiso("oc_bandeja")]
     [HttpGet("api/crm/ordenes-compra")]
@@ -134,7 +135,7 @@ public class OrdenesCompraController(
     // ══════════════════════ Ficha ══════════════════════
 
     /// <summary>
-    /// Ficha de registro: propuesta de origen, OC autogenerada a reemplazar (?idOcReemplaza=), otras propuestas del cliente,
+    /// Ficha de registro: propuesta de origen, OC a reemplazar (?idOcReemplaza=: autogenerada o pendiente_reemplazo), otras propuestas del cliente,
     /// monedas, condiciones de pago y si la extracción con IA está disponible.
     /// </summary>
     [RequierePermiso("oc_registrar")]

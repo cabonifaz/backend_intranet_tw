@@ -72,6 +72,10 @@ proc: BEGIN
     IF v_estado = 'anulada' THEN
         SELECT 1 AS IdTipoMensaje, 'La orden de compra está anulada: no se puede cambiar su PDF.' AS Mensaje; LEAVE proc;
     END IF;
+    IF EXISTS (SELECT 1 FROM orden_compra WHERE id_oc = p_id_oc AND reemplazada_por IS NOT NULL) THEN
+        SELECT 1 AS IdTipoMensaje, 'La orden de compra fue reemplazada por otra OC del cliente: es de solo lectura.' AS Mensaje;
+        LEAVE proc;
+    END IF;
     IF v_auto = 1 THEN
         SELECT 1 AS IdTipoMensaje, 'La OC autogenerada no tiene PDF: reemplázala por la OC del cliente.' AS Mensaje; LEAVE proc;
     END IF;
@@ -187,7 +191,7 @@ proc: BEGIN
     SELECT 2 AS IdTipoMensaje,
            CONCAT(IF(p_tipo = 'oc_corregida', 'OC corregida cargada y re-validada', 'PDF reemplazado y re-validado'),
                   IF(v_validadas > 0, CONCAT('. ', v_validadas, ' propuesta(s) pasaron a VALIDADA'), ''),
-                  ' (', UPPER(v_estado), ').') AS Mensaje;
+                  ' (', UPPER(REPLACE(v_estado, '_', ' ')), ').') AS Mensaje;
 
     SELECT oc.id_oc, oc.numero_oc, oc.estado, oc.monto_total, NULL AS id_oc_reemplazada, NULL AS numero_oc_reemplazada,
            0 AS notificados

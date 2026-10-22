@@ -1,7 +1,8 @@
 -- Saldo de la propuesta por cubrir con órdenes de compra (Sprint 4, HU-22 a HU-28).
 -- Total de la propuesta menos lo que le asignaron las OC no anuladas (vinculaciones activas).
 -- p_excluir_oc: no cuenta lo que asignó esa OC (para editar o comparar una OC contra su propia vinculación).
--- La OC autogenerada cuenta mientras no se reemplace (al reemplazarla, su vinculación pasa a la OC real).
+-- Las OC reemplazadas por la OC del cliente no cuentan (la OC autogenerada y la OC pendiente de reemplazo dejan de
+-- contar al registrarse la OC que las reemplaza).
 DROP FUNCTION IF EXISTS FN_SaldoPropuestaOc;
 
 DELIMITER $$
@@ -21,7 +22,7 @@ BEGIN
     FROM oc_propuesta op
     JOIN orden_compra oc ON oc.id_oc = op.id_oc
     WHERE op.id_propuesta = p_id_propuesta AND op.eliminado_en IS NULL
-      AND oc.eliminado_en IS NULL AND oc.estado <> 'anulada'
+      AND oc.eliminado_en IS NULL AND oc.estado <> 'anulada' AND oc.reemplazada_por IS NULL
       AND oc.id_oc <> IFNULL(p_excluir_oc, 0);
 
     RETURN IFNULL(v_total, 0) - v_asignado;

@@ -218,14 +218,14 @@ internal static class EvaluacionIaOrdenCompra
 public class ObtenerBandejaOrdenesCompraCasoDeUso(IOrdenCompraRepositorio repositorio)
 {
     private static readonly string[] Estados =
-        ["", "todas", "recibida", "validada", "validada_parcial", "observada", "anulada", "reemplazada", "autogeneradas", "sin_asignar"];
+        ["", "todas", "autogenerada", "autogeneradas", "validada", "validada_parcial", "observada", "pendiente_reemplazo", "anulada", "sin_asignar"];
 
     public Task<RespuestaDto<BandejaOrdenesCompraDto>> EjecutarAsync(FiltrosBandejaOrdenesCompraDto f, long idUsuario, CancellationToken ct = default)
     {
         var estado = f.Estado?.Trim().ToLowerInvariant() ?? "";
         if (!Estados.Contains(estado))
             return Task.FromResult(new RespuestaDto<BandejaOrdenesCompraDto>(1,
-                "Estado no válido. Use todas, recibida, validada, validada_parcial, observada, anulada, reemplazada, autogeneradas o sin_asignar."));
+                "Estado no válido. Use todas, autogenerada, validada, validada_parcial, observada, pendiente_reemplazo, anulada o sin_asignar."));
         if (f.FechaDesde is { } desde && f.FechaHasta is { } hasta && desde.Date > hasta.Date)
             return Task.FromResult(new RespuestaDto<BandejaOrdenesCompraDto>(1, "La fecha desde no puede ser posterior a la fecha hasta."));
 
@@ -238,6 +238,7 @@ public class ObtenerBandejaOrdenesCompraCasoDeUso(IOrdenCompraRepositorio reposi
             FechaDesde    = f.FechaDesde?.Date,
             FechaHasta    = f.FechaHasta?.Date,
             Busqueda      = string.IsNullOrWhiteSpace(f.Busqueda) ? null : f.Busqueda.Trim()[..Math.Min(f.Busqueda.Trim().Length, 200)],
+            IncluirReemplazadas = f.IncluirReemplazadas,
             Pagina        = Math.Max(1, f.Pagina),
             PorPagina     = f.PorPagina is < 1 or > 100 ? 10 : f.PorPagina,
         };

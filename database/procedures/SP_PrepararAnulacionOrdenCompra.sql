@@ -1,6 +1,8 @@
 -- HU-28 (Sprint 4) Datos del modal "Anular Orden de Compra": monto a anular, propuestas afectadas,
 -- órdenes de servicio en ejecución (impacto crítico) y motivos tipificados (MOTIVO_ANULACION_OC, 102).
--- Reglas: acción oc_anular; OC del área del usuario y no anulada (ni autogenerada ya reemplazada).
+-- Reglas: acción oc_anular; OC del área del usuario, no anulada, no reemplazada y no autogenerada.
+-- generara_oc_autogenerada (por propuesta): la propuesta está aceptada y queda sin OC vigente, así que al anular se
+--   generará una OC autogenerada nueva por su saldo (ver SP_AnularOrdenCompra).
 -- Resultados: 1 mensaje, 2 resumen del impacto, 3 propuestas afectadas, 4 OS en ejecución, 5 motivos.
 DROP PROCEDURE IF EXISTS SP_PrepararAnulacionOrdenCompra;
 
@@ -14,6 +16,7 @@ proc: BEGIN
     DECLARE v_existe INT DEFAULT 0;
     DECLARE v_estado VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_reemp  BIGINT;
+    DECLARE v_auto   TINYINT DEFAULT 0;
     DECLARE v_os     INT DEFAULT 0;
 
     IF FN_PermisoAccion(p_id_usuario, 'oc_anular') = 0 THEN
@@ -22,7 +25,7 @@ proc: BEGIN
     END IF;
 
     CALL SP_CalcularOrdenesCompra(p_id_usuario, p_id_oc);
-    SELECT COUNT(*), MAX(estado), MAX(reemplazada_por) INTO v_existe, v_estado, v_reemp FROM tmp_oc;
+    SELECT COUNT(*), MAX(estado), MAX(reemplazada_por), MAX(es_autogenerada) INTO v_existe, v_estado, v_reemp, v_auto FROM tmp_oc;
 
     IF v_existe = 0 THEN
         DROP TEMPORARY TABLE IF EXISTS tmp_oc;
@@ -34,7 +37,13 @@ proc: BEGIN
     END IF;
     IF v_reemp IS NOT NULL THEN
         DROP TEMPORARY TABLE IF EXISTS tmp_oc;
-        SELECT 1 AS IdTipoMensaje, 'La OC autogenerada ya fue reemplazada por la OC del cliente.' AS Mensaje; LEAVE proc;
+        SELECT 1 AS IdTipoMensaje, 'La orden de compra ya fue reemplazada por la OC del cliente.' AS Mensaje; LEAVE proc;
+    END IF;
+    IF v_auto = 1 THEN
+        DROP TEMPORARY TABLE IF EXISTS tmp_oc;
+        SELECT 1 AS IdTipoMensaje,
+               'La OC autogenerada no se anula: reemplázala por la OC del cliente o anula la propuesta.' AS Mensaje;
+        LEAVE proc;
     END IF;
 
     DROP TEMPORARY TABLE IF EXISTS tmp_oc_anu_os;
@@ -65,7 +74,15 @@ proc: BEGIN
     -- 3. Propuestas afectadas: pierden la cobertura de esta OC
     SELECT op.id_propuesta, p.numero, p.version, op.monto_asignado, op.estado_validacion,
            FN_SaldoPropuestaOc(op.id_propuesta, NULL)              AS saldo_actual,
-           FN_SaldoPropuestaOc(op.id_propuesta, p_id_oc)           AS saldo_despues
+           FN_SaldoPropuestaOc(op.id_propuesta, p_id_oc)           AS saldo_despues,
+           (p.estado = 'aceptado'
+            AND NOT EXISTS (SELECT 1 FROM propuesta_comercial pn
+                            WHERE pn.numero = p.numero AND pn.version > p.version AND pn.eliminado_en IS NULL
+                              AND pn.estado NOT IN ('anulado', 'revocada'))
+            AND NOT EXISTS (SELECT 1 FROM oc_propuesta o2 JOIN orden_compra c2 ON c2.id_oc = o2.id_oc
+                            WHERE o2.id_propuesta = op.id_propuesta AND o2.eliminado_en IS NULL AND o2.id_oc <> p_id_oc
+                              AND c2.eliminado_en IS NULL AND c2.estado <> 'anulada' AND c2.reemplazada_por IS NULL)
+            AND FN_SaldoPropuestaOc(op.id_propuesta, p_id_oc) > 0) AS generara_oc_autogenerada
     FROM oc_propuesta op
     JOIN propuesta_comercial p ON p.id_propuesta = op.id_propuesta
     WHERE op.id_oc = p_id_oc AND op.eliminado_en IS NULL
