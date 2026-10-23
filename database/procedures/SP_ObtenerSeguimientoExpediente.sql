@@ -61,8 +61,14 @@ proc: BEGIN
     SELECT MAX(p.id_propuesta) INTO v_ultima FROM propuesta_comercial p
     WHERE p.numero = v_numero AND p.eliminado_en IS NULL
       AND p.version = (SELECT MAX(p2.version) FROM propuesta_comercial p2 WHERE p2.numero = v_numero AND p2.eliminado_en IS NULL);
-    SELECT MIN(p.fecha_envio) INTO v_envio FROM propuesta_comercial p
-    WHERE p.numero = v_numero AND p.eliminado_en IS NULL AND p.fecha_envio IS NOT NULL;
+    -- Envío al cliente: fecha_envio_cliente (HU-10b); si no está, el evento de auditoría envio_cliente
+    SELECT MIN(COALESCE(p.fecha_envio_cliente, p.fecha_envio)) INTO v_envio FROM propuesta_comercial p
+    WHERE p.numero = v_numero AND p.eliminado_en IS NULL;
+    IF v_envio IS NULL THEN
+        SELECT MIN(a.registrado_en) INTO v_envio FROM auditoria_evento a
+        JOIN propuesta_comercial p ON p.id_propuesta = a.id_entidad AND p.numero = v_numero
+        WHERE a.entidad_tipo = 'propuesta' AND a.accion = 'envio_cliente';
+    END IF;
     SELECT s.id_seguimiento INTO v_cierre FROM seguimiento_comercial s
     JOIN propuesta_comercial p ON p.id_propuesta = s.id_propuesta AND p.numero = v_numero
     WHERE s.eliminado_en IS NULL AND s.estado IN ('cerrado_aceptacion', 'cerrado_rechazo')

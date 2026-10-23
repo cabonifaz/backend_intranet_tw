@@ -330,16 +330,35 @@ public record DetallePropuestaExpedienteDto
     public string?   TelefonoContacto   { get; init; }
     public long?     IdSede             { get; init; }
     public string?   Sede               { get; init; }
+    /// <summary>Contacto y sede de la propuesta agrupados (sección "Contacto y Cliente").</summary>
+    public ContactoClienteExpedienteDto? ContactoCliente { get; init; }
     /// <summary>Suministros del cliente incluidos en la propuesta (viñetas de la sección).</summary>
     public int       Suministros        { get; init; }
 }
+
+public record ContactoClienteExpedienteDto(
+    long? IdContacto, string? Nombre, string? Cargo, string? Area, string? Correo, string? Telefono,
+    long? IdSede, string? SedeNombre, string? SedeUbicacion, string? SedeDireccion);
 
 /// <summary>OC vinculada a la versión de la propuesta ("Órdenes de compra vinculadas desde esta propuesta").</summary>
 public record OcPropuestaExpedienteDto(
     long IdOc, string NumeroOc, string Estado, bool EsAutogenerada, bool Reemplazada, int? IdMonedaOc, string? SimboloMonedaOc,
     decimal MontoTotal, decimal MontoAsignado, decimal? MontoCubierto, string? EstadoValidacion, string? ResultadoIa,
     int? Criticas, int? Advertencias, long? IdResponsable, string? Responsable, DateTime? FechaEmision,
-    DateTime? FechaRecepcion, DateTime? FechaRegistro);
+    DateTime? FechaRecepcion, DateTime? FechaRegistro)
+{
+    /// <summary>Igual a SimboloMonedaOc.</summary>
+    public string? SimboloMoneda => SimboloMonedaOc;
+    /// <summary>Texto corto de la validación de esta vinculación: "OK", "Validación parcial", "Observada", "Pendiente"…</summary>
+    public string? Validacion => EstadoValidacion switch
+    {
+        "validada"  => "OK",
+        "observada" => Criticas is > 0 ? "Observada (crítica)" : "Validación parcial",
+        "pendiente" => "Pendiente",
+        null        => null,
+        _           => EstadoValidacion,
+    };
+}
 
 public record FormaPagoExpedienteDto(decimal? Porcentaje, string? Condicion, int Orden);
 
@@ -543,7 +562,18 @@ public record TabOrdenesCompraExpedienteDto(
 public record OsVinculadaOcExpedienteDto(
     long IdOs, string Numero, string Estado, decimal? CostoEstimado, DateTime? FechaEjecucion, string? HoraInicio,
     long? IdTecnico, string? Tecnico, long? IdResponsableComercial, string? ResponsableComercial, string? ConfirmacionCliente,
-    long IdExpediente, string? NumeroExpediente);
+    long IdExpediente, string? NumeroExpediente)
+{
+    /// <summary>Igual a FechaEjecucion.</summary>
+    public DateTime? FechaProgramada  => FechaEjecucion;
+    /// <summary>Igual a Tecnico.</summary>
+    public string?   TecnicoPrincipal => Tecnico;
+    /// <summary>Demás personal asignado a la OS (sin el técnico principal).</summary>
+    public string?   Ejecutor         { get; init; }
+    /// <summary>Lo que la OC asignó a la propuesta de esta OS (moneda de la OC).</summary>
+    public decimal?  MontoPropuestaOc { get; init; }
+    public string?   SimboloMoneda    { get; init; }
+}
 
 // Tab OS
 public record OsPillDto(long IdOs, string Numero, string Estado, DateTime? FechaEjecucion, bool Seleccionada);
@@ -707,6 +737,9 @@ public record DocumentoExpedienteDto
     public string?   EtapaOrigen     { get; init; }
     public string?   Etapa           { get; init; }
     public string?   EtapaNombre     { get; init; }
+    /// <summary>Rol del documento (chip): generada, comunicacion, adjunto_cliente, documento_origen, habilitacion,
+    /// induccion, certificado, evidencia u otro.</summary>
+    public string?   RolDocumento    { get; init; }
     public int       Version         { get; init; }
     public string    Estado          { get; init; } = "";
     public DateTime? Fecha           { get; init; }

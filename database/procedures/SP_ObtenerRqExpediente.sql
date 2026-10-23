@@ -75,7 +75,7 @@ proc: BEGIN
     -- 5. Propuestas generadas desde el RQ (última versión de cada una)
     SELECT p.id_propuesta, p.numero, p.version, p.estado, p.total, p.id_moneda, m.String2 AS simbolo_moneda,
            COALESCE(p.id_responsable, p.id_creador) AS id_responsable, CONCAT(u.nombre, ' ', u.apellido) AS responsable,
-           p.fecha_creacion, p.fecha_envio,
+           p.fecha_creacion, COALESCE(p.fecha_envio_cliente, p.fecha_envio) AS fecha_envio,
            (SELECT MIN(IFNULL(s.fecha_interaccion, s.creado_en)) FROM seguimiento_comercial s
             WHERE s.id_propuesta = p.id_propuesta AND s.eliminado_en IS NULL AND s.estado = 'cerrado_aceptacion') AS fecha_aceptacion,
            (SELECT MIN(IFNULL(s.fecha_interaccion, s.creado_en)) FROM seguimiento_comercial s

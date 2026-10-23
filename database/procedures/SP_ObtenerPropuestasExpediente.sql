@@ -83,15 +83,18 @@ proc: BEGIN
            (SELECT cp.String1 FROM tabla_maestra cp WHERE cp.IdMaestro = 39 AND cp.IdEmpresa = 1 AND cp.Num1 = p.id_condicion_pago
               AND cp.eliminado_en IS NULL LIMIT 1) AS condicion_pago,
            p.plazo_entrega_dias, p.vigencia_dias, p.fecha_expiracion,
-           p.fecha_creacion, p.fecha_envio,
+           p.fecha_creacion, COALESCE(p.fecha_envio_cliente, p.fecha_envio) AS fecha_envio,
            (SELECT MIN(IFNULL(s.fecha_interaccion, s.creado_en)) FROM seguimiento_comercial s
             WHERE s.id_propuesta = p.id_propuesta AND s.eliminado_en IS NULL AND s.estado = 'cerrado_aceptacion') AS fecha_aceptacion,
            p.descripcion_cambios, mv.String1 AS motivo_nueva_version,
-           CAST(p.secciones_activas AS CHAR) AS secciones_activas,
+           -- Completas (obligatorias + opcionales activas), en el orden del wizard
+           CAST(FN_SeccionesActivasPropuesta(p.secciones_activas) AS CHAR) AS secciones_activas,
            CONCAT('prop-', p.id_propuesta) AS clave_pdf, CONCAT(p.numero, '-v', p.version, '.pdf') AS nombre_pdf,
            r.numero AS numero_rq,
            p.id_contacto, ct.nombres AS contacto, ct.cargo AS cargo_contacto, ct.correo AS correo_contacto,
-           ct.telefono_movil AS telefono_contacto, p.id_sede, sc.nombre AS sede,
+           ct.telefono_movil AS telefono_contacto, ct.area AS area_contacto, p.id_sede, sc.nombre AS sede,
+           NULLIF(CONCAT_WS(', ', NULLIF(sc.distrito, ''), NULLIF(sc.provincia, ''), NULLIF(sc.region, '')), '') AS sede_ubicacion,
+           sc.direccion_exacta AS sede_direccion,
            (SELECT COUNT(*) FROM propuesta_texto tx WHERE tx.id_propuesta = p.id_propuesta
               AND tx.seccion = 'suministros_cliente' AND tx.tipo <> 'titulo')       AS suministros
     FROM propuesta_comercial p
@@ -119,13 +122,13 @@ proc: BEGIN
 
     -- 7. Visto bueno de la versión
     --    (el VB va a la bandeja del área sin aprobador fijo: aprobador efectivo con FN_AprobadorVistoBueno)
-    SELECT v.id_vb, v.estado, COALESCE(v.id_aprobador, FN_AprobadorVistoBueno(v.id_vb)) AS id_aprobador,
+    SELECT v.id_vb, v.estado, FN_AprobadorVistoBuenoExpediente(v.id_vb) AS id_aprobador,
            CONCAT(ua.nombre, ' ', ua.apellido) AS aprobador, ua.cargo AS cargo_aprobador,
-           v.fecha_solicitud, v.fecha_respuesta, v.resuelto_por AS id_resuelto_por,
+           v.fecha_solicitud, v.fecha_respuesta, IF(v.estado = 'pendiente', NULL, FN_AprobadorVistoBuenoExpediente(v.id_vb)) AS id_resuelto_por,
            CONCAT(ur.nombre, ' ', ur.apellido) AS resuelto_por, v.comentario_respuesta, mr.String1 AS motivo_rechazo
     FROM visto_bueno v
-    LEFT JOIN usuario ua ON ua.id_usuario = COALESCE(v.id_aprobador, FN_AprobadorVistoBueno(v.id_vb))
-    LEFT JOIN usuario ur ON ur.id_usuario = v.resuelto_por
+    LEFT JOIN usuario ua ON ua.id_usuario = FN_AprobadorVistoBuenoExpediente(v.id_vb)
+    LEFT JOIN usuario ur ON ur.id_usuario = IF(v.estado = 'pendiente', NULL, FN_AprobadorVistoBuenoExpediente(v.id_vb))
     LEFT JOIN tabla_maestra mr ON mr.IdMaestro = 10 AND mr.IdEmpresa = 1 AND mr.Num1 = v.id_motivo_rechazo
     WHERE v.id_propuesta = v_id_prop AND v.tipo = 'aprobacion' AND v.eliminado_en IS NULL
     ORDER BY v.id_vb DESC;
@@ -148,7 +151,7 @@ proc: BEGIN
         SELECT v.fecha_respuesta, CONCAT('vb_', v.estado),
                CASE v.estado WHEN 'aprobado' THEN 'VB aprobado' WHEN 'rechazado' THEN 'VB rechazado'
                              WHEN 'devuelto' THEN 'VB devuelto para ajuste' ELSE CONCAT('VB ', REPLACE(v.estado, '_', ' ')) END,
-               v.comentario_respuesta, COALESCE(v.resuelto_por, v.id_aprobador, FN_AprobadorVistoBueno(v.id_vb))
+               v.comentario_respuesta, FN_AprobadorVistoBuenoExpediente(v.id_vb)
         FROM visto_bueno v
         WHERE v.id_propuesta = v_id_prop AND v.tipo = 'aprobacion' AND v.eliminado_en IS NULL AND v.fecha_respuesta IS NOT NULL
         UNION ALL

@@ -372,6 +372,10 @@ public class ExpedienteRepositorio(CadenaConexionBd conexion)
                     TelefonoContacto   = Texto(x, "telefono_contacto"),
                     IdSede             = EnteroLargoNulo(x, "id_sede"),
                     Sede               = Texto(x, "sede"),
+                    ContactoCliente    = new ContactoClienteExpedienteDto(
+                        EnteroLargoNulo(x, "id_contacto"), Texto(x, "contacto"), Texto(x, "cargo_contacto"), Texto(x, "area_contacto"),
+                        Texto(x, "correo_contacto"), Texto(x, "telefono_contacto"), EnteroLargoNulo(x, "id_sede"), Texto(x, "sede"),
+                        Texto(x, "sede_ubicacion"), Texto(x, "sede_direccion")),
                     Suministros        = Ent(x, "suministros"),
                 }, ct);
                 var formas = await LeerListaAsync(r, x => new FormaPagoExpedienteDto(
@@ -594,7 +598,12 @@ public class ExpedienteRepositorio(CadenaConexionBd conexion)
                     EnteroLargo(x, "id_os"), Texto(x, "numero") ?? "", Texto(x, "estado") ?? "", DecimalNulo(x, "costo_total_estimado"),
                     Fh(x, "fecha_ejecucion"), Hora(x, "hora_inicio"), EnteroLargoNulo(x, "id_tecnico_principal"), Texto(x, "tecnico"),
                     EnteroLargoNulo(x, "id_responsable_comercial"), Texto(x, "responsable_comercial"), Texto(x, "confirmacion_cliente"),
-                    EnteroLargo(x, "id_expediente"), Texto(x, "numero_expediente")), ct);
+                    EnteroLargo(x, "id_expediente"), Texto(x, "numero_expediente"))
+                {
+                    Ejecutor         = Texto(x, "ejecutores"),
+                    MontoPropuestaOc = DecimalNulo(x, "monto_propuesta_oc"),
+                    SimboloMoneda    = Texto(x, "simbolo_moneda"),
+                }, ct);
 
                 return new RespuestaDto<TabOrdenesCompraExpedienteDto>(2, mensaje,
                     new TabOrdenesCompraExpedienteDto(pills, datos, validaciones, campos, timeline) { OrdenesServicio = oss });
@@ -808,6 +817,7 @@ public class ExpedienteRepositorio(CadenaConexionBd conexion)
                     Origen          = Texto(x, "origen"),
                     Modulo          = Texto(x, "modulo"),
                     EtapaOrigen     = Texto(x, "etapa_origen"),
+                    RolDocumento    = TieneColumna(x, "rol_documento") ? Texto(x, "rol_documento") : null,
                     Etapa           = Texto(x, "etapa"),
                     EtapaNombre     = Texto(x, "etapa_nombre"),
                     Version         = Ent(x, "version"),

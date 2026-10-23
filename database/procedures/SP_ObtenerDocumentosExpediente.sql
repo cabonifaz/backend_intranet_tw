@@ -96,7 +96,22 @@ proc: BEGIN
            CONCAT(u.nombre, ' ', u.apellido) AS usuario, u.cargo AS cargo_usuario, a.String1 AS area_usuario,
            d.tamano_bytes, d.tipo_contenido, d.formato, d.descripcion, d.visibilidad, d.es_interno,
            (d.ruta IS NOT NULL OR d.id_propuesta IS NOT NULL OR d.id_correo IS NOT NULL) AS descargable,
-           (d.formato IN ('PDF', 'JPG', 'PNG')) AS previsualizable
+           (d.formato IN ('PDF', 'JPG', 'PNG')) AS previsualizable,
+           -- Rol del documento (chip secundario): generada · comunicacion · adjunto_cliente · documento_origen ·
+           -- habilitacion · induccion · certificado · evidencia · otro
+           CASE
+               WHEN d.clave LIKE 'prop-%' OR d.clave LIKE 'inf-%'          THEN 'generada'
+               WHEN d.clave LIKE 'mail-%'                                  THEN 'comunicacion'
+               WHEN d.clave LIKE 'seg-%'
+                    AND d.etapa_origen IN ('Aceptación', 'Rechazo')       THEN 'adjunto_cliente'
+               WHEN d.clave LIKE 'seg-%'                                   THEN 'comunicacion'
+               WHEN d.clave LIKE 'ocpdf-%' OR d.modulo = 'OC'              THEN 'documento_origen'
+               WHEN d.clave LIKE 'ssoma-%' AND d.etapa_origen = 'Inducción' THEN 'induccion'
+               WHEN d.clave LIKE 'ssoma-%'                                 THEN 'habilitacion'
+               WHEN d.clave LIKE 'om-%'                                    THEN 'certificado'
+               WHEN d.clave LIKE 'evi-%'                                   THEN 'evidencia'
+               WHEN d.modulo = 'RQ'                                        THEN 'adjunto_cliente'
+               ELSE 'otro' END                                             AS rol_documento
     FROM tmp_exp_doc_f d
     LEFT JOIN usuario u        ON u.id_usuario = d.id_usuario
     LEFT JOIN tabla_maestra a  ON a.IdMaestro = 79 AND a.IdEmpresa = 1 AND a.String2 = u.area

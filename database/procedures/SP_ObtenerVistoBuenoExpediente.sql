@@ -5,8 +5,7 @@
 --   3 estado actual del VB de la propuesta: versión en revisión, estado global, aprobador (cargo, área, correo, teléfono,
 --     estado del usuario, si es el aprobador por defecto o uno reasignado y si es el jefe directo del comercial),
 --     versión aprobada y su monto, fecha de aprobación final, horas hábiles vs. SLA.
---     Aprobador: el VB llega a la bandeja del área sin aprobador fijo (migración 49), así que se toma quien resolvió o,
---     si está pendiente, el aprobador efectivo (FN_AprobadorVistoBueno: reasignado, suplente o jefe directo).
+--     Aprobador: FN_AprobadorVistoBuenoExpediente (quien resolvió o, si está pendiente, el aprobador efectivo).
 --   4 historial de decisiones por versión (aprobador, decisión, comentario, fechas y tiempo de revisión en horas hábiles)
 --   5 historial de reasignación del aprobador
 --   6 métricas: versiones totales, devueltas, tiempo total de aprobación (días), promedio por versión y SLA cumplido
@@ -64,10 +63,7 @@ proc: BEGIN
     WHERE p.numero = v_numero AND v.tipo = 'aprobacion' AND v.eliminado_en IS NULL AND v.estado <> 'reasignado'
     ORDER BY v.fecha_solicitud DESC, v.id_vb DESC LIMIT 1;
 
-    SELECT IF(v.estado = 'pendiente', COALESCE(FN_AprobadorVistoBueno(v.id_vb), v.id_aprobador),
-              COALESCE(v.resuelto_por, v.id_aprobador, FN_AprobadorVistoBueno(v.id_vb)))
-      INTO v_id_apr
-    FROM visto_bueno v WHERE v.id_vb = v_vb;
+    SET v_id_apr = FN_AprobadorVistoBuenoExpediente(v_vb);
 
     SELECT 2 AS IdTipoMensaje, 'Éxito.' AS Mensaje;
 
@@ -111,16 +107,16 @@ proc: BEGIN
 
     -- 4. Historial de decisiones por versión (más reciente primero)
     SELECT v.id_vb, p.id_propuesta, p.version, v.estado,
-           COALESCE(v.id_aprobador, FN_AprobadorVistoBueno(v.id_vb)) AS id_aprobador, CONCAT(ua.nombre, ' ', ua.apellido) AS aprobador,
-           ua.cargo AS cargo_aprobador, COALESCE(v.resuelto_por, v.id_aprobador, FN_AprobadorVistoBueno(v.id_vb)) AS id_revisor,
+           FN_AprobadorVistoBuenoExpediente(v.id_vb) AS id_aprobador, CONCAT(ua.nombre, ' ', ua.apellido) AS aprobador,
+           ua.cargo AS cargo_aprobador, FN_AprobadorVistoBuenoExpediente(v.id_vb) AS id_revisor,
            CONCAT(ur.nombre, ' ', ur.apellido) AS revisor, ur.cargo AS cargo_revisor,
            v.fecha_solicitud, v.fecha_respuesta, v.comentario_respuesta AS comentario, mr.String1 AS motivo_rechazo,
            IF(v.fecha_respuesta IS NULL, NULL, FN_HorasHabiles(v.fecha_solicitud, v.fecha_respuesta)) AS horas_revision,
            v.sla_horas
     FROM visto_bueno v
     JOIN propuesta_comercial p ON p.id_propuesta = v.id_propuesta
-    LEFT JOIN usuario ua ON ua.id_usuario = COALESCE(v.id_aprobador, FN_AprobadorVistoBueno(v.id_vb))
-    LEFT JOIN usuario ur ON ur.id_usuario = COALESCE(v.resuelto_por, v.id_aprobador, FN_AprobadorVistoBueno(v.id_vb))
+    LEFT JOIN usuario ua ON ua.id_usuario = FN_AprobadorVistoBuenoExpediente(v.id_vb)
+    LEFT JOIN usuario ur ON ur.id_usuario = FN_AprobadorVistoBuenoExpediente(v.id_vb)
     LEFT JOIN tabla_maestra mr ON mr.IdMaestro = 10 AND mr.IdEmpresa = 1 AND mr.Num1 = v.id_motivo_rechazo
     WHERE p.numero = v_numero AND v.tipo = 'aprobacion' AND v.eliminado_en IS NULL AND v.estado <> 'reasignado'
     ORDER BY v.fecha_solicitud DESC, v.id_vb DESC;

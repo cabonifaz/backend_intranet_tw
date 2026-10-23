@@ -57,7 +57,7 @@ BEGIN
     INSERT INTO tmp_exp_ent
     SELECT CONCAT('prop-', p.id_propuesta), IF(v_id_rq IS NULL, NULL, CONCAT('rq-', v_id_rq)), 2, 0, 'propuesta', p.id_propuesta,
            p.numero, p.version, p.estado, p.total, p.id_moneda, COALESCE(p.id_responsable, p.id_creador), p.fecha_creacion,
-           p.fecha_envio,
+           COALESCE(p.fecha_envio_cliente, p.fecha_envio),
            CASE WHEN p.estado = 'aceptado' THEN (SELECT MIN(IFNULL(s.fecha_interaccion, s.creado_en)) FROM seguimiento_comercial s
                                                  WHERE s.id_propuesta = p.id_propuesta AND s.eliminado_en IS NULL AND s.estado = 'cerrado_aceptacion')
                 WHEN p.estado = 'rechazado' THEN IFNULL((SELECT MIN(IFNULL(s.fecha_interaccion, s.creado_en)) FROM seguimiento_comercial s

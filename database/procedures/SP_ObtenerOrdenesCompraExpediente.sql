@@ -11,7 +11,8 @@
 --   5 comparación campo por campo de la última validación de la primera propuesta vinculada de este expediente
 --   6 timeline de la OC (auditoría; el detalle fino de cada validación queda en el módulo OC)
 --   7 órdenes de servicio vinculadas a la OC (las de los expedientes de sus propuestas): número, estado, costo estimado,
---     fecha de ejecución, técnico principal y responsable comercial
+--     fecha de ejecución, técnico principal, demás personal asignado (ejecutores), responsable comercial y lo que la OC
+--     asignó a la propuesta de esa OS (monto_propuesta_oc, en la moneda de la OC)
 DROP PROCEDURE IF EXISTS SP_ObtenerOrdenesCompraExpediente;
 
 DELIMITER $$
@@ -166,7 +167,17 @@ proc: BEGIN
     SELECT os.id_os, os.numero, os.estado, os.costo_total_estimado, os.fecha_ejecucion, os.hora_inicio,
            os.id_tecnico_principal, CONCAT(ut.nombre, ' ', ut.apellido) AS tecnico,
            os.id_responsable_comercial, CONCAT(uc.nombre, ' ', uc.apellido) AS responsable_comercial,
-           os.confirmacion_cliente, e.id_expediente, e.numero AS numero_expediente
+           os.confirmacion_cliente, e.id_expediente, e.numero AS numero_expediente,
+           (SELECT GROUP_CONCAT(CONCAT(up.nombre, ' ', up.apellido) ORDER BY op2.id SEPARATOR ', ')
+            FROM os_personal op2 JOIN usuario up ON up.id_usuario = op2.id_usuario
+            WHERE op2.id_os = os.id_os AND op2.eliminado_en IS NULL
+              AND op2.id_usuario <> IFNULL(os.id_tecnico_principal, 0))                     AS ejecutores,
+           (SELECT SUM(op.monto_asignado) FROM oc_propuesta op
+            WHERE op.id_oc = v_id_oc AND op.eliminado_en IS NULL
+              AND FN_ExpedienteDePropuesta(op.id_propuesta) = os.id_expediente)            AS monto_propuesta_oc,
+           (SELECT mo.String2 FROM orden_compra oc2
+            JOIN tabla_maestra mo ON mo.IdMaestro = 1 AND mo.IdEmpresa = 1 AND mo.Num1 = oc2.id_moneda
+            WHERE oc2.id_oc = v_id_oc LIMIT 1)                                               AS simbolo_moneda
     FROM orden_servicio os
     JOIN expediente_digital e ON e.id_expediente = os.id_expediente AND e.eliminado_en IS NULL
     LEFT JOIN usuario ut ON ut.id_usuario = os.id_tecnico_principal

@@ -94,7 +94,7 @@ BEGIN
         a.id_propuesta, IFNULL(a.rango, 0) AS rango_propuesta, GREATEST(IFNULL(a.propuestas_vigentes, 0) - 1, 0) AS propuestas_otras,
         p.numero AS numero_propuesta, p.version AS version_propuesta, p.estado AS estado_propuesta, p.tipo_servicio,
         COALESCE(p.id_responsable, p.id_creador) AS id_responsable_propuesta, p.id_moneda, p.total AS total_propuesta,
-        p.fecha_envio, p.modificado_en AS propuesta_modificada,
+        COALESCE(p.fecha_envio_cliente, p.fecha_envio) AS fecha_envio, p.modificado_en AS propuesta_modificada,
         (SELECT MIN(p2.fecha_creacion) FROM propuesta_comercial p2
          WHERE p2.eliminado_en IS NULL AND p2.id_requerimiento = b.id_requerimiento)                       AS fecha_primera_propuesta,
         ((SELECT COUNT(*) FROM propuesta_item i WHERE i.id_propuesta = a.id_propuesta AND i.eliminado_en IS NULL)
