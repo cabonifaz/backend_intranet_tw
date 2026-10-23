@@ -203,7 +203,9 @@ public record PropuestaDisponibleOcDto(
     string?   TipoServicio,
     bool      TieneOc,
     long?     IdOcAutogenerada     = null,
-    string?   NumeroOcAutogenerada = null);
+    string?   NumeroOcAutogenerada = null,
+    /// <summary>Ítems (servicios) de la propuesta: columna SERVICIOS.</summary>
+    int       Items                = 0);
 
 /// <summary>Propuesta de origen de la ficha de registro.</summary>
 public record PropuestaOrigenOcDto(
@@ -347,10 +349,11 @@ public record ComparacionPropuestaOcDto(
 public record HitoPagoPropuestaDto(decimal Porcentaje, string Condicion, int? DiasCredito, string? Codigo);
 
 /// <summary>
-/// Ítem del pool consolidado de la OC multi-propuesta (pestaña "Resumen"): cada ítem distinto de las propuestas
-/// vinculadas (deduplicado por descripción normalizada) y cada concepto de la OC que no está en ninguna.
-/// Severidad: ok (está en la OC y la cantidad coincide o no se puede comparar) · advertencia (falta en la OC, adicional
-/// en la OC o cantidad distinta).
+/// Ítem del pool consolidado de la OC multi-propuesta (pestaña "Resumen"). Identidad del ítem: descripción normalizada
+/// + precio unitario + alcance; las cantidades de las propuestas con el mismo ítem se suman. También trae cada concepto de
+/// la OC que no está en el pool (EnPropuestas vacío).
+/// Severidad: ok (la cantidad de la OC = la del pool) · advertencia (faltan o sobran unidades, falta en la OC o adicional
+/// en la OC). Nunca crítico.
 /// </summary>
 public record ItemConsolidadoOcDto(
     string     DescripcionNormalizada,
@@ -360,7 +363,27 @@ public record ItemConsolidadoOcDto(
     bool       EnOc,
     decimal?   CantidadOc,
     string     Severidad,
-    string?    Mensaje);
+    string?    Mensaje)
+{
+    /// <summary>Precio unitario del ítem en la moneda de la propuesta (parte de la identidad). En un adicional de la OC,
+    /// el precio de la OC.</summary>
+    public decimal? PrecioUnitario { get; init; }
+    public string?  MonedaSimbolo  { get; init; }
+    /// <summary>Alcance del ítem (propuesta_item.alcance, parte de la identidad).</summary>
+    public string?  Alcance        { get; init; }
+    /// <summary>Suma de las cantidades de las propuestas (= CantidadTotal).</summary>
+    public decimal  CantidadEnPool { get; init; }
+    /// <summary>Cantidad que pide la OC (= CantidadOc; null si la OC no la indica).</summary>
+    public decimal? CantidadEnOc   { get; init; }
+    /// <summary>Faltan (positivo) o sobran (negativo) unidades en la OC respecto del pool.</summary>
+    public decimal? Diferencia     { get; init; }
+    /// <summary>Precio unitario que trae la OC para este ítem (en la moneda de la OC).</summary>
+    public decimal? PrecioUnitarioOc { get; init; }
+    /// <summary>Cuánto aporta cada propuesta al pool: "15 unidades: 10 de PROP-A, 5 de PROP-B".</summary>
+    public List<ItemAporteDto> AportesPorPropuesta { get; init; } = [];
+}
+
+public record ItemAporteDto(long IdPropuesta, string Numero, decimal Cantidad, decimal? PrecioUnitario);
 
 /// <summary>Fila de la comparación campo por campo. Severidad: ok · advertencia · critico · sin_dato.</summary>
 public record CampoComparadoOcDto(
@@ -779,7 +802,7 @@ public record ArchivoPdfOcDto(string Ruta, string Nombre, long Tamano, string Ha
 
 /// <summary>Datos de apoyo para la IA: monedas, condiciones, ítems de las propuestas y motivo de nueva versión.</summary>
 public record ItemPropuestaIaDto(long IdPropuesta, string Numero, int Version, string Descripcion, decimal Cantidad,
-                                 decimal PrecioUnitario, decimal Subtotal);
+                                 decimal PrecioUnitario, decimal Subtotal, string? Alcance = null, int IdMoneda = 0);
 
 public record DatosIaOrdenCompraDto(
     List<MonedaOrdenCompraDto> Monedas,

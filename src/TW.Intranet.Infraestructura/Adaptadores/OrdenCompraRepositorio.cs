@@ -93,7 +93,8 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
         FechaHora(r, "fecha_aceptacion"), Texto(r, "responsable"), Texto(r, "tipo_servicio"),
         TieneColumna(r, "tiene_oc") && Booleano(r, "tiene_oc"),
         TieneColumna(r, "id_oc_autogenerada") ? EnteroLargoNulo(r, "id_oc_autogenerada") : null,
-        TieneColumna(r, "numero_oc_autogenerada") ? Texto(r, "numero_oc_autogenerada") : null);
+        TieneColumna(r, "numero_oc_autogenerada") ? Texto(r, "numero_oc_autogenerada") : null,
+        TieneColumna(r, "items") ? Ent(r, "items") : 0);
 
     private static bool TieneColumna(MySqlDataReader r, string c)
     {
@@ -598,7 +599,9 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
                 var items = new List<ItemPropuestaIaDto>();
                 while (await r.ReadAsync(ct))
                     items.Add(new ItemPropuestaIaDto(EnteroLargo(r, "id_propuesta"), Texto(r, "numero") ?? "", Ent(r, "version"),
-                        Texto(r, "descripcion") ?? "", Dec(r, "cantidad"), Dec(r, "precio_unitario"), Dec(r, "subtotal")));
+                        Texto(r, "descripcion") ?? "", Dec(r, "cantidad"), Dec(r, "precio_unitario"), Dec(r, "subtotal"),
+                        TieneColumna(r, "alcance") ? Texto(r, "alcance") : null,
+                        TieneColumna(r, "id_moneda") ? Ent(r, "id_moneda") : 0));
 
                 await r.NextResultAsync(ct);
                 int? motivo = await r.ReadAsync(ct) ? EntNulo(r, "id_motivo_nueva_version") : null;

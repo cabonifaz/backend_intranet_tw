@@ -6,7 +6,9 @@
 --   3 estado actual: estado global (sin_seguimiento, activo, cerrado_aceptacion, cerrado_rechazo), fechas de envío y
 --     de cierre, días en seguimiento, comercial a cargo, contacto del cliente, última interacción, total de
 --     interacciones y SLA del seguimiento (CONFIG_SLA expediente / seguimiento)
---   4 timeline de interacciones (envío al cliente, interacciones, correos enviados y cierre) con sus adjuntos (claves)
+--   4 timeline de interacciones (envío al cliente, interacciones, correos enviados y cierre) con sus adjuntos (claves),
+--     destinatario (contacto de la interacción, correos del "Para" o contacto de la propuesta en el envío), resumen del
+--     cuerpo del correo (texto sin HTML, 300 caracteres) y tipo de aceptación
 --   5 resultado del seguimiento (0 o 1 fila): aceptación o rechazo, fecha, registrado por, tipo de evidencia, motivo,
 --     comentario, monto comprometido y días hasta el cierre
 --   6 evidencias del cierre (clave seg-<id> para ver/descargar en /documentos/{clave})
@@ -92,6 +94,9 @@ proc: BEGIN
               ROUND(TIMESTAMPDIFF(MINUTE, v_envio, IFNULL(IFNULL(c.fecha_interaccion, c.creado_en), NOW())) / 1440, 1)) AS dias_seguimiento,
            COALESCE(pu.id_responsable, pu.id_creador) AS id_comercial, CONCAT(uc.nombre, ' ', uc.apellido) AS comercial,
            uc.cargo AS cargo_comercial, uc.correo AS correo_comercial, uc.telefono AS telefono_comercial,
+           uc.area AS codigo_area_comercial,
+           (SELECT MAX(ar.String1) FROM tabla_maestra ar WHERE ar.IdMaestro = 79 AND ar.IdEmpresa = 1
+              AND ar.String2 = uc.area)                                                     AS area_comercial,
            pu.id_contacto, ct.nombres AS contacto, ct.cargo AS cargo_contacto, ct.correo AS correo_contacto,
            k.ultima AS ultima_interaccion, IFNULL(k.total, 0) AS total_interacciones,
            v_sla AS sla_horas,
@@ -107,7 +112,8 @@ proc: BEGIN
     -- 4. Timeline de interacciones
     SELECT t.fecha, t.tipo, t.titulo, t.canal, t.resultado, t.asunto, t.detalle, t.duracion_minutos,
            t.proxima_accion_fecha, t.proxima_accion, t.version, t.id_usuario,
-           IFNULL(CONCAT(u.nombre, ' ', u.apellido), 'Sistema') AS usuario, t.adjuntos
+           IFNULL(CONCAT(u.nombre, ' ', u.apellido), 'Sistema') AS usuario, t.adjuntos,
+           t.destinatario, t.resumen_cuerpo, t.tipo_aceptacion
     FROM (
         SELECT IFNULL(s.fecha_interaccion, s.creado_en) AS fecha,
                CASE s.estado WHEN 'cerrado_aceptacion' THEN 'aceptacion' WHEN 'cerrado_rechazo' THEN 'rechazo' ELSE 'interaccion' END AS tipo,
@@ -119,23 +125,38 @@ proc: BEGIN
                NULLIF(CONCAT_WS(': ', ta.String1, NULLIF(TRIM(IFNULL(s.proxima_accion_detalle, '')), '')), '') AS proxima_accion,
                s.version, s.creado_por AS id_usuario,
                (SELECT GROUP_CONCAT(CONCAT('seg-', a.id_adjunto, '|', a.nombre_archivo) ORDER BY a.id_adjunto SEPARATOR ';')
-                FROM seguimiento_adjunto a WHERE a.id_seguimiento = s.id_seguimiento AND a.eliminado_en IS NULL) AS adjuntos
+                FROM seguimiento_adjunto a WHERE a.id_seguimiento = s.id_seguimiento AND a.eliminado_en IS NULL) AS adjuntos,
+               ct.nombres AS destinatario, CAST(NULL AS CHAR(300)) AS resumen_cuerpo, tac.String1 AS tipo_aceptacion
         FROM tmp_exp_seg s
+        LEFT JOIN contacto_cliente ct ON ct.id_contacto = s.id_contacto
+        LEFT JOIN tabla_maestra tac ON tac.IdMaestro = 95 AND tac.IdEmpresa = 1 AND tac.Num1 = s.id_tipo_aceptacion
         LEFT JOIN tabla_maestra cn ON cn.IdMaestro = 26 AND cn.IdEmpresa = 1 AND cn.Num1 = s.id_canal
         LEFT JOIN tabla_maestra rs ON rs.IdMaestro = 27 AND rs.IdEmpresa = 1 AND rs.Num1 = s.id_resultado
         LEFT JOIN tabla_maestra ta ON ta.IdMaestro = 93 AND ta.IdEmpresa = 1 AND ta.Num1 = s.id_tipo_proxima_accion
         UNION ALL
         SELECT IFNULL(sc.fecha_envio, sc.creado_en), 'correo', 'Correo de seguimiento enviado', 'Correo electrónico', NULL,
-               sc.asunto, CONCAT('Para: ', IFNULL(JSON_UNQUOTE(sc.para), '')), NULL, NULL, NULL, p.version, sc.id_usuario,
-               CONCAT('mail-', sc.id_correo, '|correo_seguimiento_', sc.id_correo, '.eml')
+               sc.asunto, CONCAT('Para: ', IFNULL(d.destinatarios, '')), NULL, NULL, NULL, p.version, sc.id_usuario,
+               CONCAT('mail-', sc.id_correo, '|correo_seguimiento_', sc.id_correo, '.eml'),
+               d.destinatarios,
+               LEFT(TRIM(REGEXP_REPLACE(REGEXP_REPLACE(IFNULL(sc.cuerpo_html, ''), '<[^>]*>', ' '), '[[:space:]]+', ' ')), 300),
+               NULL
         FROM seguimiento_correo sc
         JOIN propuesta_comercial p ON p.id_propuesta = sc.id_propuesta AND p.numero = v_numero
+        -- "Para": lista de {correo, nombre} o de textos
+        LEFT JOIN LATERAL (
+            SELECT GROUP_CONCAT(COALESCE(IF(j.nombre IS NULL, j.correo, CONCAT(j.nombre, ' <', j.correo, '>')), j.texto)
+                                SEPARATOR ', ') AS destinatarios
+            FROM JSON_TABLE(IF(JSON_VALID(sc.para) AND JSON_TYPE(sc.para) = 'ARRAY', sc.para, JSON_ARRAY()), '$[*]'
+                            COLUMNS (correo VARCHAR(200) PATH '$.correo', nombre VARCHAR(200) PATH '$.nombre',
+                                     texto VARCHAR(200) PATH '$')) j
+        ) d ON TRUE
         WHERE sc.eliminado_en IS NULL AND sc.estado = 'enviado'
         UNION ALL
         SELECT a.registrado_en, 'envio', 'Propuesta enviada al cliente', NULL, NULL, NULL, a.descripcion, NULL, NULL, NULL,
-               p.version, a.id_usuario, NULL
+               p.version, a.id_usuario, NULL, cp.nombres, NULL, NULL
         FROM auditoria_evento a
         JOIN propuesta_comercial p ON p.id_propuesta = a.id_entidad AND p.numero = v_numero
+        LEFT JOIN contacto_cliente cp ON cp.id_contacto = p.id_contacto
         WHERE a.entidad_tipo = 'propuesta' AND a.accion = 'envio_cliente'
     ) t
     LEFT JOIN usuario u ON u.id_usuario = t.id_usuario

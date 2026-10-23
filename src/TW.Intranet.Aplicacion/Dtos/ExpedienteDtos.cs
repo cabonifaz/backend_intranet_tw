@@ -221,7 +221,11 @@ public record EventoExpedienteDto(
     string?   Entidad,
     string?   Referencia,
     bool      Urgente,
-    string?   Origen);
+    string?   Origen)
+{
+    /// <summary>Cargo del usuario, ej. "(Jefe Comercial)" junto al nombre en Auditoría.</summary>
+    public string? CargoUsuario { get; init; }
+}
 
 public record DetalleExpedienteDto(
     CabeceraExpedienteDto                 Cabecera,
@@ -318,7 +322,24 @@ public record DetallePropuestaExpedienteDto
     public string    ClavePdf           { get; init; } = "";
     public string?   NombrePdf          { get; init; }
     public string?   NumeroRq           { get; init; }
+    // Contacto y Cliente de la propuesta
+    public long?     IdContacto         { get; init; }
+    public string?   Contacto           { get; init; }
+    public string?   CargoContacto      { get; init; }
+    public string?   CorreoContacto     { get; init; }
+    public string?   TelefonoContacto   { get; init; }
+    public long?     IdSede             { get; init; }
+    public string?   Sede               { get; init; }
+    /// <summary>Suministros del cliente incluidos en la propuesta (viñetas de la sección).</summary>
+    public int       Suministros        { get; init; }
 }
+
+/// <summary>OC vinculada a la versión de la propuesta ("Órdenes de compra vinculadas desde esta propuesta").</summary>
+public record OcPropuestaExpedienteDto(
+    long IdOc, string NumeroOc, string Estado, bool EsAutogenerada, bool Reemplazada, int? IdMonedaOc, string? SimboloMonedaOc,
+    decimal MontoTotal, decimal MontoAsignado, decimal? MontoCubierto, string? EstadoValidacion, string? ResultadoIa,
+    int? Criticas, int? Advertencias, long? IdResponsable, string? Responsable, DateTime? FechaEmision,
+    DateTime? FechaRecepcion, DateTime? FechaRegistro);
 
 public record FormaPagoExpedienteDto(decimal? Porcentaje, string? Condicion, int Orden);
 
@@ -341,7 +362,10 @@ public record TabPropuestasExpedienteDto(
     IReadOnlyList<ItemPropuestaExpedienteDto>    Items,
     IReadOnlyList<EquipoPropuestaExpedienteDto>  Equipos,
     IReadOnlyList<VistoBuenoVersionDto>          VistosBuenos,
-    IReadOnlyList<EventoTabDto>                  Timeline);
+    IReadOnlyList<EventoTabDto>                  Timeline)
+{
+    public IReadOnlyList<OcPropuestaExpedienteDto> OrdenesCompra { get; init; } = [];
+}
 
 // Tab Visto Bueno
 public record PropuestaPillDto(string Numero, int Version, bool Seleccionada);
@@ -354,12 +378,22 @@ public record EstadoVistoBuenoDto
     public string?   EstadoPropuesta      { get; init; }
     /// <summary>sin_solicitud, pendiente, aprobado, rechazado, devuelto…</summary>
     public string?   EstadoVb             { get; init; }
+    /// <summary>VB vigente (para "Ir al Módulo VB").</summary>
+    public long?     IdVb                 { get; init; }
     public long?     IdAprobador          { get; init; }
     public string?   Aprobador            { get; init; }
     public string?   CargoAprobador       { get; init; }
     public string?   AreaAprobador        { get; init; }
     public string?   CorreoAprobador      { get; init; }
     public string?   TelefonoAprobador    { get; init; }
+    /// <summary>Estado del usuario aprobador (activo, inactivo…): badge "Activo · En funciones".</summary>
+    public string?   EstadoAprobador      { get; init; }
+    /// <summary>true = aprobador por defecto (jefe directo o su suplente); false = reasignado.</summary>
+    public bool?     AprobadorPorDefecto  { get; init; }
+    public long?     IdComercial          { get; init; }
+    public string?   Comercial            { get; init; }
+    /// <summary>El aprobador es el jefe directo del comercial ("Es el supervisor directo de …").</summary>
+    public bool?     EsJefeDirectoComercial { get; init; }
     public long?     IdPropuestaAprobada  { get; init; }
     public int?      VersionAprobada      { get; init; }
     public decimal?  MontoAprobado        { get; init; }
@@ -408,6 +442,7 @@ public record EstadoSeguimientoExpedienteDto
     public string?   CargoComercial      { get; init; }
     public string?   CorreoComercial     { get; init; }
     public string?   TelefonoComercial   { get; init; }
+    public string?   AreaComercial       { get; init; }
     public string?   Contacto            { get; init; }
     public string?   CargoContacto       { get; init; }
     public string?   CorreoContacto      { get; init; }
@@ -420,7 +455,14 @@ public record EstadoSeguimientoExpedienteDto
 public record InteraccionSeguimientoDto(
     DateTime? Fecha, string Tipo, string? Titulo, string? Canal, string? Resultado, string? Asunto, string? Detalle,
     int? DuracionMinutos, DateTime? ProximaAccionFecha, string? ProximaAccion, int? Version, long? IdUsuario, string? Usuario,
-    IReadOnlyList<ArchivoTabDto> Adjuntos);
+    IReadOnlyList<ArchivoTabDto> Adjuntos)
+{
+    /// <summary>Contacto de la interacción, "Para" del correo o contacto de la propuesta en el envío.</summary>
+    public string? Destinatario   { get; init; }
+    /// <summary>Resumen del cuerpo del correo (texto, 300 caracteres).</summary>
+    public string? ResumenCuerpo  { get; init; }
+    public string? TipoAceptacion { get; init; }
+}
 
 public record ResultadoSeguimientoDto(
     string Resultado, DateTime? FechaCierre, long? IdRegistradoPor, string? RegistradoPor, string? TipoEvidencia,
@@ -492,7 +534,16 @@ public record TabOrdenesCompraExpedienteDto(
     DatosOcExpedienteDto?                      Datos,
     IReadOnlyList<ValidacionOcExpedienteDto>   Validaciones,
     IReadOnlyList<CampoValidacionOcDto>        Campos,
-    IReadOnlyList<EventoOcExpedienteDto>       Timeline);
+    IReadOnlyList<EventoOcExpedienteDto>       Timeline)
+{
+    /// <summary>Órdenes de servicio vinculadas a la OC elegida.</summary>
+    public IReadOnlyList<OsVinculadaOcExpedienteDto> OrdenesServicio { get; init; } = [];
+}
+
+public record OsVinculadaOcExpedienteDto(
+    long IdOs, string Numero, string Estado, decimal? CostoEstimado, DateTime? FechaEjecucion, string? HoraInicio,
+    long? IdTecnico, string? Tecnico, long? IdResponsableComercial, string? ResponsableComercial, string? ConfirmacionCliente,
+    long IdExpediente, string? NumeroExpediente);
 
 // Tab OS
 public record OsPillDto(long IdOs, string Numero, string Estado, DateTime? FechaEjecucion, bool Seleccionada);

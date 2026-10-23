@@ -8,6 +8,9 @@
 --     de pago, fechas (creación, envío, aceptación), secciones incluidas, PDF (clave prop-<id>)
 --   4 formas de pago · 5 ítems (principal y opcional) · 6 equipos a intervenir
 --   7 visto bueno de la versión (aprobador, decisión, comentario, fechas) · 8 timeline de la versión
+--   9 órdenes de compra vinculadas a la versión (número, estado, monto asignado, responsable, emisión, recepción y
+--     resultado de la validación)
+-- El detalle (3) trae también el contacto y la sede de la propuesta y cuántos suministros del cliente incluye.
 DROP PROCEDURE IF EXISTS SP_ObtenerPropuestasExpediente;
 
 DELIMITER $$
@@ -86,8 +89,14 @@ proc: BEGIN
            p.descripcion_cambios, mv.String1 AS motivo_nueva_version,
            CAST(p.secciones_activas AS CHAR) AS secciones_activas,
            CONCAT('prop-', p.id_propuesta) AS clave_pdf, CONCAT(p.numero, '-v', p.version, '.pdf') AS nombre_pdf,
-           r.numero AS numero_rq
+           r.numero AS numero_rq,
+           p.id_contacto, ct.nombres AS contacto, ct.cargo AS cargo_contacto, ct.correo AS correo_contacto,
+           ct.telefono_movil AS telefono_contacto, p.id_sede, sc.nombre AS sede,
+           (SELECT COUNT(*) FROM propuesta_texto tx WHERE tx.id_propuesta = p.id_propuesta
+              AND tx.seccion = 'suministros_cliente' AND tx.tipo <> 'titulo')       AS suministros
     FROM propuesta_comercial p
+    LEFT JOIN contacto_cliente ct ON ct.id_contacto = p.id_contacto
+    LEFT JOIN sede_cliente sc     ON sc.id_sede = p.id_sede
     LEFT JOIN usuario u        ON u.id_usuario = COALESCE(p.id_responsable, p.id_creador)
     LEFT JOIN tabla_maestra m  ON m.IdMaestro = 1 AND m.IdEmpresa = 1 AND m.Num1 = p.id_moneda
     LEFT JOIN tabla_maestra mv ON mv.IdMaestro = 11 AND mv.IdEmpresa = 1 AND mv.Num1 = p.id_motivo_nueva_version
@@ -109,12 +118,14 @@ proc: BEGIN
     FROM propuesta_equipo e WHERE e.id_propuesta = v_id_prop ORDER BY e.orden, e.id;
 
     -- 7. Visto bueno de la versión
-    SELECT v.id_vb, v.estado, v.id_aprobador, CONCAT(ua.nombre, ' ', ua.apellido) AS aprobador, ua.cargo AS cargo_aprobador,
-           v.fecha_solicitud, v.fecha_respuesta, IFNULL(v.resuelto_por, v.id_aprobador) AS id_resuelto_por,
+    --    (el VB va a la bandeja del área sin aprobador fijo: aprobador efectivo con FN_AprobadorVistoBueno)
+    SELECT v.id_vb, v.estado, COALESCE(v.id_aprobador, FN_AprobadorVistoBueno(v.id_vb)) AS id_aprobador,
+           CONCAT(ua.nombre, ' ', ua.apellido) AS aprobador, ua.cargo AS cargo_aprobador,
+           v.fecha_solicitud, v.fecha_respuesta, v.resuelto_por AS id_resuelto_por,
            CONCAT(ur.nombre, ' ', ur.apellido) AS resuelto_por, v.comentario_respuesta, mr.String1 AS motivo_rechazo
     FROM visto_bueno v
-    LEFT JOIN usuario ua ON ua.id_usuario = v.id_aprobador
-    LEFT JOIN usuario ur ON ur.id_usuario = IFNULL(v.resuelto_por, v.id_aprobador)
+    LEFT JOIN usuario ua ON ua.id_usuario = COALESCE(v.id_aprobador, FN_AprobadorVistoBueno(v.id_vb))
+    LEFT JOIN usuario ur ON ur.id_usuario = v.resuelto_por
     LEFT JOIN tabla_maestra mr ON mr.IdMaestro = 10 AND mr.IdEmpresa = 1 AND mr.Num1 = v.id_motivo_rechazo
     WHERE v.id_propuesta = v_id_prop AND v.tipo = 'aprobacion' AND v.eliminado_en IS NULL
     ORDER BY v.id_vb DESC;
@@ -137,7 +148,7 @@ proc: BEGIN
         SELECT v.fecha_respuesta, CONCAT('vb_', v.estado),
                CASE v.estado WHEN 'aprobado' THEN 'VB aprobado' WHEN 'rechazado' THEN 'VB rechazado'
                              WHEN 'devuelto' THEN 'VB devuelto para ajuste' ELSE CONCAT('VB ', REPLACE(v.estado, '_', ' ')) END,
-               v.comentario_respuesta, IFNULL(v.resuelto_por, v.id_aprobador)
+               v.comentario_respuesta, COALESCE(v.resuelto_por, v.id_aprobador, FN_AprobadorVistoBueno(v.id_vb))
         FROM visto_bueno v
         WHERE v.id_propuesta = v_id_prop AND v.tipo = 'aprobacion' AND v.eliminado_en IS NULL AND v.fecha_respuesta IS NOT NULL
         UNION ALL
@@ -150,6 +161,22 @@ proc: BEGIN
     ) t
     LEFT JOIN usuario u ON u.id_usuario = t.id_usuario
     ORDER BY t.fecha DESC;
+
+    -- 9. Órdenes de compra vinculadas a la versión (también las reemplazadas, marcadas)
+    SELECT oc.id_oc, oc.numero_oc, oc.estado, oc.es_autogenerada, (oc.reemplazada_por IS NOT NULL) AS reemplazada,
+           oc.id_moneda AS id_moneda_oc, mo.String2 AS simbolo_moneda_oc, oc.monto_total, op.monto_asignado, op.monto_cubierto,
+           op.estado_validacion, op.resultado_ia, va.criticas, va.advertencias,
+           COALESCE(oc.id_responsable, pr.id_responsable, pr.id_creador) AS id_responsable,
+           CONCAT(ur.nombre, ' ', ur.apellido) AS responsable,
+           oc.fecha_oc AS fecha_emision, oc.fecha_recepcion, oc.fecha_registro
+    FROM oc_propuesta op
+    JOIN orden_compra oc          ON oc.id_oc = op.id_oc AND oc.eliminado_en IS NULL
+    JOIN propuesta_comercial pr   ON pr.id_propuesta = op.id_propuesta
+    LEFT JOIN orden_compra_validacion va ON va.id_validacion = op.id_validacion
+    LEFT JOIN usuario ur          ON ur.id_usuario = COALESCE(oc.id_responsable, pr.id_responsable, pr.id_creador)
+    LEFT JOIN tabla_maestra mo    ON mo.IdMaestro = 1 AND mo.IdEmpresa = 1 AND mo.Num1 = oc.id_moneda
+    WHERE op.id_propuesta = v_id_prop AND op.eliminado_en IS NULL
+    ORDER BY oc.fecha_registro DESC, oc.id_oc DESC;
 END$$
 
 DELIMITER ;

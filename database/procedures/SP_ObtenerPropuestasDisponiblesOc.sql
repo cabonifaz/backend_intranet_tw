@@ -33,7 +33,7 @@ BEGIN
                d.id_requerimiento, d.numero_rq, d.id_contacto, d.contacto,
                d.total, d.saldo, d.id_moneda, d.moneda, d.moneda_simbolo,
                d.fecha_aceptacion, d.id_responsable, d.responsable, d.tipo_servicio,
-               d.id_oc_autogenerada, d.numero_oc_autogenerada,
+               d.id_oc_autogenerada, d.numero_oc_autogenerada, d.items,
                EXISTS (SELECT 1 FROM oc_propuesta op JOIN orden_compra oc ON oc.id_oc = op.id_oc
                        WHERE op.id_propuesta = d.id_propuesta AND op.eliminado_en IS NULL
                          AND oc.eliminado_en IS NULL AND oc.estado <> 'anulada')     AS tiene_oc

@@ -2,8 +2,11 @@
 -- Pills por propuesta ("Ver visto bueno de"); p_numero = número de la propuesta (por defecto la propuesta activa).
 -- Resultados: 1 mensaje
 --   2 propuestas del RQ (pills: número, última versión, seleccionada)
---   3 estado actual del VB de la propuesta: versión en revisión, estado global, aprobador asignado (cargo, área, correo,
---     teléfono), versión aprobada y su monto, fecha de aprobación final, horas hábiles vs. SLA
+--   3 estado actual del VB de la propuesta: versión en revisión, estado global, aprobador (cargo, área, correo, teléfono,
+--     estado del usuario, si es el aprobador por defecto o uno reasignado y si es el jefe directo del comercial),
+--     versión aprobada y su monto, fecha de aprobación final, horas hábiles vs. SLA.
+--     Aprobador: el VB llega a la bandeja del área sin aprobador fijo (migración 49), así que se toma quien resolvió o,
+--     si está pendiente, el aprobador efectivo (FN_AprobadorVistoBueno: reasignado, suplente o jefe directo).
 --   4 historial de decisiones por versión (aprobador, decisión, comentario, fechas y tiempo de revisión en horas hábiles)
 --   5 historial de reasignación del aprobador
 --   6 métricas: versiones totales, devueltas, tiempo total de aprobación (días), promedio por versión y SLA cumplido
@@ -21,6 +24,7 @@ proc: BEGIN
     DECLARE v_numero  VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_ultima  BIGINT;
     DECLARE v_vb      BIGINT;
+    DECLARE v_id_apr  BIGINT;
 
     IF FN_PermisoAccion(p_id_usuario, 'expediente_bandeja') = 0 THEN
         SELECT 1 AS IdTipoMensaje, 'No tienes permiso para ver los expedientes digitales.' AS Mensaje;
@@ -60,6 +64,11 @@ proc: BEGIN
     WHERE p.numero = v_numero AND v.tipo = 'aprobacion' AND v.eliminado_en IS NULL AND v.estado <> 'reasignado'
     ORDER BY v.fecha_solicitud DESC, v.id_vb DESC LIMIT 1;
 
+    SELECT IF(v.estado = 'pendiente', COALESCE(FN_AprobadorVistoBueno(v.id_vb), v.id_aprobador),
+              COALESCE(v.resuelto_por, v.id_aprobador, FN_AprobadorVistoBueno(v.id_vb)))
+      INTO v_id_apr
+    FROM visto_bueno v WHERE v.id_vb = v_vb;
+
     SELECT 2 AS IdTipoMensaje, 'Éxito.' AS Mensaje;
 
     -- 2. Propuestas (pills)
@@ -72,8 +81,13 @@ proc: BEGIN
     SELECT v_numero AS numero, pu.id_propuesta AS id_propuesta_revision, pu.version AS version_revision,
            pu.estado AS estado_propuesta,
            CASE WHEN v.id_vb IS NULL THEN 'sin_solicitud' ELSE v.estado END AS estado_vb,
-           v.id_vb, v.id_aprobador, CONCAT(ua.nombre, ' ', ua.apellido) AS aprobador, ua.cargo AS cargo_aprobador,
+           v.id_vb, v_id_apr AS id_aprobador, CONCAT(ua.nombre, ' ', ua.apellido) AS aprobador, ua.cargo AS cargo_aprobador,
            aa.String1 AS area_aprobador, ua.correo AS correo_aprobador, ua.telefono AS telefono_aprobador,
+           ua.estado AS estado_aprobador,
+           IF(v.id_vb IS NULL, NULL, v.id_vb_origen IS NULL)                 AS aprobador_por_defecto,
+           IFNULL(pu.id_responsable, pu.id_creador)                           AS id_comercial,
+           CONCAT(uc.nombre, ' ', uc.apellido)                                AS comercial,
+           IF(v_id_apr IS NULL, NULL, uc.id_supervisor <=> v_id_apr)          AS es_jefe_directo_comercial,
            va.id_propuesta AS id_propuesta_aprobada, pa.version AS version_aprobada, pa.total AS monto_aprobado,
            m.String2 AS simbolo_moneda, va.fecha_respuesta AS fecha_aprobacion,
            IFNULL(v.sla_horas, va.sla_horas) AS sla_horas,
@@ -84,7 +98,8 @@ proc: BEGIN
     FROM (SELECT 1) d
     LEFT JOIN propuesta_comercial pu ON pu.id_propuesta = v_ultima
     LEFT JOIN visto_bueno v ON v.id_vb = v_vb
-    LEFT JOIN usuario ua ON ua.id_usuario = v.id_aprobador
+    LEFT JOIN usuario ua ON ua.id_usuario = v_id_apr
+    LEFT JOIN usuario uc ON uc.id_usuario = IFNULL(pu.id_responsable, pu.id_creador)
     LEFT JOIN tabla_maestra aa ON aa.IdMaestro = 79 AND aa.IdEmpresa = 1 AND aa.String2 = ua.area
     LEFT JOIN visto_bueno va ON va.id_vb = (SELECT v2.id_vb FROM visto_bueno v2
                                             JOIN propuesta_comercial p2 ON p2.id_propuesta = v2.id_propuesta
@@ -95,22 +110,23 @@ proc: BEGIN
     LEFT JOIN tabla_maestra m ON m.IdMaestro = 1 AND m.IdEmpresa = 1 AND m.Num1 = pa.id_moneda;
 
     -- 4. Historial de decisiones por versión (más reciente primero)
-    SELECT v.id_vb, p.id_propuesta, p.version, v.estado, v.id_aprobador, CONCAT(ua.nombre, ' ', ua.apellido) AS aprobador,
-           ua.cargo AS cargo_aprobador, IFNULL(v.resuelto_por, v.id_aprobador) AS id_revisor,
+    SELECT v.id_vb, p.id_propuesta, p.version, v.estado,
+           COALESCE(v.id_aprobador, FN_AprobadorVistoBueno(v.id_vb)) AS id_aprobador, CONCAT(ua.nombre, ' ', ua.apellido) AS aprobador,
+           ua.cargo AS cargo_aprobador, COALESCE(v.resuelto_por, v.id_aprobador, FN_AprobadorVistoBueno(v.id_vb)) AS id_revisor,
            CONCAT(ur.nombre, ' ', ur.apellido) AS revisor, ur.cargo AS cargo_revisor,
            v.fecha_solicitud, v.fecha_respuesta, v.comentario_respuesta AS comentario, mr.String1 AS motivo_rechazo,
            IF(v.fecha_respuesta IS NULL, NULL, FN_HorasHabiles(v.fecha_solicitud, v.fecha_respuesta)) AS horas_revision,
            v.sla_horas
     FROM visto_bueno v
     JOIN propuesta_comercial p ON p.id_propuesta = v.id_propuesta
-    LEFT JOIN usuario ua ON ua.id_usuario = v.id_aprobador
-    LEFT JOIN usuario ur ON ur.id_usuario = IFNULL(v.resuelto_por, v.id_aprobador)
+    LEFT JOIN usuario ua ON ua.id_usuario = COALESCE(v.id_aprobador, FN_AprobadorVistoBueno(v.id_vb))
+    LEFT JOIN usuario ur ON ur.id_usuario = COALESCE(v.resuelto_por, v.id_aprobador, FN_AprobadorVistoBueno(v.id_vb))
     LEFT JOIN tabla_maestra mr ON mr.IdMaestro = 10 AND mr.IdEmpresa = 1 AND mr.Num1 = v.id_motivo_rechazo
     WHERE p.numero = v_numero AND v.tipo = 'aprobacion' AND v.eliminado_en IS NULL AND v.estado <> 'reasignado'
     ORDER BY v.fecha_solicitud DESC, v.id_vb DESC;
 
     -- 5. Historial de reasignación del aprobador
-    SELECT v.id_vb, p.version, v.fecha_respuesta AS fecha, v.id_aprobador AS id_anterior,
+    SELECT v.id_vb, p.version, v.fecha_respuesta AS fecha, COALESCE(v.id_aprobador, FN_AprobadorVistoBueno(v.id_vb)) AS id_anterior,
            CONCAT(ua.nombre, ' ', ua.apellido) AS aprobador_anterior,
            n.id_aprobador AS id_nuevo, CONCAT(un.nombre, ' ', un.apellido) AS aprobador_nuevo,
            mo.String1 AS motivo, NULLIF(TRIM(IFNULL(v.comentario_respuesta, '')), '') AS comentario,
@@ -119,7 +135,7 @@ proc: BEGIN
     FROM visto_bueno v
     JOIN propuesta_comercial p ON p.id_propuesta = v.id_propuesta
     LEFT JOIN visto_bueno n ON n.id_vb_origen = v.id_vb AND n.eliminado_en IS NULL
-    LEFT JOIN usuario ua ON ua.id_usuario = v.id_aprobador
+    LEFT JOIN usuario ua ON ua.id_usuario = COALESCE(v.id_aprobador, FN_AprobadorVistoBueno(v.id_vb))
     LEFT JOIN usuario un ON un.id_usuario = n.id_aprobador
     LEFT JOIN usuario ue ON ue.id_usuario = IFNULL(v.resuelto_por, n.creado_por)
     LEFT JOIN tabla_maestra mo ON mo.IdMaestro = 92 AND mo.IdEmpresa = 1 AND mo.Num1 = IFNULL(n.id_motivo_reasignacion, v.id_motivo_reasignacion)

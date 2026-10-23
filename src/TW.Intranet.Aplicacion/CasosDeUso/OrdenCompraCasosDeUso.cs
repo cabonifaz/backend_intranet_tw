@@ -500,29 +500,30 @@ public class CompararOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio, I
 
         var reglas = await repositorio.CompararAsync(solicitud, null, idUsuario, ct);
         if (!conIa || reglas.IdTipoMensaje != 2 || reglas.Datos is null || !ia.Disponible || solicitud.Datos.Conceptos.Count == 0)
-            return await ConsolidarAsync(reglas, solicitud.Datos.Conceptos, idUsuario, ct);
+            return await ConsolidarAsync(reglas, solicitud.Datos, idUsuario, ct);
 
         var (evaluaciones, aviso) = await EvaluacionIaOrdenCompra.EvaluarAsync(repositorio, ia, solicitud.Datos.Conceptos,
             solicitud.Datos.IdMoneda, solicitud.Datos.FacturaIgualOc,
             reglas.Datos.Propuestas.Select(p => new EvaluacionIaOrdenCompra.PropuestaAEvaluar(p.IdPropuesta, p.Numero, p.MonedaSimbolo)).ToList(),
             reglas.Datos.Campos, idUsuario, ct, solicitud.Datos.TipoCambio);
         if (evaluaciones is null)
-            return await ConsolidarAsync(aviso is null ? reglas : reglas with { Mensaje = aviso }, solicitud.Datos.Conceptos, idUsuario, ct);
+            return await ConsolidarAsync(aviso is null ? reglas : reglas with { Mensaje = aviso }, solicitud.Datos, idUsuario, ct);
 
         var conIaResultado = await repositorio.CompararAsync(solicitud, evaluaciones, idUsuario, ct);
         return await ConsolidarAsync(aviso is null || conIaResultado.IdTipoMensaje != 2 ? conIaResultado : conIaResultado with { Mensaje = aviso },
-                                     solicitud.Datos.Conceptos, idUsuario, ct);
+                                     solicitud.Datos, idUsuario, ct);
     }
 
     /// <summary>Ticket C: pool consolidado de ítems de las propuestas vinculadas contra los conceptos de la OC.</summary>
     private async Task<RespuestaDto<ComparacionOrdenCompraDto>> ConsolidarAsync(
-        RespuestaDto<ComparacionOrdenCompraDto> r, IReadOnlyList<ConceptoOrdenCompraDto> conceptos, long idUsuario, CancellationToken ct)
+        RespuestaDto<ComparacionOrdenCompraDto> r, DatosOrdenCompraDto oc, long idUsuario, CancellationToken ct)
     {
         if (r.IdTipoMensaje != 2 || r.Datos is null || r.Datos.Propuestas.Count == 0) return r;
         var ids = r.Datos.Propuestas.Select(p => p.IdPropuesta).ToList();
         var datos = await repositorio.ObtenerDatosIaAsync(ids, idUsuario, ct);
         if (datos.IdTipoMensaje != 2 || datos.Datos is null) return r;
-        var pool = ConsolidacionConceptosOrdenCompra.Calcular(conceptos, datos.Datos.Items, ids, r.Datos.EvaluacionesIa);
+        var pool = ConsolidacionConceptosOrdenCompra.Calcular(oc.Conceptos, datos.Datos.Items, ids, r.Datos.EvaluacionesIa,
+                                                             oc.IdMoneda, oc.TipoCambio, datos.Datos.Monedas);
         return r with { Datos = r.Datos with { ItemsConsolidados = pool } };
     }
 }

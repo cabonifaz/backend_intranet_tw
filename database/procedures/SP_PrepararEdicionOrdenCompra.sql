@@ -86,7 +86,8 @@ proc: BEGIN
     -- 4. Otras propuestas del mismo cliente con saldo
     CALL SP_CalcularPropuestasDisponiblesOc(p_id_usuario, v_id_cliente, p_id_oc, 0);
     SELECT d.id_propuesta, d.numero, d.version, d.id_requerimiento, d.numero_rq, d.id_contacto, d.contacto,
-           d.total, d.saldo, d.id_moneda, d.moneda, d.moneda_simbolo, d.fecha_aceptacion, d.responsable, d.tipo_servicio
+           d.total, d.saldo, d.id_moneda, d.moneda, d.moneda_simbolo, d.fecha_aceptacion, d.responsable, d.tipo_servicio,
+           d.items
     FROM tmp_oc_disp d
     WHERE NOT EXISTS (SELECT 1 FROM oc_propuesta op WHERE op.id_oc = p_id_oc AND op.id_propuesta = d.id_propuesta
                         AND op.eliminado_en IS NULL)

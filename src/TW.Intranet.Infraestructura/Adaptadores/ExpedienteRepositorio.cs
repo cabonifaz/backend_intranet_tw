@@ -56,7 +56,10 @@ public class ExpedienteRepositorio(CadenaConexionBd conexion)
         Fh(r, "fecha") ?? DateTime.MinValue, Texto(r, "tipo_evento"), TieneColumna(r, "accion") ? Texto(r, "accion") : null,
         Texto(r, "titulo"), Texto(r, "descripcion"), Texto(r, "etapa"), Texto(r, "etapa_nombre"),
         EnteroLargoNulo(r, "id_usuario"), Texto(r, "usuario") ?? "Sistema", Texto(r, "entidad"), Texto(r, "referencia"),
-        Bool(r, "urgente"), Texto(r, "origen"));
+        Bool(r, "urgente"), Texto(r, "origen"))
+    {
+        CargoUsuario = TieneColumna(r, "cargo_usuario") ? Texto(r, "cargo_usuario") : null,
+    };
 
     private static EventoTabDto EventoTab(MySqlDataReader r) => new(
         Fh(r, "fecha"), Texto(r, "tipo"), Texto(r, "titulo"), Texto(r, "descripcion"), EnteroLargoNulo(r, "id_usuario"), Texto(r, "usuario"));
@@ -362,6 +365,14 @@ public class ExpedienteRepositorio(CadenaConexionBd conexion)
                     ClavePdf           = Texto(x, "clave_pdf") ?? "",
                     NombrePdf          = Texto(x, "nombre_pdf"),
                     NumeroRq           = Texto(x, "numero_rq"),
+                    IdContacto         = EnteroLargoNulo(x, "id_contacto"),
+                    Contacto           = Texto(x, "contacto"),
+                    CargoContacto      = Texto(x, "cargo_contacto"),
+                    CorreoContacto     = Texto(x, "correo_contacto"),
+                    TelefonoContacto   = Texto(x, "telefono_contacto"),
+                    IdSede             = EnteroLargoNulo(x, "id_sede"),
+                    Sede               = Texto(x, "sede"),
+                    Suministros        = Ent(x, "suministros"),
                 }, ct);
                 var formas = await LeerListaAsync(r, x => new FormaPagoExpedienteDto(
                     DecimalNulo(x, "porcentaje"), Texto(x, "condicion"), Ent(x, "orden")), ct);
@@ -377,9 +388,15 @@ public class ExpedienteRepositorio(CadenaConexionBd conexion)
                     Texto(x, "cargo_aprobador"), Fh(x, "fecha_solicitud"), Fh(x, "fecha_respuesta"), EnteroLargoNulo(x, "id_resuelto_por"),
                     Texto(x, "resuelto_por"), Texto(x, "comentario_respuesta"), Texto(x, "motivo_rechazo")), ct);
                 var timeline = await LeerListaAsync(r, EventoTab, ct);
+                var ocs = await LeerListaAsync(r, x => new OcPropuestaExpedienteDto(
+                    EnteroLargo(x, "id_oc"), Texto(x, "numero_oc") ?? "", Texto(x, "estado") ?? "", Bool(x, "es_autogenerada"),
+                    Bool(x, "reemplazada"), EntNulo(x, "id_moneda_oc"), Texto(x, "simbolo_moneda_oc"), DecimalNulo(x, "monto_total") ?? 0,
+                    DecimalNulo(x, "monto_asignado") ?? 0, DecimalNulo(x, "monto_cubierto"), Texto(x, "estado_validacion"),
+                    Texto(x, "resultado_ia"), EntNulo(x, "criticas"), EntNulo(x, "advertencias"), EnteroLargoNulo(x, "id_responsable"),
+                    Texto(x, "responsable"), Fh(x, "fecha_emision"), Fh(x, "fecha_recepcion"), Fh(x, "fecha_registro")), ct);
 
                 return new RespuestaDto<TabPropuestasExpedienteDto>(2, mensaje,
-                    new TabPropuestasExpedienteDto(versiones, detalle, formas, items, equipos, vbs, timeline));
+                    new TabPropuestasExpedienteDto(versiones, detalle, formas, items, equipos, vbs, timeline) { OrdenesCompra = ocs });
             },
             ct);
 
@@ -411,12 +428,18 @@ public class ExpedienteRepositorio(CadenaConexionBd conexion)
                     VersionRevision     = EntNulo(x, "version_revision"),
                     EstadoPropuesta     = Texto(x, "estado_propuesta"),
                     EstadoVb            = Texto(x, "estado_vb"),
+                    IdVb                = EnteroLargoNulo(x, "id_vb"),
                     IdAprobador         = EnteroLargoNulo(x, "id_aprobador"),
                     Aprobador           = Texto(x, "aprobador"),
                     CargoAprobador      = Texto(x, "cargo_aprobador"),
                     AreaAprobador       = Texto(x, "area_aprobador"),
                     CorreoAprobador     = Texto(x, "correo_aprobador"),
                     TelefonoAprobador   = Texto(x, "telefono_aprobador"),
+                    EstadoAprobador     = Texto(x, "estado_aprobador"),
+                    AprobadorPorDefecto = BoolNulo(x, "aprobador_por_defecto"),
+                    IdComercial         = EnteroLargoNulo(x, "id_comercial"),
+                    Comercial           = Texto(x, "comercial"),
+                    EsJefeDirectoComercial = BoolNulo(x, "es_jefe_directo_comercial"),
                     IdPropuestaAprobada = EnteroLargoNulo(x, "id_propuesta_aprobada"),
                     VersionAprobada     = EntNulo(x, "version_aprobada"),
                     MontoAprobado       = DecimalNulo(x, "monto_aprobado"),
@@ -474,6 +497,7 @@ public class ExpedienteRepositorio(CadenaConexionBd conexion)
                     CargoComercial     = Texto(x, "cargo_comercial"),
                     CorreoComercial    = Texto(x, "correo_comercial"),
                     TelefonoComercial  = Texto(x, "telefono_comercial"),
+                    AreaComercial      = Texto(x, "area_comercial"),
                     Contacto           = Texto(x, "contacto"),
                     CargoContacto      = Texto(x, "cargo_contacto"),
                     CorreoContacto     = Texto(x, "correo_contacto"),
@@ -486,7 +510,12 @@ public class ExpedienteRepositorio(CadenaConexionBd conexion)
                     Fh(x, "fecha"), Texto(x, "tipo") ?? "", Texto(x, "titulo"), Texto(x, "canal"), Texto(x, "resultado"),
                     Texto(x, "asunto"), Texto(x, "detalle"), EntNulo(x, "duracion_minutos"), Fh(x, "proxima_accion_fecha"),
                     Texto(x, "proxima_accion"), EntNulo(x, "version"), EnteroLargoNulo(x, "id_usuario"), Texto(x, "usuario"),
-                    Adjuntos(Texto(x, "adjuntos"))), ct);
+                    Adjuntos(Texto(x, "adjuntos")))
+                {
+                    Destinatario   = Texto(x, "destinatario"),
+                    ResumenCuerpo  = Texto(x, "resumen_cuerpo"),
+                    TipoAceptacion = Texto(x, "tipo_aceptacion"),
+                }, ct);
                 var resultado = await LeerUnoAsync(r, x => new ResultadoSeguimientoDto(
                     Texto(x, "resultado") ?? "", Fh(x, "fecha_cierre"), EnteroLargoNulo(x, "id_registrado_por"), Texto(x, "registrado_por"),
                     Texto(x, "tipo_evidencia"), Texto(x, "motivo_rechazo"), Texto(x, "canal"), Texto(x, "comentario"),
@@ -561,8 +590,14 @@ public class ExpedienteRepositorio(CadenaConexionBd conexion)
                     Fh(x, "fecha"), Texto(x, "accion"), Texto(x, "titulo"), Texto(x, "descripcion"), Texto(x, "estado_anterior"),
                     Texto(x, "estado_nuevo"), EnteroLargoNulo(x, "id_usuario"), Texto(x, "usuario"), Bool(x, "automatico_ia")), ct);
 
+                var oss = await LeerListaAsync(r, x => new OsVinculadaOcExpedienteDto(
+                    EnteroLargo(x, "id_os"), Texto(x, "numero") ?? "", Texto(x, "estado") ?? "", DecimalNulo(x, "costo_total_estimado"),
+                    Fh(x, "fecha_ejecucion"), Hora(x, "hora_inicio"), EnteroLargoNulo(x, "id_tecnico_principal"), Texto(x, "tecnico"),
+                    EnteroLargoNulo(x, "id_responsable_comercial"), Texto(x, "responsable_comercial"), Texto(x, "confirmacion_cliente"),
+                    EnteroLargo(x, "id_expediente"), Texto(x, "numero_expediente")), ct);
+
                 return new RespuestaDto<TabOrdenesCompraExpedienteDto>(2, mensaje,
-                    new TabOrdenesCompraExpedienteDto(pills, datos, validaciones, campos, timeline));
+                    new TabOrdenesCompraExpedienteDto(pills, datos, validaciones, campos, timeline) { OrdenesServicio = oss });
             },
             ct);
 

@@ -10,6 +10,8 @@
 --     confianza (0–100), motor, dictamen, estado de la vinculación y monto asignado
 --   5 comparación campo por campo de la última validación de la primera propuesta vinculada de este expediente
 --   6 timeline de la OC (auditoría; el detalle fino de cada validación queda en el módulo OC)
+--   7 órdenes de servicio vinculadas a la OC (las de los expedientes de sus propuestas): número, estado, costo estimado,
+--     fecha de ejecución, técnico principal y responsable comercial
 DROP PROCEDURE IF EXISTS SP_ObtenerOrdenesCompraExpediente;
 
 DELIMITER $$
@@ -159,6 +161,20 @@ proc: BEGIN
     LEFT JOIN usuario u ON u.id_usuario = a.id_usuario
     WHERE a.entidad_tipo = 'orden_compra' AND a.id_entidad = v_id_oc AND a.accion <> 'exportar_auditoria_oc'
     ORDER BY a.registrado_en DESC, a.id_auditoria DESC;
+
+    -- 7. Órdenes de servicio vinculadas a la OC
+    SELECT os.id_os, os.numero, os.estado, os.costo_total_estimado, os.fecha_ejecucion, os.hora_inicio,
+           os.id_tecnico_principal, CONCAT(ut.nombre, ' ', ut.apellido) AS tecnico,
+           os.id_responsable_comercial, CONCAT(uc.nombre, ' ', uc.apellido) AS responsable_comercial,
+           os.confirmacion_cliente, e.id_expediente, e.numero AS numero_expediente
+    FROM orden_servicio os
+    JOIN expediente_digital e ON e.id_expediente = os.id_expediente AND e.eliminado_en IS NULL
+    LEFT JOIN usuario ut ON ut.id_usuario = os.id_tecnico_principal
+    LEFT JOIN usuario uc ON uc.id_usuario = os.id_responsable_comercial
+    WHERE os.eliminado_en IS NULL
+      AND os.id_expediente IN (SELECT FN_ExpedienteDePropuesta(op.id_propuesta) FROM oc_propuesta op
+                               WHERE op.id_oc = v_id_oc AND op.eliminado_en IS NULL)
+    ORDER BY os.fecha_ejecucion DESC, os.id_os DESC;
 END$$
 
 DELIMITER ;

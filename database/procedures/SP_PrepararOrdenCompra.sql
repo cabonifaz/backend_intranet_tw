@@ -100,7 +100,7 @@ proc: BEGIN
     -- 4. Otras propuestas del mismo cliente
     SELECT id_propuesta, numero, version, id_requerimiento, numero_rq, id_contacto, contacto,
            total, saldo, id_moneda, moneda, moneda_simbolo, fecha_aceptacion, responsable, tipo_servicio,
-           id_oc_autogenerada, numero_oc_autogenerada
+           id_oc_autogenerada, numero_oc_autogenerada, items
     FROM tmp_oc_disp
     WHERE id_cliente = v_id_cliente AND id_propuesta <> p_id_propuesta
     ORDER BY fecha_aceptacion DESC;

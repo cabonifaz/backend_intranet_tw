@@ -5,6 +5,7 @@
 -- p_sin_autogenerada = 1 (registro de la OC real del cliente, ticket A): las OC autogeneradas (OC-AUTO) vigentes no
 --   descuentan el saldo, porque se dan de baja al registrar la OC real (FN_SaldoPropuestaOcSinAutogenerada).
 -- id_oc_autogenerada / numero_oc_autogenerada: la OC-AUTO vigente de la propuesta (la que se reemplazará).
+-- items: ítems (servicios) de la propuesta, sin las filas de espaciado.
 DROP PROCEDURE IF EXISTS SP_CalcularPropuestasDisponiblesOc;
 
 DELIMITER $$
@@ -37,7 +38,9 @@ BEGIN
            (SELECT MIN(oc.id_oc) FROM orden_compra oc
              JOIN oc_propuesta op ON op.id_oc = oc.id_oc AND op.id_propuesta = t.id_propuesta AND op.eliminado_en IS NULL
              WHERE oc.estado = 'autogenerada' AND oc.reemplazada_por IS NULL AND oc.eliminado_en IS NULL) AS id_oc_autogenerada,
-           CAST(NULL AS CHAR(50))                                              AS numero_oc_autogenerada
+           CAST(NULL AS CHAR(50))                                              AS numero_oc_autogenerada,
+           (SELECT COUNT(*) FROM propuesta_item i WHERE i.id_propuesta = t.id_propuesta AND i.seccion = 'principal'
+              AND IFNULL(i.es_espaciado, 0) = 0 AND i.eliminado_en IS NULL)     AS items
     FROM tmp_seg t
     JOIN propuesta_comercial p     ON p.id_propuesta     = t.id_propuesta
     LEFT JOIN cliente c            ON c.id_cliente       = t.id_cliente

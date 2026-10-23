@@ -184,7 +184,7 @@ public class GeminiAsistenteOrdenCompra(HttpClient http, ConfiguracionGemini con
             facturaIgualOc = s.FacturaIgualOc,
             ocCubreVariasPropuestas = s.OcCubreVariasPropuestas,
             conceptosOc = s.ConceptosOc.Select(c => new { c.Descripcion, c.Cantidad, c.PrecioUnitario, c.Subtotal }),
-            itemsPropuesta = s.ItemsPropuesta.Select(i => new { i.Descripcion, i.Cantidad, i.PrecioUnitario, i.Subtotal }),
+            itemsPropuesta = s.ItemsPropuesta.Select(i => new { i.Descripcion, i.Alcance, i.Cantidad, i.PrecioUnitario, i.Subtotal }),
             diferenciasReglas = s.Diferencias
                 .Where(d => d.Severidad is "advertencia" or "critico")
                 .Select(d => new { d.Campo, d.Etiqueta, d.ValorOc, d.ValorPropuesta, d.Severidad, d.Mensaje }),

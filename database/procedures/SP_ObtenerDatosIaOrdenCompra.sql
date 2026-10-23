@@ -22,7 +22,8 @@ BEGIN
         SELECT Num1 AS id, MAX(String1) AS nombre, MAX(String2) AS codigo
         FROM tabla_maestra WHERE IdMaestro = 39 AND IdEmpresa = 1 AND eliminado_en IS NULL GROUP BY Num1 ORDER BY Num1;
 
-        SELECT i.id_propuesta, p.numero, p.version, i.descripcion, i.cantidad, i.precio_unitario, i.subtotal
+        SELECT i.id_propuesta, p.numero, p.version, i.descripcion, i.cantidad, i.precio_unitario, i.subtotal,
+               NULLIF(TRIM(i.alcance), '') AS alcance, p.id_moneda
         FROM propuesta_item i
         JOIN propuesta_comercial p ON p.id_propuesta = i.id_propuesta
         WHERE p_ids_propuesta IS NOT NULL AND JSON_TYPE(p_ids_propuesta) = 'ARRAY'
