@@ -23,13 +23,14 @@ BEGIN
         FROM tabla_maestra WHERE IdMaestro = 39 AND IdEmpresa = 1 AND eliminado_en IS NULL GROUP BY Num1 ORDER BY Num1;
 
         SELECT i.id_propuesta, p.numero, p.version, i.descripcion, i.cantidad, i.precio_unitario, i.subtotal,
-               NULLIF(TRIM(i.alcance), '') AS alcance, p.id_moneda
+               NULLIF(TRIM(i.alcance), '') AS alcance, p.id_moneda, (i.seccion = 'opcional') AS opcional
         FROM propuesta_item i
         JOIN propuesta_comercial p ON p.id_propuesta = i.id_propuesta
         WHERE p_ids_propuesta IS NOT NULL AND JSON_TYPE(p_ids_propuesta) = 'ARRAY'
           AND i.id_propuesta IN (SELECT j.id FROM JSON_TABLE(p_ids_propuesta, '$[*]' COLUMNS (id BIGINT PATH '$')) j)
-          AND i.seccion = 'principal' AND IFNULL(i.es_espaciado, 0) = 0
-        ORDER BY i.id_propuesta, i.orden;
+          -- Principales y opcionales (opcional = 1): el cliente puede comprar un opcional; si no lo compra no es error
+          AND i.seccion IN ('principal', 'opcional') AND IFNULL(i.es_espaciado, 0) = 0 AND i.eliminado_en IS NULL
+        ORDER BY i.id_propuesta, (i.seccion = 'opcional'), i.orden;
 
         SELECT MAX(Num1) AS id_motivo_nueva_version
         FROM tabla_maestra WHERE IdMaestro = 11 AND IdEmpresa = 1 AND String2 = 'SOLICITUD_CLIENTE' AND eliminado_en IS NULL;

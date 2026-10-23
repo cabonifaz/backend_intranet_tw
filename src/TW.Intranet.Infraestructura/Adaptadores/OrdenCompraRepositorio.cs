@@ -601,7 +601,8 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
                     items.Add(new ItemPropuestaIaDto(EnteroLargo(r, "id_propuesta"), Texto(r, "numero") ?? "", Ent(r, "version"),
                         Texto(r, "descripcion") ?? "", Dec(r, "cantidad"), Dec(r, "precio_unitario"), Dec(r, "subtotal"),
                         TieneColumna(r, "alcance") ? Texto(r, "alcance") : null,
-                        TieneColumna(r, "id_moneda") ? Ent(r, "id_moneda") : 0));
+                        TieneColumna(r, "id_moneda") ? Ent(r, "id_moneda") : 0,
+                        TieneColumna(r, "opcional") && Booleano(r, "opcional")));
 
                 await r.NextResultAsync(ct);
                 int? motivo = await r.ReadAsync(ct) ? EntNulo(r, "id_motivo_nueva_version") : null;

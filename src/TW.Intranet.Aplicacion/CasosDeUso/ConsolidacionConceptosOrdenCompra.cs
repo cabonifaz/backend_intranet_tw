@@ -17,6 +17,10 @@ namespace TW.Intranet.Aplicacion.CasosDeUso;
 ///    mejor descripción, luego el que menciona su alcance en el texto de la OC y luego el precio más cercano.
 /// 3. Cantidad OC = pool → ok; menor → advertencia "faltan N"; mayor → "sobran N"; ítem del pool sin concepto en la OC →
 ///    "falta en la OC"; concepto de la OC sin ítem → adicional en la OC.
+/// 4. Ítems opcionales (sección Opcionales de la propuesta): van al pool con EsOpcional = true y validación suave. Si la
+///    OC lo pide (igual o más) → confirmado_opcional; menos → parcial_opcional; no lo pide → no_solicitado. Nunca son
+///    advertencia ni cuentan para el resultado global. Un ítem obligatorio y uno opcional nunca se juntan; ante un
+///    empate, el concepto de la OC va primero al obligatorio.
 /// </summary>
 internal static class ConsolidacionConceptosOrdenCompra
 {
@@ -28,6 +32,7 @@ internal static class ConsolidacionConceptosOrdenCompra
         public required string? Alcance     { get; init; }
         public required string  ClaveAlcance { get; init; }
         public required int     IdMoneda    { get; init; }
+        public required bool    EsOpcional  { get; init; }
         public decimal          Cantidad    { get; set; }
         public List<ItemAporteDto> Aportes  { get; } = [];
     }
@@ -115,14 +120,14 @@ internal static class ConsolidacionConceptosOrdenCompra
             var precio = Math.Round(i.PrecioUnitario, 2);
             var claveAlcance = Normalizar(i.Alcance);
             var g = grupos.FirstOrDefault(x => x.Clave == clave && x.Precio == precio && x.ClaveAlcance == claveAlcance
-                                               && x.IdMoneda == i.IdMoneda);
+                                               && x.IdMoneda == i.IdMoneda && x.EsOpcional == i.Opcional);
             if (g is null)
             {
                 g = new Grupo
                 {
                     Clave = clave, Descripcion = i.Descripcion.Trim(), Precio = precio,
                     Alcance = string.IsNullOrWhiteSpace(i.Alcance) ? null : i.Alcance.Trim(), ClaveAlcance = claveAlcance,
-                    IdMoneda = i.IdMoneda,
+                    IdMoneda = i.IdMoneda, EsOpcional = i.Opcional,
                 };
                 grupos.Add(g);
             }
@@ -144,7 +149,7 @@ internal static class ConsolidacionConceptosOrdenCompra
         for (var k = 0; k < oc.Count; k++)
         {
             asignado[k] = -1;
-            (int Desc, int Alcance, decimal Distancia) mejor = (0, 0, decimal.MaxValue);
+            (int Desc, int Alcance, int Obligatorio, decimal Distancia) mejor = (0, 0, 0, decimal.MaxValue);
             for (var gi = 0; gi < grupos.Count; gi++)
             {
                 var g = grupos[gi];
@@ -158,10 +163,13 @@ internal static class ConsolidacionConceptosOrdenCompra
                     distancia = Math.Abs(po - pp);
                 }
                 var alcance = g.ClaveAlcance.Length > 0 && oc[k].Texto.Contains(g.ClaveAlcance, StringComparison.Ordinal) ? 1 : 0;
-                var candidato = (desc, alcance, distancia);
-                if (candidato.desc > mejor.Desc
-                    || (candidato.desc == mejor.Desc && candidato.alcance > mejor.Alcance)
-                    || (candidato.desc == mejor.Desc && candidato.alcance == mejor.Alcance && candidato.distancia < mejor.Distancia))
+                var obligatorio = g.EsOpcional ? 0 : 1;
+                var candidato = (desc, alcance, obligatorio, distancia);
+                var gana = candidato.desc != mejor.Desc ? candidato.desc > mejor.Desc
+                         : candidato.alcance != mejor.Alcance ? candidato.alcance > mejor.Alcance
+                         : candidato.obligatorio != mejor.Obligatorio ? candidato.obligatorio > mejor.Obligatorio
+                         : candidato.distancia < mejor.Distancia;
+                if (gana)
                 {
                     mejor = candidato;
                     asignado[k] = gi;
@@ -182,27 +190,42 @@ internal static class ConsolidacionConceptosOrdenCompra
                 ? $" Pool de {N(g.Cantidad)}: {string.Join(", ", g.Aportes.Select(a => $"{N(a.Cantidad)} de {a.Numero}"))}."
                 : "";
 
-            string severidad, mensaje;
+            string severidad, mensaje, estado;
             decimal? diferencia = null;
-            if (enOc.Count == 0)
+            if (g.EsOpcional)
+            {
+                // Validación suave: informativo, nunca advertencia
+                diferencia = cantidadOc is { } qo ? g.Cantidad - qo : null;
+                (severidad, estado, mensaje) = (enOc.Count, diferencia) switch
+                {
+                    (0, _)       => ("info", "no_solicitado", $"Opcional no solicitado por el cliente ({N(g.Cantidad)} disponible(s))."),
+                    (_, > 0)     => ("info", "parcial_opcional", $"Opcional solicitado en parte: la OC pide {N(cantidadOc!.Value)} de {N(g.Cantidad)}."),
+                    _            => ("ok", "confirmado_opcional", cantidadOc is null
+                                        ? "Opcional confirmado por el cliente (la OC no indica la cantidad)."
+                                        : $"Opcional confirmado por el cliente: {N(cantidadOc.Value)} unidad(es)."),
+                };
+            }
+            else if (enOc.Count == 0)
             {
                 severidad = "advertencia";
+                estado    = "falta_en_oc";
                 mensaje   = $"Falta en la OC: {N(g.Cantidad)} unidad(es) de {string.Join(", ", g.Aportes.Select(a => a.Numero))}.";
                 diferencia = g.Cantidad;
             }
             else if (cantidadOc is null)
             {
                 severidad = "ok";
+                estado    = "ok";
                 mensaje   = $"Está en la OC (no indica la cantidad).{detallePool}";
             }
             else
             {
                 diferencia = g.Cantidad - cantidadOc.Value;
-                (severidad, mensaje) = diferencia.Value switch
+                (severidad, estado, mensaje) = diferencia.Value switch
                 {
-                    0   => ("ok", $"Está en la OC: {N(cantidadOc.Value)} unidad(es).{detallePool}"),
-                    > 0 => ("advertencia", $"Faltan {N(diferencia.Value)} unidad(es): la OC pide {N(cantidadOc.Value)} y las propuestas suman {N(g.Cantidad)}.{detallePool}"),
-                    _   => ("advertencia", $"Sobran {N(-diferencia.Value)} unidad(es): la OC pide {N(cantidadOc.Value)} y las propuestas suman {N(g.Cantidad)}.{detallePool}"),
+                    0   => ("ok", "ok", $"Está en la OC: {N(cantidadOc.Value)} unidad(es).{detallePool}"),
+                    > 0 => ("advertencia", "faltan_unidades", $"Faltan {N(diferencia.Value)} unidad(es): la OC pide {N(cantidadOc.Value)} y las propuestas suman {N(g.Cantidad)}.{detallePool}"),
+                    _   => ("advertencia", "sobran_unidades", $"Sobran {N(-diferencia.Value)} unidad(es): la OC pide {N(cantidadOc.Value)} y las propuestas suman {N(g.Cantidad)}.{detallePool}"),
                 };
             }
 
@@ -217,6 +240,9 @@ internal static class ConsolidacionConceptosOrdenCompra
                 Diferencia          = diferencia,
                 PrecioUnitarioOc    = precioOc,
                 AportesPorPropuesta = [.. g.Aportes],
+                EsOpcional          = g.EsOpcional,
+                Estado              = estado,
+                CuentaParaResultadoGlobal = !g.EsOpcional,
             });
         }
 
@@ -232,6 +258,7 @@ internal static class ConsolidacionConceptosOrdenCompra
                     : "Adicional en la OC: no está en ninguna propuesta vinculada.")
             {
                 CantidadEnOc     = c.Cantidad,
+                Estado           = "adicional_en_oc",
                 PrecioUnitarioOc = oc[k].Precio,
                 MonedaSimbolo    = Simbolo(idMonedaOc),
                 Diferencia       = c.Cantidad is { } q ? -q : null,

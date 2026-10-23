@@ -381,6 +381,15 @@ public record ItemConsolidadoOcDto(
     public decimal? PrecioUnitarioOc { get; init; }
     /// <summary>Cuánto aporta cada propuesta al pool: "15 unidades: 10 de PROP-A, 5 de PROP-B".</summary>
     public List<ItemAporteDto> AportesPorPropuesta { get; init; } = [];
+    /// <summary>true = ítem de la sección Opcionales de la propuesta (validación suave).</summary>
+    public bool    EsOpcional { get; init; }
+    /// <summary>
+    /// Obligatorios: ok · faltan_unidades · sobran_unidades · falta_en_oc · adicional_en_oc.
+    /// Opcionales: confirmado_opcional (la OC lo pide, igual o más) · parcial_opcional (pide menos) · no_solicitado.
+    /// </summary>
+    public string  Estado { get; init; } = "ok";
+    /// <summary>false en los opcionales: no suman advertencias ni cambian el resultado global.</summary>
+    public bool    CuentaParaResultadoGlobal { get; init; } = true;
 }
 
 public record ItemAporteDto(long IdPropuesta, string Numero, decimal Cantidad, decimal? PrecioUnitario);
@@ -802,7 +811,8 @@ public record ArchivoPdfOcDto(string Ruta, string Nombre, long Tamano, string Ha
 
 /// <summary>Datos de apoyo para la IA: monedas, condiciones, ítems de las propuestas y motivo de nueva versión.</summary>
 public record ItemPropuestaIaDto(long IdPropuesta, string Numero, int Version, string Descripcion, decimal Cantidad,
-                                 decimal PrecioUnitario, decimal Subtotal, string? Alcance = null, int IdMoneda = 0);
+                                 decimal PrecioUnitario, decimal Subtotal, string? Alcance = null, int IdMoneda = 0,
+                                 bool Opcional = false);
 
 public record DatosIaOrdenCompraDto(
     List<MonedaOrdenCompraDto> Monedas,

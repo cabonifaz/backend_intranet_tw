@@ -137,6 +137,8 @@ public class GeminiAsistenteOrdenCompra(HttpClient http, ConfiguracionGemini con
           falta_en_oc (ítem de la propuesta que la OC no incluye), adicional_en_oc (concepto de la OC que no está en la propuesta).
         - Si la OC cubre varias propuestas, los conceptos de la OC que correspondan a otra propuesta NO son adicionales:
           ignóralos.
+        - Los ítems con opcional = true son extras que el cliente puede comprar o no: si la OC incluye uno, márcalo
+          "coincide" (o "monto_distinto" si difiere el monto); si la OC no lo incluye, NO lo listes (no es falta_en_oc).
         - Las diferencias ya detectadas por las reglas (cliente, moneda, monto, forma de pago, IGV, fechas) vienen como
           contexto: no las vuelvas a calcular, solo explícalas si ayudan.
         - dictamen: 1 a 3 oraciones en español, claras y sin tecnicismos, para el comercial.
@@ -184,7 +186,7 @@ public class GeminiAsistenteOrdenCompra(HttpClient http, ConfiguracionGemini con
             facturaIgualOc = s.FacturaIgualOc,
             ocCubreVariasPropuestas = s.OcCubreVariasPropuestas,
             conceptosOc = s.ConceptosOc.Select(c => new { c.Descripcion, c.Cantidad, c.PrecioUnitario, c.Subtotal }),
-            itemsPropuesta = s.ItemsPropuesta.Select(i => new { i.Descripcion, i.Alcance, i.Cantidad, i.PrecioUnitario, i.Subtotal }),
+            itemsPropuesta = s.ItemsPropuesta.Select(i => new { i.Descripcion, i.Alcance, i.Cantidad, i.PrecioUnitario, i.Subtotal, i.Opcional }),
             diferenciasReglas = s.Diferencias
                 .Where(d => d.Severidad is "advertencia" or "critico")
                 .Select(d => new { d.Campo, d.Etiqueta, d.ValorOc, d.ValorPropuesta, d.Severidad, d.Mensaje }),
