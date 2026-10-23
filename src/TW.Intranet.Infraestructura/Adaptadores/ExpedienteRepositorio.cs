@@ -52,6 +52,19 @@ public class ExpedienteRepositorio(CadenaConexionBd conexion)
     private static OpcionExpedienteDto Opcion(MySqlDataReader r) => new(Texto(r, "codigo") ?? "", Texto(r, "nombre") ?? "");
     private static OpcionIdExpedienteDto OpcionId(MySqlDataReader r) => new(Ent(r, "id"), Texto(r, "nombre") ?? "", Texto(r, "codigo"));
 
+    private static OsVinculadaOcExpedienteDto OsVinculada(MySqlDataReader x) => new(
+        EnteroLargo(x, "id_os"), Texto(x, "numero") ?? "", Texto(x, "estado") ?? "", DecimalNulo(x, "costo_total_estimado"),
+        Fh(x, "fecha_ejecucion"), Hora(x, "hora_inicio"), EnteroLargoNulo(x, "id_tecnico_principal"), Texto(x, "tecnico"),
+        EnteroLargoNulo(x, "id_responsable_comercial"), Texto(x, "responsable_comercial"), Texto(x, "confirmacion_cliente"),
+        EnteroLargo(x, "id_expediente"), Texto(x, "numero_expediente"))
+    {
+        Ejecutor         = Texto(x, "ejecutores"),
+        MontoPropuestaOc = DecimalNulo(x, "monto_propuesta_oc"),
+        SimboloMoneda    = Texto(x, "simbolo_moneda"),
+        IdOc             = TieneColumna(x, "id_oc") ? EnteroLargoNulo(x, "id_oc") : null,
+        NumeroOc         = TieneColumna(x, "numero_oc") ? Texto(x, "numero_oc") : null,
+    };
+
     private static EventoExpedienteDto Evento(MySqlDataReader r) => new(
         Fh(r, "fecha") ?? DateTime.MinValue, Texto(r, "tipo_evento"), TieneColumna(r, "accion") ? Texto(r, "accion") : null,
         Texto(r, "titulo"), Texto(r, "descripcion"), Texto(r, "etapa"), Texto(r, "etapa_nombre"),
@@ -399,8 +412,11 @@ public class ExpedienteRepositorio(CadenaConexionBd conexion)
                     Texto(x, "resultado_ia"), EntNulo(x, "criticas"), EntNulo(x, "advertencias"), EnteroLargoNulo(x, "id_responsable"),
                     Texto(x, "responsable"), Fh(x, "fecha_emision"), Fh(x, "fecha_recepcion"), Fh(x, "fecha_registro")), ct);
 
+                var ordenesServicio = await LeerListaAsync(r, OsVinculada, ct);
+
                 return new RespuestaDto<TabPropuestasExpedienteDto>(2, mensaje,
-                    new TabPropuestasExpedienteDto(versiones, detalle, formas, items, equipos, vbs, timeline) { OrdenesCompra = ocs });
+                    new TabPropuestasExpedienteDto(versiones, detalle, formas, items, equipos, vbs, timeline)
+                    { OrdenesCompra = ocs, OrdenesServicio = ordenesServicio });
             },
             ct);
 
@@ -594,16 +610,7 @@ public class ExpedienteRepositorio(CadenaConexionBd conexion)
                     Fh(x, "fecha"), Texto(x, "accion"), Texto(x, "titulo"), Texto(x, "descripcion"), Texto(x, "estado_anterior"),
                     Texto(x, "estado_nuevo"), EnteroLargoNulo(x, "id_usuario"), Texto(x, "usuario"), Bool(x, "automatico_ia")), ct);
 
-                var oss = await LeerListaAsync(r, x => new OsVinculadaOcExpedienteDto(
-                    EnteroLargo(x, "id_os"), Texto(x, "numero") ?? "", Texto(x, "estado") ?? "", DecimalNulo(x, "costo_total_estimado"),
-                    Fh(x, "fecha_ejecucion"), Hora(x, "hora_inicio"), EnteroLargoNulo(x, "id_tecnico_principal"), Texto(x, "tecnico"),
-                    EnteroLargoNulo(x, "id_responsable_comercial"), Texto(x, "responsable_comercial"), Texto(x, "confirmacion_cliente"),
-                    EnteroLargo(x, "id_expediente"), Texto(x, "numero_expediente"))
-                {
-                    Ejecutor         = Texto(x, "ejecutores"),
-                    MontoPropuestaOc = DecimalNulo(x, "monto_propuesta_oc"),
-                    SimboloMoneda    = Texto(x, "simbolo_moneda"),
-                }, ct);
+                var oss = await LeerListaAsync(r, OsVinculada, ct);
 
                 return new RespuestaDto<TabOrdenesCompraExpedienteDto>(2, mensaje,
                     new TabOrdenesCompraExpedienteDto(pills, datos, validaciones, campos, timeline) { OrdenesServicio = oss });

@@ -384,6 +384,8 @@ public record TabPropuestasExpedienteDto(
     IReadOnlyList<EventoTabDto>                  Timeline)
 {
     public IReadOnlyList<OcPropuestaExpedienteDto> OrdenesCompra { get; init; } = [];
+    /// <summary>Órdenes de servicio generadas desde la propuesta (con la OC que las cubre: idOc, numeroOc).</summary>
+    public IReadOnlyList<OsVinculadaOcExpedienteDto> OrdenesServicio { get; init; } = [];
 }
 
 // Tab Visto Bueno
@@ -555,8 +557,10 @@ public record TabOrdenesCompraExpedienteDto(
     IReadOnlyList<CampoValidacionOcDto>        Campos,
     IReadOnlyList<EventoOcExpedienteDto>       Timeline)
 {
-    /// <summary>Órdenes de servicio vinculadas a la OC elegida.</summary>
+    /// <summary>Órdenes de servicio cubiertas por la OC elegida (el detalle va en el tab Propuestas).</summary>
     public IReadOnlyList<OsVinculadaOcExpedienteDto> OrdenesServicio { get; init; } = [];
+    /// <summary>"N OS cubiertas por esta OC".</summary>
+    public int OrdenesServicioCubiertas => OrdenesServicio.Count;
 }
 
 public record OsVinculadaOcExpedienteDto(
@@ -573,6 +577,9 @@ public record OsVinculadaOcExpedienteDto(
     /// <summary>Lo que la OC asignó a la propuesta de esta OS (moneda de la OC).</summary>
     public decimal?  MontoPropuestaOc { get; init; }
     public string?   SimboloMoneda    { get; init; }
+    /// <summary>OC que cubre la OS (en el tab Propuestas).</summary>
+    public long?     IdOc             { get; init; }
+    public string?   NumeroOc         { get; init; }
 }
 
 // Tab OS

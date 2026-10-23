@@ -167,7 +167,7 @@ proc: BEGIN
     SELECT os.id_os, os.numero, os.estado, os.costo_total_estimado, os.fecha_ejecucion, os.hora_inicio,
            os.id_tecnico_principal, CONCAT(ut.nombre, ' ', ut.apellido) AS tecnico,
            os.id_responsable_comercial, CONCAT(uc.nombre, ' ', uc.apellido) AS responsable_comercial,
-           os.confirmacion_cliente, e.id_expediente, e.numero AS numero_expediente,
+           IF(os.confirmacion_cliente = 1, 'confirmada', 'pendiente') AS confirmacion_cliente, e.id_expediente, e.numero AS numero_expediente,
            (SELECT GROUP_CONCAT(CONCAT(up.nombre, ' ', up.apellido) ORDER BY op2.id SEPARATOR ', ')
             FROM os_personal op2 JOIN usuario up ON up.id_usuario = op2.id_usuario
             WHERE op2.id_os = os.id_os AND op2.eliminado_en IS NULL

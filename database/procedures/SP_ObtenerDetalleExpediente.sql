@@ -158,7 +158,8 @@ proc: BEGIN
 
     -- 7. Actividad reciente
     SELECT ev.fecha, ev.tipo_evento, ev.titulo, ev.descripcion, ev.etapa, et.String1 AS etapa_nombre, ev.id_usuario,
-           IFNULL(CONCAT(u.nombre, ' ', u.apellido), 'Sistema') AS usuario, ev.entidad, ev.referencia, ev.urgente, ev.origen
+           IFNULL(CONCAT(u.nombre, ' ', u.apellido), 'Sistema') AS usuario, u.cargo AS cargo_usuario,
+           ev.entidad, ev.referencia, ev.urgente, ev.origen
     FROM tmp_exp_evt ev
     LEFT JOIN usuario u        ON u.id_usuario = ev.id_usuario
     LEFT JOIN tabla_maestra et ON et.IdMaestro = 97 AND et.IdEmpresa = 1 AND et.String2 = ev.etapa

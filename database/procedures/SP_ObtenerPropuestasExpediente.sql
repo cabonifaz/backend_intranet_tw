@@ -10,6 +10,8 @@
 --   7 visto bueno de la versión (aprobador, decisión, comentario, fechas) · 8 timeline de la versión
 --   9 órdenes de compra vinculadas a la versión (número, estado, monto asignado, responsable, emisión, recepción y
 --     resultado de la validación)
+--   10 órdenes de servicio generadas desde la propuesta (las del expediente de la propuesta cuya propuesta activa es
+--      este número): número, estado, costo, fecha, técnico, ejecutores, responsable y la OC que las cubre
 -- El detalle (3) trae también el contacto y la sede de la propuesta y cuántos suministros del cliente incluye.
 DROP PROCEDURE IF EXISTS SP_ObtenerPropuestasExpediente;
 
@@ -180,6 +182,32 @@ proc: BEGIN
     LEFT JOIN tabla_maestra mo    ON mo.IdMaestro = 1 AND mo.IdEmpresa = 1 AND mo.Num1 = oc.id_moneda
     WHERE op.id_propuesta = v_id_prop AND op.eliminado_en IS NULL
     ORDER BY oc.fecha_registro DESC, oc.id_oc DESC;
+
+    -- 10. Órdenes de servicio generadas desde la propuesta (la OS cuelga del expediente; el expediente apunta a la
+    --     propuesta activa con id_propuesta). Sin propuesta activa registrada, se toman las del expediente de la propuesta.
+    SELECT os.id_os, os.numero, os.estado, os.costo_total_estimado, os.fecha_ejecucion, os.hora_inicio,
+           os.id_tecnico_principal, CONCAT(ut.nombre, ' ', ut.apellido) AS tecnico,
+           os.id_responsable_comercial, CONCAT(uc.nombre, ' ', uc.apellido) AS responsable_comercial,
+           IF(os.confirmacion_cliente = 1, 'confirmada', 'pendiente') AS confirmacion_cliente, e.id_expediente, e.numero AS numero_expediente,
+           (SELECT GROUP_CONCAT(CONCAT(up.nombre, ' ', up.apellido) ORDER BY op2.id SEPARATOR ', ')
+            FROM os_personal op2 JOIN usuario up ON up.id_usuario = op2.id_usuario
+            WHERE op2.id_os = os.id_os AND op2.eliminado_en IS NULL
+              AND op2.id_usuario <> IFNULL(os.id_tecnico_principal, 0))                     AS ejecutores,
+           e.id_orden_compra AS id_oc, oc.numero_oc,
+           (SELECT SUM(ocp.monto_asignado) FROM oc_propuesta ocp
+            WHERE ocp.id_oc = e.id_orden_compra AND ocp.id_propuesta = v_id_prop AND ocp.eliminado_en IS NULL) AS monto_propuesta_oc,
+           mo.String2 AS simbolo_moneda
+    FROM orden_servicio os
+    JOIN expediente_digital e ON e.id_expediente = os.id_expediente AND e.eliminado_en IS NULL
+    LEFT JOIN propuesta_comercial pe ON pe.id_propuesta = e.id_propuesta
+    LEFT JOIN orden_compra oc ON oc.id_oc = e.id_orden_compra
+    LEFT JOIN tabla_maestra mo ON mo.IdMaestro = 1 AND mo.IdEmpresa = 1 AND mo.Num1 = oc.id_moneda
+    LEFT JOIN usuario ut ON ut.id_usuario = os.id_tecnico_principal
+    LEFT JOIN usuario uc ON uc.id_usuario = os.id_responsable_comercial
+    WHERE os.eliminado_en IS NULL
+      AND e.id_expediente = FN_ExpedienteDePropuesta(v_id_prop)
+      AND (pe.id_propuesta IS NULL OR pe.numero = (SELECT p3.numero FROM propuesta_comercial p3 WHERE p3.id_propuesta = v_id_prop))
+    ORDER BY os.fecha_ejecucion DESC, os.id_os DESC;
 END$$
 
 DELIMITER ;
