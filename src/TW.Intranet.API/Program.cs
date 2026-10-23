@@ -205,6 +205,17 @@ builder.Services.AddScoped<ObtenerResumenMenuMovilCasoDeUso>();
 // App Mobile HU-03 — agenda de servicios programados
 builder.Services.AddScoped<IServiciosMovilRepositorio, ServiciosMovilRepositorio>();
 builder.Services.AddScoped<ObtenerServiciosProgramadosMovilCasoDeUso>();
+// App Mobile HU-04 — detalle del servicio y checklist de pre-salida
+builder.Services.AddScoped<IPresalidaMovilRepositorio, PresalidaMovilRepositorio>();
+builder.Services.AddScoped<ObtenerDetalleServicioMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerChecklistSalidaMovilCasoDeUso>();
+builder.Services.AddScoped<MarcarItemChecklistSalidaMovilCasoDeUso>();
+builder.Services.AddScoped<SolicitarAutorizacionSalidaMovilCasoDeUso>();
+builder.Services.AddScoped<IniciarTrasladoMovilCasoDeUso>();
+// App Mobile HU-04 — visto bueno de salida desde la intranet (encargado de Servicio Técnico / Metrología)
+builder.Services.AddScoped<IAutorizacionSalidaRepositorio, AutorizacionSalidaRepositorio>();
+builder.Services.AddScoped<ObtenerAutorizacionesSalidaCasoDeUso>();
+builder.Services.AddScoped<ResolverAutorizacionSalidaCasoDeUso>();
 
 // ── INYECCIÓN DE DEPENDENCIAS — Dashboard ─────────────────────────────────────
 builder.Services.AddScoped<IDashboardRepositorio,       DashboardRepositorio>();
