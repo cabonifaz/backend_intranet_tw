@@ -439,6 +439,11 @@ builder.Services.AddScoped<ConfirmarImportacionEquiposCasoDeUso>();
 builder.Services.AddScoped<DescargarPlantillaImportacionEquiposCasoDeUso>();
 builder.Services.AddScoped<ExportarReporteImportacionEquiposCasoDeUso>();
 
+// ── INYECCIÓN DE DEPENDENCIAS — Órdenes de Servicio / Metrología (Sprint 4, HU-40 a HU-44) ──
+builder.Services.AddScoped<IOrdenServicioRepositorio, OrdenServicioRepositorio>();
+builder.Services.AddScoped<ObtenerBandejaOrdenesServicioCasoDeUso>();
+builder.Services.AddScoped<ExportarBandejaOrdenesServicioCasoDeUso>();
+
 // ── INYECCIÓN DE DEPENDENCIAS — Expediente Digital (Sprint 4, HU-29 a HU-33) ───
 builder.Services.AddScoped<IExpedienteRepositorio, ExpedienteRepositorio>();
 builder.Services.AddSingleton<IGeneradorPdfTabla, GeneradorPdfTablaQuestPdf>();
