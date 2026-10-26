@@ -52,6 +52,29 @@ public static partial class ReconocedorColumnasEquipos
         return (mejorFila, mejor);
     }
 
+    /// <summary>
+    /// Columnas que el encabezado nombra sin ambigüedad ("N/S", "Código TW", "Código del cliente", "Marca"…).
+    /// Mandan sobre lo que deduzca la IA por el contenido: una serie del cliente que empieza con "TW" sigue siendo N/S.
+    /// </summary>
+    public static Dictionary<string, int> CamposPorEncabezado(IReadOnlyList<string> celdas)
+    {
+        var r = new Dictionary<string, int>();
+        for (int c = 0; c < celdas.Count; c++)
+        {
+            var campo = Campo(Similitud.Normalizar(celdas[c]), true);
+            if (campo is not null && !r.ContainsKey(campo)) r[campo] = c;
+        }
+        return r;
+    }
+
+    /// <summary>¿La columna trae códigos TW (EQ-TW-AAAA-NNNN)? Al menos la mitad de las celdas con dato.</summary>
+    public static bool TraeCodigosTw(IReadOnlyList<FilaLeida> filas, int filaEncabezado, int columna)
+    {
+        var valores = filas.Where(f => f.Numero > filaEncabezado && columna < f.Celdas.Count && f.Celdas[columna].Length > 0)
+                           .Take(30).Select(f => f.Celdas[columna]).ToList();
+        return valores.Count > 0 && valores.Count(v => PatronCodigoTw().IsMatch(v)) * 2 >= valores.Count;
+    }
+
     private static Dictionary<string, int> AsignarEncabezados(IReadOnlyList<string> celdas)
     {
         var r = new Dictionary<string, int>();

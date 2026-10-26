@@ -254,7 +254,8 @@ public sealed class ConciliadorEquiposImportacion
         var t = Similitud.Normalizar(equipo ?? "");
         string c = t.Contains("pesa") || t.Contains("patron") ? "pesa"
                  : t.Contains("termometro") || t.Contains("manometro") || t.Contains("dinamometro") || t.Contains("higrometro")
-                   || t.Contains("calibrador") || t.Contains("cronometro") ? "instrumento"
+                   || t.Contains("calibrador") || t.Contains("cronometro") || t.Contains("humedad") || t.Contains("determinador")
+                   || t.Contains("estufa") || t.Contains("mufla") ? "instrumento"
                  : "equipo";
         return clasificacionesValidas.Contains(c) ? c : clasificacionesValidas.FirstOrDefault();
     }

@@ -31,7 +31,11 @@ public class GeminiAsistenteEquipos(HttpClient http, ConfiguracionGemini configu
         - marca y modelo del equipo. Si una sola columna trae "marca modelo", asígnala a modelo.
         - capacidad: capacidad máxima, alcance o rango (ej. "80 000 kg", "220 g x 0.1 mg").
         - ubicacion: área o lugar dentro de la planta. sede: planta, sede o unidad del cliente.
-        - Usa también el contenido de las filas, no solo los títulos (ej. una columna con valores EQ-TW-… es codigoTw).
+        - El TÍTULO de la columna manda sobre su contenido: si el título dice "N/S", "S/N", "serie" o "número de serie",
+          esa columna es numSerie aunque sus valores empiecen con "TW" (son series del cliente). codigoTw solo es la
+          columna cuyo título menciona "código TW" / "Total Weight" o, sin título, la que trae valores EQ-TW-AAAA-NNNN.
+          Un título "código del cliente", "tag" o "código interno" es codigoCliente.
+        - Usa el contenido de las filas solo cuando el título no existe o es ambiguo.
         - confianza: de 0 a 100.
         """;
 

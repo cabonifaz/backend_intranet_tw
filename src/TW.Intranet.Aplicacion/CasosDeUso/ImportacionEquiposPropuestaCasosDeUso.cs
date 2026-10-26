@@ -50,8 +50,13 @@ public class AnalizarImportacionEquiposCasoDeUso(
         var hoja = lectura.Hoja;
         if (hoja.Filas.Count == 0) return new(1, "El archivo no tiene datos.");
 
-        // ── 1. Columnas: la IA las reconoce; las reglas completan lo que falte ──
+        // ── 1. Columnas ──
+        // Lo que el encabezado nombra sin ambigüedad ("N/S", "Código TW", "Código del cliente"…) manda; la IA reconoce
+        // el resto (encabezados con otros nombres, archivos sin encabezado) y las reglas completan lo que falte.
         var (filaEncabezado, columnas) = ReconocedorColumnasEquipos.Reconocer(hoja.Filas);
+        var porEncabezado = filaEncabezado > 0
+            ? ReconocedorColumnasEquipos.CamposPorEncabezado(hoja.Filas.First(f => f.Numero == filaEncabezado).Celdas)
+            : [];
         var iaUsada = false;
         string? aviso = null;
         if (ia.Disponible)
@@ -60,20 +65,41 @@ public class AnalizarImportacionEquiposCasoDeUso(
             if (r.Datos is { } mapeo && mapeo.Columnas.Keys.Any(k => k is "numSerie" or "codigoTw" or "codigoCliente"))
             {
                 iaUsada = true;
-                var deReglas = columnas;
-                columnas = mapeo.Columnas.Where(c => ReconocedorColumnasEquipos.Campos.Contains(c.Key))
+                var deIa = mapeo.Columnas.Where(c => ReconocedorColumnasEquipos.Campos.Contains(c.Key))
                                          .GroupBy(c => c.Value).Select(g => g.First())
                                          .ToDictionary(c => c.Key, c => c.Value);
-                if (mapeo.FilaEncabezado == filaEncabezado || filaEncabezado == 0)
-                    foreach (var (campo, col) in deReglas)
+                if (porEncabezado.Keys.Any(k => k is "numSerie" or "codigoTw" or "codigoCliente") && porEncabezado.Count >= 2)
+                {
+                    // El encabezado es claro: se respeta y la IA solo agrega columnas que el encabezado no nombró.
+                    var deReglas = columnas;
+                    columnas = new Dictionary<string, int>(porEncabezado);
+                    foreach (var (campo, col) in deReglas.Concat(deIa))
                         if (!columnas.ContainsKey(campo) && !columnas.ContainsValue(col)) columnas[campo] = col;
-                filaEncabezado = mapeo.FilaEncabezado;
+                }
+                else
+                {
+                    var deReglas = columnas;
+                    columnas = deIa;
+                    if (mapeo.FilaEncabezado == filaEncabezado || filaEncabezado == 0)
+                        foreach (var (campo, col) in deReglas)
+                            if (!columnas.ContainsKey(campo) && !columnas.ContainsValue(col)) columnas[campo] = col;
+                    filaEncabezado = mapeo.FilaEncabezado;
+                }
             }
             else aviso = r.Error is null
                 ? "La IA no reconoció las columnas del archivo; se usaron las reglas."
                 : r.Error + " Se usaron las reglas.";
         }
         else aviso = "La IA no está configurada: el archivo se analizó solo con reglas.";
+
+        // Una columna es código TW solo si el encabezado lo dice o si sus valores tienen el formato EQ-TW-AAAA-NNNN.
+        if (columnas.TryGetValue("codigoTw", out var colTw)
+            && !(porEncabezado.TryGetValue("codigoTw", out var colTwEnc) && colTwEnc == colTw)
+            && !ReconocedorColumnasEquipos.TraeCodigosTw(hoja.Filas, filaEncabezado, colTw))
+        {
+            columnas.Remove("codigoTw");
+            if (!columnas.ContainsKey("numSerie") && !columnas.ContainsValue(colTw)) columnas["numSerie"] = colTw;
+        }
 
         if (!columnas.Keys.Any(k => k is "numSerie" or "codigoTw" or "codigoCliente"))
             return new(1, "No se reconoció la columna del número de serie (N/S). Revise que el archivo tenga encabezados o descargue la plantilla.");
