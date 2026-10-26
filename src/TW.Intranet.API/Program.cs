@@ -400,7 +400,7 @@ builder.Services.AddScoped<AutogenerarOrdenCompraCasoDeUso>();
 builder.Services.AddScoped<PrepararAnulacionOrdenCompraCasoDeUso>();
 builder.Services.AddScoped<AnularOrdenCompraCasoDeUso>();
 
-// IA de órdenes de compra (Google Gemini, nivel gratuito de AI Studio).
+// IA de órdenes de compra y de la importación de equipos de propuestas (Google Gemini, nivel gratuito de AI Studio).
 // Variables: Gemini__ApiKey, Gemini__Modelo (gemini-3.5-flash-lite), Gemini__UrlBase, Gemini__TimeoutSegundos (60).
 // Sin ApiKey el módulo funciona igual: la ficha se llena a mano y la validación usa solo las reglas.
 var seccionGemini = cfg.GetSection("Gemini");
@@ -418,11 +418,26 @@ if (configuracionGemini.Configurado)
         c.Timeout     = TimeSpan.FromSeconds(configuracionGemini.TimeoutSegundos);
         c.DefaultRequestHeaders.Accept.ParseAdd("application/json");
     });
+    builder.Services.AddHttpClient<IAsistenteIaEquipos, GeminiAsistenteEquipos>(c =>
+    {
+        c.BaseAddress = new Uri(configuracionGemini.UrlBase);
+        c.Timeout     = TimeSpan.FromSeconds(configuracionGemini.TimeoutSegundos);
+        c.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+    });
 }
 else
 {
     builder.Services.AddSingleton<IAsistenteIaOrdenCompra, AsistenteIaOrdenCompraNoConfigurado>();
+    builder.Services.AddSingleton<IAsistenteIaEquipos, AsistenteIaEquiposNoConfigurado>();
 }
+
+// ── INYECCIÓN DE DEPENDENCIAS — Propuestas: importación de equipos desde Excel con IA (Sprint 4) ──
+builder.Services.AddScoped<IImportacionEquiposRepositorio, ImportacionEquiposRepositorio>();
+builder.Services.AddSingleton<ILectorHojaCalculo, LectorHojaCalculoXlsx>();
+builder.Services.AddScoped<AnalizarImportacionEquiposCasoDeUso>();
+builder.Services.AddScoped<ConfirmarImportacionEquiposCasoDeUso>();
+builder.Services.AddScoped<DescargarPlantillaImportacionEquiposCasoDeUso>();
+builder.Services.AddScoped<ExportarReporteImportacionEquiposCasoDeUso>();
 
 // ── INYECCIÓN DE DEPENDENCIAS — Expediente Digital (Sprint 4, HU-29 a HU-33) ───
 builder.Services.AddScoped<IExpedienteRepositorio, ExpedienteRepositorio>();
