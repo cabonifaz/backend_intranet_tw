@@ -124,6 +124,10 @@ public class GeminiAsistenteOrdenCompra(HttpClient http, ConfiguracionGemini con
           falta_en_oc (ítem de la propuesta que la OC no incluye), adicional_en_oc (concepto de la OC que no está en la propuesta).
         - Si la OC cubre varias propuestas, los conceptos de la OC que correspondan a otra propuesta NO son adicionales:
           ignóralos.
+        - Si ocCubreVariasPropuestas es true, NO compares el monto total de la OC con el total de esta propuesta ni
+          sugieras acciones por el monto: el monto se valida de forma global (total de la OC contra la suma de los saldos
+          pendientes de todas las propuestas vinculadas) y el reparto entre propuestas lo decide el comercial. Usa
+          campo = monto solo si las reglas reportan una diferencia de monto.
         - Los ítems con opcional = true son extras que el cliente puede comprar o no: si la OC incluye uno, márcalo
           "coincide" (o "monto_distinto" si difiere el monto); si la OC no lo incluye, NO lo listes (no es falta_en_oc).
         - Las diferencias ya detectadas por las reglas (cliente, moneda, monto, forma de pago, IGV, fechas) vienen como

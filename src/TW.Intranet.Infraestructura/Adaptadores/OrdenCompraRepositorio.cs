@@ -546,7 +546,8 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
                         Texto(r, "resultado_ia"), EnteroLargoNulo(r, "id_contacto"), Texto(r, "contacto"),
                         EnteroLargoNulo(r, "id_requerimiento"), Texto(r, "numero_rq"),
                         EnteroLargoNulo(r, "id_propuesta_nueva_version"), Texto(r, "numero_nueva_version"),
-                        EntNulo(r, "version_nueva_version"), Texto(r, "estado_nueva_version"), Booleano(r, "nueva_version_aceptada"))
+                        EntNulo(r, "version_nueva_version"), Texto(r, "estado_nueva_version"), Booleano(r, "nueva_version_aceptada"),
+                        TieneColumna(r, "items") ? Ent(r, "items") : 0)
                     {
                         MontoCubierto = TieneColumna(r, "monto_cubierto") ? DecimalNulo(r, "monto_cubierto") : null,
                     });

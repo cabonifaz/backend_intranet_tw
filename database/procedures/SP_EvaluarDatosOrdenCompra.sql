@@ -165,6 +165,11 @@ proc: BEGIN
                            (SELECT IFNULL(JSON_ARRAYAGG(px.numero), JSON_ARRAY())
                             FROM JSON_TABLE(p_vinculaciones, '$[*]' COLUMNS (id BIGINT PATH '$.idPropuesta')) jv
                             JOIN propuesta_comercial px ON px.id_propuesta = jv.id));
+    -- Ids de todas las vinculadas: con 2 o más, el monto se valida contra la suma de sus saldos (SP_CompararOcPropuesta)
+    SET v_datos = JSON_SET(v_datos, '$._idsVinculadas',
+                           (SELECT IFNULL(JSON_ARRAYAGG(jv.id), JSON_ARRAY())
+                            FROM JSON_TABLE(p_vinculaciones, '$[*]' COLUMNS (id BIGINT PATH '$.idPropuesta')) jv
+                            WHERE jv.id > 0));
 
     SET v_n = JSON_LENGTH(p_vinculaciones);
     WHILE v_i < v_n DO

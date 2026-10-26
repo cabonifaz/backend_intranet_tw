@@ -14,6 +14,11 @@
 --   (USD y COP, por ejemplo) un solo tipo de cambio en soles no alcanza: también es crítica.
 -- OUT p_monto_cubierto: el monto asignado convertido a la moneda de la propuesta (NULL si es la misma moneda o no se
 --   pudo convertir). Es lo que descuenta del saldo de la propuesta (oc_propuesta.monto_cubierto).
+-- p_datos._idsVinculadas (lo agregan SP_EvaluarDatosOrdenCompra y SP_RegistrarValidacionOrdenCompra): ids de TODAS las
+--   propuestas vinculadas a la OC. Con 2 o más, el monto se valida de forma global (pedido de Jazir 26-oct): el monto
+--   total de la OC contra la suma de los saldos pendientes de las propuestas vinculadas (convertidos a la moneda de la
+--   OC con el tipo de cambio). El reparto entre propuestas lo decide el comercial y no genera advertencias.
+--   OK si la OC alcanza (aunque sobre); advertencia si falta.
 -- p_eval_ia (opcional): evaluación de la IA para esta propuesta:
 --   { conceptos: [{descripcion, montoOc, montoPropuesta, estado}], dictamen, insights: [...], confianza, motor }
 --   estado del concepto: coincide | falta_en_oc | adicional_en_oc | monto_distinto
@@ -103,6 +108,11 @@ BEGIN
     DECLARE v_hitos_cond    INT DEFAULT 0;
     DECLARE v_hitos_ok      TINYINT DEFAULT 0;
     DECLARE o_cod_cond      VARCHAR(40)   CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    -- Monto global (OC con varias propuestas vinculadas)
+    DECLARE o_monto_total   DECIMAL(16,2);
+    DECLARE v_n_vinc        INT DEFAULT 0;
+    DECLARE v_saldo_vinc    DECIMAL(16,2);
+    DECLARE v_sin_conv      INT DEFAULT 0;
 
     -- Propuesta
     SELECT p.numero, p.version, c.razon_social, c.ruc, p.id_moneda,
@@ -237,8 +247,57 @@ BEGIN
              ELSE 'La OC referencia una propuesta que no está vinculada.' END,
         NULL);
 
-    -- 3. Monto asignado frente al saldo de la propuesta (alerta, nunca bloquea). Si la OC está en otra moneda, se compara
-    --    el monto convertido con el tipo de cambio.
+    -- 3. Monto (alerta, nunca bloquea).
+    --    Con varias propuestas vinculadas: monto total de la OC frente a la suma de los saldos pendientes de todas ellas
+    --    (en la moneda de la OC). Con una sola: monto asignado frente al saldo de la propuesta (convertido si la OC está
+    --    en otra moneda).
+    SET o_monto_total = CAST(FN_JsonTexto(p_datos, '$.montoTotal') AS DECIMAL(16,2));
+    IF JSON_TYPE(JSON_EXTRACT(p_datos, '$._idsVinculadas')) = 'ARRAY' THEN
+        SET v_n_vinc = JSON_LENGTH(JSON_EXTRACT(p_datos, '$._idsVinculadas'));
+    END IF;
+
+    IF v_n_vinc >= 2 AND o_monto_total IS NOT NULL THEN
+        SELECT COUNT(*), SUM(x.saldo_oc), IFNULL(SUM(x.saldo_oc IS NULL), 0)
+          INTO v_n_vinc, v_saldo_vinc, v_sin_conv
+        FROM (
+            SELECT CASE
+                       WHEN o_id_moneda IS NULL OR s.id_moneda = o_id_moneda THEN s.saldo
+                       WHEN o_tc IS NULL THEN NULL
+                       WHEN o_cod_moneda = 'PEN' AND mp.String3 <> 'PEN' THEN ROUND(s.saldo * o_tc, 2)  -- propuesta en moneda extranjera
+                       WHEN o_cod_moneda <> 'PEN' AND mp.String3 = 'PEN' THEN ROUND(s.saldo / o_tc, 2)  -- propuesta en soles
+                       ELSE NULL                                                                         -- dos monedas extranjeras
+                   END AS saldo_oc
+            FROM (SELECT px.id_propuesta, px.id_moneda,
+                         IF(IFNULL(p_sin_autogenerada, 0) = 1, FN_SaldoPropuestaOcSinAutogenerada(px.id_propuesta, p_excluir_oc),
+                            FN_SaldoPropuestaOc(px.id_propuesta, p_excluir_oc)) AS saldo
+                  FROM propuesta_comercial px
+                  WHERE px.id_propuesta IN (SELECT jv.id FROM JSON_TABLE(JSON_EXTRACT(p_datos, '$._idsVinculadas'), '$[*]'
+                                                                         COLUMNS (id BIGINT PATH '$')) jv)) s
+            LEFT JOIN tabla_maestra mp ON mp.IdMaestro = 1 AND mp.IdEmpresa = 1 AND mp.Num1 = s.id_moneda
+        ) x;
+    END IF;
+
+    IF v_n_vinc >= 2 AND o_monto_total IS NOT NULL THEN
+        SET v_diferencia = IF(v_sin_conv > 0, NULL, o_monto_total - IFNULL(v_saldo_vinc, 0));
+        INSERT INTO tmp_oc_cmp VALUES (3, 'monto', 'Monto',
+            CONCAT(IFNULL(o_simbolo, ''), ' ', FORMAT(o_monto_total, 2), ' (total de la OC)'),
+            IF(v_sin_conv > 0, CONCAT('Saldo pendiente de las ', v_n_vinc, ' propuestas vinculadas'),
+               CONCAT(IFNULL(o_simbolo, ''), ' ', FORMAT(IFNULL(v_saldo_vinc, 0), 2), ' (saldo pendiente de las ', v_n_vinc,
+                      ' propuestas vinculadas)')),
+            CASE WHEN v_diferencia IS NULL THEN 'sin_dato' WHEN v_diferencia > -0.01 THEN 'ok' ELSE 'advertencia' END,
+            CASE
+                WHEN v_diferencia IS NULL THEN IF(o_tc IS NULL,
+                    'No se puede comparar el monto: hay propuestas vinculadas en otra moneda y falta el tipo de cambio.',
+                    'No se puede comparar el monto: un tipo de cambio en soles no convierte entre esas dos monedas.')
+                WHEN ABS(v_diferencia) < 0.01 THEN CONCAT('La OC cubre exactamente el saldo pendiente de las ', v_n_vinc,
+                                                          ' propuestas vinculadas.')
+                WHEN v_diferencia > 0 THEN CONCAT('La OC alcanza para cubrir las ', v_n_vinc, ' propuestas vinculadas (sobran ',
+                                                  FORMAT(v_diferencia, 2), ').')
+                ELSE CONCAT('Faltan ', FORMAT(-v_diferencia, 2), ' para cubrir el saldo pendiente total de las ', v_n_vinc,
+                            ' propuestas vinculadas.')
+            END,
+            IF(v_diferencia IS NOT NULL AND v_diferencia <= -0.01, 'Confirmar el monto con el cliente', NULL));
+    ELSE
     SET v_diferencia = v_monto_conv - v_saldo;
     INSERT INTO tmp_oc_cmp VALUES (3, 'monto', 'Monto',
         CONCAT(IFNULL(o_simbolo, ''), ' ', FORMAT(IFNULL(p_monto_asignado, 0), 2),
@@ -257,6 +316,7 @@ BEGIN
             ELSE CONCAT('El monto asignado excede el saldo de la propuesta en ', FORMAT(v_diferencia, 2), '.')
         END,
         IF(v_monto_conv IS NULL OR ABS(v_diferencia) < 0.01, NULL, 'Confirmar el monto con el cliente'));
+    END IF;
 
     -- 4. Moneda
     INSERT INTO tmp_oc_cmp VALUES (4, 'moneda', 'Moneda',

@@ -37,6 +37,11 @@ BEGIN
                            (SELECT IFNULL(JSON_ARRAYAGG(px.numero), JSON_ARRAY())
                             FROM oc_propuesta op JOIN propuesta_comercial px ON px.id_propuesta = op.id_propuesta
                             WHERE op.id_oc = p_id_oc AND op.eliminado_en IS NULL));
+    -- Ids de todas las vinculadas: con 2 o más, el monto se valida contra la suma de sus saldos (SP_CompararOcPropuesta)
+    SET v_datos = JSON_SET(v_datos, '$._idsVinculadas',
+                           (SELECT IFNULL(JSON_ARRAYAGG(op.id_propuesta), JSON_ARRAY())
+                            FROM oc_propuesta op
+                            WHERE op.id_oc = p_id_oc AND op.eliminado_en IS NULL));
 
     CALL SP_CompararOcPropuesta(p_id_propuesta, p_id_oc, 0, v_datos, p_monto_asignado, p_eval_ia,
                                 p_resultado, v_coinc, v_adv, v_crit, v_total, p_sugerencia, v_cubierto);

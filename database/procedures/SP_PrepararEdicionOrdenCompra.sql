@@ -74,7 +74,9 @@ proc: BEGIN
            nv.estado AS estado_nueva_version,
            (nv.id_propuesta IS NOT NULL
             AND (EXISTS (SELECT 1 FROM seguimiento_comercial s WHERE s.id_propuesta = nv.id_propuesta
-                           AND s.estado = 'cerrado_aceptacion' AND s.eliminado_en IS NULL)))      AS nueva_version_aceptada
+                           AND s.estado = 'cerrado_aceptacion' AND s.eliminado_en IS NULL)))      AS nueva_version_aceptada,
+           (SELECT COUNT(*) FROM propuesta_item i WHERE i.id_propuesta = op.id_propuesta AND i.seccion = 'principal'
+              AND IFNULL(i.es_espaciado, 0) = 0 AND i.eliminado_en IS NULL)                     AS items
     FROM oc_propuesta op
     JOIN propuesta_comercial p     ON p.id_propuesta  = op.id_propuesta
     LEFT JOIN contacto_cliente ct  ON ct.id_contacto  = p.id_contacto

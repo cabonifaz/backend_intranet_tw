@@ -269,7 +269,8 @@ public record VinculacionEdicionOcDto(
     string?   NumeroNuevaVersion,
     int?      VersionNuevaVersion,
     string?   EstadoNuevaVersion,
-    bool      NuevaVersionAceptada)
+    bool      NuevaVersionAceptada,
+    int       Items = 0)
 {
     /// <summary>Lo asignado en la moneda de la propuesta (null = misma moneda que la OC).</summary>
     public decimal? MontoCubierto { get; init; }
