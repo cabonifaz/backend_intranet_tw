@@ -443,6 +443,19 @@ builder.Services.AddScoped<ExportarReporteImportacionEquiposCasoDeUso>();
 builder.Services.AddScoped<IOrdenServicioRepositorio, OrdenServicioRepositorio>();
 builder.Services.AddScoped<ObtenerBandejaOrdenesServicioCasoDeUso>();
 builder.Services.AddScoped<ExportarBandejaOrdenesServicioCasoDeUso>();
+builder.Services.AddScoped<PrepararOrdenServicioCasoDeUso>();
+builder.Services.AddScoped<GuardarOrdenServicioCasoDeUso>();
+builder.Services.AddScoped<PrepararSolicitudEdicionOsCasoDeUso>();
+builder.Services.AddScoped<SolicitarEdicionOsCasoDeUso>();
+builder.Services.AddScoped<ResolverSolicitudEdicionOsCasoDeUso>();
+builder.Services.AddScoped<PrepararAnulacionOsCasoDeUso>();
+builder.Services.AddScoped<AnularOrdenServicioCasoDeUso>();
+builder.Services.AddScoped<ObtenerDetalleOrdenServicioCasoDeUso>();
+builder.Services.AddScoped<ObtenerTabsOrdenServicioCasoDeUso>();
+builder.Services.AddScoped<BuscarEquiposOrdenServicioCasoDeUso>();
+builder.Services.AddScoped<BuscarConceptosOrdenServicioCasoDeUso>();
+builder.Services.AddScoped<DescargarPlantillaImportacionOsCasoDeUso>();
+builder.Services.AddScoped<AnalizarImportacionOsCasoDeUso>();
 
 // ── INYECCIÓN DE DEPENDENCIAS — Expediente Digital (Sprint 4, HU-29 a HU-33) ───
 builder.Services.AddScoped<IExpedienteRepositorio, ExpedienteRepositorio>();

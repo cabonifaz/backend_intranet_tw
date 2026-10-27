@@ -47,6 +47,39 @@ public class LectorHojaCalculoXlsx : ILectorHojaCalculo
         }
     }
 
+    public ResultadoLecturaLibro LeerLibro(Stream contenido, string nombreArchivo, int maxFilasPorHoja)
+    {
+        try
+        {
+            using var memoria = new MemoryStream();
+            contenido.CopyTo(memoria);
+            var bytes = memoria.ToArray();
+            if (bytes.Length == 0) return new(null, "El archivo está vacío.");
+            if (bytes.Length >= 4 && bytes[0] == 0xD0 && bytes[1] == 0xCF && bytes[2] == 0x11 && bytes[3] == 0xE0)
+                return new(null, "El formato .xls (Excel 97-2003) no es compatible. Ábralo en Excel y guárdelo como .xlsx.");
+            if (bytes.Length < 4 || bytes[0] != (byte)'P' || bytes[1] != (byte)'K')
+                return new(null, "El archivo no es un Excel .xlsx válido. Use la plantilla oficial.");
+
+            using var zip = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
+            var compartidas = LeerTextosCompartidos(zip);
+            var hojas = new List<HojaLeida>();
+            foreach (var (nombre, ruta) in ListarHojas(zip))
+            {
+                var entrada = zip.GetEntry(ruta);
+                if (entrada is null) continue;
+                if (entrada.Length > MaxBytesDescomprimidos) return new(null, $"La hoja {nombre} es demasiado grande.", nombre);
+                var filas = LeerHoja(entrada, compartidas, maxFilasPorHoja, out var excedido);
+                if (excedido) return new(null, $"La hoja {nombre} tiene más de {maxFilasPorHoja} filas con datos.", nombre);
+                hojas.Add(new HojaLeida(nombre, filas));
+            }
+            return hojas.Count == 0 ? new(null, "El Excel no tiene hojas.") : new(hojas, null);
+        }
+        catch (Exception ex) when (ex is InvalidDataException or XmlException or IOException or FormatException)
+        {
+            return new(null, "No se pudo leer el archivo: está dañado o no es un Excel .xlsx válido.");
+        }
+    }
+
     // ══════════════════════ XLSX ══════════════════════
 
     private static ResultadoLecturaHoja LeerXlsx(ZipArchive zip, int maxFilas)

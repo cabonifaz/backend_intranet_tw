@@ -125,6 +125,57 @@ public static class PlantillasCorreo
         return new MensajeCorreoDto(anterior.Correo!, anterior.Nombre, asunto, html, texto);
     }
 
+    /// <summary>HU-40 — Al Jefe Comercial: un comercial solicita editar una OS/OM emitida.</summary>
+    public static MensajeCorreoDto SolicitudEdicionOs(SolicitudEdicionOsDto s, OpcionesCorreo opciones)
+    {
+        string asunto = $"{opciones.NombreSistema}: solicitud de edición de la {s.Tipo} {s.Numero}";
+        string html = $"""
+            <div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#1F2937">
+              <h2 style="margin:0 0 12px;font-size:18px">{H(opciones.NombreSistema)}</h2>
+              <p style="margin:0 0 12px">Hola {H(s.Destinatario)}, {H(s.Autor)} solicita tu aprobación para editar la <b>{H(s.Tipo)} {H(s.Numero)}</b> ({H(s.RazonSocial)}).</p>
+              <table style="border-collapse:collapse;font-size:14px">
+                <tr><td style="padding:4px 12px 4px 0;color:#6B7280">Motivo</td><td style="padding:4px 0">{H(s.Motivo)}</td></tr>
+                <tr><td style="padding:4px 12px 4px 0;color:#6B7280;vertical-align:top">Comentario</td><td style="padding:4px 0">{H(s.Comentario)}</td></tr>
+              </table>
+              {Boton(opciones)}
+              <p style="margin:16px 0 0;font-size:12px;color:#6B7280">Aprueba o rechaza la solicitud desde el detalle de la orden en la Bandeja de OS/OM.</p>
+            </div>
+            """;
+        string texto = $"{opciones.NombreSistema}\n\nHola {s.Destinatario}, {s.Autor} solicita tu aprobación para editar la {s.Tipo} {s.Numero} ({s.RazonSocial}).\n" +
+                       $"Motivo: {s.Motivo}\nComentario: {s.Comentario}\n\nAprueba o rechaza la solicitud desde el detalle de la orden." +
+                       (string.IsNullOrWhiteSpace(opciones.UrlIntranet) ? "" : $"\n\nIngresa en {opciones.UrlIntranet}");
+        return new MensajeCorreoDto(s.CorreoDestinatario!, s.Destinatario, asunto, html, texto);
+    }
+
+    /// <summary>HU-40 — Al comercial: el Jefe Comercial aprobó o rechazó su solicitud de edición.</summary>
+    public static MensajeCorreoDto ResolucionEdicionOs(SolicitudEdicionOsDto s, OpcionesCorreo opciones)
+    {
+        bool aprobada = s.Aprobada == true;
+        string resultado = aprobada ? "aprobó" : "rechazó";
+        string asunto = $"{opciones.NombreSistema}: edición de la {s.Tipo} {s.Numero} {(aprobada ? "aprobada" : "rechazada")}";
+        string siguiente = aprobada
+            ? "Ya puedes editar la orden; al guardar los cambios se re-emite y se notifica a Operaciones."
+            : "La orden se mantiene sin cambios.";
+        string comentario = string.IsNullOrWhiteSpace(s.Comentario) ? ""
+            : $"""<tr><td style="padding:4px 12px 4px 0;color:#6B7280;vertical-align:top">Comentario</td><td style="padding:4px 0">{H(s.Comentario)}</td></tr>""";
+        string html = $"""
+            <div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#1F2937">
+              <h2 style="margin:0 0 12px;font-size:18px">{H(opciones.NombreSistema)}</h2>
+              <p style="margin:0 0 12px">Hola {H(s.Destinatario)}, {H(s.Autor)} <b>{resultado}</b> tu solicitud de edición de la <b>{H(s.Tipo)} {H(s.Numero)}</b> ({H(s.RazonSocial)}).</p>
+              <table style="border-collapse:collapse;font-size:14px">
+                <tr><td style="padding:4px 12px 4px 0;color:#6B7280">Motivo</td><td style="padding:4px 0">{H(s.Motivo)}</td></tr>
+                {comentario}
+              </table>
+              <p style="margin:12px 0 0">{H(siguiente)}</p>
+              {Boton(opciones)}
+            </div>
+            """;
+        string texto = $"{opciones.NombreSistema}\n\nHola {s.Destinatario}, {s.Autor} {resultado} tu solicitud de edición de la {s.Tipo} {s.Numero} ({s.RazonSocial}).\n" +
+                       $"Motivo: {s.Motivo}\n" + (string.IsNullOrWhiteSpace(s.Comentario) ? "" : $"Comentario: {s.Comentario}\n") + $"\n{siguiente}" +
+                       (string.IsNullOrWhiteSpace(opciones.UrlIntranet) ? "" : $"\n\nIngresa en {opciones.UrlIntranet}");
+        return new MensajeCorreoDto(s.CorreoDestinatario!, s.Destinatario, asunto, html, texto);
+    }
+
     private static string Entidad(string tipo) => tipo switch
     {
         "requerimiento"  => "RQ",

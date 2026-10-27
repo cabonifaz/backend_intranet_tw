@@ -6,7 +6,8 @@
 --   Visto Bueno   respuestas del aprobador (visto_bueno); la misma respuesta en la auditoría de la propuesta no se repite
 --   Seguimiento   interacciones, cierre con aceptación o rechazo (seguimiento_comercial) y correos enviados
 --   OC            auditoria_evento 'orden_compra' (registro, decisión, reemplazo, anulación; el detalle fino queda en la OC)
---   OS            generación de la OS y confirmación del cliente (Programación)
+--   OS            generación de la OS y confirmación del cliente (Programación); auditoria_evento 'orden_servicio'
+--                 (emisión, solicitud / aprobación / rechazo de edición, edición, importación por Excel, anulación)
 --   Ejecución     eventos de campo e incidencias          Cierre   informe técnico y conformidad del cliente
 --   Expediente    auditoria_evento 'expediente' (creación, paso a OS, reasignaciones consolidadas, exportaciones)
 -- Los eventos de documentos internos antiguos respetan su visibilidad (solo el área indicada, quien lo subió y Gerencia/TI).
@@ -73,6 +74,7 @@ BEGIN
                WHEN a.entidad_tipo = 'propuesta' AND a.accion IN ('envio_vb', 'solicitar_revocacion_vb') THEN 'visto_bueno'
                WHEN a.entidad_tipo = 'propuesta' AND a.accion IN ('envio_cliente', 'cambio_estado')      THEN 'seguimiento'
                WHEN a.entidad_tipo = 'propuesta'                                                         THEN 'propuesta'
+               WHEN a.entidad_tipo = 'orden_servicio'                                                    THEN 'orden_servicio'
                ELSE 'orden_compra'
            END,
            a.id_usuario, a.entidad_tipo,
@@ -80,10 +82,12 @@ BEGIN
                WHEN 'expediente'   THEN (SELECT e.numero FROM expediente_digital e WHERE e.id_expediente = a.id_entidad)
                WHEN 'propuesta'    THEN (SELECT CONCAT(p.numero, ' v', p.version) FROM propuesta_comercial p WHERE p.id_propuesta = a.id_entidad)
                WHEN 'orden_compra' THEN (SELECT CONCAT('OC ', oc.numero_oc) FROM orden_compra oc WHERE oc.id_oc = a.id_entidad)
+               WHEN 'orden_servicio' THEN (SELECT os.numero FROM orden_servicio os WHERE os.id_os = a.id_entidad)
            END,
-           (a.accion IN ('observar_oc', 'registrar_bloqueo', 'anular_oc')
+           (a.accion IN ('observar_oc', 'registrar_bloqueo', 'anular_oc', 'anular_os')
             OR (a.accion = 'decision_oc' AND a.estado_nuevo IN ('correccion_cliente', 'nueva_version'))),
-           CASE a.entidad_tipo WHEN 'expediente' THEN 'Expediente' WHEN 'propuesta' THEN 'Propuestas' ELSE 'Órdenes de Compra' END
+           CASE a.entidad_tipo WHEN 'expediente' THEN 'Expediente' WHEN 'propuesta' THEN 'Propuestas'
+                               WHEN 'orden_servicio' THEN 'Órdenes de Servicio' ELSE 'Órdenes de Compra' END
     FROM auditoria_evento a
     WHERE ((a.entidad_tipo = 'expediente' AND a.id_entidad = p_id_expediente
             AND (a.accion <> 'adjuntar_documento'
@@ -99,7 +103,8 @@ BEGIN
        OR (a.entidad_tipo = 'orden_compra' AND a.id_entidad IN (SELECT id_oc FROM tmp_exp_ocs)
            -- El detalle fino de la OC (cada validación, extracción o corrección) queda en el timeline de la OC
            AND a.accion NOT IN ('exportar_auditoria_oc', 'validacion_ia', 'extraccion_ia', 'corregir_campo_oc',
-                                'editar_vinculacion', 'cargar_pdf_oc', 'cambio_estado_oc', 'reasignar_responsable')));
+                                'editar_vinculacion', 'cargar_pdf_oc', 'cambio_estado_oc', 'reasignar_responsable'))
+       OR (a.entidad_tipo = 'orden_servicio' AND a.id_entidad IN (SELECT id_os FROM tmp_exp_oss)));
 
     -- 2. RQ (historial propio del requerimiento)
     INSERT INTO tmp_exp_evt
@@ -158,9 +163,11 @@ BEGIN
 
     -- 5. Orden de servicio: generación y confirmación del cliente
     INSERT INTO tmp_exp_evt
-    SELECT os.fecha_creacion, 'orden_servicio', 'generar_os', 'Orden de servicio generada',
-           CONCAT('Ejecución programada para el ', DATE_FORMAT(os.fecha_ejecucion, '%d/%m/%Y'),
-                  IFNULL(CONCAT(' a las ', DATE_FORMAT(os.hora_inicio, '%H:%i')), ''), '.'),
+    SELECT COALESCE(os.fecha_creacion, os.creado_en), 'orden_servicio', 'generar_os',
+           IF(os.tipo = 'OM', 'Orden de metrología generada', 'Orden de servicio generada'),
+           IF(os.fecha_ejecucion IS NULL, CONCAT(os.tipo, ' ', os.numero, ' creada desde la propuesta aceptada.'),
+              CONCAT('Ejecución programada para el ', DATE_FORMAT(os.fecha_ejecucion, '%d/%m/%Y'),
+                     IFNULL(CONCAT(' a las ', DATE_FORMAT(os.hora_inicio, '%H:%i')), ''), '.')),
            'orden_servicio', os.creado_por, 'orden_servicio', os.numero, 0, 'Órdenes de Servicio'
     FROM orden_servicio os
     WHERE os.id_expediente = p_id_expediente AND os.eliminado_en IS NULL;
@@ -228,11 +235,13 @@ BEGIN
             WHEN accion IN ('observar_oc', 'levantar_observacion_oc', 'registrar_bloqueo', 'resolver_bloqueo',
                             'registrar_excepcion', 'cerrar_excepcion')                                     THEN 'bloqueo'
             WHEN accion IN ('liberar_programacion', 'crear_y_liberar_programacion', 'avanzar_etapa',
-                            'pasar_programacion', 'pasar_orden_servicio', 'volver_orden_compra')           THEN 'orden_servicio'
+                            'pasar_programacion', 'pasar_orden_servicio', 'volver_orden_compra',
+                            'emitir_os', 'editar_os', 'importar_excel_os', 'solicitar_edicion_os',
+                            'aprobar_edicion_os', 'rechazar_edicion_os')                                   THEN 'orden_servicio'
             WHEN accion IN ('adjuntar_documento', 'reemplazar_pdf_oc', 'reemplazar_pdf', 'subir_oc_corregida') THEN 'documento'
             WHEN accion = 'reasignar_responsable'                                                          THEN 'reasignacion'
             WHEN accion IN ('anulacion', 'anulacion_por_version', 'cerrar_por_anulacion', 'propuesta_anulada',
-                            'anular_proceso', 'anular_oc')                                                 THEN 'anulacion'
+                            'anular_proceso', 'anular_oc', 'anular_os')                                    THEN 'anulacion'
             ELSE 'otro' END),
         titulo = IFNULL(titulo, CASE accion
             WHEN 'crear_expediente'              THEN 'Expediente creado'
@@ -247,6 +256,13 @@ BEGIN
             WHEN 'anulacion_por_version'         THEN 'Versión reemplazada'
             WHEN 'propuesta_anulada'             THEN 'Propuesta anulada'
             WHEN 'registrar_oc'                  THEN 'OC registrada'
+            WHEN 'emitir_os'                     THEN 'OS/OM emitida'
+            WHEN 'editar_os'                     THEN 'OS/OM editada y re-emitida'
+            WHEN 'importar_excel_os'             THEN 'Equipos y conceptos importados desde Excel'
+            WHEN 'solicitar_edicion_os'          THEN 'Edición de la OS/OM solicitada al Jefe Comercial'
+            WHEN 'aprobar_edicion_os'            THEN 'Edición de la OS/OM aprobada'
+            WHEN 'rechazar_edicion_os'           THEN 'Edición de la OS/OM rechazada'
+            WHEN 'anular_os'                     THEN 'OS/OM anulada'
             WHEN 'registrar_oc_complementaria'   THEN 'OC complementaria registrada'
             WHEN 'validar_oc'                    THEN 'OC validada'
             WHEN 'observar_oc'                   THEN 'OC observada'
