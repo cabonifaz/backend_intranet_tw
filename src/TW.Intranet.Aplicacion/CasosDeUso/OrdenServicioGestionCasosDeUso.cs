@@ -11,6 +11,28 @@ namespace TW.Intranet.Aplicacion.CasosDeUso;
 
 // ── HU-40 Crear / editar ─────────────────────────────────────────────────────
 
+/// <summary>Modal "Elegir Propuesta Aceptada": propuestas aceptadas sin OS/OM activa.</summary>
+public class ObtenerPropuestasDisponiblesOsCasoDeUso(IOrdenServicioRepositorio repositorio)
+{
+    public Task<RespuestaDto<PropuestasDisponiblesOsDto>> EjecutarAsync(FiltrosPropuestasDisponiblesOsDto f, long idUsuario, CancellationToken ct = default)
+    {
+        f.Busqueda  = GuardarOrdenServicioCasoDeUso.Recortar(f.Busqueda, 200);
+        f.Tipo      = GuardarOrdenServicioCasoDeUso.Recortar(f.Tipo, 5)?.ToUpperInvariant();
+        f.Pagina    = Math.Max(1, f.Pagina);
+        f.PorPagina = f.PorPagina is < 1 or > 100 ? 10 : f.PorPagina;
+        return repositorio.ObtenerPropuestasDisponiblesAsync(f, idUsuario, ct);
+    }
+}
+
+/// <summary>Catálogos MOTIVO_EDICION_OS (tipo = edicion) y MOTIVO_ANULACION_OS (tipo = anulacion).</summary>
+public class ObtenerMotivosOrdenServicioCasoDeUso(IOrdenServicioRepositorio repositorio)
+{
+    public Task<RespuestaDto<List<OpcionFiltroDto>>> EjecutarAsync(string tipo, long idUsuario, CancellationToken ct = default) =>
+        tipo is "edicion" or "anulacion"
+            ? repositorio.ObtenerMotivosAsync(tipo, idUsuario, ct)
+            : Task.FromResult(new RespuestaDto<List<OpcionFiltroDto>>(1, "Tipo de motivo no válido."));
+}
+
 /// <summary>Ficha Nueva OS/OM desde una propuesta aceptada (idPropuesta) o Editar (idOs).</summary>
 public class PrepararOrdenServicioCasoDeUso(IOrdenServicioRepositorio repositorio)
 {

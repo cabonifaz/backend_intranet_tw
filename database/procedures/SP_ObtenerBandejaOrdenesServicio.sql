@@ -8,7 +8,7 @@
 --   p_tipo: vacío o todos, OS u OM
 --   p_id_cliente, p_id_responsable (responsable comercial de la orden)
 --   p_fecha_desde / p_fecha_hasta (fecha de emisión; los borradores usan su fecha de creación)
---   p_busqueda: N° OS/OM, N° de propuesta, cliente o RUC
+--   p_busqueda: N° OS/OM, N° de propuesta, N° de RQ, cliente o RUC
 --   p_exportar = 1: todas las filas, sin paginar (Exportar XLSX)
 -- Las tarjetas se calculan con todos los filtros salvo el de estado.
 -- Resultados: 1 mensaje, 2 tarjetas, 3 filas, 4 total, 5 clientes (filtro), 6 responsables (filtro).
@@ -86,6 +86,8 @@ BEGIN
                c.ruc,
                COALESCE(os.id_propuesta, e.id_propuesta)                         AS id_propuesta,
                os.id_expediente,
+               os.id_requerimiento                                               AS id_req_os,
+               e.id_requerimiento                                                AS id_req_exp,
                os.id_responsable_comercial                                       AS id_responsable,
                os.creado_en
         FROM orden_servicio os
@@ -99,9 +101,12 @@ BEGIN
         SELECT t.*,
                p.numero                                                           AS numero_propuesta,
                p.version                                                          AS version_propuesta,
+               r.id_requerimiento                                                 AS id_requerimiento,
+               r.numero                                                           AS numero_requerimiento,
                NULLIF(TRIM(CONCAT(IFNULL(u.nombre, ''), ' ', IFNULL(u.apellido, ''))), '') AS responsable
         FROM tmp_os_bandeja t
         LEFT JOIN propuesta_comercial p ON p.id_propuesta = t.id_propuesta
+        LEFT JOIN requerimiento r       ON r.id_requerimiento = COALESCE(t.id_req_os, p.id_requerimiento, t.id_req_exp)
         LEFT JOIN usuario u             ON u.id_usuario   = t.id_responsable
         WHERE (v_tipo IN ('', 'TODOS') OR t.tipo = v_tipo)
           AND (IFNULL(p_id_cliente, 0) = 0     OR t.id_cliente     = p_id_cliente)
@@ -111,6 +116,7 @@ BEGIN
           AND (v_busqueda = ''
                OR t.numero       LIKE CONCAT('%', v_busqueda, '%')
                OR p.numero       LIKE CONCAT('%', v_busqueda, '%')
+               OR r.numero       LIKE CONCAT('%', v_busqueda, '%')
                OR t.razon_social LIKE CONCAT('%', v_busqueda, '%')
                OR t.ruc          LIKE CONCAT('%', v_busqueda, '%'));
 
@@ -150,6 +156,7 @@ BEGIN
             t.fecha_emision, t.emitida_registrada,
             t.id_cliente, t.razon_social, t.ruc,
             t.id_propuesta, t.numero_propuesta, t.version_propuesta,
+            t.id_requerimiento, t.numero_requerimiento,
             t.id_expediente,
             t.id_responsable, t.responsable,
             (SELECT COUNT(*) FROM os_equipo oe

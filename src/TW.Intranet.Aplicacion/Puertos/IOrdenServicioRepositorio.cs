@@ -10,6 +10,9 @@ public interface IOrdenServicioRepositorio
         FiltrosBandejaOrdenesServicioDto filtros, bool exportar, long idUsuario, CancellationToken ct);
 
     // ── HU-40 ──
+    Task<RespuestaDto<PropuestasDisponiblesOsDto>> ObtenerPropuestasDisponiblesAsync(FiltrosPropuestasDisponiblesOsDto filtros, long idUsuario, CancellationToken ct);
+    /// <summary>tipo: edicion | anulacion.</summary>
+    Task<RespuestaDto<List<OpcionFiltroDto>>> ObtenerMotivosAsync(string tipo, long idUsuario, CancellationToken ct);
     /// <summary>Ficha nueva (idPropuesta) o de edición (idOs).</summary>
     Task<RespuestaDto<FichaOrdenServicioDto>> PrepararAsync(long? idPropuesta, long? idOs, long idUsuario, CancellationToken ct);
     Task<RespuestaDto<OrdenServicioGuardadaDto>> GuardarAsync(long idOs, GuardarOrdenServicioDto datos, long idUsuario, CancellationToken ct);

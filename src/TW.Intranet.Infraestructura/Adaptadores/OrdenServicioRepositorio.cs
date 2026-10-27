@@ -58,6 +58,8 @@ public class OrdenServicioRepositorio(CadenaConexionBd conexion) : RepositorioSp
                         IdPropuesta            = EnteroLargoNulo(r, "id_propuesta"),
                         NumeroPropuesta        = Texto(r, "numero_propuesta"),
                         VersionPropuesta       = EnteroNulo(r, "version_propuesta"),
+                        IdRequerimiento        = EnteroLargoNulo(r, "id_requerimiento"),
+                        NumeroRequerimiento    = Texto(r, "numero_requerimiento"),
                         IdExpediente           = EnteroLargoNulo(r, "id_expediente"),
                         IdResponsable          = EnteroLargoNulo(r, "id_responsable"),
                         Responsable            = Texto(r, "responsable"),
@@ -144,6 +146,7 @@ public class OrdenServicioRepositorio(CadenaConexionBd conexion) : RepositorioSp
             Sugerido           = Tiene(r, "sugerido") && Booleano(r, "sugerido"),
             OtraOsNumero       = otraNumero,
             OtraOsEstado       = otraEstado,
+            DeLaPropuesta      = Tiene(r, "de_la_propuesta") && Booleano(r, "de_la_propuesta"),
         };
     }
 
@@ -158,7 +161,8 @@ public class OrdenServicioRepositorio(CadenaConexionBd conexion) : RepositorioSp
     private static ConceptoCatalogoOsDto LeerConceptoCatalogo(MySqlDataReader r) => new(
         EnteroLargo(r, "id_suministro"), Texto(r, "codigo") ?? "", Texto(r, "descripcion") ?? "",
         TextoSi(r, "tipo"), TextoSi(r, "tipo_label"), TextoSi(r, "subtipo"), TextoSi(r, "subtipo_label"),
-        Tiene(r, "aplica_servicio") && Booleano(r, "aplica_servicio"), Tiene(r, "aplica_metrologia") && Booleano(r, "aplica_metrologia"));
+        Tiene(r, "aplica_servicio") && Booleano(r, "aplica_servicio"), Tiene(r, "aplica_metrologia") && Booleano(r, "aplica_metrologia"),
+        Tiene(r, "de_la_propuesta") && Booleano(r, "de_la_propuesta"));
 
     private static PropuestaOrigenOsDto LeerPropuesta(MySqlDataReader r, bool ficha) => new()
     {
@@ -200,6 +204,55 @@ public class OrdenServicioRepositorio(CadenaConexionBd conexion) : RepositorioSp
         valor is null ? DBNull.Value : System.Text.Json.JsonSerializer.Serialize(valor);
 
     // ══════════════════════ HU-40 Crear / editar ══════════════════════
+
+    public Task<RespuestaDto<PropuestasDisponiblesOsDto>> ObtenerPropuestasDisponiblesAsync(
+        FiltrosPropuestasDisponiblesOsDto f, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_ObtenerPropuestasDisponiblesOrdenServicio",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario", idUsuario);
+                p.AddWithValue("p_busqueda",   Valor(f.Busqueda));
+                p.AddWithValue("p_tipo",       Valor(f.Tipo));
+                p.AddWithValue("p_pagina",     f.Pagina);
+                p.AddWithValue("p_por_pagina", f.PorPagina);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                var items = new List<PropuestaDisponibleOsDto>();
+                while (await r.ReadAsync(ct))
+                    items.Add(new PropuestaDisponibleOsDto
+                    {
+                        IdPropuesta         = EnteroLargo(r, "id_propuesta"),
+                        Numero              = Texto(r, "numero") ?? "",
+                        Version             = Entero(r, "version"),
+                        TipoServicio        = Texto(r, "tipo_servicio"),
+                        Tipo                = Texto(r, "tipo") ?? "OS",
+                        IdCliente           = EnteroLargo(r, "id_cliente"),
+                        RazonSocial         = Texto(r, "razon_social") ?? "",
+                        Ruc                 = Texto(r, "ruc"),
+                        Sede                = Texto(r, "sede"),
+                        IdRequerimiento     = EnteroLargoNulo(r, "id_requerimiento"),
+                        NumeroRequerimiento = Texto(r, "numero_rq"),
+                        Area                = Texto(r, "area"),
+                        IdResponsable       = EnteroLargoNulo(r, "id_responsable"),
+                        Responsable         = Texto(r, "responsable"),
+                        FechaAceptacion     = FechaHora(r, "fecha_aceptacion"),
+                        MontoTotal          = DecimalNulo(r, "monto_total"),
+                        SimboloMoneda       = Texto(r, "simbolo_moneda"),
+                        EquiposCotizados    = Entero(r, "equipos_cotizados"),
+                        ConceptosCotizados  = Entero(r, "conceptos_cotizados"),
+                    });
+                var total = await LeerTotalAsync(r, ct);
+                return new RespuestaDto<PropuestasDisponiblesOsDto>(2, mensaje, new PropuestasDisponiblesOsDto(items, total, f.Pagina, f.PorPagina));
+            },
+            ct);
+
+    public Task<RespuestaDto<List<OpcionFiltroDto>>> ObtenerMotivosAsync(string tipo, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_ObtenerMotivosOrdenServicio",
+            p => { p.AddWithValue("p_id_usuario", idUsuario); p.AddWithValue("p_tipo", tipo); },
+            async (r, mensaje) => new RespuestaDto<List<OpcionFiltroDto>>(2, mensaje, await LeerOpcionesAsync(r, ct)),
+            ct);
 
     public Task<RespuestaDto<FichaOrdenServicioDto>> PrepararAsync(long? idPropuesta, long? idOs, long idUsuario, CancellationToken ct)
         => EjecutarAsync("SP_PrepararOrdenServicio",
@@ -579,6 +632,7 @@ public class OrdenServicioRepositorio(CadenaConexionBd conexion) : RepositorioSp
                 p.AddWithValue("p_ubicacion",     Valor(f.Ubicacion));
                 p.AddWithValue("p_pagina",        f.Pagina);
                 p.AddWithValue("p_por_pagina",    f.PorPagina);
+                p.AddWithValue("p_id_propuesta",  Valor(f.IdPropuesta));
             },
             async (r, mensaje) =>
             {
@@ -601,6 +655,7 @@ public class OrdenServicioRepositorio(CadenaConexionBd conexion) : RepositorioSp
                 p.AddWithValue("p_tipo",       Valor(f.Tipo));
                 p.AddWithValue("p_pagina",     f.Pagina);
                 p.AddWithValue("p_por_pagina", f.PorPagina);
+                p.AddWithValue("p_id_propuesta", Valor(f.IdPropuesta));
             },
             async (r, mensaje) =>
             {

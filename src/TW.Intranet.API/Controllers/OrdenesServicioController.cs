@@ -30,7 +30,9 @@ public class OrdenesServicioController(
     BuscarEquiposOrdenServicioCasoDeUso          buscarEquipos,
     BuscarConceptosOrdenServicioCasoDeUso        buscarConceptos,
     DescargarPlantillaImportacionOsCasoDeUso     plantilla,
-    AnalizarImportacionOsCasoDeUso               analizarImportacion) : ControllerBase
+    AnalizarImportacionOsCasoDeUso               analizarImportacion,
+    ObtenerPropuestasDisponiblesOsCasoDeUso      propuestasDisponibles,
+    ObtenerMotivosOrdenServicioCasoDeUso         motivos) : ControllerBase
 {
     private const long TamanoMaximoPeticion = 6 * 1024 * 1024;
 
@@ -66,15 +68,23 @@ public class OrdenesServicioController(
 
     // ══════════════════════ HU-40 Crear / editar / solicitar edición / anular ══════════════════════
 
+    /// <summary>Modal "Elegir Propuesta Aceptada": ?busqueda=&amp;tipo=OS|OM&amp;pagina=1&amp;porPagina=10</summary>
+    [RequierePermiso("os_guardar")]
+    [HttpGet("propuestas-disponibles")]
+    public async Task<IActionResult> PropuestasDisponibles([FromQuery] FiltrosPropuestasDisponiblesOsDto filtros, CancellationToken ct = default)
+        => Responder(await propuestasDisponibles.EjecutarAsync(filtros, IdUsuarioActual, ct));
+
     /// <summary>Ficha "Nueva OS/OM" desde una propuesta aceptada: cliente, contactos, contexto de la propuesta, conceptos y equipos sugeridos.</summary>
     [RequierePermiso("os_guardar")]
     [HttpGet("preparar")]
+    [HttpGet("preparar-nueva")]
     public async Task<IActionResult> Preparar([FromQuery] long idPropuesta, CancellationToken ct = default)
         => Responder(await preparar.EjecutarAsync(idPropuesta, null, IdUsuarioActual, ct));
 
     /// <summary>Ficha de edición: borrador, o emitida con la edición aprobada por el Jefe Comercial (modo edicion_aprobada).</summary>
     [RequierePermiso("os_guardar")]
     [HttpGet("{idOs:long}/edicion")]
+    [HttpGet("{idOs:long}/preparar-edicion")]
     public async Task<IActionResult> PrepararEdicion(long idOs, CancellationToken ct = default)
         => Responder(await preparar.EjecutarAsync(null, idOs, IdUsuarioActual, ct));
 
@@ -99,6 +109,7 @@ public class OrdenesServicioController(
     /// <summary>Envía la solicitud de edición: { idMotivo, comentario (20 a 500) }. Notifica (campanita y correo) al Jefe Comercial.</summary>
     [RequierePermiso("os_guardar")]
     [HttpPost("{idOs:long}/solicitud-edicion")]
+    [HttpPost("{idOs:long}/solicitar-edicion")]
     public async Task<IActionResult> SolicitarEdicion(long idOs, [FromBody] SolicitarEdicionOsDto? datos, CancellationToken ct = default)
         => Responder(await solicitarEdicion.EjecutarAsync(idOs, datos, IdUsuarioActual, ct));
 
@@ -108,9 +119,36 @@ public class OrdenesServicioController(
     public async Task<IActionResult> ResolverSolicitud(long idSolicitud, [FromBody] ResolverSolicitudEdicionOsDto? datos, CancellationToken ct = default)
         => Responder(await resolverSolicitud.EjecutarAsync(idSolicitud, datos, IdUsuarioActual, ct));
 
+    /// <summary>Jefe Comercial aprueba la edición: { comentario } opcional.</summary>
+    [RequierePermiso("os_aprobar_edicion")]
+    [HttpPost("{idOs:long}/solicitudes/{idSolicitud:long}/aprobar")]
+    public async Task<IActionResult> AprobarSolicitud(long idOs, long idSolicitud, [FromBody] ComentarioSolicitudOsDto? datos, CancellationToken ct = default)
+        => Responder(await resolverSolicitud.EjecutarAsync(idSolicitud, new ResolverSolicitudEdicionOsDto { Aprobar = true, Comentario = datos?.Comentario },
+                                                          IdUsuarioActual, ct));
+
+    /// <summary>Jefe Comercial rechaza la edición: { comentario } obligatorio (mín. 10 caracteres).</summary>
+    [RequierePermiso("os_aprobar_edicion")]
+    [HttpPost("{idOs:long}/solicitudes/{idSolicitud:long}/rechazar")]
+    public async Task<IActionResult> RechazarSolicitud(long idOs, long idSolicitud, [FromBody] ComentarioSolicitudOsDto? datos, CancellationToken ct = default)
+        => Responder(await resolverSolicitud.EjecutarAsync(idSolicitud, new ResolverSolicitudEdicionOsDto { Aprobar = false, Comentario = datos?.Comentario },
+                                                          IdUsuarioActual, ct));
+
+    /// <summary>Catálogo MOTIVO_EDICION_OS.</summary>
+    [RequierePermiso("os_bandeja", "os_bandeja_operaciones")]
+    [HttpGet("motivos-edicion")]
+    public async Task<IActionResult> MotivosEdicion(CancellationToken ct = default)
+        => Responder(await motivos.EjecutarAsync("edicion", IdUsuarioActual, ct));
+
+    /// <summary>Catálogo MOTIVO_ANULACION_OS.</summary>
+    [RequierePermiso("os_bandeja", "os_bandeja_operaciones")]
+    [HttpGet("motivos-anulacion")]
+    public async Task<IActionResult> MotivosAnulacion(CancellationToken ct = default)
+        => Responder(await motivos.EjecutarAsync("anulacion", IdUsuarioActual, ct));
+
     /// <summary>Modal Anular: impacto en la programación (técnico, fecha, viáticos, personal) y motivos.</summary>
     [RequierePermiso("os_anular")]
     [HttpGet("{idOs:long}/anulacion/preparar")]
+    [HttpGet("{idOs:long}/impacto-anulacion")]
     public async Task<IActionResult> PrepararAnulacion(long idOs, CancellationToken ct = default)
         => Responder(await prepararAnulacion.EjecutarAsync(idOs, IdUsuarioActual, ct));
 
@@ -167,9 +205,19 @@ public class OrdenesServicioController(
     public async Task<IActionResult> BuscarEquipos([FromQuery] FiltrosBuscarEquiposOsDto filtros, CancellationToken ct = default)
         => Responder(await buscarEquipos.EjecutarAsync(filtros, IdUsuarioActual, ct));
 
+    /// <summary>Equipos del cliente (misma búsqueda que equipos-cliente): ?idPropuesta=&amp;idOs=&amp;busqueda=&amp;clasificacion=&amp;ubicacion=&amp;pagina=&amp;porPagina=</summary>
+    [RequierePermiso("os_guardar")]
+    [HttpGet("/api/crm/clientes/{idCliente:long}/equipos-disponibles")]
+    public async Task<IActionResult> EquiposDisponibles(long idCliente, [FromQuery] FiltrosBuscarEquiposOsDto filtros, CancellationToken ct = default)
+    {
+        filtros.IdCliente = idCliente;
+        return Responder(await buscarEquipos.EjecutarAsync(filtros, IdUsuarioActual, ct));
+    }
+
     /// <summary>Conceptos (suministros de clase Servicio): ?busqueda=&amp;tipo=&amp;pagina=1&amp;porPagina=20</summary>
     [RequierePermiso("os_guardar")]
     [HttpGet("conceptos")]
+    [HttpGet("catalogo-conceptos")]
     public async Task<IActionResult> BuscarConceptos([FromQuery] FiltrosBuscarConceptosOsDto filtros, CancellationToken ct = default)
         => Responder(await buscarConceptos.EjecutarAsync(filtros, IdUsuarioActual, ct));
 
@@ -178,6 +226,7 @@ public class OrdenesServicioController(
     /// <summary>Plantilla oficial (.xlsx): hojas Conceptos y Equipos.</summary>
     [RequierePermiso("os_guardar")]
     [HttpGet("importacion/plantilla")]
+    [HttpGet("importar/plantilla")]
     public IActionResult Plantilla()
     {
         var a = plantilla.Ejecutar();
@@ -187,6 +236,7 @@ public class OrdenesServicioController(
     /// <summary>Analiza el Excel (multipart: archivo, idCliente, idOs). No guarda nada: el front aplica el resultado (Fusionar / Reemplazar).</summary>
     [RequierePermiso("os_guardar")]
     [HttpPost("importacion/analizar")]
+    [HttpPost("importar/analizar")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(TamanoMaximoPeticion)]
     [RequestFormLimits(MultipartBodyLengthLimit = TamanoMaximoPeticion)]

@@ -1,5 +1,6 @@
 -- HU-43 (Sprint 4) Modal "Agregar Concepto del Servicio": catálogo maestro de Suministros de clase Servicio (activos).
 -- Sin precios: la OS/OM no maneja montos. Filtros: p_busqueda (descripción o código), p_tipo (tipo del suministro).
+-- p_id_propuesta (opcional): marca de_la_propuesta = 1 en los suministros cotizados en esa propuesta y los lista primero.
 -- Resultados: 1 mensaje, 2 conceptos, 3 total, 4 tipos de servicio (filtro).
 DROP PROCEDURE IF EXISTS SP_BuscarConceptosServicio;
 
@@ -10,7 +11,8 @@ CREATE PROCEDURE SP_BuscarConceptosServicio(
     IN p_busqueda   VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_tipo       VARCHAR(60)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_pagina     INT,
-    IN p_por_pagina INT
+    IN p_por_pagina INT,
+    IN p_id_propuesta BIGINT
 )
 proc: BEGIN
     DECLARE v_por_pagina INT;
@@ -28,14 +30,17 @@ proc: BEGIN
     SELECT 2 AS IdTipoMensaje, 'Éxito.' AS Mensaje;
 
     SELECT s.id_suministro, s.codigo, s.descripcion, s.tipo, tt.String1 AS tipo_label, s.subtipo, ts.String1 AS subtipo_label,
-           IFNULL(s.aplica_servicio, 0) AS aplica_servicio, IFNULL(s.aplica_metrologia, 0) AS aplica_metrologia
+           IFNULL(s.aplica_servicio, 0) AS aplica_servicio, IFNULL(s.aplica_metrologia, 0) AS aplica_metrologia,
+           EXISTS (SELECT 1 FROM propuesta_item i
+                   WHERE i.id_propuesta = p_id_propuesta AND i.id_catalogo_item = s.id_suministro
+                     AND i.eliminado_en IS NULL AND IFNULL(i.es_espaciado, 0) = 0) AS de_la_propuesta
     FROM suministros s
     LEFT JOIN tabla_maestra tt ON tt.IdMaestro = 72 AND tt.IdEmpresa = 1 AND tt.String2 = s.tipo
     LEFT JOIN tabla_maestra ts ON ts.IdMaestro = 73 AND ts.IdEmpresa = 1 AND ts.String2 = s.subtipo
     WHERE s.clase = 'servicio' AND s.estado = 'activo' AND s.eliminado_en IS NULL
       AND (IFNULL(p_tipo, '') = '' OR s.tipo = p_tipo)
       AND (v_busqueda = '' OR s.descripcion LIKE CONCAT('%', v_busqueda, '%') OR s.codigo LIKE CONCAT('%', v_busqueda, '%'))
-    ORDER BY s.descripcion
+    ORDER BY de_la_propuesta DESC, s.descripcion
     LIMIT v_por_pagina OFFSET v_offset;
 
     SELECT COUNT(*) AS total

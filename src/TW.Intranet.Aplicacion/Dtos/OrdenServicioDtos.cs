@@ -62,6 +62,8 @@ public record ItemBandejaOrdenServicioDto
     public long?     IdPropuesta            { get; init; }
     public string?   NumeroPropuesta        { get; init; }
     public int?      VersionPropuesta       { get; init; }
+    public long?     IdRequerimiento        { get; init; }
+    public string?   NumeroRequerimiento    { get; init; }
     /// <summary>Para los modales reutilizables de Documentos (HU-31) e Historial de Auditoría (HU-32).</summary>
     public long?     IdExpediente           { get; init; }
     public long?     IdResponsable          { get; init; }
@@ -128,6 +130,8 @@ public record EquipoOrdenServicioDto
     /// <summary>Doble registro: OS/OM activa en la que ya está el equipo (null = disponible).</summary>
     public string? OtraOsNumero       { get; init; }
     public string? OtraOsEstado       { get; init; }
+    /// <summary>Buscador: el equipo está cotizado en la propuesta de origen.</summary>
+    public bool    DeLaPropuesta      { get; init; }
 }
 
 /// <summary>Concepto del servicio (suministro de clase Servicio, sin precio).</summary>
@@ -398,6 +402,8 @@ public class FiltrosBuscarEquiposOsDto
     /// <summary>equipo | instrumento | pesa.</summary>
     public string? Clasificacion { get; set; }
     public string? Ubicacion     { get; set; }
+    /// <summary>Marca (y lista primero) los equipos cotizados en la propuesta de origen.</summary>
+    public long?   IdPropuesta   { get; set; }
     public int     Pagina        { get; set; } = 1;
     public int     PorPagina     { get; set; } = 20;
 }
@@ -409,12 +415,15 @@ public class FiltrosBuscarConceptosOsDto
     public string? Busqueda  { get; set; }
     /// <summary>Tipo del suministro (catálogo TIPO_SUMINISTRO de clase servicio).</summary>
     public string? Tipo      { get; set; }
+    /// <summary>Marca (y lista primero) los conceptos cotizados en la propuesta de origen.</summary>
+    public long?   IdPropuesta { get; set; }
     public int     Pagina    { get; set; } = 1;
     public int     PorPagina { get; set; } = 20;
 }
 
 public record ConceptoCatalogoOsDto(long IdSuministro, string Codigo, string Descripcion, string? Tipo, string? TipoLabel,
-                                    string? Subtipo, string? SubtipoLabel, bool AplicaServicio, bool AplicaMetrologia);
+                                    string? Subtipo, string? SubtipoLabel, bool AplicaServicio, bool AplicaMetrologia,
+                                    bool DeLaPropuesta = false);
 
 public record BusquedaConceptosOsDto(List<ConceptoCatalogoOsDto> Items, int Total, List<OpcionImportacionDto> Tipos);
 
@@ -466,3 +475,49 @@ public record CandidatosImportacionOsDto(
     List<EquipoOrdenServicioDto> Equipos,
     List<(string CodigoTw, string Motivo)> NoDisponibles,
     List<ConceptoCatalogoOsDto> Conceptos);
+
+// ── HU-40 Modal "Elegir Propuesta Aceptada" ────────────────────────────────
+
+public class FiltrosPropuestasDisponiblesOsDto
+{
+    /// <summary>N° de propuesta, N° de RQ, cliente o RUC.</summary>
+    public string? Busqueda  { get; set; }
+    /// <summary>OS | OM (vacío = ambos).</summary>
+    public string? Tipo      { get; set; }
+    public int     Pagina    { get; set; } = 1;
+    public int     PorPagina { get; set; } = 10;
+}
+
+/// <summary>Propuesta aceptada sin OS/OM activa.</summary>
+public record PropuestaDisponibleOsDto
+{
+    public long      IdPropuesta        { get; init; }
+    public string    Numero             { get; init; } = "";
+    public int       Version            { get; init; }
+    public string?   TipoServicio       { get; init; }
+    /// <summary>OS u OM que se generará (Metrología → OM).</summary>
+    public string    Tipo               { get; init; } = "OS";
+    public long      IdCliente          { get; init; }
+    public string    RazonSocial        { get; init; } = "";
+    public string?   Ruc                { get; init; }
+    public string?   Sede               { get; init; }
+    public long?     IdRequerimiento    { get; init; }
+    public string?   NumeroRequerimiento { get; init; }
+    public string?   Area               { get; init; }
+    public long?     IdResponsable      { get; init; }
+    public string?   Responsable        { get; init; }
+    public DateTime? FechaAceptacion    { get; init; }
+    /// <summary>Referencial.</summary>
+    public decimal?  MontoTotal         { get; init; }
+    public string?   SimboloMoneda      { get; init; }
+    public int       EquiposCotizados   { get; init; }
+    public int       ConceptosCotizados { get; init; }
+}
+
+public record PropuestasDisponiblesOsDto(List<PropuestaDisponibleOsDto> Items, int Total, int Pagina, int PorPagina);
+
+/// <summary>Body de aprobar / rechazar una solicitud de edición (rechazar: comentario obligatorio, mín. 10).</summary>
+public class ComentarioSolicitudOsDto
+{
+    public string? Comentario { get; set; }
+}

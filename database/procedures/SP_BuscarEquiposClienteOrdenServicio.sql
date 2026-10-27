@@ -2,6 +2,7 @@
 -- la advertencia de doble registro si el equipo ya está en otra OS/OM activa (emitida, programada o en ejecución).
 -- Filtros: p_busqueda (código TW, marca, modelo, N° serie, código del cliente o ubicación), p_clasificacion
 -- (equipo | instrumento | pesa), p_ubicacion (ubicación exacta, de la lista que devuelve el mismo SP).
+-- p_id_propuesta (opcional): marca de_la_propuesta = 1 en los equipos cotizados en esa propuesta y los lista primero.
 -- Resultados: 1 mensaje, 2 equipos, 3 total, 4 ubicaciones (filtro), 5 clasificaciones (filtro).
 DROP PROCEDURE IF EXISTS SP_BuscarEquiposClienteOrdenServicio;
 
@@ -15,7 +16,8 @@ CREATE PROCEDURE SP_BuscarEquiposClienteOrdenServicio(
     IN p_clasificacion VARCHAR(60)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_ubicacion     VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_pagina        INT,
-    IN p_por_pagina    INT
+    IN p_por_pagina    INT,
+    IN p_id_propuesta  BIGINT
 )
 proc: BEGIN
     DECLARE v_por_pagina INT;
@@ -43,7 +45,9 @@ proc: BEGIN
             JOIN orden_servicio o2 ON o2.id_os = e2.id_os AND o2.eliminado_en IS NULL
             WHERE e2.id_equipo = ec.id_equipo AND e2.eliminado_en IS NULL AND o2.id_os <> IFNULL(p_id_os, 0)
               AND o2.estado NOT IN ('borrador', 'finalizada', 'anulada')
-            ORDER BY o2.id_os DESC LIMIT 1) AS otra_os
+            ORDER BY o2.id_os DESC LIMIT 1) AS otra_os,
+           EXISTS (SELECT 1 FROM propuesta_equipo pe
+                   WHERE pe.id_propuesta = p_id_propuesta AND pe.id_equipo = ec.id_equipo) AS de_la_propuesta
     FROM equipo_cliente ec
     LEFT JOIN sede_cliente sc  ON sc.id_sede = ec.id_sede
     LEFT JOIN tabla_maestra tc ON tc.IdMaestro = 71 AND tc.IdEmpresa = 1 AND tc.String2 = ec.clasificacion
@@ -60,7 +64,7 @@ proc: BEGIN
 
     SELECT 2 AS IdTipoMensaje, 'Éxito.' AS Mensaje;
 
-    SELECT * FROM tmp_os_buscar_eq ORDER BY codigo_tw LIMIT v_por_pagina OFFSET v_offset;
+    SELECT * FROM tmp_os_buscar_eq ORDER BY de_la_propuesta DESC, codigo_tw LIMIT v_por_pagina OFFSET v_offset;
     SELECT COUNT(*) AS total FROM tmp_os_buscar_eq;
     DROP TEMPORARY TABLE IF EXISTS tmp_os_buscar_eq;
 

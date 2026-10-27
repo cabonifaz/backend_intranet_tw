@@ -444,6 +444,8 @@ builder.Services.AddScoped<IOrdenServicioRepositorio, OrdenServicioRepositorio>(
 builder.Services.AddScoped<ObtenerBandejaOrdenesServicioCasoDeUso>();
 builder.Services.AddScoped<ExportarBandejaOrdenesServicioCasoDeUso>();
 builder.Services.AddScoped<PrepararOrdenServicioCasoDeUso>();
+builder.Services.AddScoped<ObtenerPropuestasDisponiblesOsCasoDeUso>();
+builder.Services.AddScoped<ObtenerMotivosOrdenServicioCasoDeUso>();
 builder.Services.AddScoped<GuardarOrdenServicioCasoDeUso>();
 builder.Services.AddScoped<PrepararSolicitudEdicionOsCasoDeUso>();
 builder.Services.AddScoped<SolicitarEdicionOsCasoDeUso>();
