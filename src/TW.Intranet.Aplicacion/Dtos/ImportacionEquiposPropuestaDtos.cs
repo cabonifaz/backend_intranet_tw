@@ -65,8 +65,8 @@ public class FilaImportacionEquipoDto
     public string  Estado        { get; set; } = "revision";
     /// <summary>
     /// Por qué quedó en ese estado: codigo_tw, num_serie, codigo_cliente (automático); serie_similar, sugerencia_ia,
-    /// serie_repetida, sin_serie, faltan_datos (revisión); catalogo, sin_catalogo (nuevo); duplicado_archivo,
-    /// ya_en_propuesta, otro_cliente (omitido).
+    /// serie_repetida, serie_distinta, equipo_inactivo, sin_serie, sin_suministro, faltan_datos (revisión); catalogo (nuevo);
+    /// duplicado_archivo, ya_en_propuesta, otro_cliente (omitido).
     /// </summary>
     public string  Motivo        { get; set; } = "";
     public string  EstadoLabel   { get; set; } = "";

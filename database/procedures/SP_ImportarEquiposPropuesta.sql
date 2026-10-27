@@ -4,7 +4,8 @@
 --                  "clasificacion": "equipo", "idSuministro": 12, "idSede": 3, "codigoCliente": "TAG-9",
 --                  "ubicacion": "Laboratorio", "alcanceMaximo": "220 g" }]
 --   vincular: el equipo debe ser del cliente.
---   crear:    registra el equipo en el inventario del cliente (estado activo, código EQ-TW-AAAA-NNNN).
+--   crear:    registra el equipo en el inventario del cliente (estado activo, código EQ-TW-AAAA-NNNN). El suministro del
+--             catálogo es obligatorio (ficha técnica del equipo); marca y modelo se toman de él si no se envían.
 --             Si el cliente ya tiene un equipo con la misma serie, marca y modelo, se reutiliza (no se duplica).
 --             Si la serie está registrada en OTRO cliente, se rechaza.
 -- Primero valida todas las filas; si alguna falla no se guarda nada.
@@ -144,6 +145,11 @@ proc: BEGIN
        AND NOT EXISTS (SELECT 1 FROM tabla_maestra tm
                        WHERE tm.IdMaestro = 71 AND tm.IdEmpresa = 1
                          AND tm.String2 = t.clasificacion AND tm.String2 <> 'servicio');
+
+    -- Un equipo del cliente no se registra sin su ficha técnica (suministro del catálogo)
+    UPDATE tmp_importacion_equipos
+       SET error = 'Elija el suministro del catálogo para registrar el equipo.'
+     WHERE accion = 'crear' AND error IS NULL AND id_suministro IS NULL;
 
     UPDATE tmp_importacion_equipos t
        SET t.error = 'El suministro elegido no existe o no está activo.'

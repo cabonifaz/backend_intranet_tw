@@ -33,7 +33,7 @@ public class AnalizarImportacionEquiposCasoDeUso(
     IAsistenteIaEquipos            ia,
     IImportacionEquiposRepositorio repositorio)
 {
-    private static readonly string[] MotivosParaIa = ["serie_similar", "serie_repetida", "codigo_cliente", "faltan_datos", "sin_catalogo"];
+    private static readonly string[] MotivosParaIa = ["serie_similar", "serie_repetida", "codigo_cliente", "faltan_datos", "sin_suministro"];
 
     public async Task<RespuestaDto<AnalisisImportacionEquiposDto>> EjecutarAsync(
         Stream contenido, string nombreArchivo, long tamano, AnalizarImportacionEquiposSolicitudDto solicitud,
@@ -247,7 +247,7 @@ public class AnalizarImportacionEquiposCasoDeUso(
             && !string.Equals(nuevo.Clasificacion, res.Clasificacion, StringComparison.OrdinalIgnoreCase))
         { nuevo.Clasificacion = res.Clasificacion!.ToLowerInvariant(); cambio = true; }
 
-        if (f.Motivo is "faltan_datos" or "sin_catalogo")
+        if (f.Motivo is "faltan_datos" or "sin_suministro")
         {
             conciliador.EvaluarNuevo(f);
             if (cambio) { f.Origen = "ia"; f.Confianza = Math.Max(f.Confianza, confianza); }
@@ -298,8 +298,8 @@ public class ConfirmarImportacionEquiposCasoDeUso(IImportacionEquiposRepositorio
                     if (!series.Add(serie)) return new(1, fila + $"la serie {f.NumSerie!.Trim()} está repetida en la importación.");
                     if (f.IdSede is not > 0) return new(1, fila + "indique la sede del equipo.");
                     if (string.IsNullOrWhiteSpace(f.Clasificacion)) return new(1, fila + "indique la clasificación (equipo, instrumento o pesa).");
-                    if (f.IdSuministro is not > 0 && (string.IsNullOrWhiteSpace(f.Marca) || string.IsNullOrWhiteSpace(f.Modelo)))
-                        return new(1, fila + "indique la marca y el modelo, o elija el suministro del catálogo.");
+                    if (f.IdSuministro is not > 0)
+                        return new(1, fila + "elija el suministro del catálogo para registrar el equipo.");
                     f.NumSerie      = ConciliadorEquiposImportacion.Recortar(f.NumSerie, 80);
                     f.Marca         = ConciliadorEquiposImportacion.Recortar(f.Marca, 80);
                     f.Modelo        = ConciliadorEquiposImportacion.Recortar(f.Modelo, 80);

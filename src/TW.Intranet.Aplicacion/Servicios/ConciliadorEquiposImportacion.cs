@@ -93,7 +93,7 @@ public sealed class ConciliadorEquiposImportacion
         {
             if (ns.Length > 0 && NormalizarSerie(porTw.NumSerie) != ns)
             {
-                Revision(f, "serie_distinta", Con(porTw, 100), seleccionar: true, confianza: 80);
+                Revision(f, "serie_distinta", Con(porTw, 100), seleccionar: false, confianza: 80);
                 f.Observaciones.Add($"El código TW {porTw.CodigoTw} está registrado con la serie {porTw.NumSerie}, no con {d.NumSerie}.");
             }
             else Automatico(f, porTw, "codigo_tw", 100);
@@ -274,30 +274,41 @@ public sealed class ConciliadorEquiposImportacion
         return bd.Sedes.Count == 1 ? (bd.Sedes[0].Id, bd.Sedes[0].Nombre) : (null, null);
     }
 
-    /// <summary>Estado de una fila cuyo destino es crear el equipo: nuevo si tiene todo, revisión si falta algo.</summary>
+    /// <summary>
+    /// Estado de una fila cuyo destino es crear el equipo. Un equipo del cliente no se registra sin su ficha técnica
+    /// (suministro del catálogo): sin suministro queda en revisión "sin_suministro" y no se puede importar hasta que el
+    /// comercial elija uno (si el modelo no existe, se crea antes en el maestro de Suministros, HU-86).
+    /// Con suministro, nuevo si también tiene clasificación y sede; si no, revisión "faltan_datos".
+    /// </summary>
     public void EvaluarNuevo(FilaImportacionEquipoDto f)
     {
         var n = f.Nuevo!;
+        f.Equipo = null;
+        f.Accion = "crear";
+        f.Observaciones.RemoveAll(o => o.StartsWith("Para registrar el equipo"));
+
         var faltan = new List<string>();
-        if (string.IsNullOrWhiteSpace(n.Marca) || string.IsNullOrWhiteSpace(n.Modelo)) faltan.Add("marca y modelo (o el suministro del catálogo)");
         if (!EsClasificacionValida(n.Clasificacion)) faltan.Add("la clasificación");
         if (n.IdSede is null) faltan.Add("la sede");
 
-        f.Equipo = null;
-        f.Accion = "crear";
-        if (faltan.Count > 0)
+        if (n.IdSuministro is null)
+        {
+            f.Estado = "revision"; f.Motivo = "sin_suministro"; f.Importable = false; f.Seleccionado = false;
+            f.Confianza = 0;
+            f.Observaciones.Add("Para registrar el equipo elija el suministro del catálogo"
+                + (faltan.Count > 0 ? " e indique " + string.Join(" y ", faltan) : "")
+                + ". Si el modelo no está en el catálogo, créelo primero en el maestro de Suministros.");
+        }
+        else if (faltan.Count > 0)
         {
             f.Estado = "revision"; f.Motivo = "faltan_datos"; f.Importable = false; f.Seleccionado = false;
             f.Confianza = 0;
-            f.Observaciones.RemoveAll(o => o.StartsWith("Para registrar el equipo indique"));
-            f.Observaciones.Add("Para registrar el equipo indique " + string.Join(", ", faltan) + ".");
+            f.Observaciones.Add("Para registrar el equipo indique " + string.Join(" y ", faltan) + ".");
         }
         else
         {
-            f.Estado = "nuevo"; f.Importable = true; f.Seleccionado = true;
-            f.Motivo = n.IdSuministro is null ? "sin_catalogo" : "catalogo";
-            f.Confianza = Math.Max(f.Confianza, n.IdSuministro is null ? 70 : 90);
-            f.Observaciones.RemoveAll(o => o.StartsWith("Para registrar el equipo indique"));
+            f.Estado = "nuevo"; f.Motivo = "catalogo"; f.Importable = true; f.Seleccionado = true;
+            f.Confianza = Math.Max(f.Confianza, 90);
         }
         f.EstadoLabel = Etiqueta(f);
     }
@@ -379,7 +390,7 @@ public sealed class ConciliadorEquiposImportacion
     public static string Etiqueta(FilaImportacionEquipoDto f) => f.Estado switch
     {
         "automatico" => $"Match {f.Confianza}% automático",
-        "nuevo"      => f.Motivo == "catalogo" ? "Nuevo registro en sede (modelo del catálogo)" : "Nuevo registro en sede",
+        "nuevo"      => "Nuevo registro en sede",
         "omitido"    => f.Motivo switch
         {
             "duplicado_archivo" => "Duplicado en el archivo",
@@ -397,6 +408,7 @@ public sealed class ConciliadorEquiposImportacion
             "equipo_inactivo" => "Revisar: equipo inactivo",
             "sin_serie"       => "Falta el N/S",
             "faltan_datos"    => "Faltan datos para registrar",
+            "sin_suministro"  => "Falta el suministro del catálogo",
             _                 => "Revisión manual",
         },
     };
