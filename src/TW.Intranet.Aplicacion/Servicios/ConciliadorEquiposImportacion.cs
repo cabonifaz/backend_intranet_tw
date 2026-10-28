@@ -81,6 +81,68 @@ public sealed class ConciliadorEquiposImportacion
     private static int Parecido(string? a, string? b) =>
         string.IsNullOrWhiteSpace(a) || string.IsNullOrWhiteSpace(b) ? 0 : Similitud.Puntaje(a, b);
 
+    // ══════════════════════ Puntaje ponderado ══════════════════════
+    //
+    // Matriz acordada con el equipo (suma 100):
+    //   N/S exacto 55 (ancla: identifica al equipo físico; N/S parecido, hasta 2 caracteres de diferencia: 25)
+    //   Suministro 25 (marca + modelo + capacidad; confirma el tipo de equipo)
+    //   Código del cliente 10 · Sede 5 · Ubicación 5 (refuerzos mutables: el cliente puede cambiarlos)
+    // Estado por puntaje: ≥ 80 automático · 40 a 79 revisión (sin preseleccionar) · < 40 equipo nuevo.
+    // Solo el N/S exacto llega a automático: un N/S parecido o una fila sin N/S quedan como máximo en revisión.
+
+    public const int PesoSerie          = 55;
+    public const int PesoSerieParecida  = 25;
+    public const int PesoSuministro     = 25;
+    public const int PesoCodigoCliente  = 10;
+    public const int PesoSede           = 5;
+    public const int PesoUbicacion      = 5;
+    public const int UmbralAutomatico   = 80;
+    public const int UmbralRevision     = 40;
+    /// <summary>Diferencia máxima (Levenshtein) para considerar parecido un N/S.</summary>
+    public const int MaxDiferenciaSerie = 2;
+
+    /// <summary>Señales que coinciden entre la fila y un equipo del cliente.</summary>
+    public sealed record Puntaje(int Total, bool SerieExacta, bool SerieParecida, int Suministro, bool SuministroDistinto,
+                                 bool CodigoCliente, bool Sede, bool Ubicacion);
+
+    public static bool SerieParecida(string a, string b) =>
+        a.Length > 0 && b.Length > 0 && a != b && Math.Min(a.Length, b.Length) >= 5 && Levenshtein(a, b) <= MaxDiferenciaSerie;
+
+    private static bool Coincide(string? a, string? b) =>
+        !string.IsNullOrWhiteSpace(a) && !string.IsNullOrWhiteSpace(b)
+        && (NormalizarSerie(a) == NormalizarSerie(b) || Parecido(a, b) >= Similitud.UmbralDuplicado);
+
+    private static bool Vacio(string? s) => string.IsNullOrWhiteSpace(s);
+
+    public Puntaje Puntuar(DatosLeidosEquipoDto d, EquipoConciliadoDto e)
+    {
+        var ns = NormalizarSerie(d.NumSerie);
+        var nsBd = NormalizarSerie(e.NumSerie);
+        bool exacta = ns.Length > 0 && ns == nsBd;
+        bool parecida = !exacta && SerieParecida(ns, nsBd);
+
+        // Suministro: marca + modelo (+ capacidad). Si el archivo no trae marca ni modelo, no contradice: con el N/S
+        // exacto basta (el comercial ve la observación). Si los trae y no coinciden, el suministro es distinto.
+        int suministro = 0; bool distinto = false;
+        bool hayMarca = !Vacio(d.Marca), hayModelo = !Vacio(d.Modelo);
+        bool marca  = hayMarca && (Coincide(d.Marca, e.Marca) || e.Marca.Equals("Genérico", StringComparison.OrdinalIgnoreCase));
+        bool modelo = hayModelo && Coincide(d.Modelo, e.Modelo);
+        bool capacidadDistinta = !Vacio(d.Capacidad) && !Vacio(e.AlcanceMaximo)
+                                 && NormalizarSerie(d.Capacidad) != NormalizarSerie(e.AlcanceMaximo);
+        if (!hayMarca && !hayModelo) suministro = exacta ? PesoSuministro : 0;
+        else if ((marca || !hayMarca) && (modelo || !hayModelo)) suministro = capacidadDistinta ? 15 : PesoSuministro;
+        else if (marca || modelo) { suministro = 10; distinto = true; }
+        else distinto = true;
+
+        bool codigo    = Coincide(d.CodigoCliente, e.CodigoCliente);
+        bool sede      = !Vacio(d.Sede) && !Vacio(e.SedeNombre) && Parecido(d.Sede, e.SedeNombre) >= Similitud.UmbralDuplicado;
+        bool ubicacion = !Vacio(d.Ubicacion) && !Vacio(e.Ubicacion) && Parecido(d.Ubicacion, e.Ubicacion) >= Similitud.UmbralDuplicado;
+
+        int total = (exacta ? PesoSerie : parecida ? PesoSerieParecida : 0) + suministro
+                    + (codigo ? PesoCodigoCliente : 0) + (sede ? PesoSede : 0) + (ubicacion ? PesoUbicacion : 0);
+        return new Puntaje(Math.Min(total, 100), exacta, parecida, suministro, distinto, codigo, sede, ubicacion);
+    }
+
     // ══════════════════════ Conciliación por reglas ══════════════════════
 
     public FilaImportacionEquipoDto Conciliar(int fila, DatosLeidosEquipoDto d)
@@ -93,60 +155,19 @@ public sealed class ConciliadorEquiposImportacion
         {
             if (ns.Length > 0 && NormalizarSerie(porTw.NumSerie) != ns)
             {
-                Revision(f, "serie_distinta", Con(porTw, 100), seleccionar: false, confianza: 80);
+                Revision(f, "serie_distinta", Con(porTw, 100), seleccionar: false, confianza: Math.Min(Puntuar(d, porTw).Total + PesoSerie, 79));
                 f.Observaciones.Add($"El código TW {porTw.CodigoTw} está registrado con la serie {porTw.NumSerie}, no con {d.NumSerie}.");
             }
-            else Automatico(f, porTw, "codigo_tw", 100);
-            return f;
-        }
-
-        // 2. N.° de serie exacto en el cliente.
-        if (ns.Length > 0 && porSerie.Contains(ns))
-        {
-            var mismos = porSerie[ns].ToList();
-            if (mismos.Count == 1)
-            {
-                var e = mismos[0];
-                var marcaDistinta = !string.IsNullOrWhiteSpace(d.Marca) && Parecido(d.Marca, e.Marca) < Similitud.UmbralParecido
-                                    && !e.Marca.Equals("Genérico", StringComparison.OrdinalIgnoreCase);
-                Automatico(f, e, "num_serie", marcaDistinta ? 90 : 100);
-                if (marcaDistinta) f.Observaciones.Add($"La marca del archivo ({d.Marca}) no coincide con la registrada ({e.Marca}).");
-                return f;
-            }
-
-            // Misma serie en varios equipos del cliente (de distinta marca/modelo): se elige por marca y modelo.
-            var puntuados = mismos
-                .Select(e => (e, p: Math.Max(Parecido($"{d.Marca} {d.Modelo}", $"{e.Marca} {e.Modelo}"), Parecido(d.Modelo, e.Modelo))))
-                .OrderByDescending(x => x.p).ToList();
-            if (puntuados[0].p >= Similitud.UmbralDuplicado && puntuados[0].p - puntuados[1].p >= 15)
-                Automatico(f, puntuados[0].e, "num_serie", 95);
             else
             {
-                f.Candidatos = puntuados.Take(5).Select(x => Con(x.e, 100)).ToList();
-                Revision(f, "serie_repetida", f.Candidatos[0], seleccionar: false, confianza: 50);
-                f.Observaciones.Add($"El cliente tiene {mismos.Count} equipos con la serie {d.NumSerie}: elija cuál es.");
+                Automatico(f, porTw, "codigo_tw", 100);
+                AvisarCambios(f, d, porTw);
             }
             return f;
         }
 
-        // 3. Código del cliente (tag / código interno).
-        var cc = NormalizarSerie(d.CodigoCliente);
-        if (cc.Length > 0 && porCodigoCliente.Contains(cc) && porCodigoCliente[cc].Count() == 1)
-        {
-            var e = porCodigoCliente[cc].First();
-            if (ns.Length == 0 || PuntajeSerie(ns, NormalizarSerie(e.NumSerie)) >= UmbralSerieParecida)
-                Automatico(f, e, "codigo_cliente", 95);
-            else
-            {
-                Revision(f, "codigo_cliente", Con(e, 70), seleccionar: false, confianza: 60);
-                f.Observaciones.Add($"El código del cliente {d.CodigoCliente} corresponde al equipo {e.CodigoTw} (serie {e.NumSerie}), pero el archivo indica la serie {d.NumSerie}.");
-                PrepararNuevo(f, d, ns);
-            }
-            return f;
-        }
-
-        // 4. La serie es de un equipo de OTRO cliente: no se puede vincular ni duplicar.
-        if (ns.Length > 0 && otrosPorSerie.Contains(ns))
+        // 2. La serie es de un equipo de OTRO cliente (y no del cliente): no se puede vincular ni duplicar.
+        if (ns.Length > 0 && !porSerie.Contains(ns) && otrosPorSerie.Contains(ns))
         {
             var o = otrosPorSerie[ns].First();
             Omitir(f, "otro_cliente");
@@ -154,35 +175,98 @@ public sealed class ConciliadorEquiposImportacion
             return f;
         }
 
-        // 5. Serie parecida (error de tipeo) en el cliente.
-        if (ns.Length > 0)
-        {
-            var parecidos = bd.Equipos
-                .Select(e => (e, p: PuntajeSerie(ns, NormalizarSerie(e.NumSerie))))
-                .Where(x => x.p >= UmbralSerieParecida)
-                .OrderByDescending(x => x.p).ThenByDescending(x => Parecido($"{d.Marca} {d.Modelo}", $"{x.e.Marca} {x.e.Modelo}"))
-                .Take(5).ToList();
-            if (parecidos.Count > 0)
+        // 3. Candidatos: N/S exacto o parecido, código del cliente y, sin N/S, misma marca y modelo. Se puntúa cada uno.
+        var cc = NormalizarSerie(d.CodigoCliente);
+        var puntuados = bd.Equipos
+            .Where(e =>
             {
-                f.Candidatos = parecidos.Select(x => Con(x.e, x.p)).ToList();
-                Revision(f, "serie_similar", f.Candidatos[0], seleccionar: false, confianza: parecidos[0].p - 20);
-                f.Observaciones.Add($"No hay un equipo con la serie {d.NumSerie}; el más parecido es {parecidos[0].e.NumSerie} ({parecidos[0].e.CodigoTw}).");
-                PrepararNuevo(f, d, ns);
+                var nsBd = NormalizarSerie(e.NumSerie);
+                return (ns.Length > 0 && (nsBd == ns || SerieParecida(ns, nsBd)))
+                    || (cc.Length > 0 && NormalizarSerie(e.CodigoCliente) == cc)
+                    || (ns.Length == 0 && Coincide(d.Marca, e.Marca) && Coincide(d.Modelo, e.Modelo));
+            })
+            .Select(e => (e, p: Puntuar(d, e)))
+            .OrderByDescending(x => x.p.Total).ThenByDescending(x => x.p.SerieExacta)
+            .Take(5).ToList();
+        f.Candidatos = puntuados.Select(x => Con(x.e, x.p.Total)).ToList();
+        var mejor = puntuados.FirstOrDefault();
+
+        // 4. Sin coincidencia suficiente (< 40): equipo nuevo para el cliente.
+        if (mejor.e is null || mejor.p.Total < UmbralRevision)
+        {
+            if (mejor.e is not null)
+                f.Observaciones.Add($"Coincidencia débil ({mejor.p.Total}%) con {mejor.e.CodigoTw} ({mejor.e.Marca} {mejor.e.Modelo}, serie {mejor.e.NumSerie}): "
+                                    + (ns.Length == 0 ? "no alcanza para vincularlo al inventario." : "se propone como equipo nuevo."));
+            if (ns.Length == 0)
+            {
+                Revision(f, "sin_serie", null, seleccionar: false, confianza: mejor.e is null ? 0 : mejor.p.Total);
+                f.Importable = false;
+                f.Observaciones.Add("La fila no tiene número de serie (obligatorio para registrar el equipo).");
                 return f;
             }
-        }
-
-        // 6. Equipo nuevo para el cliente.
-        if (ns.Length == 0)
-        {
-            Revision(f, "sin_serie", null, seleccionar: false, confianza: 0);
-            f.Importable = false;
-            f.Observaciones.Add("La fila no tiene número de serie (obligatorio para registrar el equipo).");
+            PrepararNuevo(f, d, ns);
+            EvaluarNuevo(f);
+            f.Confianza = mejor.e is null ? 0 : mejor.p.Total;
             return f;
         }
-        PrepararNuevo(f, d, ns);
-        EvaluarNuevo(f);
+
+        var exactos = puntuados.Where(x => x.p.SerieExacta).ToList();
+
+        // 5. Automático: solo con N/S exacto y ≥ 80, sin otro equipo del cliente con la misma serie que compita.
+        if (mejor.p.SerieExacta && mejor.p.Total >= UmbralAutomatico
+            && (exactos.Count == 1 || exactos[1].p.Total < UmbralAutomatico))
+        {
+            Automatico(f, mejor.e, "num_serie", mejor.p.Total);
+            f.Candidatos = [];
+            if (Vacio(d.Marca) && Vacio(d.Modelo))
+                f.Observaciones.Add("ⓘ El archivo no trae marca ni modelo: se identificó solo por el N/S.");
+            AvisarCambios(f, d, mejor.e);
+            return f;
+        }
+
+        // 6. Revisión (40 a 79, o N/S repetido en el cliente): el comercial confirma.
+        string motivo; string observacion;
+        if (exactos.Count > 1)
+        {
+            motivo = "serie_repetida";
+            observacion = $"El cliente tiene {exactos.Count} equipos con la serie {d.NumSerie}: elija cuál es.";
+        }
+        else if (mejor.p.SerieExacta)
+        {
+            motivo = mejor.p.SuministroDistinto ? "suministro_distinto" : "coincidencia_parcial";
+            observacion = mejor.p.SuministroDistinto
+                ? $"La serie coincide con {mejor.e.CodigoTw}, pero está registrado como {mejor.e.Marca} {mejor.e.Modelo} y el archivo indica {d.Marca} {d.Modelo}."
+                : $"La serie coincide con {mejor.e.CodigoTw}, pero los demás datos no lo confirman.";
+        }
+        else if (mejor.p.SerieParecida)
+        {
+            motivo = "serie_similar";
+            observacion = $"No hay un equipo con la serie {d.NumSerie}; el más parecido es {mejor.e.NumSerie} ({mejor.e.CodigoTw}). Puede ser un error de tipeo o un equipo distinto.";
+        }
+        else
+        {
+            motivo = "codigo_cliente";
+            observacion = ns.Length == 0
+                ? $"Sin N/S en el archivo: coincide con {mejor.e.CodigoTw} por el código del cliente y otros datos. Confirme que es el mismo equipo."
+                : $"El código del cliente {d.CodigoCliente} corresponde al equipo {mejor.e.CodigoTw} (serie {mejor.e.NumSerie}), pero el archivo indica la serie {d.NumSerie}.";
+        }
+        Revision(f, motivo, Con(mejor.e, mejor.p.Total), seleccionar: false, confianza: Math.Min(mejor.p.Total, UmbralAutomatico - 1));
+        f.Observaciones.Add(observacion);
+        if (ns.Length > 0 && !mejor.p.SerieExacta) PrepararNuevo(f, d, ns);
         return f;
+    }
+
+    /// <summary>Match automático con datos mutables distintos: avisa sin forzar la revisión.</summary>
+    private void AvisarCambios(FilaImportacionEquipoDto f, DatosLeidosEquipoDto d, EquipoConciliadoDto e)
+    {
+        if (!Vacio(d.CodigoCliente) && !Vacio(e.CodigoCliente) && !Coincide(d.CodigoCliente, e.CodigoCliente))
+            f.Observaciones.Add($"ⓘ Código cliente cambió: {e.CodigoCliente} → {d.CodigoCliente}");
+        if (!Vacio(d.Sede) && !Vacio(e.SedeNombre) && Parecido(d.Sede, e.SedeNombre) < Similitud.UmbralDuplicado)
+            f.Observaciones.Add($"ⓘ Sede cambió: {e.SedeNombre} → {d.Sede}");
+        if (!Vacio(d.Ubicacion) && !Vacio(e.Ubicacion) && Parecido(d.Ubicacion, e.Ubicacion) < Similitud.UmbralDuplicado)
+            f.Observaciones.Add($"ⓘ Ubicación cambió: {e.Ubicacion} → {d.Ubicacion}");
+        if (!Vacio(d.Marca) && !Vacio(e.Marca) && !Coincide(d.Marca, e.Marca) && !e.Marca.Equals("Genérico", StringComparison.OrdinalIgnoreCase))
+            f.Observaciones.Add($"ⓘ Marca distinta: registrada {e.Marca}, archivo {d.Marca}");
     }
 
     // ══════════════════════ Equipo nuevo ══════════════════════
@@ -294,7 +378,6 @@ public sealed class ConciliadorEquiposImportacion
         if (n.IdSuministro is null)
         {
             f.Estado = "revision"; f.Motivo = "sin_suministro"; f.Importable = false; f.Seleccionado = false;
-            f.Confianza = 0;
             f.Observaciones.Add("Para registrar el equipo elija el suministro del catálogo"
                 + (faltan.Count > 0 ? " e indique " + string.Join(" y ", faltan) : "")
                 + ". Si el modelo no está en el catálogo, créelo primero en el maestro de Suministros.");
@@ -302,13 +385,11 @@ public sealed class ConciliadorEquiposImportacion
         else if (faltan.Count > 0)
         {
             f.Estado = "revision"; f.Motivo = "faltan_datos"; f.Importable = false; f.Seleccionado = false;
-            f.Confianza = 0;
             f.Observaciones.Add("Para registrar el equipo indique " + string.Join(" y ", faltan) + ".");
         }
         else
         {
             f.Estado = "nuevo"; f.Motivo = "catalogo"; f.Importable = true; f.Seleccionado = true;
-            f.Confianza = Math.Max(f.Confianza, 90);
         }
         f.EstadoLabel = Etiqueta(f);
     }
@@ -372,12 +453,16 @@ public sealed class ConciliadorEquiposImportacion
         f.EstadoLabel = Etiqueta(f);
     }
 
-    /// <summary>Elegido por la IA entre los candidatos: queda en revisión (el comercial confirma), marcado si la confianza es alta.</summary>
-    public void SugerenciaIa(FilaImportacionEquipoDto f, EquipoConciliadoDto e, int confianza, string? motivo)
+    /// <summary>
+    /// Elegido por la IA entre los candidatos: queda en revisión sin preseleccionar (el comercial confirma). La confianza
+    /// es la de la matriz de pesos (la IA no la sube: un N/S parecido o una fila sin N/S nunca llegan a automático).
+    /// </summary>
+    public void SugerenciaIa(FilaImportacionEquipoDto f, EquipoConciliadoDto e, int confianzaIa, string? motivo)
     {
-        Revision(f, "sugerencia_ia", e, seleccionar: confianza >= 85, confianza: confianza);
+        var puntaje = Math.Min(Puntuar(f.Leido, e).Total, UmbralAutomatico - 1);
+        Revision(f, "sugerencia_ia", Con(e, puntaje), seleccionar: false, confianza: puntaje);
         f.Origen = "ia";
-        if (!string.IsNullOrWhiteSpace(motivo)) f.Observaciones.Add("IA: " + Recortar(motivo, 300));
+        f.Observaciones.Add($"IA ({confianzaIa}%): " + (Recortar(motivo, 300) ?? "es el equipo más probable."));
         f.EstadoLabel = Etiqueta(f);
     }
 
@@ -404,7 +489,9 @@ public sealed class ConciliadorEquiposImportacion
             "serie_similar"   => "Revisar: serie parecida",
             "serie_repetida"  => "Revisar: serie repetida en el cliente",
             "serie_distinta"  => "Revisar: código TW con otra serie",
-            "codigo_cliente"  => "Revisar: código del cliente con otra serie",
+            "codigo_cliente"  => "Revisar: coincide el código del cliente",
+            "suministro_distinto"  => "Revisar: misma serie, otra marca o modelo",
+            "coincidencia_parcial" => "Revisar: coincidencia parcial",
             "equipo_inactivo" => "Revisar: equipo inactivo",
             "sin_serie"       => "Falta el N/S",
             "faltan_datos"    => "Faltan datos para registrar",

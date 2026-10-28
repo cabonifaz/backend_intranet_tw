@@ -33,7 +33,8 @@ public class AnalizarImportacionEquiposCasoDeUso(
     IAsistenteIaEquipos            ia,
     IImportacionEquiposRepositorio repositorio)
 {
-    private static readonly string[] MotivosParaIa = ["serie_similar", "serie_repetida", "codigo_cliente", "faltan_datos", "sin_suministro"];
+    private static readonly string[] MotivosParaIa =
+        ["serie_similar", "serie_repetida", "codigo_cliente", "suministro_distinto", "coincidencia_parcial", "sin_serie", "faltan_datos", "sin_suministro"];
 
     public async Task<RespuestaDto<AnalisisImportacionEquiposDto>> EjecutarAsync(
         Stream contenido, string nombreArchivo, long tamano, AnalizarImportacionEquiposSolicitudDto solicitud,
@@ -250,7 +251,7 @@ public class AnalizarImportacionEquiposCasoDeUso(
         if (f.Motivo is "faltan_datos" or "sin_suministro")
         {
             conciliador.EvaluarNuevo(f);
-            if (cambio) { f.Origen = "ia"; f.Confianza = Math.Max(f.Confianza, confianza); }
+            if (cambio) f.Origen = "ia";
         }
         else if (f.Motivo == "serie_similar" && res.IdEquipo is null && confianza >= 80)
         {
