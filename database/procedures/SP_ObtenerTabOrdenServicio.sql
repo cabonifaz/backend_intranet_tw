@@ -44,9 +44,18 @@ proc: BEGIN
     SELECT 2 AS IdTipoMensaje, 'Éxito.' AS Mensaje;
 
     IF p_tab = 'propuesta' THEN
-        SELECT p.id_propuesta, p.numero, p.version, p.estado, p.tipo_servicio,
-               (SELECT MIN(IFNULL(s.fecha_interaccion, s.creado_en)) FROM seguimiento_comercial s
-                WHERE s.id_propuesta = p.id_propuesta AND s.eliminado_en IS NULL AND s.estado = 'cerrado_aceptacion') AS fecha_aceptacion,
+        SELECT p.id_propuesta, p.numero, p.version, p.estado,
+               COALESCE(NULLIF(TRIM(IF(p.tipo_servicio REGEXP '^[0-9]+$',
+                                       (SELECT ts.String1 FROM tabla_maestra ts WHERE ts.IdMaestro = 3 AND ts.IdEmpresa = 1
+                                          AND ts.Num1 = CAST(p.tipo_servicio AS UNSIGNED) LIMIT 1), p.tipo_servicio)), ''),
+                        (SELECT GROUP_CONCAT(DISTINCT ts.String1 ORDER BY ts.String1 SEPARATOR ', ')
+                         FROM propuesta_item i JOIN tabla_maestra ts ON ts.IdMaestro = 3 AND ts.IdEmpresa = 1 AND ts.Num1 = i.id_tipo_servicio
+                         WHERE i.id_propuesta = p.id_propuesta AND i.eliminado_en IS NULL)) AS tipo_servicio,
+               COALESCE((SELECT MIN(IFNULL(s.fecha_interaccion, s.creado_en)) FROM seguimiento_comercial s
+                         WHERE s.id_propuesta = p.id_propuesta AND s.eliminado_en IS NULL AND s.estado = 'cerrado_aceptacion'),
+                        (SELECT MIN(ae.registrado_en) FROM auditoria_evento ae
+                         WHERE ae.entidad_tipo = 'propuesta' AND ae.id_entidad = p.id_propuesta AND ae.estado_nuevo = 'aceptado'),
+                        IF(p.estado = 'aceptado', p.modificado_en, NULL)) AS fecha_aceptacion,
                CONCAT(uc.nombre, ' ', uc.apellido) AS comercial,
                (SELECT CONCAT(ua.nombre, ' ', ua.apellido) FROM visto_bueno v
                 JOIN usuario ua ON ua.id_usuario = FN_AprobadorVistoBuenoExpediente(v.id_vb)
@@ -54,10 +63,17 @@ proc: BEGIN
                 ORDER BY v.id_vb DESC LIMIT 1) AS aprobador_vb,
                p.total AS monto_total, m.String2 AS simbolo_moneda,
                (SELECT COUNT(*) FROM propuesta_equipo pe WHERE pe.id_propuesta = p.id_propuesta) AS equipos_cotizados,
+               (SELECT COUNT(*) FROM orden_servicio o2 JOIN propuesta_comercial p2 ON p2.id_propuesta = o2.id_propuesta
+                WHERE p2.numero = p.numero AND o2.eliminado_en IS NULL AND o2.estado <> 'anulada') AS os_activas,
                (SELECT COUNT(*) FROM propuesta_item i WHERE i.id_propuesta = p.id_propuesta AND i.seccion = 'principal'
                   AND IFNULL(i.es_espaciado, 0) = 0 AND i.eliminado_en IS NULL) AS conceptos_cotizados,
-               (SELECT cp.String1 FROM tabla_maestra cp WHERE cp.IdMaestro = 39 AND cp.IdEmpresa = 1 AND cp.Num1 = p.id_condicion_pago
-                  AND cp.eliminado_en IS NULL LIMIT 1) AS condicion_pago
+               COALESCE((SELECT cp.String1 FROM tabla_maestra cp WHERE cp.IdMaestro = 39 AND cp.IdEmpresa = 1
+                           AND cp.Num1 = p.id_condicion_pago AND cp.eliminado_en IS NULL LIMIT 1),
+                        (SELECT GROUP_CONCAT(CONCAT(TRIM(TRAILING '.' FROM TRIM(TRAILING '0' FROM CAST(f.porcentaje AS CHAR))), '% ',
+                                                    IFNULL((SELECT MAX(tm.String1) FROM tabla_maestra tm WHERE tm.IdMaestro = 39
+                                                              AND tm.IdEmpresa = 1 AND tm.String2 = f.condicion), f.condicion))
+                                             ORDER BY f.orden, f.id SEPARATOR ' · ')
+                         FROM propuesta_forma_pago f WHERE f.id_propuesta = p.id_propuesta)) AS condicion_pago
         FROM propuesta_comercial p
         LEFT JOIN usuario uc      ON uc.id_usuario = COALESCE(p.id_responsable, p.id_creador)
         LEFT JOIN tabla_maestra m ON m.IdMaestro = 1 AND m.IdEmpresa = 1 AND m.Num1 = p.id_moneda
@@ -72,9 +88,13 @@ proc: BEGIN
                (SELECT GROUP_CONCAT(oc.id_suministro ORDER BY oc.orden SEPARATOR ',')
                 FROM os_concepto_equipo ce JOIN os_concepto oc ON oc.id = ce.id_os_concepto AND oc.eliminado_en IS NULL
                 WHERE ce.id_os_equipo = oe.id AND ce.eliminado_en IS NULL)                         AS conceptos_ids,
-               (SELECT GROUP_CONCAT(oc.descripcion ORDER BY oc.orden SEPARATOR ' | ')
+               (SELECT GROUP_CONCAT(CONCAT(oc.descripcion, IFNULL(CONCAT(' (', oc.alcance, ')'), '')) ORDER BY oc.orden SEPARATOR ' | ')
                 FROM os_concepto_equipo ce JOIN os_concepto oc ON oc.id = ce.id_os_concepto AND oc.eliminado_en IS NULL
-                WHERE ce.id_os_equipo = oe.id AND ce.eliminado_en IS NULL)                         AS conceptos
+                WHERE ce.id_os_equipo = oe.id AND ce.eliminado_en IS NULL)                         AS conceptos,
+               (SELECT GROUP_CONCAT(oc.id ORDER BY oc.orden SEPARATOR ',')
+                FROM os_concepto_equipo ce JOIN os_concepto oc ON oc.id = ce.id_os_concepto AND oc.eliminado_en IS NULL
+                WHERE ce.id_os_equipo = oe.id AND ce.eliminado_en IS NULL)                         AS conceptos_os,
+               EXISTS (SELECT 1 FROM propuesta_equipo pe WHERE pe.id_propuesta = v_id_prop AND pe.id_equipo = ec.id_equipo) AS de_la_propuesta
         FROM os_equipo oe
         JOIN equipo_cliente ec     ON ec.id_equipo = oe.id_equipo
         LEFT JOIN sede_cliente sc  ON sc.id_sede = ec.id_sede
@@ -83,7 +103,9 @@ proc: BEGIN
         ORDER BY IFNULL(oe.orden, oe.id), oe.id;
 
     ELSEIF p_tab = 'conceptos' THEN
-        SELECT oc.id AS id_os_concepto, oc.orden, oc.id_suministro, oc.codigo, oc.descripcion,
+        SELECT oc.id AS id_os_concepto, oc.orden, oc.id_suministro, oc.codigo, oc.descripcion, oc.alcance,
+               EXISTS (SELECT 1 FROM propuesta_item pi WHERE pi.id_propuesta = v_id_prop AND pi.id_catalogo_item = oc.id_suministro
+                         AND pi.eliminado_en IS NULL AND IFNULL(pi.es_espaciado, 0) = 0) AS de_la_propuesta,
                (SELECT GROUP_CONCAT(ec.codigo_tw ORDER BY IFNULL(oe.orden, oe.id) SEPARATOR ',')
                 FROM os_concepto_equipo ce
                 JOIN os_equipo oe ON oe.id = ce.id_os_equipo AND oe.eliminado_en IS NULL

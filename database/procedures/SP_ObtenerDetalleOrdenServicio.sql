@@ -61,9 +61,9 @@ proc: BEGIN
            sp.id_aprobador, CONCAT(uj.nombre, ' ', uj.apellido) AS aprobador_solicitud,
            (sa.id_solicitud IS NOT NULL)                                                                AS edicion_aprobada,
            -- Acciones
-           (v_guardar = 1 AND ((os.estado = 'borrador' AND (os.id_responsable_comercial IS NULL OR os.id_responsable_comercial = p_id_usuario
-                                                             OR v_jefe = 1))
-                               OR sa.id_solicitud IS NOT NULL))                                         AS puede_editar,
+           -- Sin borradores: solo se edita con una solicitud de edición aprobada y aún no ejecutada
+           (v_guardar = 1 AND sa.id_solicitud IS NOT NULL
+            AND os.estado IN ('emitida', 'programada', 'reprogramada'))                               AS puede_editar,
            (v_guardar = 1 AND (os.id_responsable_comercial <=> p_id_usuario)
             AND os.estado IN ('emitida', 'programada', 'reprogramada') AND sp.id_solicitud IS NULL AND sa.id_solicitud IS NULL)
                                                                                                         AS puede_solicitar_edicion,

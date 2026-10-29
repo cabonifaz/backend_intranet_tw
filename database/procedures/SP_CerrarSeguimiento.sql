@@ -12,7 +12,8 @@
 --   del usuario. Fecha del cierre (NULL = ahora) no futura ni anterior al envío de la propuesta.
 -- Aceptación: tipo de aceptación (TIPO_ACEPTACION_PROPUESTA) y contacto que confirma obligatorios.
 --   El seguimiento queda cerrado_aceptacion, la propuesta pasa a 'aceptado' y entra a la etapa de
---   Órdenes de Compra (próxima acción "Generar orden de compra").
+--   Órdenes de Compra (próxima acción "Generar orden de compra"). Si otra versión del mismo número estaba
+--   aceptada, pasa a 'revocada': una propuesta tiene una sola versión aceptada.
 -- Rechazo: motivo (MOTIVO_RECHAZO) y comentario de al menos 20 caracteres. La propuesta pasa a 'rechazado'.
 -- Notifica a los supervisores y administradores del área del comercial (y al responsable).
 -- Resultados: 1 mensaje, 2 id_seguimiento y estado del seguimiento (solo al guardar).
@@ -209,6 +210,21 @@ proc: BEGIN
     UPDATE propuesta_comercial
     SET estado = IF(p_tipo = 'aceptacion', 'aceptado', 'rechazado'), modificado_por = p_id_usuario
     WHERE id_propuesta = p_id_propuesta;
+
+    -- Una sola versión aceptada por propuesta: al aceptar esta versión, la versión aceptada anterior queda revocada
+    IF p_tipo = 'aceptacion' THEN
+        INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion,
+                                      id_usuario, registrado_en, metadata)
+        SELECT 'propuesta', p.id_propuesta, 'revocacion_por_version', 'aceptado', 'revocada',
+               CONCAT(p.numero, ' v', p.version, ' revocada: el cliente aceptó la v', v_version, '.'),
+               p_id_usuario, NOW(), JSON_OBJECT('id_propuesta_vigente', p_id_propuesta)
+        FROM propuesta_comercial p
+        WHERE p.numero = v_numero AND p.id_propuesta <> p_id_propuesta AND p.estado = 'aceptado' AND p.eliminado_en IS NULL;
+
+        UPDATE propuesta_comercial
+        SET estado = 'revocada', modificado_en = NOW(), modificado_por = p_id_usuario
+        WHERE numero = v_numero AND id_propuesta <> p_id_propuesta AND estado = 'aceptado' AND eliminado_en IS NULL;
+    END IF;
 
     -- Notificación a supervisores y administradores del área del comercial, y al responsable
     SELECT CONCAT(nombre, ' ', apellido) INTO v_usuario FROM usuario WHERE id_usuario = p_id_usuario;

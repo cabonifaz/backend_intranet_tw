@@ -143,6 +143,7 @@ public class OrdenServicioRepositorio(CadenaConexionBd conexion) : RepositorioSp
             // En el tab Equipos "conceptos" trae las descripciones y "conceptos_ids" los ids; en la ficha "conceptos" son los ids
             Conceptos          = Ids(csv),
             ConceptosDescripcion = Tiene(r, "conceptos_ids") ? Lista(Texto(r, "conceptos"), " | ") : [],
+            ConceptosOs        = Tiene(r, "conceptos_os") ? Ids(Texto(r, "conceptos_os")) : [],
             Sugerido           = Tiene(r, "sugerido") && Booleano(r, "sugerido"),
             OtraOsNumero       = otraNumero,
             OtraOsEstado       = otraEstado,
@@ -179,6 +180,7 @@ public class OrdenServicioRepositorio(CadenaConexionBd conexion) : RepositorioSp
         EquiposCotizados   = Entero(r, "equipos_cotizados"),
         ConceptosCotizados = Entero(r, "conceptos_cotizados"),
         CondicionPago      = Texto(r, "condicion_pago"),
+        OsActivas          = Tiene(r, "os_activas") ? Entero(r, "os_activas") : 0,
     };
 
     private static async Task<List<PersonalAsignadoOsDto>> LeerPersonalAsync(MySqlDataReader r, CancellationToken ct)
@@ -242,6 +244,8 @@ public class OrdenServicioRepositorio(CadenaConexionBd conexion) : RepositorioSp
                         SimboloMoneda       = Texto(r, "simbolo_moneda"),
                         EquiposCotizados    = Entero(r, "equipos_cotizados"),
                         ConceptosCotizados  = Entero(r, "conceptos_cotizados"),
+                        OsActivasCount         = Entero(r, "os_activas"),
+                        EquiposPendientesCount = Entero(r, "equipos_pendientes"),
                     });
                 var total = await LeerTotalAsync(r, ct);
                 return new RespuestaDto<PropuestasDisponiblesOsDto>(2, mensaje, new PropuestasDisponiblesOsDto(items, total, f.Pagina, f.PorPagina));
@@ -273,7 +277,9 @@ public class OrdenServicioRepositorio(CadenaConexionBd conexion) : RepositorioSp
                     IdOs                   = EnteroLargoNulo(r, "id_os"),
                     Numero                 = Texto(r, "numero") ?? "",
                     Tipo                   = tipo,
-                    Estado                 = Texto(r, "estado") ?? "borrador",
+                    Estado                 = Texto(r, "estado") ?? "emitida",
+                    OsActivas              = Tiene(r, "os_activas") ? Entero(r, "os_activas") : 0,
+                    EquiposPendientes      = Tiene(r, "equipos_pendientes") ? Entero(r, "equipos_pendientes") : 0,
                     IdSolicitudAprobada    = EnteroLargoNulo(r, "id_solicitud_aprobada"),
                     MotivoEdicion          = Texto(r, "motivo_edicion"),
                     EdicionAprobadaPor     = Texto(r, "edicion_aprobada_por"),
@@ -313,18 +319,25 @@ public class OrdenServicioRepositorio(CadenaConexionBd conexion) : RepositorioSp
                 while (await r.ReadAsync(ct))
                     conceptos.Add(new ConceptoOrdenServicioDto
                     {
+                        IdOsConcepto  = EnteroLargoNulo(r, "id_os_concepto"),
                         IdSuministro  = EnteroLargoNulo(r, "id_suministro"),
                         Codigo        = Texto(r, "codigo"),
                         Descripcion   = Texto(r, "descripcion") ?? "",
+                        Alcance       = Texto(r, "alcance"),
                         Sugerido      = Booleano(r, "sugerido"),
                         Clasificacion = Texto(r, "clasificacion"),
+                        DeLaPropuesta = Booleano(r, "de_la_propuesta"),
                     });
 
-                var equipos = await LeerEquiposAsync(r, ct);
-                // Relación concepto ↔ equipos (la columna "Aplica a" de la sección Conceptos)
-                conceptos = conceptos.Select(c => c with
+                // Conceptos de cada equipo por posición (el mismo suministro puede estar en varios conceptos)
+                var equipos = (await LeerEquiposAsync(r, ct)).Select(e => e with
                 {
-                    EquiposAplicados = equipos.Where(e => c.IdSuministro is long id && e.Conceptos.Contains(id)).Select(e => e.CodigoTw).ToList(),
+                    ConceptosIdx = e.ConceptosOs.Select(id => conceptos.FindIndex(c => c.IdOsConcepto == id)).Where(i => i >= 0).ToList(),
+                }).ToList();
+                // Relación concepto ↔ equipos (la columna "Aplica a" de la sección Conceptos)
+                conceptos = conceptos.Select((c, i) => c with
+                {
+                    EquiposAplicados = equipos.Where(e => e.ConceptosIdx.Contains(i)).Select(e => e.CodigoTw).ToList(),
                 }).ToList();
 
                 return new RespuestaDto<FichaOrdenServicioDto>(2, mensaje, ficha with { Contactos = contactos, Conceptos = conceptos, Equipos = equipos });
@@ -349,9 +362,13 @@ public class OrdenServicioRepositorio(CadenaConexionBd conexion) : RepositorioSp
                     ["certDireccion"]        = d.CertDireccion,
                     ["certContacto"]         = d.CertContacto,
                 }));
-                p.AddWithValue("p_conceptos", Json(d.Conceptos.Select(c => new { idSuministro = c })));
-                p.AddWithValue("p_equipos",   Json(d.Equipos.Select(e => new { idEquipo = e.IdEquipo, conceptos = e.Conceptos })));
-                p.AddWithValue("p_emitir",    Bit(d.Emitir));
+                p.AddWithValue("p_conceptos", Json(d.ConceptosDetalle is { } detalle
+                    ? detalle.Select(c => (object)new { idSuministro = c.IdSuministro, alcance = c.Alcance, idOsConcepto = c.IdOsConcepto })
+                    : d.Conceptos.Select(c => (object)new { idSuministro = c })));
+                p.AddWithValue("p_equipos", Json(d.Equipos.Select(e => e.ConceptosIdx is { } idx
+                    ? (object)new { idEquipo = e.IdEquipo, conceptosIdx = idx }
+                    : new { idEquipo = e.IdEquipo, conceptos = e.Conceptos })));
+                p.AddWithValue("p_emitir",    Bit(true));
                 p.AddWithValue("p_importacion", d.Importacion is { } i
                     ? Json(new { nombreArchivo = i.NombreArchivo, modo = i.Modo, conceptos = i.Conceptos, equipos = i.Equipos,
                                  relaciones = i.Relaciones, advertencias = i.Advertencias })
@@ -580,6 +597,8 @@ public class OrdenServicioRepositorio(CadenaConexionBd conexion) : RepositorioSp
                     IdSuministro     = EnteroLargoNulo(r, "id_suministro"),
                     Codigo           = Texto(r, "codigo"),
                     Descripcion      = Texto(r, "descripcion") ?? "",
+                    Alcance          = Texto(r, "alcance"),
+                    DeLaPropuesta    = Booleano(r, "de_la_propuesta"),
                     EquiposAplicados = Lista(Texto(r, "equipos_aplicados"), ","),
                 });
             return new RespuestaDto<List<ConceptoOrdenServicioDto>>(2, mensaje, lista);

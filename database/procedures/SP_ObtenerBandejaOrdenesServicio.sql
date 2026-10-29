@@ -167,9 +167,9 @@ BEGIN
             (sp.id_solicitud IS NOT NULL)                                                 AS solicitud_pendiente,
             (sa.id_solicitud IS NOT NULL)                                                 AS edicion_aprobada,
             -- Acciones según estado y rol
-            (v_guardar = 1
-             AND ((t.estado = 'borrador' AND (t.id_responsable = p_id_usuario OR t.id_responsable IS NULL OR v_jefe = 1))
-                  OR sa.id_solicitud IS NOT NULL))                                        AS puede_editar,
+            -- Sin borradores: solo se edita con una solicitud de edición aprobada y aún no ejecutada
+            (v_guardar = 1 AND sa.id_solicitud IS NOT NULL
+             AND t.estado IN ('emitida', 'programada', 'reprogramada'))                   AS puede_editar,
             (v_guardar = 1 AND (t.id_responsable <=> p_id_usuario)
              AND t.estado IN ('emitida', 'programada', 'reprogramada')
              AND sp.id_solicitud IS NULL AND sa.id_solicitud IS NULL)                     AS puede_solicitar_edicion,

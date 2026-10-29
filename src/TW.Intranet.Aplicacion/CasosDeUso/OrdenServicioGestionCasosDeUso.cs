@@ -52,17 +52,27 @@ public class GuardarOrdenServicioCasoDeUso(IOrdenServicioRepositorio repositorio
         static Task<RespuestaDto<OrdenServicioGuardadaDto>> Error(string m) => Task.FromResult(new RespuestaDto<OrdenServicioGuardadaDto>(1, m));
 
         if (d is null) return Error("Envíe los datos de la orden.");
+        if (!d.Emitir) return Error("Las órdenes de servicio deben emitirse al guardar.");
         if (idOs <= 0 && d.IdPropuesta is not > 0) return Error("Indique la propuesta aceptada que origina la orden.");
         if (d.FechaProgramadaDesde is { } desde && d.FechaProgramadaHasta is { } hasta && desde.Date > hasta.Date)
             return Error("La fecha programada \"Desde\" no puede ser posterior a \"Hasta\".");
         if ((d.Observaciones?.Trim().Length ?? 0) > 2000) return Error("Las observaciones admiten hasta 2000 caracteres.");
-        if (d.Conceptos.Count > 200) return Error("Una orden admite hasta 200 conceptos.");
+
+        // Conceptos: el mismo suministro puede repetirse con otro alcance (cada ítem de la propuesta es un concepto)
+        var conceptos = d.ConceptosDetalle ?? d.Conceptos.Select(c => new ConceptoGuardarOsDto { IdSuministro = c }).ToList();
+        if (conceptos.Count > 200) return Error("Una orden admite hasta 200 conceptos.");
         if (d.Equipos.Count > 1000) return Error("Una orden admite hasta 1000 equipos.");
-        if (d.Conceptos.Any(c => c <= 0) || d.Equipos.Any(e => e.IdEquipo <= 0)) return Error("Hay conceptos o equipos no válidos.");
-        if (d.Conceptos.Distinct().Count() != d.Conceptos.Count) return Error("Hay conceptos repetidos.");
+        if (conceptos.Any(c => c is null || c.IdSuministro <= 0) || d.Equipos.Any(e => e.IdEquipo <= 0))
+            return Error("Hay conceptos o equipos no válidos.");
+        if (conceptos.Any(c => (c.Alcance?.Trim().Length ?? 0) > 100)) return Error("El alcance de un concepto admite hasta 100 caracteres.");
+        var guardados = conceptos.Where(c => c.IdOsConcepto is > 0).Select(c => c.IdOsConcepto!.Value).ToList();
+        if (guardados.Distinct().Count() != guardados.Count) return Error("Hay conceptos repetidos (mismo idOsConcepto).");
         if (d.Equipos.Select(e => e.IdEquipo).Distinct().Count() != d.Equipos.Count) return Error("Hay equipos repetidos.");
-        if (d.Equipos.SelectMany(e => e.Conceptos).Any(c => !d.Conceptos.Contains(c)))
+        if (d.Equipos.Any(e => e.ConceptosIdx is { } idx ? idx.Any(i => i < 0 || i >= conceptos.Count)
+                                                         : e.Conceptos.Any(c => conceptos.All(x => x.IdSuministro != c))))
             return Error("Un equipo tiene asignado un concepto que no está en la sección Conceptos del Servicio.");
+        foreach (var c in conceptos) c.Alcance = Recortar(c.Alcance, 100);
+        d.ConceptosDetalle = conceptos;
 
         d.Observaciones   = Recortar(d.Observaciones, 2000);
         d.CertRazonSocial = Recortar(d.CertRazonSocial, 300);

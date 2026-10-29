@@ -121,8 +121,13 @@ public record EquipoOrdenServicioDto
     public string? ValorNominal       { get; init; }
     /// <summary>pendiente | en_proceso | ejecutado | observado (Módulo 11).</summary>
     public string? EstadoEjecucion    { get; init; }
-    /// <summary>Conceptos que aplican a este equipo (idSuministro).</summary>
+    /// <summary>Conceptos que aplican a este equipo (idSuministro). Con el mismo suministro en varios conceptos (otro
+    /// alcance), use ConceptosIdx u ConceptosOs para saber cuál.</summary>
     public List<long>   Conceptos     { get; init; } = [];
+    /// <summary>Ficha: posición (base 0) de cada concepto aplicado en la lista Conceptos de la ficha.</summary>
+    public List<int>    ConceptosIdx  { get; init; } = [];
+    /// <summary>idOsConcepto de los conceptos aplicados (orden guardada).</summary>
+    public List<long>   ConceptosOs   { get; init; } = [];
     /// <summary>Descripciones de los conceptos aplicados (tab Equipos del detalle).</summary>
     public List<string> ConceptosDescripcion { get; init; } = [];
     /// <summary>Precargado desde la propuesta como sugerencia (ficha nueva).</summary>
@@ -130,7 +135,7 @@ public record EquipoOrdenServicioDto
     /// <summary>Doble registro: OS/OM activa en la que ya está el equipo (null = disponible).</summary>
     public string? OtraOsNumero       { get; init; }
     public string? OtraOsEstado       { get; init; }
-    /// <summary>Buscador: el equipo está cotizado en la propuesta de origen.</summary>
+    /// <summary>El equipo está cotizado en la propuesta de origen (buscador, ficha y tab Equipos).</summary>
     public bool    DeLaPropuesta      { get; init; }
 }
 
@@ -141,8 +146,12 @@ public record ConceptoOrdenServicioDto
     public long?   IdSuministro      { get; init; }
     public string? Codigo            { get; init; }
     public string  Descripcion       { get; init; } = "";
+    /// <summary>Alcance del ítem de la propuesta ("200 kg"). El mismo suministro con otro alcance es otro concepto.</summary>
+    public string? Alcance           { get; init; }
     public string? Clasificacion     { get; init; }
     public bool    Sugerido          { get; init; }
+    /// <summary>El suministro está cotizado en la propuesta de origen.</summary>
+    public bool    DeLaPropuesta     { get; init; }
     /// <summary>Códigos TW de los equipos a los que aplica; vacío = "General" (aplica a toda la orden).</summary>
     public List<string> EquiposAplicados { get; init; } = [];
     public bool    General           => EquiposAplicados.Count == 0;
@@ -167,6 +176,8 @@ public record PropuestaOrigenOsDto
     public int       EquiposCotizados   { get; init; }
     public int       ConceptosCotizados { get; init; }
     public string?   CondicionPago      { get; init; }
+    /// <summary>OS/OM no anuladas de la propuesta (todas sus versiones).</summary>
+    public int       OsActivas          { get; init; }
 }
 
 /// <summary>Datos para la emisión del certificado (solo OM).</summary>
@@ -184,7 +195,12 @@ public record FichaOrdenServicioDto
     public string    Numero               { get; init; } = "";
     /// <summary>OS u OM (lo define el área de la RQ: Metrología → OM).</summary>
     public string    Tipo                 { get; init; } = "OS";
-    public string    Estado               { get; init; } = "borrador";
+    /// <summary>emitida en una orden nueva (las OS/OM no tienen borrador).</summary>
+    public string    Estado               { get; init; } = "emitida";
+    /// <summary>Orden nueva: OS/OM activas que ya tiene la propuesta y equipos cotizados que quedan por cubrir (los
+    /// que se precargan). Banner: "Esta propuesta ya tiene N OS activas — se precargaron M equipos pendientes".</summary>
+    public int       OsActivas            { get; init; }
+    public int       EquiposPendientes    { get; init; }
     // Edición autorizada (banner verde)
     public long?     IdSolicitudAprobada  { get; init; }
     public string?   MotivoEdicion        { get; init; }
@@ -224,8 +240,21 @@ public record FichaOrdenServicioDto
 public class EquipoGuardarOsDto
 {
     public long       IdEquipo  { get; set; }
-    /// <summary>idSuministro de los conceptos que aplican al equipo (vacío = sin concepto asignado).</summary>
+    /// <summary>idSuministro de los conceptos que aplican al equipo (vacío = sin concepto asignado). Si el suministro está
+    /// en varios conceptos (otro alcance), aplica a todos: para elegir uno use ConceptosIdx.</summary>
     public List<long> Conceptos { get; set; } = [];
+    /// <summary>Posición (base 0) de cada concepto que aplica, en la lista de conceptos enviada. Si viene, reemplaza a Conceptos.</summary>
+    public List<int>? ConceptosIdx { get; set; }
+}
+
+/// <summary>Concepto a guardar. Alcance vacío: se conserva el del concepto guardado (IdOsConcepto) o se toma el del
+/// ítem de la propuesta, por orden de aparición del suministro.</summary>
+public class ConceptoGuardarOsDto
+{
+    public long    IdSuministro { get; set; }
+    public string? Alcance      { get; set; }
+    /// <summary>Concepto ya guardado en la orden (edición).</summary>
+    public long?   IdOsConcepto { get; set; }
 }
 
 /// <summary>Resumen de una importación por Excel aplicada en el formulario (HU-44): se registra en la auditoría.</summary>
@@ -253,11 +282,13 @@ public class GuardarOrdenServicioDto
     public string?    CertRuc              { get; set; }
     public string?    CertDireccion        { get; set; }
     public string?    CertContacto         { get; set; }
-    /// <summary>idSuministro de los conceptos, en orden.</summary>
+    /// <summary>idSuministro de los conceptos, en orden (se admite el mismo suministro varias veces).</summary>
     public List<long> Conceptos            { get; set; } = [];
+    /// <summary>Conceptos con alcance e idOsConcepto. Si viene, reemplaza a Conceptos.</summary>
+    public List<ConceptoGuardarOsDto>? ConceptosDetalle { get; set; }
     public List<EquipoGuardarOsDto> Equipos { get; set; } = [];
-    /// <summary>true = emitir el borrador.</summary>
-    public bool       Emitir               { get; set; }
+    /// <summary>Siempre true: las OS/OM se emiten al guardar (false responde error).</summary>
+    public bool       Emitir               { get; set; } = true;
     public ImportacionAplicadaOsDto? Importacion { get; set; }
 }
 
@@ -327,7 +358,11 @@ public record SolicitudPendienteOsDto(
 
 public record AvanceEquipoOsDto(
     long IdOsEquipo, long IdEquipo, string CodigoTw, string Clasificacion, string ClasificacionLabel,
-    string Marca, string Modelo, string NumSerie, string EstadoEjecucion, DateTime? FechaEjecucion, string? Observacion);
+    string Marca, string Modelo, string NumSerie, string EstadoEjecucion, DateTime? FechaEjecucion, string? Observacion)
+{
+    public string NumeroSerie => NumSerie;
+    public string MarcaModelo => $"{Marca} {Modelo}".Trim();
+}
 
 public record AvanceOrdenServicioDto(int Total, int Pendientes, int EnProceso, int Ejecutados, int Observados, decimal Porcentaje,
                                      List<AvanceEquipoOsDto> Equipos);
@@ -512,6 +547,10 @@ public record PropuestaDisponibleOsDto
     public string?   SimboloMoneda      { get; init; }
     public int       EquiposCotizados   { get; init; }
     public int       ConceptosCotizados { get; init; }
+    /// <summary>OS/OM no anuladas que ya tiene la propuesta.</summary>
+    public int       OsActivasCount         { get; init; }
+    /// <summary>Equipos cotizados que aún no están en una OS/OM activa.</summary>
+    public int       EquiposPendientesCount { get; init; }
 }
 
 public record PropuestasDisponiblesOsDto(List<PropuestaDisponibleOsDto> Items, int Total, int Pagina, int PorPagina);
