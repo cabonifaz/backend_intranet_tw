@@ -148,7 +148,12 @@ public record CabeceraExpedienteDto
     public string?   SiguienteEtapaNombre { get; init; }
     public string?   ProximoPaso          { get; init; }
     // Contadores de los tabs
+    /// <summary>Propuestas únicas (por número, sin contar versiones).</summary>
     public int       CantidadPropuestas   { get; init; }
+    /// <summary>Todas las versiones de las propuestas (filas del tab Propuestas).</summary>
+    public int       CantidadVersionesPropuesta { get; init; }
+    /// <summary>Registros de seguimiento comercial (llamadas, correos, visitas, cierre) de las propuestas del expediente.</summary>
+    public int       CantidadSeguimiento  { get; init; }
     public int       CantidadOc           { get; init; }
     public int       CantidadVb           { get; init; }
     public int       CantidadOs           { get; init; }
