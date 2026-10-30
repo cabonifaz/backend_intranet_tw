@@ -21,6 +21,8 @@ proc: BEGIN
     DECLARE v_existe      INT DEFAULT 0;
     DECLARE v_documentos  INT DEFAULT 0;
     DECLARE v_versiones   INT DEFAULT 0;
+    DECLARE v_propuestas  INT DEFAULT 0;
+    DECLARE v_seguim      INT DEFAULT 0;
     DECLARE v_ocs         INT DEFAULT 0;
     DECLARE v_vbs         INT DEFAULT 0;
     DECLARE v_resp_com    BIGINT;
@@ -49,9 +51,16 @@ proc: BEGIN
     SELECT COUNT(*) INTO v_documentos FROM tmp_exp_doc;
     DROP TEMPORARY TABLE IF EXISTS tmp_exp_doc;
 
-    -- Contadores de los tabs: versiones de propuestas, OC (vigentes e historial) y solicitudes de VB
-    SELECT COUNT(*) INTO v_versiones FROM propuesta_comercial p JOIN tmp_exp x ON p.id_requerimiento = x.id_requerimiento
+    -- Contadores del stepper y de los tabs: propuestas (únicas por número) y sus versiones, registros de seguimiento,
+    -- OC (vigentes e historial) y solicitudes de VB
+    SELECT COUNT(*), COUNT(DISTINCT p.numero) INTO v_versiones, v_propuestas
+    FROM propuesta_comercial p JOIN tmp_exp x ON p.id_requerimiento = x.id_requerimiento
     WHERE p.eliminado_en IS NULL;
+    SELECT COUNT(*) INTO v_seguim
+    FROM seguimiento_comercial s
+    JOIN propuesta_comercial p ON p.id_propuesta = s.id_propuesta AND p.eliminado_en IS NULL
+    JOIN tmp_exp x ON p.id_requerimiento = x.id_requerimiento
+    WHERE s.eliminado_en IS NULL;
     SELECT COUNT(*) INTO v_ocs FROM tmp_exp_ent WHERE entidad_tipo = 'orden_compra';
     SELECT COUNT(*) INTO v_vbs FROM visto_bueno v
     JOIN propuesta_comercial p ON p.id_propuesta = v.id_propuesta AND p.eliminado_en IS NULL
@@ -96,7 +105,8 @@ proc: BEGIN
             ELSE NULL
         END AS proximo_paso,
         -- Contadores de los tabs
-        v_versiones AS cantidad_propuestas, v_ocs AS cantidad_oc, v_vbs AS cantidad_vb,
+        v_propuestas AS cantidad_propuestas, v_versiones AS cantidad_versiones_propuesta, v_seguim AS cantidad_seguimiento,
+        v_ocs AS cantidad_oc, v_vbs AS cantidad_vb,
         x.cantidad_os,
         -- Permisos: el expediente es de consulta; solo se reasigna en etapa comercial
         (FN_PermisoAccion(p_id_usuario, 'expediente_reasignar') = 1 AND x.etapa_comercial = 1 AND x.etapa <> 'cerrado') AS puede_reasignar,

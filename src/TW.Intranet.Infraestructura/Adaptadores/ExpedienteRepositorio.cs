@@ -254,6 +254,8 @@ public class ExpedienteRepositorio(CadenaConexionBd conexion)
                     SiguienteEtapaNombre = Texto(r, "siguiente_etapa_nombre"),
                     ProximoPaso          = Texto(r, "proximo_paso"),
                     CantidadPropuestas   = Ent(r, "cantidad_propuestas"),
+                    CantidadVersionesPropuesta = Ent(r, "cantidad_versiones_propuesta"),
+                    CantidadSeguimiento  = Ent(r, "cantidad_seguimiento"),
                     CantidadOc           = Ent(r, "cantidad_oc"),
                     CantidadVb           = Ent(r, "cantidad_vb"),
                     CantidadOs           = Ent(r, "cantidad_os"),
