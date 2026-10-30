@@ -12,4 +12,9 @@ public record Usuario
     public string Estado       { get; init; } = string.Empty;
     public string SesionToken  { get; init; } = string.Empty;
     public bool   ForzarCambioContrasena { get; init; }
+
+    // App móvil (App Mobile HU-01)
+    public string  NombreUsuario { get; init; } = string.Empty;
+    public string? Cargo         { get; init; }
+    public string? Area          { get; init; }
 }

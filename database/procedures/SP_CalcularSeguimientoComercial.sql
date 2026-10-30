@@ -85,11 +85,11 @@ BEGIN
            AND (oc.id_propuesta = p.id_propuesta
                 OR oc.id_oc IN (SELECT op.id_oc FROM oc_propuesta op
                                 WHERE op.id_propuesta = p.id_propuesta AND op.eliminado_en IS NULL))) AS fecha_primera_oc,
+        -- OC con la vinculación de esta propuesta aún sin validar (observada o pendiente)
         (SELECT COUNT(*) FROM orden_compra oc
-         WHERE oc.eliminado_en IS NULL AND oc.estado = 'pendiente_validacion'
-           AND (oc.id_propuesta = p.id_propuesta
-                OR oc.id_oc IN (SELECT op.id_oc FROM oc_propuesta op
-                                WHERE op.id_propuesta = p.id_propuesta AND op.eliminado_en IS NULL))) AS oc_por_validar,
+         JOIN oc_propuesta op ON op.id_oc = oc.id_oc AND op.id_propuesta = p.id_propuesta AND op.eliminado_en IS NULL
+         WHERE oc.eliminado_en IS NULL AND oc.estado NOT IN ('anulada', 'autogenerada') AND oc.reemplazada_por IS NULL
+           AND op.estado_validacion <> 'validada')                                  AS oc_por_validar,
         (SELECT MAX(r.id_reprogramacion) FROM seguimiento_reprogramacion r
          WHERE r.id_propuesta = p.id_propuesta AND r.id_seguimiento IS NULL
            AND r.eliminado_en IS NULL)                                               AS id_reprog_inicial,
@@ -98,7 +98,7 @@ BEGIN
     FROM propuesta_comercial p
     JOIN usuario u ON u.id_usuario = COALESCE(p.id_responsable, p.id_creador)
     WHERE p.eliminado_en IS NULL
-      AND p.estado IN ('enviado', 'aprobado', 'rechazado')
+      AND p.estado IN ('enviado', 'aceptado', 'aprobado', 'rechazado')
       AND p.version = (SELECT MAX(p2.version) FROM propuesta_comercial p2
                        WHERE p2.numero = p.numero AND p2.eliminado_en IS NULL)
       AND (v_todas = 1 OR u.area = v_area)
@@ -197,7 +197,7 @@ BEGIN
                                       AND ta.Num1 = IF(s.id_seguimiento IS NULL,
                                                        IF(r0.id_reprogramacion IS NULL, b.id_tipo_primera_accion, r0.id_tipo_accion_nueva),
                                                        s.id_tipo_proxima_accion)
-            WHERE b.estado_propuesta = 'enviado'
+            WHERE b.estado_propuesta IN ('enviado', 'aceptado')
                OR (b.estado_propuesta = 'aprobado' AND b.fecha_primera_oc IS NOT NULL)
                OR (b.estado_propuesta = 'rechazado' AND s.estado = 'cerrado_rechazo')
         ) j

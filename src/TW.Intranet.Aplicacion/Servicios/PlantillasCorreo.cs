@@ -72,37 +72,121 @@ public static class PlantillasCorreo
     }
 
     /// <summary>HU-33 — Aviso al nuevo responsable de un expediente reasignado.</summary>
-    public static MensajeCorreoDto ExpedienteAsignado(ReasignacionExpedienteDto r, OpcionesCorreo opciones)
+    /// <summary>HU-33 — Al nuevo responsable: la lista de entidades (y expedientes) que ahora son suyas.</summary>
+    public static MensajeCorreoDto ResponsableAsignado(ReasignacionExpedienteDto r, OpcionesCorreo opciones)
     {
-        string asunto = $"{opciones.NombreSistema}: te asignaron el expediente {r.Numero}";
-        string vence  = r.FechaLimite is { } f ? f.ToString("dd/MM/yyyy HH:mm") : "sin SLA";
-        bool hayUrl   = !string.IsNullOrWhiteSpace(opciones.UrlIntranet);
-        string boton  = hayUrl
-            ? $"""<p style="margin:16px 0 0"><a href="{H(opciones.UrlIntranet)}" style="background:#2563EB;color:#FFFFFF;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:bold;display:inline-block">Abrir la intranet</a></p>"""
-            : "";
-        string comentario = string.IsNullOrWhiteSpace(r.Comentario)
-            ? ""
-            : $"""<tr><td style="padding:4px 12px 4px 0;color:#6B7280">Comentario</td><td style="padding:4px 0">{H(r.Comentario)}</td></tr>""";
+        string asunto = $"{opciones.NombreSistema}: te asignaron {r.TotalEntidades} " +
+                        (r.TotalEntidades == 1 ? "entidad" : "entidades") +
+                        (r.TotalExpedientes > 1 ? $" en {r.TotalExpedientes} expedientes" : $" del expediente {r.NumeroExpediente}");
+        string filas = string.Concat(r.Entidades.Select(e =>
+            $"""<tr><td style="padding:4px 12px 4px 0">{H(e.NumeroExpediente)}</td><td style="padding:4px 12px 4px 0">{H(Entidad(e.EntidadTipo))}</td><td style="padding:4px 12px 4px 0"><b>{H(e.Codigo)}</b></td><td style="padding:4px 0;color:#6B7280">{H(e.Cliente)}</td></tr>"""));
+        string html = $"""
+            <div style="font-family:Arial,Helvetica,sans-serif;max-width:640px;margin:0 auto;color:#1F2937">
+              <h2 style="margin:0 0 12px;font-size:18px">{H(opciones.NombreSistema)}</h2>
+              <p style="margin:0 0 12px">Hola {H(r.Responsable)}, {H(r.ReasignadoPor ?? "un jefe")} te asignó como responsable ({H(r.Alcance)}).</p>
+              <table style="border-collapse:collapse;font-size:14px;margin:0 0 12px">
+                <tr><td style="padding:4px 12px 4px 0;color:#6B7280">Motivo</td><td style="padding:4px 0">{H(r.Motivo)}</td></tr>
+                <tr><td style="padding:4px 12px 4px 0;color:#6B7280">Comentario</td><td style="padding:4px 0">{H(r.Comentario)}</td></tr>
+                <tr><td style="padding:4px 12px 4px 0;color:#6B7280">SLA</td><td style="padding:4px 0">{H(r.GestionSla == "reiniciar" ? "Reiniciado desde ahora" : "Se mantiene el plazo restante")}</td></tr>
+              </table>
+              <table style="border-collapse:collapse;font-size:13px">
+                <tr style="color:#6B7280"><td style="padding:4px 12px 4px 0">Expediente</td><td style="padding:4px 12px 4px 0">Entidad</td><td style="padding:4px 12px 4px 0">Código</td><td style="padding:4px 0">Cliente</td></tr>
+                {filas}
+              </table>
+              {Boton(opciones)}
+              <p style="margin:16px 0 0;font-size:12px;color:#6B7280">La reasignación quedó registrada en la auditoría de cada expediente.</p>
+            </div>
+            """;
+        string texto = $"{opciones.NombreSistema}\n\nHola {r.Responsable}, {r.ReasignadoPor ?? "un jefe"} te asignó como responsable ({r.Alcance}).\n" +
+                       $"Motivo: {r.Motivo}\nComentario: {r.Comentario}\n\n" +
+                       string.Join("\n", r.Entidades.Select(e => $"- {e.NumeroExpediente}: {Entidad(e.EntidadTipo)} {e.Codigo} ({e.Cliente})")) +
+                       (string.IsNullOrWhiteSpace(opciones.UrlIntranet) ? "" : $"\n\nIngresa en {opciones.UrlIntranet}");
+        return new MensajeCorreoDto(r.CorreoResponsable!, r.Responsable, asunto, html, texto);
+    }
 
+    /// <summary>HU-33 — Al responsable anterior: aviso informativo de lo que pasó a otro comercial.</summary>
+    public static MensajeCorreoDto ResponsableReemplazado(ReasignacionExpedienteDto r, ResponsableAnteriorDto anterior, OpcionesCorreo opciones)
+    {
+        string asunto = $"{opciones.NombreSistema}: cambio de responsable ({anterior.Cantidad} " +
+                        (anterior.Cantidad == 1 ? "entidad)" : "entidades)");
         string html = $"""
             <div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#1F2937">
               <h2 style="margin:0 0 12px;font-size:18px">{H(opciones.NombreSistema)}</h2>
-              <p style="margin:0 0 12px">Hola {H(r.Responsable)}, {H(r.ReasignadoPor ?? "un jefe")} te asignó el expediente <b>{H(r.Numero)}</b>.</p>
+              <p style="margin:0 0 12px">Hola {H(anterior.Nombre)}, {H(r.ReasignadoPor ?? "un jefe")} reasignó a <b>{H(r.Responsable)}</b>: {H(anterior.Codigos)}.</p>
               <table style="border-collapse:collapse;font-size:14px">
-                <tr><td style="padding:4px 12px 4px 0;color:#6B7280">Cliente</td><td style="padding:4px 0">{H(r.Cliente)}</td></tr>
-                <tr><td style="padding:4px 12px 4px 0;color:#6B7280">Etapa</td><td style="padding:4px 0">{H(r.EtapaNombre)}</td></tr>
                 <tr><td style="padding:4px 12px 4px 0;color:#6B7280">Motivo</td><td style="padding:4px 0">{H(r.Motivo)}</td></tr>
-                {comentario}
-                <tr><td style="padding:4px 12px 4px 0;color:#6B7280">Vence</td><td style="padding:4px 0"><b>{H(vence)}</b></td></tr>
+                <tr><td style="padding:4px 12px 4px 0;color:#6B7280">Comentario</td><td style="padding:4px 0">{H(r.Comentario)}</td></tr>
               </table>
-              {boton}
-              <p style="margin:16px 0 0;font-size:12px;color:#6B7280">La reasignación quedó registrada en la auditoría del expediente.</p>
+              <p style="margin:16px 0 0;font-size:12px;color:#6B7280">Es un aviso informativo; no requiere ninguna acción.</p>
             </div>
             """;
-        string texto = $"{opciones.NombreSistema}\n\nHola {r.Responsable}, {r.ReasignadoPor ?? "un jefe"} te asignó el expediente {r.Numero}.\n" +
-                       $"Cliente: {r.Cliente}\nEtapa: {r.EtapaNombre}\nMotivo: {r.Motivo}\n" +
-                       (string.IsNullOrWhiteSpace(r.Comentario) ? "" : $"Comentario: {r.Comentario}\n") +
-                       $"Vence: {vence}\n" + (hayUrl ? $"\nIngresa en {opciones.UrlIntranet}" : "");
-        return new MensajeCorreoDto(r.CorreoResponsable!, r.Responsable, asunto, html, texto);
+        string texto = $"{opciones.NombreSistema}\n\nHola {anterior.Nombre}, {r.ReasignadoPor ?? "un jefe"} reasignó a {r.Responsable}: {anterior.Codigos}.\n" +
+                       $"Motivo: {r.Motivo}\nComentario: {r.Comentario}\n\nEs un aviso informativo.";
+        return new MensajeCorreoDto(anterior.Correo!, anterior.Nombre, asunto, html, texto);
     }
+
+    /// <summary>HU-40 — Al Jefe Comercial: un comercial solicita editar una OS/OM emitida.</summary>
+    public static MensajeCorreoDto SolicitudEdicionOs(SolicitudEdicionOsDto s, OpcionesCorreo opciones)
+    {
+        string asunto = $"{opciones.NombreSistema}: solicitud de edición de la {s.Tipo} {s.Numero}";
+        string html = $"""
+            <div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#1F2937">
+              <h2 style="margin:0 0 12px;font-size:18px">{H(opciones.NombreSistema)}</h2>
+              <p style="margin:0 0 12px">Hola {H(s.Destinatario)}, {H(s.Autor)} solicita tu aprobación para editar la <b>{H(s.Tipo)} {H(s.Numero)}</b> ({H(s.RazonSocial)}).</p>
+              <table style="border-collapse:collapse;font-size:14px">
+                <tr><td style="padding:4px 12px 4px 0;color:#6B7280">Motivo</td><td style="padding:4px 0">{H(s.Motivo)}</td></tr>
+                <tr><td style="padding:4px 12px 4px 0;color:#6B7280;vertical-align:top">Comentario</td><td style="padding:4px 0">{H(s.Comentario)}</td></tr>
+              </table>
+              {Boton(opciones)}
+              <p style="margin:16px 0 0;font-size:12px;color:#6B7280">Aprueba o rechaza la solicitud desde el detalle de la orden en la Bandeja de OS/OM.</p>
+            </div>
+            """;
+        string texto = $"{opciones.NombreSistema}\n\nHola {s.Destinatario}, {s.Autor} solicita tu aprobación para editar la {s.Tipo} {s.Numero} ({s.RazonSocial}).\n" +
+                       $"Motivo: {s.Motivo}\nComentario: {s.Comentario}\n\nAprueba o rechaza la solicitud desde el detalle de la orden." +
+                       (string.IsNullOrWhiteSpace(opciones.UrlIntranet) ? "" : $"\n\nIngresa en {opciones.UrlIntranet}");
+        return new MensajeCorreoDto(s.CorreoDestinatario!, s.Destinatario, asunto, html, texto);
+    }
+
+    /// <summary>HU-40 — Al comercial: el Jefe Comercial aprobó o rechazó su solicitud de edición.</summary>
+    public static MensajeCorreoDto ResolucionEdicionOs(SolicitudEdicionOsDto s, OpcionesCorreo opciones)
+    {
+        bool aprobada = s.Aprobada == true;
+        string resultado = aprobada ? "aprobó" : "rechazó";
+        string asunto = $"{opciones.NombreSistema}: edición de la {s.Tipo} {s.Numero} {(aprobada ? "aprobada" : "rechazada")}";
+        string siguiente = aprobada
+            ? "Ya puedes editar la orden; al guardar los cambios se re-emite y se notifica a Operaciones."
+            : "La orden se mantiene sin cambios.";
+        string comentario = string.IsNullOrWhiteSpace(s.Comentario) ? ""
+            : $"""<tr><td style="padding:4px 12px 4px 0;color:#6B7280;vertical-align:top">Comentario</td><td style="padding:4px 0">{H(s.Comentario)}</td></tr>""";
+        string html = $"""
+            <div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#1F2937">
+              <h2 style="margin:0 0 12px;font-size:18px">{H(opciones.NombreSistema)}</h2>
+              <p style="margin:0 0 12px">Hola {H(s.Destinatario)}, {H(s.Autor)} <b>{resultado}</b> tu solicitud de edición de la <b>{H(s.Tipo)} {H(s.Numero)}</b> ({H(s.RazonSocial)}).</p>
+              <table style="border-collapse:collapse;font-size:14px">
+                <tr><td style="padding:4px 12px 4px 0;color:#6B7280">Motivo</td><td style="padding:4px 0">{H(s.Motivo)}</td></tr>
+                {comentario}
+              </table>
+              <p style="margin:12px 0 0">{H(siguiente)}</p>
+              {Boton(opciones)}
+            </div>
+            """;
+        string texto = $"{opciones.NombreSistema}\n\nHola {s.Destinatario}, {s.Autor} {resultado} tu solicitud de edición de la {s.Tipo} {s.Numero} ({s.RazonSocial}).\n" +
+                       $"Motivo: {s.Motivo}\n" + (string.IsNullOrWhiteSpace(s.Comentario) ? "" : $"Comentario: {s.Comentario}\n") + $"\n{siguiente}" +
+                       (string.IsNullOrWhiteSpace(opciones.UrlIntranet) ? "" : $"\n\nIngresa en {opciones.UrlIntranet}");
+        return new MensajeCorreoDto(s.CorreoDestinatario!, s.Destinatario, asunto, html, texto);
+    }
+
+    private static string Entidad(string tipo) => tipo switch
+    {
+        "requerimiento"  => "RQ",
+        "propuesta"      => "Propuesta",
+        "orden_compra"   => "OC",
+        "orden_servicio" => "OS",
+        _                => tipo,
+    };
+
+    private static string Boton(OpcionesCorreo opciones) =>
+        string.IsNullOrWhiteSpace(opciones.UrlIntranet)
+            ? ""
+            : $"""<p style="margin:16px 0 0"><a href="{H(opciones.UrlIntranet)}" style="background:#2563EB;color:#FFFFFF;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:bold;display:inline-block">Abrir la intranet</a></p>""";
 }

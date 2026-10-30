@@ -77,7 +77,7 @@ proc: BEGIN
     SET v_es_ultima = NOT EXISTS (SELECT 1 FROM propuesta_comercial
                                   WHERE numero = v_numero AND version > v_version AND eliminado_en IS NULL);
 
-    -- HU-28: OC de la propuesta (principal y complementarias), OS vinculadas y propuestas afectadas
+    -- OC de la propuesta (las registradas a partir de ella), OS vinculadas y otras propuestas que esas OC cubren
     SELECT COUNT(*), GROUP_CONCAT(numero_oc ORDER BY id_oc SEPARATOR ', ') INTO v_n_ocs, v_ocs
     FROM orden_compra WHERE id_propuesta = p_id_propuesta AND eliminado_en IS NULL AND estado <> 'anulada';
 
@@ -93,7 +93,7 @@ proc: BEGIN
     WHERE op.eliminado_en IS NULL AND op.id_propuesta <> p_id_propuesta;
 
     -- Expediente del RQ (nace con el RQ, migración 71)
-    SELECT MAX(e.id_expediente), MAX(e.etapa_actual NOT IN ('requerimiento', 'propuesta', 'visto_bueno', 'orden_compra'))
+    SELECT MAX(e.id_expediente), MAX(e.etapa_actual NOT IN ('requerimiento', 'propuesta', 'visto_bueno', 'seguimiento', 'orden_compra'))
       INTO v_id_exp, v_exp_liberado
     FROM expediente_digital e
     WHERE e.eliminado_en IS NULL AND e.estado <> 'cerrado'
@@ -187,12 +187,11 @@ proc: BEGIN
         FROM orden_compra oc
         WHERE oc.id_propuesta = p_id_propuesta AND oc.eliminado_en IS NULL AND oc.estado <> 'anulada';
 
-        UPDATE orden_compra SET estado = 'anulada', modificado_por = p_id_usuario
+        UPDATE orden_compra SET estado = 'anulada', fecha_anulacion = NOW(), anulado_por = p_id_usuario,
+                                justificacion_anulacion = LEFT(CONCAT('Anulada por la anulación de la propuesta ', v_numero, ' v', v_version,
+                                                                      ' (', v_motivo_label, ').'), 1000),
+                                modificado_por = p_id_usuario
         WHERE id_propuesta = p_id_propuesta AND eliminado_en IS NULL AND estado <> 'anulada';
-
-        UPDATE orden_compra_observacion SET estado = 'levantada', fecha_levantamiento = NOW(), levantada_por = p_id_usuario
-        WHERE estado = 'abierta' AND eliminado_en IS NULL
-          AND id_oc IN (SELECT id_oc FROM (SELECT id_oc FROM orden_compra WHERE id_propuesta = p_id_propuesta) x);
 
         -- Los bloqueos que dejaron esas OC en los expedientes ya no aplican (OC anuladas)
         UPDATE expediente_bloqueador SET resuelto = 1, fecha_resolucion = NOW(), resuelto_por = p_id_usuario,

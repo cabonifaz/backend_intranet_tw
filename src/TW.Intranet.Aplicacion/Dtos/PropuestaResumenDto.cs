@@ -13,7 +13,7 @@ public record PropuestaResumenDto(
     string?   Moneda,
     decimal   Total,
     decimal   TotalOpcionales,
-    /// <summary>Estado en BD: borrador | pendiente_vb | enviado | aprobado | rechazado | anulado | vencido.</summary>
+    /// <summary>Estado en BD: borrador | pendiente_vb | aprobado (VB) | enviado | aceptado (cliente) | rechazado | anulado | vencido | pendiente_revocacion | revocada.</summary>
     string    Estado,
     DateTime? FechaCreacion,
     string?   Responsable,

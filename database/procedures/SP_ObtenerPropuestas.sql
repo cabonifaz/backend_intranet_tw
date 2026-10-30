@@ -46,6 +46,7 @@ BEGIN
         CASE p.estado
             WHEN 'borrador'     THEN 'borrador'
             WHEN 'pendiente_vb' THEN 'por_vb'
+            WHEN 'aceptado'     THEN 'aceptada'
             WHEN 'enviado'      THEN IF((EXISTS (SELECT 1 FROM orden_compra oc
                         WHERE oc.eliminado_en IS NULL AND oc.estado <> 'anulada'
                           AND (oc.id_propuesta = p.id_propuesta
@@ -66,6 +67,7 @@ BEGIN
         CASE p.estado
             WHEN 'borrador'  THEN 'editar'
             WHEN 'enviado'   THEN 'nueva_version'
+            WHEN 'aceptado'  THEN 'ver_detalle'
             WHEN 'aprobado'  THEN 'enviar'
             WHEN 'rechazado' THEN 'nueva_version'
             ELSE 'ver_detalle'
@@ -100,7 +102,7 @@ BEGIN
                                                WHERE op.id_propuesta = p.id_propuesta AND op.eliminado_en IS NULL))) OR EXISTS (SELECT 1 FROM seguimiento_comercial sa
                         WHERE sa.id_propuesta = p.id_propuesta AND sa.eliminado_en IS NULL
                           AND sa.estado = 'cerrado_aceptacion')))
-           OR (p_grupo_estado = 'aceptada'       AND p.estado IN ('aprobado', 'enviado') AND (EXISTS (SELECT 1 FROM orden_compra oc
+           OR (p_grupo_estado = 'aceptada'       AND p.estado IN ('aprobado', 'enviado', 'aceptado') AND (EXISTS (SELECT 1 FROM orden_compra oc
                         WHERE oc.eliminado_en IS NULL AND oc.estado <> 'anulada'
                           AND (oc.id_propuesta = p.id_propuesta
                                OR oc.id_oc IN (SELECT op.id_oc FROM oc_propuesta op
@@ -150,7 +152,7 @@ BEGIN
                                                WHERE op.id_propuesta = p.id_propuesta AND op.eliminado_en IS NULL))) OR EXISTS (SELECT 1 FROM seguimiento_comercial sa
                         WHERE sa.id_propuesta = p.id_propuesta AND sa.eliminado_en IS NULL
                           AND sa.estado = 'cerrado_aceptacion')))
-           OR (p_grupo_estado = 'aceptada'       AND p.estado IN ('aprobado', 'enviado') AND (EXISTS (SELECT 1 FROM orden_compra oc
+           OR (p_grupo_estado = 'aceptada'       AND p.estado IN ('aprobado', 'enviado', 'aceptado') AND (EXISTS (SELECT 1 FROM orden_compra oc
                         WHERE oc.eliminado_en IS NULL AND oc.estado <> 'anulada'
                           AND (oc.id_propuesta = p.id_propuesta
                                OR oc.id_oc IN (SELECT op.id_oc FROM oc_propuesta op

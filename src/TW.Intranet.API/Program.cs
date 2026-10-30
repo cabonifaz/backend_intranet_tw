@@ -127,11 +127,37 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                     return;
                 }
 
-                var repositorio = context.HttpContext.RequestServices
-                    .GetRequiredService<IAutenticacionRepositorio>();
-
-                var esValido = await repositorio.VerificarSesionTokenAsync(
-                    idUsuario, tokenClaim.Value, context.HttpContext.RequestAborted);
+                // App móvil (App Mobile HU-01): su sesión vive en sesion_usuario (1 equipo a la vez)
+                // y es independiente de la sesión de la intranet (usuario.sesion_token).
+                var canalClaim = claims?.FirstOrDefault(c => c.Type == "canal");
+                var rutaPedida = context.HttpContext.Request.Path;
+                bool esValido;
+                if (canalClaim?.Value == "movil")
+                {
+                    // Desarrollo seguro: el token de la app solo sirve en las rutas que usa la app.
+                    if (!TW.Intranet.API.Seguridad.SeguridadAppMovil.EsRutaPermitidaTokenMovil(rutaPedida))
+                    {
+                        context.Fail("El token de la app no tiene acceso a este recurso.");
+                        return;
+                    }
+                    var repositorioMovil = context.HttpContext.RequestServices
+                        .GetRequiredService<IAutenticacionMovilRepositorio>();
+                    esValido = await repositorioMovil.VerificarSesionAsync(
+                        idUsuario, tokenClaim.Value, context.HttpContext.RequestAborted);
+                }
+                else if (TW.Intranet.API.Seguridad.SeguridadAppMovil.EsRutaApp(rutaPedida))
+                {
+                    // Un token de la intranet no se usa en api/movil/* (la intranet nunca llama a esas rutas).
+                    context.Fail("Este recurso es solo para la app móvil.");
+                    return;
+                }
+                else
+                {
+                    var repositorio = context.HttpContext.RequestServices
+                        .GetRequiredService<IAutenticacionRepositorio>();
+                    esValido = await repositorio.VerificarSesionTokenAsync(
+                        idUsuario, tokenClaim.Value, context.HttpContext.RequestAborted);
+                }
 
                 if (!esValido)
                     context.Fail("Sesión invalidada. Por favor inicia sesión nuevamente.");
@@ -150,6 +176,46 @@ builder.Services.AddScoped<IVerificadorContrasena,    BcryptVerificadorContrasen
 builder.Services.AddScoped<IniciarSesionCasoDeUso>();
 builder.Services.AddScoped<CambiarContrasenaCasoDeUso>();
 builder.Services.AddScoped<ObtenerMisDatosCasoDeUso>();
+
+// ── APP MÓVIL DE CAMPO — acceso con usuario y 1 equipo a la vez (App Mobile HU-01) ──
+// Variables (opcionales): AppMovil__HorasExpiracion (12), AppMovil__ReemplazarSesionAnterior (false).
+//   false = si el usuario ya tiene sesión en otro equipo, el nuevo ingreso se rechaza.
+//   true  = el nuevo equipo cierra la sesión del anterior.
+builder.Services.AddSingleton(new TW.Intranet.Aplicacion.Dtos.OpcionesSesionMovil(
+    HorasExpiracion:          int.TryParse(cfg["AppMovil:HorasExpiracion"], out var horasSesionMovil) ? horasSesionMovil : 12,
+    ReemplazarSesionAnterior: bool.TryParse(cfg["AppMovil:ReemplazarSesionAnterior"], out var reemplazarSesionMovil) && reemplazarSesionMovil));
+// Desarrollo seguro (opcionales): AppMovil__MaxIntentosFallidos (5), AppMovil__MinutosBloqueo (15),
+// AppMovil__IngresosPorMinutoPorIp (10). Solo afectan al ingreso de la app, no al de la intranet.
+var opcionesSeguridadMovil = new TW.Intranet.Aplicacion.Dtos.OpcionesSeguridadMovil(
+    MaxIntentosFallidos:    int.TryParse(cfg["AppMovil:MaxIntentosFallidos"], out var maxIntentosMovil) ? maxIntentosMovil : 5,
+    MinutosBloqueo:         int.TryParse(cfg["AppMovil:MinutosBloqueo"], out var minutosBloqueoMovil) ? minutosBloqueoMovil : 15,
+    IngresosPorMinutoPorIp: int.TryParse(cfg["AppMovil:IngresosPorMinutoPorIp"], out var ingresosIpMovil) ? ingresosIpMovil : 10);
+builder.Services.AddSingleton(opcionesSeguridadMovil);
+builder.Services.AddSingleton<IControlIntentosIngreso, ControlIntentosIngresoMemoria>();
+TW.Intranet.API.Seguridad.SeguridadAppMovil.AgregarSeguridadAppMovil(builder.Services, opcionesSeguridadMovil);
+builder.Services.AddScoped<IAutenticacionMovilRepositorio, AutenticacionMovilRepositorio>();
+builder.Services.AddScoped<IniciarSesionMovilCasoDeUso>();
+builder.Services.AddScoped<CerrarSesionMovilCasoDeUso>();
+builder.Services.AddScoped<LiberarSesionMovilCasoDeUso>();
+builder.Services.AddScoped<AsignarAccesoMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerAccesoMovilCasoDeUso>();
+// App Mobile HU-02 — menú principal
+builder.Services.AddScoped<IMenuMovilRepositorio, MenuMovilRepositorio>();
+builder.Services.AddScoped<ObtenerResumenMenuMovilCasoDeUso>();
+// App Mobile HU-03 — agenda de servicios programados
+builder.Services.AddScoped<IServiciosMovilRepositorio, ServiciosMovilRepositorio>();
+builder.Services.AddScoped<ObtenerServiciosProgramadosMovilCasoDeUso>();
+// App Mobile HU-04 — detalle del servicio y checklist de pre-salida
+builder.Services.AddScoped<IPresalidaMovilRepositorio, PresalidaMovilRepositorio>();
+builder.Services.AddScoped<ObtenerDetalleServicioMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerChecklistSalidaMovilCasoDeUso>();
+builder.Services.AddScoped<MarcarItemChecklistSalidaMovilCasoDeUso>();
+builder.Services.AddScoped<SolicitarAutorizacionSalidaMovilCasoDeUso>();
+builder.Services.AddScoped<IniciarTrasladoMovilCasoDeUso>();
+// App Mobile HU-04 — visto bueno de salida desde la intranet (encargado de Servicio Técnico / Metrología)
+builder.Services.AddScoped<IAutorizacionSalidaRepositorio, AutorizacionSalidaRepositorio>();
+builder.Services.AddScoped<ObtenerAutorizacionesSalidaCasoDeUso>();
+builder.Services.AddScoped<ResolverAutorizacionSalidaCasoDeUso>();
 
 // ── INYECCIÓN DE DEPENDENCIAS — Dashboard ─────────────────────────────────────
 builder.Services.AddScoped<IDashboardRepositorio,       DashboardRepositorio>();
@@ -312,55 +378,114 @@ builder.Services.AddScoped<CompararVersionesPropuestaCasoDeUso>();
 builder.Services.AddScoped<ObtenerCostoSuministroCasoDeUso>();
 builder.Services.AddScoped<GuardarCostoSuministroCasoDeUso>();
 
-// ── INYECCIÓN DE DEPENDENCIAS — Órdenes de compra (HU-22) ────────────────────
+// ── INYECCIÓN DE DEPENDENCIAS — Órdenes de compra (Sprint 4, HU-22 a HU-28) ──
 builder.Services.AddScoped<IOrdenCompraRepositorio, OrdenCompraRepositorio>();
-builder.Services.AddScoped<PrepararOrdenCompraCasoDeUso>();
-builder.Services.AddScoped<CalcularCoberturaOrdenCompraCasoDeUso>();
-builder.Services.AddScoped<RegistrarOrdenCompraCasoDeUso>();
-builder.Services.AddScoped<ObtenerPdfOrdenCompraCasoDeUso>();
+builder.Services.AddSingleton<IGeneradorExcel, GeneradorExcelXlsx>();
 builder.Services.AddScoped<ObtenerBandejaOrdenesCompraCasoDeUso>();
 builder.Services.AddScoped<ObtenerDetalleOrdenCompraCasoDeUso>();
-builder.Services.AddScoped<ObtenerPropuestasSinOrdenCompraCasoDeUso>();
-builder.Services.AddScoped<EvaluarOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<ObtenerValidacionOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<ObtenerTimelineOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<ExportarTimelineOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<ObtenerPdfOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<PrepararOrdenCompraCasoDeUso>();
 builder.Services.AddScoped<PrepararEdicionOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<ObtenerPropuestasDisponiblesOcCasoDeUso>();
+builder.Services.AddScoped<ExtraerOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<CompararOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<RegistrarOrdenCompraCasoDeUso>();
 builder.Services.AddScoped<EditarOrdenCompraCasoDeUso>();
-builder.Services.AddSingleton<IGeneradorExcel, GeneradorExcelXlsx>();
-builder.Services.AddScoped<ObtenerDocumentosOrdenCompraCasoDeUso>();
-builder.Services.AddScoped<ObtenerVersionDocumentoOrdenCompraCasoDeUso>();
 builder.Services.AddScoped<ReemplazarDocumentoOrdenCompraCasoDeUso>();
-builder.Services.AddScoped<ObtenerAuditoriaOrdenCompraCasoDeUso>();
-builder.Services.AddScoped<ExportarAuditoriaOrdenCompraCasoDeUso>();
-builder.Services.AddScoped<PrepararValidacionOrdenCompraCasoDeUso>();
-builder.Services.AddScoped<ValidarOrdenCompraCasoDeUso>();
-builder.Services.AddScoped<ObservarOrdenCompraCasoDeUso>();
-builder.Services.AddScoped<LevantarObservacionOrdenCompraCasoDeUso>();
-builder.Services.AddScoped<PrepararDistribucionOrdenCompraCasoDeUso>();
-builder.Services.AddScoped<DistribuirOrdenCompraCasoDeUso>();
-builder.Services.AddScoped<PrepararOcComplementariaCasoDeUso>();
-builder.Services.AddScoped<RegistrarOcComplementariaCasoDeUso>();
-builder.Services.AddScoped<PrepararLiberacionOrdenCompraCasoDeUso>();
-builder.Services.AddScoped<LiberarOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<RevalidarOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<AutogenerarOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<PrepararAnulacionOrdenCompraCasoDeUso>();
+builder.Services.AddScoped<AnularOrdenCompraCasoDeUso>();
 
-// ── INYECCIÓN DE DEPENDENCIAS — Expediente Digital (HU-29 a HU-34) ───────────
+// IA de órdenes de compra y de la importación de equipos de propuestas (Google Gemini, nivel gratuito de AI Studio).
+// Variables: Gemini__ApiKey, Gemini__Modelo (gemini-3.5-flash-lite), Gemini__UrlBase, Gemini__TimeoutSegundos (60).
+// Sin ApiKey el módulo funciona igual: la ficha se llena a mano y la validación usa solo las reglas.
+var seccionGemini = cfg.GetSection("Gemini");
+var configuracionGemini = new ConfiguracionGemini(
+    ApiKey:          seccionGemini["ApiKey"]?.Trim() ?? "",
+    Modelo:          string.IsNullOrWhiteSpace(seccionGemini["Modelo"]) ? "gemini-3.5-flash-lite" : seccionGemini["Modelo"]!.Trim(),
+    UrlBase:         string.IsNullOrWhiteSpace(seccionGemini["UrlBase"]) ? "https://generativelanguage.googleapis.com/" : seccionGemini["UrlBase"]!.TrimEnd('/') + "/",
+    TimeoutSegundos: int.TryParse(seccionGemini["TimeoutSegundos"], out var timeoutGemini) && timeoutGemini > 0 ? timeoutGemini : 60);
+builder.Services.AddSingleton(configuracionGemini);
+if (configuracionGemini.Configurado)
+{
+    builder.Services.AddHttpClient<IAsistenteIaOrdenCompra, GeminiAsistenteOrdenCompra>(c =>
+    {
+        c.BaseAddress = new Uri(configuracionGemini.UrlBase);
+        c.Timeout     = TimeSpan.FromSeconds(configuracionGemini.TimeoutSegundos);
+        c.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+    });
+    builder.Services.AddHttpClient<IAsistenteIaEquipos, GeminiAsistenteEquipos>(c =>
+    {
+        c.BaseAddress = new Uri(configuracionGemini.UrlBase);
+        c.Timeout     = TimeSpan.FromSeconds(configuracionGemini.TimeoutSegundos);
+        c.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+    });
+}
+else
+{
+    builder.Services.AddSingleton<IAsistenteIaOrdenCompra, AsistenteIaOrdenCompraNoConfigurado>();
+    builder.Services.AddSingleton<IAsistenteIaEquipos, AsistenteIaEquiposNoConfigurado>();
+}
+
+// ── INYECCIÓN DE DEPENDENCIAS — Propuestas: importación de equipos desde Excel con IA (Sprint 4) ──
+builder.Services.AddScoped<IImportacionEquiposRepositorio, ImportacionEquiposRepositorio>();
+builder.Services.AddSingleton<ILectorHojaCalculo, LectorHojaCalculoXlsx>();
+builder.Services.AddScoped<AnalizarImportacionEquiposCasoDeUso>();
+builder.Services.AddScoped<ConfirmarImportacionEquiposCasoDeUso>();
+builder.Services.AddScoped<DescargarPlantillaImportacionEquiposCasoDeUso>();
+builder.Services.AddScoped<ExportarReporteImportacionEquiposCasoDeUso>();
+
+// ── INYECCIÓN DE DEPENDENCIAS — Órdenes de Servicio / Metrología (Sprint 4, HU-40 a HU-44) ──
+builder.Services.AddScoped<IOrdenServicioRepositorio, OrdenServicioRepositorio>();
+builder.Services.AddScoped<ObtenerBandejaOrdenesServicioCasoDeUso>();
+builder.Services.AddScoped<ExportarBandejaOrdenesServicioCasoDeUso>();
+builder.Services.AddScoped<PrepararOrdenServicioCasoDeUso>();
+builder.Services.AddScoped<ObtenerPropuestasDisponiblesOsCasoDeUso>();
+builder.Services.AddScoped<ObtenerMotivosOrdenServicioCasoDeUso>();
+builder.Services.AddScoped<GuardarOrdenServicioCasoDeUso>();
+builder.Services.AddScoped<PrepararSolicitudEdicionOsCasoDeUso>();
+builder.Services.AddScoped<SolicitarEdicionOsCasoDeUso>();
+builder.Services.AddScoped<ResolverSolicitudEdicionOsCasoDeUso>();
+builder.Services.AddScoped<PrepararAnulacionOsCasoDeUso>();
+builder.Services.AddScoped<AnularOrdenServicioCasoDeUso>();
+builder.Services.AddScoped<ObtenerDetalleOrdenServicioCasoDeUso>();
+builder.Services.AddScoped<ObtenerTabsOrdenServicioCasoDeUso>();
+builder.Services.AddScoped<BuscarEquiposOrdenServicioCasoDeUso>();
+builder.Services.AddScoped<BuscarConceptosOrdenServicioCasoDeUso>();
+builder.Services.AddScoped<DescargarPlantillaImportacionOsCasoDeUso>();
+builder.Services.AddScoped<AnalizarImportacionOsCasoDeUso>();
+
+// ── INYECCIÓN DE DEPENDENCIAS — Expediente Digital (Sprint 4, HU-29 a HU-33) ───
 builder.Services.AddScoped<IExpedienteRepositorio, ExpedienteRepositorio>();
+builder.Services.AddSingleton<IGeneradorPdfTabla, GeneradorPdfTablaQuestPdf>();
 builder.Services.AddScoped<ObtenerBandejaExpedientesCasoDeUso>();
+builder.Services.AddScoped<ExportarBandejaExpedientesCasoDeUso>();
 builder.Services.AddScoped<ObtenerDetalleExpedienteCasoDeUso>();
-builder.Services.AddScoped<ObtenerWorkflowExpedienteCasoDeUso>();
-builder.Services.AddScoped<ExportarWorkflowExpedienteCasoDeUso>();
+builder.Services.AddScoped<ObtenerTabRqExpedienteCasoDeUso>();
+builder.Services.AddScoped<ObtenerTabPropuestasExpedienteCasoDeUso>();
+builder.Services.AddScoped<CompararVersionesExpedienteCasoDeUso>();
+builder.Services.AddScoped<ObtenerTabVistoBuenoExpedienteCasoDeUso>();
+builder.Services.AddScoped<ObtenerTabSeguimientoExpedienteCasoDeUso>();
+builder.Services.AddScoped<ObtenerTabOrdenesCompraExpedienteCasoDeUso>();
+builder.Services.AddScoped<ObtenerTabOrdenServicioExpedienteCasoDeUso>();
+builder.Services.AddScoped<ObtenerTabProgramacionExpedienteCasoDeUso>();
+builder.Services.AddScoped<ObtenerTabSsomaExpedienteCasoDeUso>();
+builder.Services.AddScoped<ObtenerTabEjecucionExpedienteCasoDeUso>();
+builder.Services.AddScoped<ObtenerTabCierreExpedienteCasoDeUso>();
 builder.Services.AddScoped<ExportarExpedienteCasoDeUso>();
 builder.Services.AddScoped<ObtenerDocumentosExpedienteCasoDeUso>();
+builder.Services.AddScoped<ExportarDocumentosExpedienteCasoDeUso>();
 builder.Services.AddScoped<ObtenerArchivoExpedienteCasoDeUso>();
-builder.Services.AddScoped<AdjuntarDocumentoExpedienteCasoDeUso>();
-builder.Services.AddScoped<RegistrarBloqueoExpedienteCasoDeUso>();
-builder.Services.AddScoped<PrepararResolucionBloqueoCasoDeUso>();
-builder.Services.AddScoped<ResolverBloqueoExpedienteCasoDeUso>();
 builder.Services.AddScoped<ObtenerHistorialExpedienteCasoDeUso>();
 builder.Services.AddScoped<ExportarHistorialExpedienteCasoDeUso>();
 builder.Services.AddScoped<PrepararReasignacionExpedienteCasoDeUso>();
+builder.Services.AddScoped<ObtenerCarteraComercialExpedienteCasoDeUso>();
 builder.Services.AddScoped<BuscarResponsablesExpedienteCasoDeUso>();
 builder.Services.AddScoped<ReasignarResponsableExpedienteCasoDeUso>();
-builder.Services.AddScoped<PrepararAvanceExpedienteCasoDeUso>();
-builder.Services.AddScoped<AvanzarEtapaExpedienteCasoDeUso>();
 
 // ── INYECCIÓN DE DEPENDENCIAS — Seguimiento comercial (HU-17 / HU-18 / HU-19 / HU-20 / HU-21) ────────────────
 builder.Services.AddScoped<ISeguimientoComercialRepositorio, SeguimientoComercialRepositorio>();
@@ -493,6 +618,10 @@ if (!app.Environment.IsProduction())
 
 app.UseHttpsRedirection();
 app.UseCors("PoliticaCors");
+// App móvil — desarrollo seguro: cabeceras en api/movil/* y límite de ingresos por IP
+// (solo en los endpoints marcados con [EnableRateLimiting]; la intranet no cambia).
+TW.Intranet.API.Seguridad.SeguridadAppMovil.UsarCabecerasSeguridadAppMovil(app);
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
