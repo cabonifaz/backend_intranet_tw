@@ -236,7 +236,7 @@ public class BuscarEquiposOrdenServicioCasoDeUso(IOrdenServicioRepositorio repos
         f.Clasificacion = GuardarOrdenServicioCasoDeUso.Recortar(f.Clasificacion, 60)?.ToLowerInvariant();
         f.Ubicacion     = GuardarOrdenServicioCasoDeUso.Recortar(f.Ubicacion, 200);
         f.Pagina        = Math.Max(1, f.Pagina);
-        f.PorPagina     = f.PorPagina is < 1 or > 200 ? 20 : f.PorPagina;
+        f.PorPagina     = f.PorPagina < 1 ? 20 : Math.Min(f.PorPagina, 1000);
         return repositorio.BuscarEquiposAsync(f, idUsuario, ct);
     }
 }
@@ -248,7 +248,7 @@ public class BuscarConceptosOrdenServicioCasoDeUso(IOrdenServicioRepositorio rep
         f.Busqueda  = GuardarOrdenServicioCasoDeUso.Recortar(f.Busqueda, 200);
         f.Tipo      = GuardarOrdenServicioCasoDeUso.Recortar(f.Tipo, 60);
         f.Pagina    = Math.Max(1, f.Pagina);
-        f.PorPagina = f.PorPagina is < 1 or > 200 ? 20 : f.PorPagina;
+        f.PorPagina = f.PorPagina < 1 ? 20 : Math.Min(f.PorPagina, 1000);
         return repositorio.BuscarConceptosAsync(f, idUsuario, ct);
     }
 }

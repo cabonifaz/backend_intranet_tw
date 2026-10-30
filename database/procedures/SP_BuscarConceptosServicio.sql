@@ -23,7 +23,7 @@ proc: BEGIN
         SELECT 1 AS IdTipoMensaje, 'No tienes permiso para crear o editar órdenes de servicio.' AS Mensaje; LEAVE proc;
     END IF;
 
-    SET v_por_pagina = IF(IFNULL(p_por_pagina, 0) < 1, 20, LEAST(p_por_pagina, 200));
+    SET v_por_pagina = IF(IFNULL(p_por_pagina, 0) < 1, 20, LEAST(p_por_pagina, 1000));
     SET v_offset     = (GREATEST(IFNULL(p_pagina, 1), 1) - 1) * v_por_pagina;
     SET v_busqueda   = TRIM(IFNULL(p_busqueda, ''));
 
