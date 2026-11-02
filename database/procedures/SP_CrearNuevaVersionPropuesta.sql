@@ -147,7 +147,7 @@ proc: BEGIN
         igv_pct, igv_monto, total, aplica_igv, precios_incluyen_igv,
         plazo_entrega_dias, plazo_entrega_unidad, plazo_entrega_condicion, vigencia_dias,
         introduccion, notas_generales, tipo_servicio, referencia, secciones_activas,
-        es_tercerizado, tercero_ruc, tercero_razon_social, tercero_direccion,
+        es_tercerizado, id_cliente_tercero, tercero_ruc, tercero_razon_social, tercero_direccion,
         tipo_cambio, garantia_meses, mostrar_garantia,
         subtotal_opcionales, descuento_opcionales, total_opcionales,
         estado, id_propuesta_padre, id_motivo_nueva_version, descripcion_cambios,
@@ -173,9 +173,12 @@ proc: BEGIN
         IF(p_copiar_configuracion = 1, o.introduccion, NULL),
         IF(p_copiar_configuracion = 1, o.notas_generales, NULL),
         IF(p_copiar_configuracion = 1, o.tipo_servicio, NULL),
-        IF(p_copiar_configuracion = 1, o.referencia, NULL),
+        -- Observaciones 31/10: la referencia es siempre el detalle del RQ
+        (SELECT NULLIF(LEFT(TRIM(IFNULL(rq.descripcion, '')), 2000), '') FROM requerimiento rq
+          WHERE rq.id_requerimiento = o.id_requerimiento),
         IF(p_copiar_configuracion = 1, o.secciones_activas, NULL),
         IF(p_copiar_configuracion = 1, o.es_tercerizado, 0),
+        IF(p_copiar_configuracion = 1, o.id_cliente_tercero, NULL),
         IF(p_copiar_configuracion = 1, o.tercero_ruc, NULL),
         IF(p_copiar_configuracion = 1, o.tercero_razon_social, NULL),
         IF(p_copiar_configuracion = 1, o.tercero_direccion, NULL),

@@ -34,6 +34,12 @@ public class PropuestaDetalleDto
     public string? TerceroRuc         { get; set; }
     public string? TerceroRazonSocial { get; set; }
     public string? TerceroDireccion   { get; set; }
+    /// <summary>Cliente intermediario elegido de la BD (observaciones 31/10).</summary>
+    public long?   IdClienteTercero   { get; set; }
+    /// <summary>El RQ entra al sistema de acreditación (habilita el tipo "Servicio metrológico").</summary>
+    public bool    RqEsAcreditacion   { get; set; }
+    /// <summary>Código del catálogo TIPO_PROPUESTA (null si el tipo es anterior al catálogo).</summary>
+    public string? TipoPropuestaCodigo { get; set; }
 
     public int      IdMoneda              { get; set; }
     public string?  Moneda                { get; set; }

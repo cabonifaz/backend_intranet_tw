@@ -1,6 +1,7 @@
 -- Catálogo genérico de tabla_maestra por Descripcion.
 --   Devuelve además num2 y string3 (p.ej. CARGO_USUARIO los usa para
 --   indicar el área a la que pertenece cada cargo).
+--   Observaciones 31/10: no devuelve las filas dadas de baja (eliminado_en).
 DROP PROCEDURE IF EXISTS SP_ObtenerCatalogo;
 
 DELIMITER $$
@@ -26,6 +27,7 @@ BEGIN
         FROM tabla_maestra
         WHERE Descripcion = p_descripcion
           AND IdEmpresa   = 1
+          AND eliminado_en IS NULL
           -- Algunos nombres existen también en los catálogos antiguos de la migración 01
           -- (ej. ORIGEN_REQUERIMIENTO 6 y 63): se usa siempre el catálogo más reciente.
           AND IdMaestro   = (SELECT MAX(t.IdMaestro) FROM tabla_maestra t

@@ -211,6 +211,11 @@ public class EquipoImportadoDto
     public string? Ubicacion          { get; init; }
     /// <summary>vinculado | creado | reutilizado.</summary>
     public string  Resultado          { get; init; } = "vinculado";
+    /// <summary>Estado real del equipo (observaciones 31/10): activo | inactivo | borrador.</summary>
+    public string? EstadoEquipo         { get; init; }
+    /// <summary>Vigente | Inactivo | Borrador.</summary>
+    public string? EstadoEquipoLabel    { get; init; }
+    public string? EstadoOperativoLabel { get; init; }
 }
 
 // ── Datos de la BD para conciliar ──────────────────────────────────────────

@@ -118,7 +118,8 @@ public class ObtenerDetallePropuestaCasoDeUso(IPropuestasRepositorio repositorio
 
     private static AccionesPropuestaDto ConstruirAcciones(PropuestaContextoDto c)
     {
-        var puedeEditar       = c.Estado == "borrador";
+        // Observaciones 31/10: también tras el VB (aprobado, aún no enviada al cliente); al guardar vuelve a borrador.
+        var puedeEditar       = c.Estado is "borrador" or "aprobado";
         var puedeNuevaVersion = c.EsUltimaVersion && EstadosParaNuevaVersion.Contains(c.Estado);
 
         return new AccionesPropuestaDto

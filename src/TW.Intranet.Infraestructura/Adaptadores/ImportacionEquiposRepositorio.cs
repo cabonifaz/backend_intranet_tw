@@ -123,6 +123,9 @@ public class ImportacionEquiposRepositorio(CadenaConexionBd conexion) : Reposito
                     CodigoCliente      = Texto(r, "codigo_cliente"),
                     Ubicacion          = Texto(r, "ubicacion_especifica"),
                     Resultado          = Texto(r, "resultado") ?? "vinculado",
+                    EstadoEquipo         = Texto(r, "estado_equipo"),
+                    EstadoEquipoLabel    = Texto(r, "estado_equipo_label"),
+                    EstadoOperativoLabel = Texto(r, "estado_operativo_label"),
                 });
 
             return new RespuestaDto<ResultadoImportacionEquiposDto>(2, mensaje, new ResultadoImportacionEquiposDto

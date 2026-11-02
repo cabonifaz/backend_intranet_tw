@@ -132,6 +132,13 @@ public class SuministrosRepositorio(CadenaConexionBd conexion)
             },
             (_, mensaje) => Task.FromResult(new RespuestaDto<object>(2, mensaje)), ct);
 
+    private static bool TieneColumna(MySqlDataReader r, string col)
+    {
+        for (int i = 0; i < r.FieldCount; i++)
+            if (string.Equals(r.GetName(i), col, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
     private static SuministroListaItemDto LeerListaItem(MySqlDataReader r) => new(
         IdSuministro:       EnteroLargo(r, "id_suministro"),
         Codigo:             Texto(r, "codigo") ?? "",
@@ -149,5 +156,9 @@ public class SuministrosRepositorio(CadenaConexionBd conexion)
         ProcedenciaLabel:   Texto(r, "procedencia_label") ?? "",
         Estado:             Texto(r, "estado") ?? "",
         EsActivoEnCatalogo: Booleano(r, "es_activo_en_catalogo"),
-        UsarEnPropuestas:   Booleano(r, "usar_en_propuestas"));
+        UsarEnPropuestas:   Booleano(r, "usar_en_propuestas"),
+        IdPrimerProcedimiento:  TieneColumna(r, "primer_procedimiento") ? EnteroLargoNulo(r, "id_primer_procedimiento")  : null,
+        PrimerProcedimiento:    TieneColumna(r, "primer_procedimiento") ? Texto(r, "primer_procedimiento")               : null,
+        IdSegundoProcedimiento: TieneColumna(r, "segundo_procedimiento") ? EnteroLargoNulo(r, "id_segundo_procedimiento") : null,
+        SegundoProcedimiento:   TieneColumna(r, "segundo_procedimiento") ? Texto(r, "segundo_procedimiento")              : null);
 }

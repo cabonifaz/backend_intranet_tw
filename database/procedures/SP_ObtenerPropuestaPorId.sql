@@ -1,6 +1,8 @@
 -- HU-07 — Propuesta completa: cabecera, ítems, textos, formas de pago y equipos
 -- HU-10 — + motivo/descripción de la versión y última edición (fecha y usuario)
 -- HU-11 — + etiqueta del motivo del descuento
+-- Observaciones 31/10: + cliente intermediario, acreditación del RQ, código del tipo de propuesta, estado real de
+--   cada equipo y formas de pago sin duplicados (el catálogo 39 tenía códigos repetidos).
 DROP PROCEDURE IF EXISTS SP_ObtenerPropuestaPorId;
 
 DELIMITER $$
@@ -27,7 +29,7 @@ BEGIN
             p.id_responsable, CONCAT(ur.nombre, ' ', ur.apellido) AS nombre_responsable,
             p.tipo_servicio, p.referencia, p.introduccion, p.notas_generales,
             p.secciones_activas,
-            p.es_tercerizado, p.tercero_ruc, p.tercero_razon_social, p.tercero_direccion,
+            p.es_tercerizado, p.id_cliente_tercero, p.tercero_ruc, p.tercero_razon_social, p.tercero_direccion,
             p.id_moneda, tm_mon.String3 AS moneda, tm_mon.String2 AS moneda_simbolo,
             p.tipo_cambio, p.garantia_meses, p.mostrar_garantia,
             p.plazo_entrega_dias, p.plazo_entrega_unidad, p.plazo_entrega_condicion,
@@ -40,7 +42,10 @@ BEGIN
             -- HU-10: versión y última edición
             p.id_motivo_nueva_version, tm_mot.String1 AS motivo_nueva_version, p.descripcion_cambios,
             COALESCE(p.modificado_en, p.creado_en)    AS ultima_edicion_en,
-            CONCAT(um.nombre, ' ', um.apellido)       AS ultima_edicion_por
+            CONCAT(um.nombre, ' ', um.apellido)       AS ultima_edicion_por,
+            IFNULL(r.es_inacal, 0)                    AS rq_es_acreditacion,
+            (SELECT tp.String2 FROM tabla_maestra tp WHERE tp.IdMaestro = 106 AND tp.IdEmpresa = 1
+                AND tp.String1 = p.tipo_servicio LIMIT 1) AS tipo_propuesta_codigo
         FROM propuesta_comercial p
         JOIN requerimiento r          ON r.id_requerimiento = p.id_requerimiento
         JOIN cliente c                ON c.id_cliente       = p.id_cliente
@@ -68,18 +73,27 @@ BEGIN
         ORDER BY FIELD(seccion, 'detalle', 'recomendaciones', 'suministros_cliente', 'condiciones'), orden, id;
 
         -- 5. Formas de pago
-        SELECT f.id, f.porcentaje, f.condicion, tm.String1 AS condicion_label, f.orden
+        SELECT f.id, f.porcentaje, f.condicion,
+               (SELECT tm.String1 FROM tabla_maestra tm
+                 WHERE tm.IdMaestro = 39 AND tm.IdEmpresa = 1 AND tm.String2 = f.condicion
+                 ORDER BY tm.eliminado_en IS NOT NULL, tm.IdTablaMaestra LIMIT 1) AS condicion_label,
+               f.orden
         FROM propuesta_forma_pago f
-        LEFT JOIN tabla_maestra tm ON tm.IdMaestro = 39 AND tm.IdEmpresa = 1 AND tm.String2 = f.condicion
         WHERE f.id_propuesta = p_id_propuesta
         ORDER BY f.orden, f.id;
 
         -- 6. Equipos
-        SELECT id, id_equipo, local_sede, tipo, subtipo, num_serie, marca, modelo,
-               codigo_cliente, codigo_tw, orden
-        FROM propuesta_equipo
-        WHERE id_propuesta = p_id_propuesta
-        ORDER BY orden, id;
+        SELECT pe.id, pe.id_equipo, pe.local_sede, pe.tipo, pe.subtipo, pe.num_serie, pe.marca, pe.modelo,
+               pe.codigo_cliente, pe.codigo_tw, pe.orden,
+               ec.estado AS estado_equipo,
+               CASE ec.estado WHEN 'activo' THEN 'Vigente' WHEN 'inactivo' THEN 'Inactivo'
+                              WHEN 'borrador' THEN 'Borrador' ELSE NULL END AS estado_equipo_label,
+               (SELECT eo.String1 FROM tabla_maestra eo WHERE eo.IdMaestro = 83 AND eo.IdEmpresa = 1
+                   AND eo.String2 = ec.estado_operativo LIMIT 1) AS estado_operativo_label
+        FROM propuesta_equipo pe
+        LEFT JOIN equipo_cliente ec ON ec.id_equipo = pe.id_equipo
+        WHERE pe.id_propuesta = p_id_propuesta
+        ORDER BY pe.orden, pe.id;
     END IF;
 END$$
 

@@ -9,6 +9,13 @@
 --   o administrador). Para el resto se conserva el descuento ya guardado
 --   (o el de la versión base) y se ignoran p_descuento_pct, p_descuento_monto
 --   y p_id_motivo_descuento. Todo descuento mayor a 0 exige motivo.
+--   Observaciones 31/10:
+--     · Tipo de propuesta = catálogo TIPO_PROPUESTA (106), se recibe el código o el nombre y se guarda el nombre.
+--       "Servicio metrológico" solo si el RQ entra al sistema de acreditación (requerimiento.es_inacal).
+--     · RQ con acreditación: para crear la propuesta el RQ debe tener al menos un adjunto.
+--     · Referencia = detalle del RQ (no editable: siempre se toma del RQ).
+--     · Tercerizado: p_id_cliente_tercero = cliente intermediario de la BD (RUC, razón social y dirección salen del cliente).
+--     · Edición post-VB: una propuesta 'aprobado' (con VB, aún no enviada al cliente) se puede editar y vuelve a 'borrador'.
 DROP PROCEDURE IF EXISTS SP_GuardarPropuesta;
 
 DELIMITER $$
@@ -47,7 +54,8 @@ CREATE PROCEDURE SP_GuardarPropuesta(
     IN p_textos_json             LONGTEXT,
     IN p_pagos_json              LONGTEXT,
     IN p_equipos_json            LONGTEXT,
-    IN p_id_usuario              BIGINT
+    IN p_id_usuario              BIGINT,
+    IN p_id_cliente_tercero      BIGINT
 )
 proc: BEGIN
     DECLARE v_id            BIGINT;
@@ -78,6 +86,11 @@ proc: BEGIN
     DECLARE v_es_nueva      TINYINT DEFAULT 0;
     DECLARE v_puede_desc    TINYINT DEFAULT 0;
     DECLARE v_id_desc_src   BIGINT DEFAULT 0;
+    DECLARE v_es_inacal     TINYINT DEFAULT 0;
+    DECLARE v_detalle_rq    TEXT         CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_tipo_nombre   VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_tipo_req_acr  INT;
+    DECLARE v_tipo_actual   VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -96,8 +109,8 @@ proc: BEGIN
     SET p_equipos_json = IFNULL(NULLIF(p_equipos_json, ''), '[]');
 
     -- ── Requerimiento de origen ──────────────────────────────────────────
-    SELECT id_cliente, estado, numero, id_sede, id_contacto
-      INTO v_id_cliente, v_estado_rq, v_numero_rq, v_sede_rq, v_contacto_rq
+    SELECT id_cliente, estado, numero, id_sede, id_contacto, IFNULL(es_inacal, 0), descripcion
+      INTO v_id_cliente, v_estado_rq, v_numero_rq, v_sede_rq, v_contacto_rq, v_es_inacal, v_detalle_rq
     FROM requerimiento
     WHERE id_requerimiento = p_id_requerimiento AND SoftDelete = 0
     LIMIT 1;
@@ -117,6 +130,31 @@ proc: BEGIN
         LEAVE proc;
     END IF;
 
+    -- Referencia: siempre el detalle del RQ (no editable)
+    SET p_referencia = NULLIF(LEFT(TRIM(IFNULL(v_detalle_rq, '')), 2000), '');
+
+    -- Tercerizado: cliente intermediario elegido de la BD
+    IF IFNULL(p_es_tercerizado, 0) = 0 THEN
+        SET p_id_cliente_tercero = NULL;
+    ELSEIF IFNULL(p_id_cliente_tercero, 0) > 0 THEN
+        IF p_id_cliente_tercero = v_id_cliente THEN
+            SELECT 1 AS IdTipoMensaje, 'El cliente intermediario debe ser distinto del cliente de la propuesta.' AS Mensaje;
+            LEAVE proc;
+        END IF;
+        SET p_tercero_ruc = NULL;
+        SELECT ruc, razon_social, COALESCE(NULLIF(TRIM(direccion_fiscal), ''), NULLIF(TRIM(domicilio_fiscal), ''))
+          INTO p_tercero_ruc, p_tercero_razon_social, p_tercero_direccion
+        FROM cliente
+        WHERE id_cliente = p_id_cliente_tercero AND SoftDelete = 0 AND eliminado_en IS NULL
+        LIMIT 1;
+        IF p_tercero_ruc IS NULL THEN
+            SELECT 1 AS IdTipoMensaje, 'El cliente intermediario no existe.' AS Mensaje;
+            LEAVE proc;
+        END IF;
+    ELSE
+        SET p_id_cliente_tercero = NULL;
+    END IF;
+
     IF IFNULL(p_es_tercerizado, 0) = 1
        AND (IFNULL(p_tercero_ruc, '') = '' OR IFNULL(p_tercero_razon_social, '') = '') THEN
         SELECT 1 AS IdTipoMensaje, 'Para un servicio tercerizado indique el RUC y la razón social del titular del certificado.' AS Mensaje;
@@ -133,7 +171,7 @@ proc: BEGIN
             SELECT 1 AS IdTipoMensaje, 'Propuesta no encontrada.' AS Mensaje;
             LEAVE proc;
         END IF;
-        IF v_estado <> 'borrador' THEN
+        IF v_estado NOT IN ('borrador', 'aprobado') THEN
             SELECT 1 AS IdTipoMensaje, 'La propuesta ya no está en borrador y no puede modificarse. Genere una nueva versión.' AS Mensaje;
             LEAVE proc;
         END IF;
@@ -165,6 +203,44 @@ proc: BEGIN
 
         SELECT MAX(version) + 1 INTO v_version FROM propuesta_comercial WHERE numero = v_numero;
         SET v_padre = p_id_propuesta_base;
+    END IF;
+
+    -- ── Tipo de propuesta (catálogo 106) ────────────────────────────────
+    SET p_tipo_servicio = NULLIF(TRIM(IFNULL(p_tipo_servicio, '')), '');
+    IF p_tipo_servicio IS NOT NULL THEN
+        SELECT String1, IFNULL(Num2, 0) INTO v_tipo_nombre, v_tipo_req_acr
+        FROM tabla_maestra
+        WHERE IdMaestro = 106 AND IdEmpresa = 1 AND eliminado_en IS NULL
+          AND (String2 = p_tipo_servicio OR String1 = p_tipo_servicio)
+        LIMIT 1;
+
+        IF v_tipo_nombre IS NULL THEN
+            -- Solo se aceptan valores fuera del catálogo si la propuesta ya los tenía (data anterior al cambio)
+            IF IFNULL(p_id_propuesta, 0) > 0 THEN
+                SELECT tipo_servicio INTO v_tipo_actual FROM propuesta_comercial WHERE id_propuesta = p_id_propuesta;
+            END IF;
+            IF v_tipo_actual IS NULL OR v_tipo_actual <> p_tipo_servicio THEN
+                SELECT 1 AS IdTipoMensaje, 'Seleccione un tipo de propuesta válido.' AS Mensaje;
+                LEAVE proc;
+            END IF;
+        ELSE
+            IF v_tipo_req_acr = 1 AND v_es_inacal = 0 THEN
+                SELECT 1 AS IdTipoMensaje,
+                       CONCAT('"', v_tipo_nombre, '" solo está disponible si el requerimiento entra al sistema de acreditación.') AS Mensaje;
+                LEAVE proc;
+            END IF;
+            SET p_tipo_servicio = v_tipo_nombre;
+        END IF;
+    END IF;
+
+    -- ── RQ con acreditación: debe tener al menos un adjunto para crear la propuesta ──
+    IF IFNULL(p_id_propuesta, 0) = 0 AND v_es_inacal = 1 AND NOT EXISTS (
+        SELECT 1 FROM documento_adjunto d
+        WHERE d.entidad_tipo = 'requerimiento' AND d.id_entidad = p_id_requerimiento AND d.eliminado_en IS NULL
+    ) THEN
+        SELECT 1 AS IdTipoMensaje,
+               CONCAT('El requerimiento ', v_numero_rq, ' entra al sistema de acreditación: adjunte al menos un documento en el requerimiento antes de crear la propuesta.') AS Mensaje;
+        LEAVE proc;
     END IF;
 
     -- ── Formas de pago: deben sumar 100 % ───────────────────────────────
@@ -287,7 +363,7 @@ proc: BEGIN
             igv_pct, igv_monto, total, aplica_igv, precios_incluyen_igv,
             plazo_entrega_dias, plazo_entrega_unidad, plazo_entrega_condicion, vigencia_dias,
             introduccion, notas_generales, tipo_servicio, referencia, secciones_activas,
-            es_tercerizado, tercero_ruc, tercero_razon_social, tercero_direccion,
+            es_tercerizado, id_cliente_tercero, tercero_ruc, tercero_razon_social, tercero_direccion,
             tipo_cambio, garantia_meses, mostrar_garantia,
             subtotal_opcionales, descuento_opcionales, total_opcionales,
             estado, id_propuesta_padre, id_creador, fecha_creacion, fecha_expiracion,
@@ -299,7 +375,7 @@ proc: BEGIN
             v_igv_pct, v_igv, v_total, IFNULL(p_aplica_igv, 1), IFNULL(p_precios_incluyen_igv, 0),
             p_plazo_entrega_dias, p_plazo_entrega_unidad, p_plazo_entrega_condicion, p_vigencia_dias,
             p_introduccion, p_notas_generales, p_tipo_servicio, p_referencia, NULLIF(p_secciones_activas, ''),
-            IFNULL(p_es_tercerizado, 0), p_tercero_ruc, p_tercero_razon_social, p_tercero_direccion,
+            IFNULL(p_es_tercerizado, 0), p_id_cliente_tercero, p_tercero_ruc, p_tercero_razon_social, p_tercero_direccion,
             p_tipo_cambio, p_garantia_meses, IFNULL(p_mostrar_garantia, 1),
             v_sub_opc, v_desc_opc, v_total_opc,
             'borrador', v_padre, p_id_usuario, NOW(),
@@ -340,6 +416,7 @@ proc: BEGIN
             referencia              = p_referencia,
             secciones_activas       = NULLIF(p_secciones_activas, ''),
             es_tercerizado          = IFNULL(p_es_tercerizado, 0),
+            id_cliente_tercero      = p_id_cliente_tercero,
             tercero_ruc             = p_tercero_ruc,
             tercero_razon_social    = p_tercero_razon_social,
             tercero_direccion       = p_tercero_direccion,
@@ -349,6 +426,7 @@ proc: BEGIN
             subtotal_opcionales     = v_sub_opc,
             descuento_opcionales    = v_desc_opc,
             total_opcionales        = v_total_opc,
+            estado                  = 'borrador',
             modificado_en           = NOW(),
             modificado_por          = p_id_usuario
         WHERE id_propuesta = v_id;
@@ -469,10 +547,18 @@ proc: BEGIN
                 v_usu_nombre, NOW(), NOW(), p_id_usuario);
     END IF;
 
+    IF v_es_nueva = 0 AND v_estado = 'aprobado' THEN
+        INSERT INTO historial_requerimiento (id_requerimiento, tipo, tipo_label, icono, descripcion, usuario, fecha, creado_en, creado_por)
+        VALUES (p_id_requerimiento, 'propuesta', 'Propuesta editada tras VB', 'edit_note',
+                CONCAT('Propuesta ', v_numero, ' v', v_version, ' editada después del visto bueno: vuelve a borrador.'),
+                v_usu_nombre, NOW(), NOW(), p_id_usuario);
+    END IF;
+
     INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion, id_usuario, registrado_en, metadata)
     VALUES ('propuesta', v_id, IF(v_es_nueva = 1, IF(v_version > 1, 'nueva_version', 'creacion'), 'edicion'),
-            IF(v_es_nueva = 1, NULL, 'borrador'), 'borrador',
-            CONCAT('Propuesta ', v_numero, ' v', v_version, IF(v_es_nueva = 1, ' creada.', ' actualizada.')),
+            IF(v_es_nueva = 1, NULL, v_estado), 'borrador',
+            CONCAT('Propuesta ', v_numero, ' v', v_version, IF(v_es_nueva = 1, ' creada.',
+                   IF(v_estado = 'aprobado', ' editada después del visto bueno: vuelve a borrador y debe pasar otra vez por VB.', ' actualizada.'))),
             p_id_usuario, NOW(),
             JSON_OBJECT('total', v_total, 'total_opcionales', v_total_opc));
 
@@ -480,7 +566,8 @@ proc: BEGIN
 
     SELECT 2 AS IdTipoMensaje,
            IF(v_es_nueva = 1, CONCAT('Propuesta ', v_numero, ' v', v_version, ' creada en borrador.'),
-                              'Propuesta guardada correctamente.') AS Mensaje;
+                              IF(v_estado = 'aprobado', 'Propuesta guardada. Volvió a borrador: envíela nuevamente a visto bueno.',
+                                 'Propuesta guardada correctamente.')) AS Mensaje;
     SELECT v_id AS id_propuesta, v_numero AS numero, v_version AS version,
            v_sub AS subtotal, v_desc AS descuento_monto, v_igv AS igv_monto, v_total AS total,
            v_sub_opc AS subtotal_opcionales, v_desc_opc AS descuento_opcionales, v_total_opc AS total_opcionales;

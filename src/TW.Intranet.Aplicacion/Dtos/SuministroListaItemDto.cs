@@ -18,5 +18,10 @@ public record SuministroListaItemDto(
     string ProcedenciaLabel,
     string Estado,
     bool   EsActivoEnCatalogo,
-    bool   UsarEnPropuestas
+    bool   UsarEnPropuestas,
+    /// <summary>Observaciones 31/10: procedimientos técnicos (para la descripción del ítem en la propuesta).</summary>
+    long?   IdPrimerProcedimiento  = null,
+    string? PrimerProcedimiento    = null,
+    long?   IdSegundoProcedimiento = null,
+    string? SegundoProcedimiento   = null
 );
