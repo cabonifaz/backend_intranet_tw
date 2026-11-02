@@ -1,4 +1,7 @@
 -- Crear / editar requerimiento. Número: RQ-0003-2026 (correlativo-año).
+-- Observaciones 31/10: fecha de requerimiento con hora (DATETIME), segundo contacto (p_id_contacto_secundario, del mismo
+-- cliente y distinto del principal), "Proyecto entra al sistema de acreditación" (p_es_acreditacion → es_inacal) y solo
+-- las áreas vigentes del catálogo 64 (Comercial, Servicio Técnico, Metrología).
 DROP PROCEDURE IF EXISTS SP_GuardarRequerimiento;
 DELIMITER $$
 CREATE PROCEDURE SP_GuardarRequerimiento(
@@ -9,12 +12,14 @@ CREATE PROCEDURE SP_GuardarRequerimiento(
     IN p_id_origen        INT,
     IN p_id_area          INT,
     IN p_id_prioridad     INT,
-    IN p_fecha_necesidad  DATE,
+    IN p_fecha_necesidad  DATETIME,
     IN p_descripcion      TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_notificar_correo TINYINT,
     IN p_requiere_visita  TINYINT,
     IN p_cliente_deuda    TINYINT,
-    IN p_id_usuario       BIGINT
+    IN p_id_usuario       BIGINT,
+    IN p_id_contacto_secundario BIGINT,
+    IN p_es_acreditacion  TINYINT
 )
 BEGIN
     DECLARE v_new_id       BIGINT;
@@ -24,7 +29,9 @@ BEGIN
 
     DECLARE v_old_desc     TEXT         CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_old_prio     INT;
-    DECLARE v_old_fecha    DATE;
+    DECLARE v_old_fecha    DATETIME;
+    DECLARE v_old_contacto2 BIGINT;
+    DECLARE v_old_acred    TINYINT;
     DECLARE v_old_origen   INT;
     DECLARE v_old_area     INT;
     DECLARE v_old_contacto BIGINT;
@@ -43,12 +50,24 @@ BEGIN
     SELECT CONCAT(nombre, ' ', apellido) INTO v_responsable
     FROM usuario WHERE id_usuario = p_id_usuario LIMIT 1;
 
+    SET p_id_contacto_secundario = NULLIF(p_id_contacto_secundario, 0);
+    SET p_es_acreditacion = IF(IFNULL(p_es_acreditacion, 0) = 1, 1, 0);
+
     IF v_responsable IS NULL THEN
         SELECT 1 AS IdTipoMensaje, 'El usuario ejecutor no existe en el sistema.' AS Mensaje;
+    ELSEIF NOT EXISTS (SELECT 1 FROM tabla_maestra WHERE IdMaestro = 64 AND IdEmpresa = 1 AND Num1 = p_id_area
+                         AND eliminado_en IS NULL) THEN
+        SELECT 1 AS IdTipoMensaje, 'Seleccione un área de servicio válida (Comercial, Servicio Técnico o Metrología).' AS Mensaje;
+    ELSEIF p_id_contacto_secundario IS NOT NULL
+       AND NOT EXISTS (SELECT 1 FROM contacto_cliente WHERE id_contacto = p_id_contacto_secundario
+                         AND id_cliente = p_id_cliente AND SoftDelete = 0) THEN
+        SELECT 1 AS IdTipoMensaje, 'El segundo contacto no pertenece al cliente.' AS Mensaje;
+    ELSEIF p_id_contacto_secundario IS NOT NULL AND p_id_contacto_secundario <=> p_id_contacto THEN
+        SELECT 1 AS IdTipoMensaje, 'El segundo contacto debe ser distinto del contacto principal.' AS Mensaje;
     ELSEIF p_id_requerimiento = 0 THEN
         INSERT INTO requerimiento (
             numero,
-            id_cliente, id_sede, id_contacto,
+            id_cliente, id_sede, id_contacto, id_contacto_secundario, es_inacal,
             id_origen, id_area, id_prioridad,
             descripcion, fecha_necesidad,
             notificar_correo, requiere_visita, cliente_deuda,
@@ -56,7 +75,7 @@ BEGIN
             fecha_creacion, creado_en, creado_por
         ) VALUES (
             'RQ-TEMP',
-            p_id_cliente, p_id_sede, p_id_contacto,
+            p_id_cliente, p_id_sede, p_id_contacto, p_id_contacto_secundario, p_es_acreditacion,
             p_id_origen, p_id_area, p_id_prioridad,
             p_descripcion, p_fecha_necesidad,
             p_notificar_correo, p_requiere_visita, p_cliente_deuda,
@@ -96,8 +115,10 @@ BEGIN
         ELSEIF v_estado_actual IN ('anulado', 'cerrado') THEN
             SELECT 1 AS IdTipoMensaje, 'No se puede editar un requerimiento anulado o cerrado.' AS Mensaje;
         ELSE
-        SELECT descripcion, id_prioridad, fecha_necesidad, id_origen, id_area, id_contacto, id_sede
-        INTO   v_old_desc, v_old_prio, v_old_fecha, v_old_origen, v_old_area, v_old_contacto, v_old_sede
+        SELECT descripcion, id_prioridad, fecha_necesidad, id_origen, id_area, id_contacto, id_sede,
+               id_contacto_secundario, IFNULL(es_inacal, 0)
+        INTO   v_old_desc, v_old_prio, v_old_fecha, v_old_origen, v_old_area, v_old_contacto, v_old_sede,
+               v_old_contacto2, v_old_acred
         FROM   requerimiento
         WHERE  id_requerimiento = p_id_requerimiento AND SoftDelete = 0;
 
@@ -105,6 +126,8 @@ BEGIN
             id_cliente       = p_id_cliente,
             id_sede          = p_id_sede,
             id_contacto      = p_id_contacto,
+            id_contacto_secundario = p_id_contacto_secundario,
+            es_inacal        = p_es_acreditacion,
             id_origen        = p_id_origen,
             id_area          = p_id_area,
             id_prioridad     = p_id_prioridad,
@@ -144,13 +167,13 @@ BEGIN
         IF (v_old_fecha IS NULL AND p_fecha_necesidad IS NOT NULL)
            OR (v_old_fecha IS NOT NULL AND p_fecha_necesidad IS NULL)
            OR (v_old_fecha IS NOT NULL AND p_fecha_necesidad IS NOT NULL AND v_old_fecha != p_fecha_necesidad) THEN
-            SET v_cambios = CONCAT(v_cambios, 'Fecha requerida: ',
-                IFNULL(DATE_FORMAT(v_old_fecha, '%d/%m/%Y'), 'Sin fecha'), ' → ',
-                IFNULL(DATE_FORMAT(p_fecha_necesidad, '%d/%m/%Y'), 'Sin fecha'), '. ');
+            SET v_cambios = CONCAT(v_cambios, 'Fecha de requerimiento: ',
+                IFNULL(DATE_FORMAT(v_old_fecha, '%d/%m/%Y %H:%i'), 'Sin fecha'), ' → ',
+                IFNULL(DATE_FORMAT(p_fecha_necesidad, '%d/%m/%Y %H:%i'), 'Sin fecha'), '. ');
         END IF;
 
         IF v_old_desc != p_descripcion THEN
-            SET v_cambios = CONCAT(v_cambios, 'Descripción actualizada. ');
+            SET v_cambios = CONCAT(v_cambios, 'Detalle del requerimiento actualizado. ');
         END IF;
 
         IF (v_old_sede IS NULL AND p_id_sede IS NOT NULL)
@@ -163,6 +186,15 @@ BEGIN
            OR (v_old_contacto IS NOT NULL AND p_id_contacto IS NULL)
            OR (v_old_contacto IS NOT NULL AND p_id_contacto IS NOT NULL AND v_old_contacto != p_id_contacto) THEN
             SET v_cambios = CONCAT(v_cambios, 'Contacto modificado. ');
+        END IF;
+
+        IF NOT (v_old_contacto2 <=> p_id_contacto_secundario) THEN
+            SET v_cambios = CONCAT(v_cambios, 'Segundo contacto modificado. ');
+        END IF;
+
+        IF v_old_acred <> p_es_acreditacion THEN
+            SET v_cambios = CONCAT(v_cambios, IF(p_es_acreditacion = 1, 'Entra al sistema de acreditación. ',
+                                                 'Ya no entra al sistema de acreditación. '));
         END IF;
 
         IF v_cambios = '' THEN

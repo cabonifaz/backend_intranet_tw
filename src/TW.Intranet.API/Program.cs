@@ -260,6 +260,13 @@ builder.Services.AddScoped<ObtenerCatalogosRequerimientoCasoDeUso>();
 builder.Services.AddScoped<ObtenerRequerimientoPorIdCasoDeUso>();
 builder.Services.AddScoped<GuardarRequerimientoCasoDeUso>();
 builder.Services.AddScoped<AnularRequerimientoCasoDeUso>();
+builder.Services.AddScoped<IAdjuntosRequerimientoRepositorio, AdjuntosRequerimientoRepositorio>();
+builder.Services.AddScoped<SubirAdjuntosRequerimientoCasoDeUso>();
+builder.Services.AddScoped<ObtenerAdjuntoRequerimientoCasoDeUso>();
+builder.Services.AddScoped<EliminarAdjuntoRequerimientoCasoDeUso>();
+builder.Services.AddScoped<ICarteraClientesRepositorio, CarteraClientesRepositorio>();
+builder.Services.AddScoped<ObtenerCarteraClientesCasoDeUso>();
+builder.Services.AddScoped<AsignarCarteraClientesCasoDeUso>();
 
 // ── INYECCIÓN DE DEPENDENCIAS — Usuarios y Suplencias (HU-82/83/84) ──────────
 builder.Services.AddScoped<IUsuariosRepositorio, UsuariosRepositorio>();

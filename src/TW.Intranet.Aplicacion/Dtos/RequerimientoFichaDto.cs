@@ -25,5 +25,23 @@ public record RequerimientoFichaDto(
     bool      ClienteDeuda,
     string    Estado,
     string?   EstadoLabel,
-    IReadOnlyList<HistorialItemDto> Historial
+    IReadOnlyList<HistorialItemDto> Historial,
+    long?     IdContactoSecundario = null,
+    string?   NombreContactoSecundario = null,
+    bool      EsAcreditacion = false,
+    int       CantidadAdjuntos = 0,
+    IReadOnlyList<AdjuntoRequerimientoDto>? Adjuntos = null
 );
+
+/// <summary>Documento adjunto del requerimiento (foto, video, correo, PDF, Office, texto).</summary>
+public record AdjuntoRequerimientoDto(
+    long     IdDocumento,
+    string   NombreArchivo,
+    string?  TipoContenido,
+    long?    TamanoBytes,
+    DateTime FechaCarga,
+    string?  SubidoPor
+);
+
+/// <summary>Ruta interna de un adjunto del requerimiento (para abrirlo del almacenamiento).</summary>
+public record RutaAdjuntoRequerimientoDto(string Ruta, string NombreArchivo, string TipoContenido);

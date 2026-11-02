@@ -206,7 +206,11 @@ public class CrmRepositorio(CadenaConexionBd conexion) : ICrmRepositorio
                 ClienteDeuda:    reader.GetBoolean("cliente_deuda"),
                 Estado:          reader.GetString("estado"),
                 EstadoLabel:     nullable("estado_label"),
-                Historial:       Array.Empty<HistorialItemDto>()
+                Historial:       Array.Empty<HistorialItemDto>(),
+                IdContactoSecundario:     nullableLong("id_contacto_secundario"),
+                NombreContactoSecundario: nullable("nombre_contacto_secundario"),
+                EsAcreditacion:           Convert.ToInt32(reader["es_acreditacion"]) != 0,
+                CantidadAdjuntos:         Convert.ToInt32(reader["cantidad_adjuntos"])
             );
 
             // Leer historial (tercer result set)
@@ -225,7 +229,24 @@ public class CrmRepositorio(CadenaConexionBd conexion) : ICrmRepositorio
                 ));
             }
 
-            return new RespuestaDto<RequerimientoFichaDto>(2, mensaje, ficha with { Historial = historial });
+            // Adjuntos (cuarto result set)
+            var adjuntos = new List<AdjuntoRequerimientoDto>();
+            if (await reader.NextResultAsync(ct))
+            {
+                while (await reader.ReadAsync(ct))
+                {
+                    adjuntos.Add(new AdjuntoRequerimientoDto(
+                        IdDocumento:   reader.GetInt64("id_documento"),
+                        NombreArchivo: reader.GetString("nombre_archivo"),
+                        TipoContenido: reader.IsDBNull(reader.GetOrdinal("tipo_contenido")) ? null : reader.GetString("tipo_contenido"),
+                        TamanoBytes:   reader.IsDBNull(reader.GetOrdinal("tamano_bytes"))   ? null : Convert.ToInt64(reader["tamano_bytes"]),
+                        FechaCarga:    reader.GetDateTime("fecha_carga"),
+                        SubidoPor:     reader.IsDBNull(reader.GetOrdinal("subido_por"))     ? null : reader.GetString("subido_por")
+                    ));
+                }
+            }
+
+            return new RespuestaDto<RequerimientoFichaDto>(2, mensaje, ficha with { Historial = historial, Adjuntos = adjuntos });
         }
         catch (Exception ex)
         {
@@ -259,6 +280,8 @@ public class CrmRepositorio(CadenaConexionBd conexion) : ICrmRepositorio
             cmd.Parameters.AddWithValue("p_requiere_visita",  comando.RequiereVisita  ? 1 : 0);
             cmd.Parameters.AddWithValue("p_cliente_deuda",    comando.ClienteDeuda    ? 1 : 0);
             cmd.Parameters.AddWithValue("p_id_usuario",       idUsuario);
+            cmd.Parameters.AddWithValue("p_id_contacto_secundario", comando.IdContactoSecundario ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("p_es_acreditacion",  comando.EsAcreditacion ? 1 : 0);
 
             await using var reader = await cmd.ExecuteReaderAsync(ct);
 
