@@ -588,7 +588,8 @@ public record OsVinculadaOcExpedienteDto(
 }
 
 // Tab OS
-public record OsPillDto(long IdOs, string Numero, string Estado, DateTime? FechaEjecucion, bool Seleccionada);
+public record OsPillDto(long IdOs, string Numero, string Estado, DateTime? FechaEjecucion, bool Seleccionada,
+                        string? Tipo = null, DateTime? FechaProgramadaDesde = null, DateTime? FechaProgramadaHasta = null);
 
 public record DatosOsExpedienteDto
 {
@@ -615,12 +616,49 @@ public record DatosOsExpedienteDto
     public string?   ContactoConfirma       { get; init; }
     public string?   NotasOperativas        { get; init; }
     public string?   GeneradoPor            { get; init; }
+
+    // Observaciones 31/10 — datos de la OS/OM del módulo comercial (Sprint 4)
+    /// <summary>OS | OM.</summary>
+    public string?   Tipo                   { get; init; }
+    public string?   EstadoLabel            { get; init; }
+    public DateTime? FechaEmision           { get; init; }
+    public string?   EmitidoPor             { get; init; }
+    /// <summary>Rango tentativo de ejecución.</summary>
+    public DateTime? FechaProgramadaDesde   { get; init; }
+    public DateTime? FechaProgramadaHasta   { get; init; }
+    public long?     IdPropuesta            { get; init; }
+    public string?   NumeroPropuesta        { get; init; }
+    public int?      VersionPropuesta       { get; init; }
+    public string?   NumeroRq               { get; init; }
+    public string?   RazonSocial            { get; init; }
+    public string?   Ruc                    { get; init; }
+    public string?   Contacto               { get; init; }
+    public string?   CargoContacto          { get; init; }
+    public string?   TelefonoContacto       { get; init; }
+    public string?   CorreoContacto         { get; init; }
+    public string?   Observaciones          { get; init; }
+    public bool      EsTercerizado          { get; init; }
+    public string?   CertRazonSocial        { get; init; }
+    public string?   CertRuc                { get; init; }
+    public string?   CertDireccion          { get; init; }
+    public string?   CertContacto           { get; init; }
+    public string?   MotivoAnulacion        { get; init; }
+    public string?   ComentarioAnulacion    { get; init; }
+    public DateTime? AnuladoEn              { get; init; }
+    public string?   AnuladoPor             { get; init; }
+    public int       NumeroEquipos          { get; init; }
+    public int       NumeroConceptos        { get; init; }
 }
 
 public record PersonalOsDto(long IdUsuario, string? Nombre, string? Cargo, string? RolEnServicio, string? EstadoSsoma);
 
 public record EquipoOsDto(long IdEquipo, string? CodigoTw, string? CodigoCliente, string? Marca, string? Modelo,
-                          string? NumeroSerie, string? Ubicacion, string? TipoIntervencion, bool IngresadoEnCampo);
+                          string? NumeroSerie, string? Ubicacion, string? TipoIntervencion, bool IngresadoEnCampo,
+                          string? Clasificacion = null, string? EstadoEjecucion = null, DateTime? FechaEjecucion = null);
+
+/// <summary>Concepto de la OS/OM (módulo comercial) con los códigos TW de los equipos a los que aplica.</summary>
+public record ConceptoOsExpedienteDto(long IdOsConcepto, int Orden, string? Codigo, string? Descripcion, string? Alcance,
+                                      string? EquiposAplicados);
 
 public record GastoOsDto(long IdGasto, string? Tipo, string? Concepto, decimal? Monto, string? SimboloMoneda, string? Descripcion,
                          string? Estado, DateTime? FechaSolicitud, string? Usuario);
@@ -634,7 +672,8 @@ public record TabOrdenServicioExpedienteDto(
     IReadOnlyList<PersonalOsDto>                 Personal,
     IReadOnlyList<EquipoOsDto>                   Equipos,
     IReadOnlyList<GastoOsDto>                    Gastos,
-    IReadOnlyList<OrdenMetrologiaExpedienteDto>  OrdenesMetrologia);
+    IReadOnlyList<OrdenMetrologiaExpedienteDto>  OrdenesMetrologia,
+    IReadOnlyList<ConceptoOsExpedienteDto>?      Conceptos = null);
 
 // Tab Programación
 public record CalendarioOsDto(long IdOs, string Numero, string Estado, DateTime? FechaEjecucion, string? HoraInicio,

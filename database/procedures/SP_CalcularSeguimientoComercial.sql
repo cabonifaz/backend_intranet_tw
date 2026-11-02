@@ -74,8 +74,11 @@ BEGIN
         (SELECT s.id_seguimiento FROM seguimiento_comercial s
          WHERE s.id_propuesta = p.id_propuesta AND s.eliminado_en IS NULL
          ORDER BY s.fecha_interaccion DESC, s.id_seguimiento DESC LIMIT 1)          AS id_ult_seg,
+        -- Observaciones 31/10: las interacciones de TODAS las versiones de la propuesta (como el timeline
+        -- del detalle), sin contar el registro de cierre (aceptación / rechazo del cliente).
         (SELECT COUNT(*) FROM seguimiento_comercial s
-         WHERE s.id_propuesta = p.id_propuesta AND s.eliminado_en IS NULL)          AS interacciones,
+         JOIN propuesta_comercial pv ON pv.id_propuesta = s.id_propuesta AND pv.eliminado_en IS NULL
+         WHERE pv.numero = p.numero AND s.eliminado_en IS NULL AND s.estado = 'activo') AS interacciones,
         (SELECT MAX(s.fecha_interaccion) FROM seguimiento_comercial s
          JOIN tabla_maestra rs ON rs.IdMaestro = 27 AND rs.IdEmpresa = 1 AND rs.Num1 = s.id_resultado
          WHERE s.id_propuesta = p.id_propuesta AND s.eliminado_en IS NULL

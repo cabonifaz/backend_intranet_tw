@@ -35,29 +35,22 @@ public class ObtenerBandejaVistoBuenoCasoDeUso(IVistoBuenoRepositorio repositori
 
 public class ResolverVistoBuenoCasoDeUso(IVistoBuenoRepositorio repositorio)
 {
-    private static readonly string[] Acciones = ["aprobar", "corregir", "rechazar"];
+    // Observaciones 31/10: se quita "rechazar"; aprobar va sin validaciones obligatorias y
+    // la fecha límite de corrección es opcional.
+    private static readonly string[] Acciones = ["aprobar", "corregir"];
 
     public Task<RespuestaDto<ResultadoResolverVistoBuenoDto>> EjecutarAsync(
         long idPropuesta, ResolverVistoBuenoDto dto, long idUsuario, CancellationToken ct = default)
     {
         var accion = dto.Accion?.Trim().ToLowerInvariant() ?? "";
         if (!Acciones.Contains(accion))
-            return Task.FromResult(new RespuestaDto<ResultadoResolverVistoBuenoDto>(1, "Acción no válida. Use aprobar, corregir o rechazar."));
-        if (accion != "aprobar" && (dto.Comentario?.Trim().Length ?? 0) < 10)
+            return Task.FromResult(new RespuestaDto<ResultadoResolverVistoBuenoDto>(1, "Acción no válida. Use aprobar o solicitar corrección."));
+        if (accion == "corregir" && (dto.Comentario?.Trim().Length ?? 0) < 10)
             return Task.FromResult(new RespuestaDto<ResultadoResolverVistoBuenoDto>(1,
-                accion == "corregir" ? "Indique qué debe corregir el comercial (mínimo 10 caracteres)."
-                                     : "Indique el motivo del rechazo (mínimo 10 caracteres)."));
+                "Indique qué debe corregir el comercial (mínimo 10 caracteres)."));
 
-        // HU-15 — requisitos de cada decisión (el SP vuelve a validarlos contra los catálogos)
-        if (accion == "rechazar" && (dto.IdMotivoRechazo is null or <= 0))
-            return Task.FromResult(new RespuestaDto<ResultadoResolverVistoBuenoDto>(1, "Seleccione el motivo del rechazo."));
-        if (accion == "corregir")
-        {
-            if (dto.Areas is null || dto.Areas.Count(a => !string.IsNullOrWhiteSpace(a)) == 0)
-                return Task.FromResult(new RespuestaDto<ResultadoResolverVistoBuenoDto>(1, "Seleccione al menos un área a corregir."));
-            if (dto.FechaLimite is null)
-                return Task.FromResult(new RespuestaDto<ResultadoResolverVistoBuenoDto>(1, "Indique la fecha y hora límite de corrección."));
-        }
+        if (accion == "corregir" && (dto.Areas is null || dto.Areas.Count(a => !string.IsNullOrWhiteSpace(a)) == 0))
+            return Task.FromResult(new RespuestaDto<ResultadoResolverVistoBuenoDto>(1, "Seleccione al menos un área a corregir."));
 
         var normalizado = dto with
         {
