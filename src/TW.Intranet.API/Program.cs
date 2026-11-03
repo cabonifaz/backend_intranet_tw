@@ -279,6 +279,7 @@ builder.Services.AddScoped<ObtenerJefesDisponiblesCasoDeUso>();
 builder.Services.AddScoped<ObtenerSedesOperativasCasoDeUso>();
 builder.Services.AddScoped<GuardarUsuarioCasoDeUso>();
 builder.Services.AddScoped<CambiarEstadoUsuarioCasoDeUso>();
+builder.Services.AddScoped<ValidarNombreUsuarioCasoDeUso>();
 
 // Casos de uso — Suplencias
 builder.Services.AddScoped<ObtenerSuplentesCasoDeUso>();

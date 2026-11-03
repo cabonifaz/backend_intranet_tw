@@ -19,6 +19,11 @@ public class GuardarUsuarioDto
     public string?   Cargo           { get; set; }
     /// <summary>Código de AREA_USUARIO (ej. "comercial").</summary>
     public string?   Area            { get; set; }
+    /// <summary>
+    /// Usuario de la app móvil (App Mobile HU-01). La ficha solo lo envía para el área Servicio Técnico.
+    /// Con valor: lo asigna y habilita la app. Vacío: ver SP_GuardarUsuario.
+    /// </summary>
+    public string?   NombreUsuario   { get; set; }
     /// <summary>Nivel: administrador | supervisor | usuario | visor (catálogo ROL_SISTEMA).</summary>
     public string?   RolSistema      { get; set; }
     /// <summary>Código de SEDE_OPERATIVA_TW. Si no se envía: "lima_central".</summary>

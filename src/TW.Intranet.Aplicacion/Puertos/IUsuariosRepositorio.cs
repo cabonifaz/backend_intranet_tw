@@ -22,6 +22,10 @@ public interface IUsuariosRepositorio
     Task<RespuestaDto<object>> CambiarEstadoUsuarioAsync(
         long idUsuario, string estado, long idEjecutor, CancellationToken ct);
 
+    /// <summary>Usuarios de la app vigentes que empiezan con <paramref name="prefijo"/> (para validar disponibilidad).</summary>
+    Task<RespuestaDto<List<string>>> ObtenerNombresUsuarioConPrefijoAsync(
+        string prefijo, long? excluirIdUsuario, CancellationToken ct);
+
     // ── Suplentes ─────────────────────────────────────────────────────────────
     Task<RespuestaDto<SuplentesPaginadoDto>> ObtenerSuplentesAsync(
         string? busqueda, string? estado, int pagina, int porPagina, CancellationToken ct);

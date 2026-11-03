@@ -1,6 +1,6 @@
-using System.Text.RegularExpressions;
 using TW.Intranet.Aplicacion.Dtos;
 using TW.Intranet.Aplicacion.Puertos;
+using TW.Intranet.Aplicacion.Servicios;
 
 namespace TW.Intranet.Aplicacion.CasosDeUso;
 
@@ -143,11 +143,8 @@ public class LiberarSesionMovilCasoDeUso(IAutenticacionMovilRepositorio reposito
 /// El jefe asigna el usuario con el que la persona entra a la app (o se lo quita).
 /// Formato: 4 a 30 caracteres, solo minúsculas, números, punto, guion o guion bajo.
 /// </summary>
-public partial class AsignarAccesoMovilCasoDeUso(IAutenticacionMovilRepositorio repositorio)
+public class AsignarAccesoMovilCasoDeUso(IAutenticacionMovilRepositorio repositorio)
 {
-    [GeneratedRegex("^[a-z0-9._-]{4,30}$")]
-    private static partial Regex FormatoUsuario();
-
     public Task<RespuestaDto<bool>> EjecutarAsync(
         long idUsuario, AsignarAccesoMovilDto dto, long idEjecutor, CancellationToken ct = default)
     {
@@ -157,10 +154,9 @@ public partial class AsignarAccesoMovilCasoDeUso(IAutenticacionMovilRepositorio 
         string? nombreUsuario = null;
         if (dto.Habilitar)
         {
-            nombreUsuario = (dto.NombreUsuario ?? string.Empty).Trim().ToLowerInvariant();
-            if (!FormatoUsuario().IsMatch(nombreUsuario))
-                return Task.FromResult(new RespuestaDto<bool>(1,
-                    "El usuario debe tener de 4 a 30 caracteres: letras minúsculas, números, punto, guion o guion bajo (sin espacios ni @)."));
+            nombreUsuario = FormatoNombreUsuarioMovil.Normalizar(dto.NombreUsuario);
+            if (!FormatoNombreUsuarioMovil.EsValido(nombreUsuario))
+                return Task.FromResult(new RespuestaDto<bool>(1, FormatoNombreUsuarioMovil.MensajeFormato));
         }
 
         return repositorio.AsignarAccesoAsync(idUsuario, nombreUsuario, dto.Habilitar, idEjecutor, ct);
