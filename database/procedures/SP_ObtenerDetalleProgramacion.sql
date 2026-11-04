@@ -1,6 +1,8 @@
 -- HU-37 (Sprint 5) Detalle de la Programación (se abre desde cualquier tab de la bandeja). Solo lectura.
 -- Acceso: prog_bandeja (módulo operaciones). Las acciones (registrar respuesta, reprogramar, cancelar, viáticos) vienen como
 -- banderas calculadas con el usuario del token.
+-- HU-38: cancelar lo permite cualquier rol con prog_gestionar (no pide aprobación); trae la solicitud de reprogramación pendiente
+--   (id_solicitud_pendiente) y puede_resolver_solicitud (jefe); el historial incluye reprogramaciones, aprobaciones y la cancelación.
 -- Resultados: 1 mensaje, 2 programación (datos, enlaces cruzados, próximo paso y acciones), 3 técnicos, 4 equipos reservados,
 --   5 conceptos del servicio, 6 checklist de validación (4 ítems, siempre visibles), 7 alertas SSOMA sobrevenidas,
 --   8 historial (timeline), 9 respuestas del cliente registradas.
@@ -33,7 +35,7 @@ proc: BEGIN
     DECLARE v_aplica       TINYINT      DEFAULT 0;
     DECLARE v_gestiona     TINYINT      DEFAULT 0;
     DECLARE v_aprueba      TINYINT      DEFAULT 0;
-    DECLARE v_anula        TINYINT      DEFAULT 0;
+    DECLARE v_pendiente    BIGINT       DEFAULT NULL;
     DECLARE v_n_tec        INT          DEFAULT 0;
     DECLARE v_principal    VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_n_eq_prog    INT          DEFAULT 0;
@@ -83,7 +85,11 @@ proc: BEGIN
     SET v_aplica   = IF(v_activa = 1 AND v_fecha >= CURDATE(), 1, 0);
     SET v_gestiona = IF(FN_PermisoAccion(p_id_usuario, 'prog_gestionar') = 1, 1, 0);
     SET v_aprueba  = IF(FN_PermisoAccion(p_id_usuario, 'prog_aprobar_reprogramacion') = 1, 1, 0);
-    SET v_anula    = IF(FN_PermisoAccion(p_id_usuario, 'os_anular') = 1, 1, 0);
+    -- HU-38: solicitud de reprogramación pendiente de esta programación (también las anteriores a la HU-38, que solo traen la OS)
+    SELECT MAX(rp.id_reprogramacion) INTO v_pendiente
+    FROM os_reprogramacion rp
+    WHERE rp.estado = 'pendiente' AND rp.eliminado_en IS NULL
+      AND (rp.id_programacion = p_id_programacion OR (rp.id_programacion IS NULL AND rp.id_os = v_id_os));
 
     -- ── Técnicos de la programación y su situación SSOMA de hoy ───────────────
     DROP TEMPORARY TABLE IF EXISTS tmp_det_tec;
@@ -212,12 +218,14 @@ proc: BEGIN
            -- Acciones (según los permisos del usuario del token y el estado)
            IF(v_gestiona = 1 AND v_activa = 1, 1, 0)                                                      AS puede_registrar_respuesta,
            IF(v_gestiona = 1 AND v_activa = 1, 1, 0)                                                      AS puede_reasignar,
-           IF((v_gestiona = 1 OR v_aprueba = 1) AND v_activa = 1, 1, 0)                                   AS puede_reprogramar,
+           IF(v_activa = 1 AND (v_aprueba = 1 OR (v_gestiona = 1 AND v_pendiente IS NULL)), 1, 0)          AS puede_reprogramar,
            IF(v_aprueba = 1, 1, 0)                                                                        AS reprogramacion_directa,
            IF(v_gestiona = 1 AND v_aprueba = 0, 1, 0)                                                     AS reprogramacion_requiere_solicitud,
-           IF(v_anula = 1 AND v_activa = 1, 1, 0)                                                         AS puede_cancelar,
+           IF(v_gestiona = 1 AND v_activa = 1, 1, 0)                                                      AS puede_cancelar,
            IF(v_estado = 'confirmada' AND v_activa = 1 AND v_aprueba = 1, 1, 0)                           AS puede_gestionar_viaticos,
-           IF(os.id_expediente IS NOT NULL, 1, 0)                                                         AS puede_ver_expediente
+           IF(os.id_expediente IS NOT NULL, 1, 0)                                                         AS puede_ver_expediente,
+           v_pendiente                                                                                    AS id_solicitud_pendiente,
+           IF(v_aprueba = 1 AND v_pendiente IS NOT NULL AND v_activa = 1, 1, 0)                           AS puede_resolver_solicitud
     FROM programacion pr
     JOIN orden_servicio os          ON os.id_os = pr.id_os
     LEFT JOIN cliente c             ON c.id_cliente = os.id_cliente
@@ -309,13 +317,25 @@ proc: BEGIN
                CASE ae.accion WHEN 'programar_os'   THEN 'programacion'
                               WHEN 'respuesta_cliente' THEN 'respuesta_cliente'
                               WHEN 'anular_os'      THEN 'cancelacion'
+                              WHEN 'cancelar_programacion' THEN 'cancelacion'
+                              WHEN 'solicitar_reprogramacion' THEN 'reprogramacion'
+                              WHEN 'reprogramacion_directa' THEN 'reprogramacion'
+                              WHEN 'aprobar_reprogramacion' THEN 'aprobacion'
+                              WHEN 'rechazar_reprogramacion' THEN 'aprobacion'
+                              WHEN 'retirar_solicitud_reprogramacion' THEN 'aprobacion'
                               ELSE 'estado' END                                       AS tipo,
                CASE ae.accion WHEN 'programar_os'   THEN 'Programación creada'
                               WHEN 'respuesta_cliente' THEN 'Respuesta del cliente'
                               WHEN 'anular_os'      THEN 'Orden anulada: programación cancelada'
+                              WHEN 'cancelar_programacion' THEN 'Programación cancelada'
+                              WHEN 'solicitar_reprogramacion' THEN 'Reprogramación solicitada'
+                              WHEN 'reprogramacion_directa' THEN 'Reprogramación (edición directa del Jefe)'
+                              WHEN 'aprobar_reprogramacion' THEN 'Reprogramación aprobada'
+                              WHEN 'rechazar_reprogramacion' THEN 'Reprogramación rechazada'
+                              WHEN 'retirar_solicitud_reprogramacion' THEN 'Solicitud de reprogramación retirada'
                               ELSE ae.accion END                                      AS titulo,
                ae.descripcion, TRIM(CONCAT(ua.nombre, ' ', ua.apellido))              AS usuario,
-               ae.estado_anterior, ae.estado_nuevo, NULL                              AS motivo
+               ae.estado_anterior, ae.estado_nuevo, JSON_UNQUOTE(JSON_EXTRACT(ae.metadata, '$.motivo')) AS motivo
         FROM auditoria_evento ae
         LEFT JOIN usuario ua ON ua.id_usuario = ae.id_usuario
         WHERE (ae.entidad_tipo = 'programacion' AND ae.id_entidad = p_id_programacion)
@@ -331,7 +351,7 @@ proc: BEGIN
         FROM os_reprogramacion rp
         LEFT JOIN usuario us        ON us.id_usuario = rp.id_solicitante
         LEFT JOIN tabla_maestra mo  ON mo.IdMaestro = 13 AND mo.IdEmpresa = 1 AND mo.Num1 = rp.id_motivo
-        WHERE rp.id_os = v_id_os AND rp.eliminado_en IS NULL AND rp.fecha_solicitud >= v_creado
+        WHERE rp.id_os = v_id_os AND rp.id_programacion IS NULL AND rp.eliminado_en IS NULL AND rp.fecha_solicitud >= v_creado
         UNION ALL
         SELECT rp.fecha_resolucion, 3, 'aprobacion',
                CASE rp.estado WHEN 'aprobada' THEN 'Reprogramación aprobada' WHEN 'rechazada' THEN 'Reprogramación rechazada'
@@ -340,7 +360,7 @@ proc: BEGIN
         FROM os_reprogramacion rp
         LEFT JOIN usuario ur        ON ur.id_usuario = rp.resuelto_por
         LEFT JOIN tabla_maestra mo  ON mo.IdMaestro = 13 AND mo.IdEmpresa = 1 AND mo.Num1 = rp.id_motivo
-        WHERE rp.id_os = v_id_os AND rp.eliminado_en IS NULL AND rp.fecha_solicitud >= v_creado
+        WHERE rp.id_os = v_id_os AND rp.id_programacion IS NULL AND rp.eliminado_en IS NULL AND rp.fecha_solicitud >= v_creado
           AND rp.estado <> 'pendiente' AND rp.fecha_resolucion IS NOT NULL
     ) x
     ORDER BY x.fecha, x.ord;

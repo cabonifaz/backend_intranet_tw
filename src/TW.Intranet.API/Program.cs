@@ -485,6 +485,15 @@ builder.Services.AddScoped<DerivarSsomaProgramacionCasoDeUso>();
 // ── INYECCIÓN DE DEPENDENCIAS — Detalle de la Programación y confirmación con el cliente (Sprint 5, HU-37) ──
 builder.Services.AddScoped<IProgramacionDetalleRepositorio, ProgramacionDetalleRepositorio>();
 builder.Services.AddScoped<ObtenerDetalleProgramacionCasoDeUso>();
+builder.Services.AddScoped<IProgramacionReprogramacionRepositorio, ProgramacionReprogramacionRepositorio>();
+builder.Services.AddScoped<PrepararReprogramacionCasoDeUso>();
+builder.Services.AddScoped<ReprogramarProgramacionCasoDeUso>();
+builder.Services.AddScoped<ObtenerSolicitudReprogramacionCasoDeUso>();
+builder.Services.AddScoped<ResolverSolicitudReprogramacionCasoDeUso>();
+builder.Services.AddScoped<RetirarSolicitudReprogramacionCasoDeUso>();
+builder.Services.AddScoped<PrepararCancelacionProgramacionCasoDeUso>();
+builder.Services.AddScoped<CancelarProgramacionCasoDeUso>();
+builder.Services.AddScoped<ObtenerHistorialProgramacionesOsCasoDeUso>();
 builder.Services.AddScoped<RegistrarRespuestaClienteCasoDeUso>();
 
 // ── INYECCIÓN DE DEPENDENCIAS — Expediente Digital (Sprint 4, HU-29 a HU-33) ───

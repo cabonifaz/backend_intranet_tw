@@ -60,6 +60,8 @@ public class ProgramacionDetalleRepositorio(CadenaConexionBd conexion) : Reposit
                     CreadoEn           = FechaHora(r, "creado_en"),
                     CreadoPor          = Texto(r, "creado_por_nombre"),
                     BloqueoSsomaActivo = Booleano(r, "bloqueo_ssoma_activo"),
+                    IdSolicitudPendiente   = EnteroLargoNulo(r, "id_solicitud_pendiente"),
+                    PuedeResolverSolicitud = Booleano(r, "puede_resolver_solicitud"),
                     Acciones           = new AccionesDetalleProgramacionDto(
                         Booleano(r, "puede_registrar_respuesta"), Booleano(r, "puede_reasignar"), Booleano(r, "puede_reprogramar"),
                         Booleano(r, "reprogramacion_directa"), Booleano(r, "reprogramacion_requiere_solicitud"),

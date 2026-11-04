@@ -55,6 +55,10 @@ public class CabeceraProgramacionDto
     public string?  CreadoPor        { get; init; }
     /// <summary>true = hay una habilitación SSOMA que bloquea la ejecución hasta reasignar o reprogramar.</summary>
     public bool     BloqueoSsomaActivo { get; init; }
+    /// <summary>HU-38 Solicitud de reprogramación pendiente de la programación (ícono de alerta); null si no hay.</summary>
+    public long?    IdSolicitudPendiente   { get; init; }
+    /// <summary>HU-38 El usuario del token puede aprobar o rechazar la solicitud pendiente.</summary>
+    public bool     PuedeResolverSolicitud { get; init; }
     public required AccionesDetalleProgramacionDto Acciones { get; init; }
 }
 

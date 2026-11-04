@@ -16,6 +16,8 @@ namespace TW.Intranet.API.Controllers;
 /// HU-36: ficha "Programar Servicio", buscador de técnicos, validación previa, creación de la programación y derivación a
 /// SSOMA. Acceso: prog_gestionar. Cada SP vuelve a validar el permiso.
 /// HU-37: detalle de la programación (acceso prog_bandeja) y registro de la respuesta del cliente (acceso prog_gestionar).
+/// HU-38: reprogramación (el servidor decide edición directa del Jefe o solicitud del Asistente), aprobación o rechazo de la
+/// solicitud (prog_aprobar_reprogramacion), cancelación de la programación e historial de programaciones por OS.
 /// </summary>
 [ApiController]
 [Route("api/operaciones/programacion")]
@@ -32,6 +34,14 @@ public class ProgramacionOperativaController(
     DerivarSsomaProgramacionCasoDeUso           derivarSsoma,
     ObtenerDetalleProgramacionCasoDeUso         obtenerDetalle,
     RegistrarRespuestaClienteCasoDeUso          registrarRespuesta,
+    PrepararReprogramacionCasoDeUso             prepararReprogramacion,
+    ReprogramarProgramacionCasoDeUso            reprogramar,
+    ObtenerSolicitudReprogramacionCasoDeUso     obtenerSolicitud,
+    ResolverSolicitudReprogramacionCasoDeUso    resolverSolicitud,
+    RetirarSolicitudReprogramacionCasoDeUso     retirarSolicitud,
+    PrepararCancelacionProgramacionCasoDeUso    prepararCancelacion,
+    CancelarProgramacionCasoDeUso               cancelar,
+    ObtenerHistorialProgramacionesOsCasoDeUso   obtenerHistorialOs,
     ILogger<ProgramacionOperativaController>    logger) : ControllerBase
 {
     private long IdUsuarioActual =>
@@ -166,4 +176,70 @@ public class ProgramacionOperativaController(
     public async Task<IActionResult> RegistrarRespuestaCliente(
         long idProgramacion, [FromBody] RegistrarRespuestaClienteDto dto, CancellationToken ct = default)
         => Responder(await registrarRespuesta.EjecutarAsync(idProgramacion, dto, IdUsuarioActual, ct));
+
+    // ══════════════════════ HU-38 Reprogramación y Cancelación de la Programación ══════════════════════
+
+    /// <summary>Ficha "Reprogramar Servicio": programación actual, técnicos y equipos de la OS, motivos y circuito del usuario (modo directa | solicitud).</summary>
+    [RequierePermiso("prog_gestionar")]
+    [HttpGet("programaciones/{idProgramacion:long}/reprogramar/preparar")]
+    public async Task<IActionResult> PrepararReprogramar(long idProgramacion, CancellationToken ct = default)
+        => Responder(await prepararReprogramacion.EjecutarAsync(idProgramacion, IdUsuarioActual, ct));
+
+    /// <summary>
+    /// Reprograma (campos omitidos = se mantienen) con motivo del catálogo y comentario (400). Jefe: edición directa firmada en el
+    /// timeline. Asistente: solicitud pendiente (la programación no se congela). Cambia fecha u hora → vuelve a PENDIENTE CONFIRMACIÓN CLIENTE.
+    /// </summary>
+    [RequierePermiso("prog_gestionar")]
+    [RequestSizeLimit(8 * 1024)]
+    [HttpPost("programaciones/{idProgramacion:long}/reprogramar")]
+    public async Task<IActionResult> Reprogramar(long idProgramacion, [FromBody] ReprogramarProgramacionDto dto, CancellationToken ct = default)
+        => Responder(await reprogramar.EjecutarAsync(idProgramacion, dto, IdUsuarioActual, ct));
+
+    /// <summary>Modal "Solicitud de Reprogramación": actual vs propuesto, justificación e impacto.</summary>
+    [RequierePermiso("prog_bandeja")]
+    [HttpGet("solicitudes/{idSolicitud:long}")]
+    public async Task<IActionResult> Solicitud(long idSolicitud, CancellationToken ct = default)
+        => Responder(await obtenerSolicitud.EjecutarAsync(idSolicitud, IdUsuarioActual, ct));
+
+    /// <summary>Aprueba la solicitud: aplica los cambios (con las validaciones de horario y SSOMA). Solo el Jefe.</summary>
+    [RequierePermiso("prog_aprobar_reprogramacion")]
+    [RequestSizeLimit(4 * 1024)]
+    [HttpPost("solicitudes/{idSolicitud:long}/aprobar")]
+    public async Task<IActionResult> AprobarSolicitud(long idSolicitud, [FromBody] ResolverSolicitudDto? dto, CancellationToken ct = default)
+        => Responder(await resolverSolicitud.EjecutarAsync(idSolicitud, "aprobar", dto, IdUsuarioActual, ct));
+
+    /// <summary>Rechaza la solicitud: la programación queda igual y el motivo (obligatorio) queda en el timeline. Solo el Jefe.</summary>
+    [RequierePermiso("prog_aprobar_reprogramacion")]
+    [RequestSizeLimit(4 * 1024)]
+    [HttpPost("solicitudes/{idSolicitud:long}/rechazar")]
+    public async Task<IActionResult> RechazarSolicitud(long idSolicitud, [FromBody] ResolverSolicitudDto? dto, CancellationToken ct = default)
+        => Responder(await resolverSolicitud.EjecutarAsync(idSolicitud, "rechazar", dto, IdUsuarioActual, ct));
+
+    /// <summary>El solicitante retira su solicitud pendiente.</summary>
+    [RequierePermiso("prog_gestionar")]
+    [HttpPost("solicitudes/{idSolicitud:long}/retirar")]
+    public async Task<IActionResult> RetirarSolicitud(long idSolicitud, CancellationToken ct = default)
+        => Responder(await retirarSolicitud.EjecutarAsync(idSolicitud, IdUsuarioActual, ct));
+
+    /// <summary>Modal "Cancelar Programación": motivos, viáticos depositados y límites del comentario.</summary>
+    [RequierePermiso("prog_gestionar")]
+    [HttpGet("programaciones/{idProgramacion:long}/cancelar/preparar")]
+    public async Task<IActionResult> PrepararCancelar(long idProgramacion, CancellationToken ct = default)
+        => Responder(await prepararCancelacion.EjecutarAsync(idProgramacion, IdUsuarioActual, ct));
+
+    /// <summary>
+    /// Cancela la programación desde cualquier estado y por cualquier rol con prog_gestionar, sin aprobación. Pasa a CANCELADA (terminal);
+    /// la OS sigue emitida y vuelve a Pendientes como "Pendiente por programar".
+    /// </summary>
+    [RequierePermiso("prog_gestionar")]
+    [RequestSizeLimit(4 * 1024)]
+    [HttpPost("programaciones/{idProgramacion:long}/cancelar")]
+    public async Task<IActionResult> Cancelar(long idProgramacion, [FromBody] CancelarProgramacionDto dto, CancellationToken ct = default)
+        => Responder(await cancelar.EjecutarAsync(idProgramacion, dto, IdUsuarioActual, ct));
+
+    /// <summary>Historial completo de programaciones de la OS (activas y canceladas) con su timeline.</summary>
+    [RequierePermiso("prog_bandeja")]
+    [HttpGet("ordenes/{idOs:long}/programaciones")]
+    public async Task<IActionResult> HistorialOs(long idOs, CancellationToken ct = default)
+        => Responder(await obtenerHistorialOs.EjecutarAsync(idOs, IdUsuarioActual, ct));
 }
