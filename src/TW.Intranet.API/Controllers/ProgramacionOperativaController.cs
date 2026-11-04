@@ -15,6 +15,7 @@ namespace TW.Intranet.API.Controllers;
 /// Acceso a la bandeja: prog_bandeja (módulo operaciones); el SP lo vuelve a validar.
 /// HU-36: ficha "Programar Servicio", buscador de técnicos, validación previa, creación de la programación y derivación a
 /// SSOMA. Acceso: prog_gestionar. Cada SP vuelve a validar el permiso.
+/// HU-37: detalle de la programación (acceso prog_bandeja) y registro de la respuesta del cliente (acceso prog_gestionar).
 /// </summary>
 [ApiController]
 [Route("api/operaciones/programacion")]
@@ -29,6 +30,8 @@ public class ProgramacionOperativaController(
     BuscarTecnicosProgramacionCasoDeUso         buscarTecnicos,
     CrearProgramacionCasoDeUso                  crearProgramacion,
     DerivarSsomaProgramacionCasoDeUso           derivarSsoma,
+    ObtenerDetalleProgramacionCasoDeUso         obtenerDetalle,
+    RegistrarRespuestaClienteCasoDeUso          registrarRespuesta,
     ILogger<ProgramacionOperativaController>    logger) : ControllerBase
 {
     private long IdUsuarioActual =>
@@ -139,4 +142,28 @@ public class ProgramacionOperativaController(
     [HttpPost("ordenes/{idOs:long}/derivar-ssoma")]
     public async Task<IActionResult> DerivarSsoma(long idOs, [FromBody] DerivarSsomaDto dto, CancellationToken ct = default)
         => Responder(await derivarSsoma.EjecutarAsync(idOs, dto, IdUsuarioActual, ct));
+
+    // ══════════════════════ HU-37 Detalle de la Programación y confirmación con el cliente ══════════════════════
+
+    /// <summary>
+    /// Detalle de la programación (se abre desde cualquier tab de la bandeja con idProgramacion de la fila): datos con enlaces
+    /// cruzados a la OS, el expediente y la propuesta, checklist de validación, alerta SSOMA sobrevenida, historial y
+    /// respuestas del cliente. Las banderas de "acciones" salen de los permisos del usuario del token.
+    /// </summary>
+    [RequierePermiso("prog_bandeja")]
+    [HttpGet("programaciones/{idProgramacion:long}")]
+    public async Task<IActionResult> Detalle(long idProgramacion, CancellationToken ct = default)
+        => Responder(await obtenerDetalle.EjecutarAsync(idProgramacion, IdUsuarioActual, ct));
+
+    /// <summary>
+    /// "Registrar respuesta del cliente": canal (correo|whatsapp|llamada|presencial), resultado (acepto|pidio_reprogramar|cancelo)
+    /// y comentario opcional (300). No envía nada al cliente. Aceptó → PROGRAMADO y se habilita Gestionar Viáticos (HU-45);
+    /// pidió reprogramar / canceló → no cambia el estado y la respuesta indica el flujo de la HU-38 (siguienteAccion).
+    /// </summary>
+    [RequierePermiso("prog_gestionar")]
+    [RequestSizeLimit(4 * 1024)]
+    [HttpPost("programaciones/{idProgramacion:long}/respuesta-cliente")]
+    public async Task<IActionResult> RegistrarRespuestaCliente(
+        long idProgramacion, [FromBody] RegistrarRespuestaClienteDto dto, CancellationToken ct = default)
+        => Responder(await registrarRespuesta.EjecutarAsync(idProgramacion, dto, IdUsuarioActual, ct));
 }

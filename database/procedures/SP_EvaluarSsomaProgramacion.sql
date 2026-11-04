@@ -7,7 +7,7 @@
 --   tmp_ssoma_res : una fila por técnico con su estado: conforme · por_vencer · incompleto · pendiente · bloqueado
 -- Requisitos del cliente/zona: requisito_ssoma_cliente obligatorios del cliente (o generales) y de la sede (o de todas),
 --   del tipo de servicio de la orden (o de todos), que aplican a personas (REQUISITO_SSOMA String3 vacío, ambos o tecnico).
---   Se comparan con el último documento del técnico del tipo equivalente (ssoma_requisito_documento, migración 87).
+--   Se comparan con el último documento del técnico del tipo equivalente (ssoma_requisito_documento, migración 86).
 --   sin_verificar = el requisito no tiene documento equivalente configurado: solo se informa.
 -- Situación de un documento: bloqueado si está observado o vencido, o vence antes del servicio; sin_documento si no hay
 --   documento o está pendiente de carga; por_vencer si vence dentro de DIAS_POR_VENCER_SSOMA días del servicio; si no, conforme.

@@ -96,6 +96,8 @@ BEGIN
            os.confirmacion_cliente,
            os.fecha_confirmacion_cliente,
            COALESCE(os.fecha_emision, os.creado_en)                                     AS fecha_emision,
+           (SELECT MAX(pr.id_programacion) FROM programacion pr
+            WHERE pr.id_os = os.id_os AND pr.estado <> 'cancelada' AND pr.eliminado_en IS NULL)  AS id_programacion,
            (SELECT MAX(pr.codigo) FROM programacion pr
             WHERE pr.id_os = os.id_os AND pr.estado <> 'cancelada' AND pr.eliminado_en IS NULL)  AS codigo_programacion,
            (SELECT MAX(rp.id_reprogramacion) FROM os_reprogramacion rp

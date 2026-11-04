@@ -41,14 +41,14 @@ proc: BEGIN
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
+        GET DIAGNOSTICS CONDITION 1
+            @err_msg  = MESSAGE_TEXT,
+            @err_code = MYSQL_ERRNO;   -- primero: la limpieza de abajo genera notas que reemplazan el diagnóstico
         ROLLBACK;
         DROP TEMPORARY TABLE IF EXISTS tmp_drv_tec;
         DROP TEMPORARY TABLE IF EXISTS tmp_drv_pend;
         DROP TEMPORARY TABLE IF EXISTS tmp_ssoma_in;
         CALL SP_LimpiarSsomaProgramacion();
-        GET DIAGNOSTICS CONDITION 1
-            @err_msg  = MESSAGE_TEXT,
-            @err_code = MYSQL_ERRNO;
         SELECT 3 AS IdTipoMensaje,
                CONCAT('[MySQL ', @err_code, '] ', @err_msg) AS Mensaje;
     END;
