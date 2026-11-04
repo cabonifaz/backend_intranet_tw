@@ -96,6 +96,8 @@ BEGIN
            os.confirmacion_cliente,
            os.fecha_confirmacion_cliente,
            COALESCE(os.fecha_emision, os.creado_en)                                     AS fecha_emision,
+           (SELECT MAX(pr.codigo) FROM programacion pr
+            WHERE pr.id_os = os.id_os AND pr.estado <> 'cancelada' AND pr.eliminado_en IS NULL)  AS codigo_programacion,
            (SELECT MAX(rp.id_reprogramacion) FROM os_reprogramacion rp
             WHERE rp.id_os = os.id_os AND rp.estado = 'pendiente' AND rp.eliminado_en IS NULL) AS id_reprogramacion_pendiente,
            -- Motivo SSOMA (solo para órdenes programadas; NULL = nada bloquea)

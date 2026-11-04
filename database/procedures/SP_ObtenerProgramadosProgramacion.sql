@@ -119,7 +119,7 @@ proc: BEGIN
         t.id_expediente, t.id_cliente, t.razon_social, t.ruc, t.id_sede, t.sede, t.zona,
         t.id_propuesta, t.numero_propuesta, t.version_propuesta, t.numero_requerimiento, t.id_area, t.area,
         t.id_tecnico, t.tecnico, t.tecnicos_apoyo, t.n_tecnicos,
-        t.id_tipo_servicio, t.tipo_servicio, t.ssoma_motivo,
+        t.id_tipo_servicio, t.tipo_servicio, t.ssoma_motivo, t.codigo_programacion,
         t.fecha_ejecucion,
         TIME_FORMAT(t.hora_inicio, '%H:%i')                                           AS hora_inicio,
         TIME_FORMAT(t.hora_fin, '%H:%i')                                              AS hora_fin,

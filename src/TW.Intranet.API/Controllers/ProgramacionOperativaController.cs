@@ -12,7 +12,9 @@ namespace TW.Intranet.API.Controllers;
 /// acción de Operaciones y servicios ya programados. Cada fila trae las acciones que el usuario puede hacer: Programar
 /// (HU-36), Reprogramar / Solicitar reprogramación (HU-38), Cancelar (POST api/crm/ordenes-servicio/{idOs}/anular) y
 /// Ver detalle (GET api/crm/ordenes-servicio/{idOs}).
-/// Acceso: prog_bandeja (módulo operaciones); el SP lo vuelve a validar.
+/// Acceso a la bandeja: prog_bandeja (módulo operaciones); el SP lo vuelve a validar.
+/// HU-36: ficha "Programar Servicio", buscador de técnicos, validación previa, creación de la programación y derivación a
+/// SSOMA. Acceso: prog_gestionar. Cada SP vuelve a validar el permiso.
 /// </summary>
 [ApiController]
 [Route("api/operaciones/programacion")]
@@ -23,6 +25,10 @@ public class ProgramacionOperativaController(
     ObtenerProgramadosProgramacionCasoDeUso     obtenerProgramados,
     ExportarPendientesProgramacionCasoDeUso     exportarPendientes,
     ExportarProgramadosProgramacionCasoDeUso    exportarProgramados,
+    PrepararProgramacionCasoDeUso               prepararProgramacion,
+    BuscarTecnicosProgramacionCasoDeUso         buscarTecnicos,
+    CrearProgramacionCasoDeUso                  crearProgramacion,
+    DerivarSsomaProgramacionCasoDeUso           derivarSsoma,
     ILogger<ProgramacionOperativaController>    logger) : ControllerBase
 {
     private long IdUsuarioActual =>
@@ -91,4 +97,46 @@ public class ProgramacionOperativaController(
         if (r.IdTipoMensaje != 2 || r.Datos is null) return Responder(r);
         return File(r.Datos.Contenido, r.Datos.TipoContenido, r.Datos.NombreArchivo);
     }
+
+    // ══════════════════════ HU-36 Programar una OS y asignar recursos ══════════════════════
+
+    /// <summary>
+    /// Ficha "Programar Servicio": datos heredados de la OS/OM (cliente, sede, propuesta, expediente), sus equipos y los
+    /// requisitos SSOMA del cliente. Indica si la orden se puede programar (solo una EMITIDA sin programación activa).
+    /// </summary>
+    [RequierePermiso("prog_gestionar")]
+    [HttpGet("ordenes/{idOs:long}/preparar")]
+    public async Task<IActionResult> Preparar(long idOs, CancellationToken ct = default)
+        => Responder(await prepararProgramacion.EjecutarAsync(idOs, IdUsuarioActual, ct));
+
+    /// <summary>
+    /// Buscador de técnicos y modal "Asignar Recurso": disponibilidad en el horario elegido, carga y cupo del día, SSOMA contra
+    /// los requisitos del cliente/zona, experiencia con el cliente, scorecard y contadores por pestaña.
+    /// ?fecha=yyyy-MM-dd&amp;horaInicio=HH:mm&amp;horaFin=HH:mm&amp;soloDisponibles=&amp;soloSsomaConforme=&amp;busqueda=&amp;sedeOperativa=
+    /// &amp;tipoRecurso=tecnico|metrologo|externo
+    /// </summary>
+    [RequierePermiso("prog_gestionar")]
+    [HttpGet("ordenes/{idOs:long}/tecnicos")]
+    public async Task<IActionResult> Tecnicos(long idOs, [FromQuery] FiltrosTecnicosProgramacionDto filtros, CancellationToken ct = default)
+        => Responder(await buscarTecnicos.EjecutarAsync(idOs, filtros, IdUsuarioActual, ct));
+
+    /// <summary>
+    /// Crea la programación activa de una OS emitida (cronograma, técnico principal, apoyo y equipos). Queda
+    /// PENDIENTE DE CONFIRMACIÓN DEL CLIENTE y aparece en la bandeja. Las validaciones (SSOMA, solapamiento) bloquean con 400.
+    /// </summary>
+    [RequierePermiso("prog_gestionar")]
+    [RequestSizeLimit(32 * 1024)]
+    [HttpPost]
+    public async Task<IActionResult> Crear([FromBody] CrearProgramacionDto dto, CancellationToken ct = default)
+        => Responder(await crearProgramacion.EjecutarAsync(dto, IdUsuarioActual, ct));
+
+    /// <summary>
+    /// "Derivar al área SSOMA" desde el bloque de validación SSOMA: notifica a SSOMA qué técnicos no cumplen los requisitos
+    /// del cliente/zona de la orden y qué les falta. No cambia la orden. Avisos repetidos (misma persona y orden en 10 min) → 400.
+    /// </summary>
+    [RequierePermiso("prog_gestionar")]
+    [RequestSizeLimit(8 * 1024)]
+    [HttpPost("ordenes/{idOs:long}/derivar-ssoma")]
+    public async Task<IActionResult> DerivarSsoma(long idOs, [FromBody] DerivarSsomaDto dto, CancellationToken ct = default)
+        => Responder(await derivarSsoma.EjecutarAsync(idOs, dto, IdUsuarioActual, ct));
 }

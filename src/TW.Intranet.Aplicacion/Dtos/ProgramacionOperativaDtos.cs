@@ -149,6 +149,8 @@ public class ItemProgramacionDto
     public string?   TipoServicio            { get; init; }
     /// <summary>Qué validación SSOMA bloquea la orden (solo órdenes programadas; null = ninguna).</summary>
     public string?   SsomaMotivo             { get; init; }
+    /// <summary>Código de la programación vigente (PRG-AAAA-NNNN); null si la OS aún no se programó.</summary>
+    public string?   CodigoProgramacion      { get; init; }
     public string?   FechaEjecucion          { get; init; }
     public string?   HoraInicio              { get; init; }
     public string?   HoraFin                 { get; init; }

@@ -475,6 +475,13 @@ builder.Services.AddScoped<ObtenerProgramadosProgramacionCasoDeUso>();
 builder.Services.AddScoped<ExportarPendientesProgramacionCasoDeUso>();
 builder.Services.AddScoped<ExportarProgramadosProgramacionCasoDeUso>();
 
+// ── INYECCIÓN DE DEPENDENCIAS — Programar Servicio y Asignar Recurso (Sprint 5, HU-36) ──
+builder.Services.AddScoped<IProgramacionRepositorio, ProgramacionRepositorio>();
+builder.Services.AddScoped<PrepararProgramacionCasoDeUso>();
+builder.Services.AddScoped<BuscarTecnicosProgramacionCasoDeUso>();
+builder.Services.AddScoped<CrearProgramacionCasoDeUso>();
+builder.Services.AddScoped<DerivarSsomaProgramacionCasoDeUso>();
+
 // ── INYECCIÓN DE DEPENDENCIAS — Expediente Digital (Sprint 4, HU-29 a HU-33) ───
 builder.Services.AddScoped<IExpedienteRepositorio, ExpedienteRepositorio>();
 builder.Services.AddSingleton<IGeneradorPdfTabla, GeneradorPdfTablaQuestPdf>();

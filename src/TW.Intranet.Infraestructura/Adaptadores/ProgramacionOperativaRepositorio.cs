@@ -207,6 +207,7 @@ public class ProgramacionOperativaRepositorio(CadenaConexionBd conexion) : Repos
         IdTipoServicio               = EnteroNulo(r, "id_tipo_servicio"),
         TipoServicio                 = Texto(r, "tipo_servicio"),
         SsomaMotivo                  = Texto(r, "ssoma_motivo"),
+        CodigoProgramacion           = Texto(r, "codigo_programacion"),
         FechaEjecucion               = Fecha(r, "fecha_ejecucion"),
         HoraInicio                   = Texto(r, "hora_inicio"),
         HoraFin                      = Texto(r, "hora_fin"),
