@@ -507,6 +507,15 @@ builder.Services.AddScoped<CancelarProgramacionCasoDeUso>();
 builder.Services.AddScoped<ObtenerHistorialProgramacionesOsCasoDeUso>();
 builder.Services.AddScoped<RegistrarRespuestaClienteCasoDeUso>();
 
+// HU-51 Bandeja de Seguimiento Operativo (Sprint 5): solo lectura
+builder.Services.AddScoped<ISeguimientoOperativoRepositorio, SeguimientoOperativoRepositorio>();
+builder.Services.AddScoped<ObtenerResumenSeguimientoCasoDeUso>();
+builder.Services.AddScoped<ObtenerServiciosSeguimientoCasoDeUso>();
+builder.Services.AddScoped<ObtenerTecnicosSeguimientoCasoDeUso>();
+builder.Services.AddScoped<ObtenerIncidenciasSeguimientoCasoDeUso>();
+builder.Services.AddScoped<ObtenerFiltrosSeguimientoCasoDeUso>();
+builder.Services.AddScoped<RegistrarUbicacionMovilCasoDeUso>();
+
 // ── INYECCIÓN DE DEPENDENCIAS — Expediente Digital (Sprint 4, HU-29 a HU-33) ───
 builder.Services.AddScoped<IExpedienteRepositorio, ExpedienteRepositorio>();
 builder.Services.AddSingleton<IGeneradorPdfTabla, GeneradorPdfTablaQuestPdf>();
