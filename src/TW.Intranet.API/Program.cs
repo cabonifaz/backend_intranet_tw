@@ -467,6 +467,14 @@ builder.Services.AddScoped<BuscarConceptosOrdenServicioCasoDeUso>();
 builder.Services.AddScoped<DescargarPlantillaImportacionOsCasoDeUso>();
 builder.Services.AddScoped<AnalizarImportacionOsCasoDeUso>();
 
+// ── INYECCIÓN DE DEPENDENCIAS — Programación Operativa (Sprint 5, HU-35) ──
+builder.Services.AddScoped<IProgramacionOperativaRepositorio, ProgramacionOperativaRepositorio>();
+builder.Services.AddScoped<ObtenerResumenProgramacionCasoDeUso>();
+builder.Services.AddScoped<ObtenerPendientesProgramacionCasoDeUso>();
+builder.Services.AddScoped<ObtenerProgramadosProgramacionCasoDeUso>();
+builder.Services.AddScoped<ExportarPendientesProgramacionCasoDeUso>();
+builder.Services.AddScoped<ExportarProgramadosProgramacionCasoDeUso>();
+
 // ── INYECCIÓN DE DEPENDENCIAS — Expediente Digital (Sprint 4, HU-29 a HU-33) ───
 builder.Services.AddScoped<IExpedienteRepositorio, ExpedienteRepositorio>();
 builder.Services.AddSingleton<IGeneradorPdfTabla, GeneradorPdfTablaQuestPdf>();

@@ -2,3 +2,4 @@
 **/obj
 .git
 .vs
+**/appsettings.Local.json
