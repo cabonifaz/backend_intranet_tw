@@ -495,6 +495,12 @@ builder.Services.AddScoped<IProgramacionConflictosRepositorio, ProgramacionConfl
 builder.Services.AddScoped<ObtenerConflictosProgramacionCasoDeUso>();
 builder.Services.AddScoped<ObtenerConflictoProgramacionCasoDeUso>();
 builder.Services.AddScoped<ResolverConflictoProgramacionCasoDeUso>();
+builder.Services.AddScoped<IProgramacionViaticosRepositorio, ProgramacionViaticosRepositorio>();
+builder.Services.AddScoped<ObtenerViaticosProgramacionCasoDeUso>();
+builder.Services.AddScoped<GuardarViaticosProgramacionCasoDeUso>();
+builder.Services.AddScoped<RevisarGastoProgramacionCasoDeUso>();
+builder.Services.AddScoped<CerrarRendicionProgramacionCasoDeUso>();
+builder.Services.AddScoped<ObtenerComprobanteGastoCasoDeUso>();
 builder.Services.AddScoped<ObtenerProgramacionesTecnicoDiaCasoDeUso>();
 builder.Services.AddScoped<PrepararCancelacionProgramacionCasoDeUso>();
 builder.Services.AddScoped<CancelarProgramacionCasoDeUso>();
