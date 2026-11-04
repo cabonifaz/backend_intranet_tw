@@ -26,5 +26,10 @@ public record ClienteDetalleDto(
     string?  NombreCategoria,
     string   Estado,
     /// <summary>Códigos de AREA_USUARIO asignados al cliente.</summary>
-    List<string>? Areas = null
+    List<string>? Areas = null,
+    /// <summary>Cartera de clientes: comercial asignado (nombre completo), fecha y quién asignó.</summary>
+    long?     IdComercialCartera = null,
+    string?   ComercialCartera   = null,
+    DateTime? CarteraAsignadoEn  = null,
+    string?   CarteraAsignadoPor = null
 );

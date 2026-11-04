@@ -48,12 +48,17 @@ BEGIN
         IF(ci.estado = 'activo', 1, 0)                    AS es_activo_en_catalogo,
         ci.usar_en_propuestas,
         ci.id_primer_procedimiento,
-        NULLIF(TRIM(CONCAT_WS(' - ', p1.codigo, p1.titulo)), '') AS primer_procedimiento,
+        -- id_*_procedimiento guarda el CÓDIGO del procedimiento (ej. 'TW-CAL-01'), no el id numérico
+        COALESCE((SELECT NULLIF(TRIM(CONCAT_WS(' - ', p1.codigo, p1.titulo)), '') FROM procedimiento_tecnico p1
+                   WHERE p1.codigo = ci.id_primer_procedimiento AND p1.eliminado_en IS NULL
+                   ORDER BY p1.id_procedimiento DESC LIMIT 1),
+                 NULLIF(TRIM(ci.id_primer_procedimiento), ''))                AS primer_procedimiento,
         ci.id_segundo_procedimiento,
-        NULLIF(TRIM(CONCAT_WS(' - ', p2.codigo, p2.titulo)), '') AS segundo_procedimiento
+        COALESCE((SELECT NULLIF(TRIM(CONCAT_WS(' - ', p2.codigo, p2.titulo)), '') FROM procedimiento_tecnico p2
+                   WHERE p2.codigo = ci.id_segundo_procedimiento AND p2.eliminado_en IS NULL
+                   ORDER BY p2.id_procedimiento DESC LIMIT 1),
+                 NULLIF(TRIM(ci.id_segundo_procedimiento), ''))               AS segundo_procedimiento
     FROM suministros ci
-    LEFT JOIN procedimiento_tecnico p1 ON p1.id_procedimiento = ci.id_primer_procedimiento AND p1.eliminado_en IS NULL
-    LEFT JOIN procedimiento_tecnico p2 ON p2.id_procedimiento = ci.id_segundo_procedimiento AND p2.eliminado_en IS NULL
     LEFT JOIN tabla_maestra t_cla ON t_cla.IdMaestro = 71 AND t_cla.IdEmpresa = 1 AND t_cla.String2 = ci.clase
     LEFT JOIN tabla_maestra t_tip ON t_tip.IdMaestro = 72 AND t_tip.IdEmpresa = 1 AND t_tip.String2 = ci.tipo
     LEFT JOIN tabla_maestra t_sub ON t_sub.IdMaestro = 73 AND t_sub.IdEmpresa = 1 AND t_sub.String2 = ci.subtipo

@@ -11,7 +11,7 @@ public interface IMaestrosRepositorio
         long idCliente, CancellationToken ct);
 
     Task<RespuestaDto<long>> GuardarClienteAsync(
-        GuardarClienteDto dto, string usuCre, CancellationToken ct);
+        GuardarClienteDto dto, string usuCre, long idUsuario, CancellationToken ct);
 
     Task<RespuestaDto<object>> CambiarEstadoClienteAsync(
         CambiarEstadoClienteDto dto, string usuMod, CancellationToken ct);

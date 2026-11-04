@@ -78,7 +78,8 @@ public class MaestrosController(
             return BadRequest(ModelState);
 
         if (!TryObtenerUsuarioActual(out string usuarioActual)) return Unauthorized();
-        var respuesta = await guardarClienteCasoDeUso.EjecutarAsync(dto, usuarioActual, ct);
+        long.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out long idUsuario);
+        var respuesta = await guardarClienteCasoDeUso.EjecutarAsync(dto, usuarioActual, idUsuario, ct);
 
         return respuesta.IdTipoMensaje switch
         {

@@ -157,8 +157,8 @@ public class SuministrosRepositorio(CadenaConexionBd conexion)
         Estado:             Texto(r, "estado") ?? "",
         EsActivoEnCatalogo: Booleano(r, "es_activo_en_catalogo"),
         UsarEnPropuestas:   Booleano(r, "usar_en_propuestas"),
-        IdPrimerProcedimiento:  TieneColumna(r, "primer_procedimiento") ? EnteroLargoNulo(r, "id_primer_procedimiento")  : null,
+        IdPrimerProcedimiento:  TieneColumna(r, "primer_procedimiento") ? Texto(r, "id_primer_procedimiento")  : null,
         PrimerProcedimiento:    TieneColumna(r, "primer_procedimiento") ? Texto(r, "primer_procedimiento")               : null,
-        IdSegundoProcedimiento: TieneColumna(r, "segundo_procedimiento") ? EnteroLargoNulo(r, "id_segundo_procedimiento") : null,
+        IdSegundoProcedimiento: TieneColumna(r, "segundo_procedimiento") ? Texto(r, "id_segundo_procedimiento") : null,
         SegundoProcedimiento:   TieneColumna(r, "segundo_procedimiento") ? Texto(r, "segundo_procedimiento")              : null);
 }

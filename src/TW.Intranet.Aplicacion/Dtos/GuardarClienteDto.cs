@@ -24,7 +24,12 @@ public record GuardarClienteDto(
     bool     SsomaInduccionSsoma,
     bool     SsomaExamenMedico,
     [StringLength(1000)] string?  SsomaNotas,
-    int?     IdCategoria
+    int?     IdCategoria,
+    /// <summary>
+    /// Comercial de la cartera (null o 0 = quitar). Solo se aplica si el usuario tiene la acción
+    /// cartera_asignar; si no, se ignora y queda el valor actual.
+    /// </summary>
+    long?    IdComercialCartera = null
     // Las áreas del cliente se manejan por su CRUD propio (POST /clientes/{id}/areas),
     // ya no viajan en el DTO de guardar cliente (migración 37).
 );
