@@ -42,6 +42,10 @@ public class ProgramacionOperativaController(
     PrepararCancelacionProgramacionCasoDeUso    prepararCancelacion,
     CancelarProgramacionCasoDeUso               cancelar,
     ObtenerHistorialProgramacionesOsCasoDeUso   obtenerHistorialOs,
+    ObtenerConflictosProgramacionCasoDeUso      obtenerConflictos,
+    ObtenerConflictoProgramacionCasoDeUso       obtenerConflicto,
+    ResolverConflictoProgramacionCasoDeUso      resolverConflicto,
+    ObtenerProgramacionesTecnicoDiaCasoDeUso    obtenerTecnicoDia,
     ILogger<ProgramacionOperativaController>    logger) : ControllerBase
 {
     private long IdUsuarioActual =>
@@ -242,4 +246,34 @@ public class ProgramacionOperativaController(
     [HttpGet("ordenes/{idOs:long}/programaciones")]
     public async Task<IActionResult> HistorialOs(long idOs, CancellationToken ct = default)
         => Responder(await obtenerHistorialOs.EjecutarAsync(idOs, IdUsuarioActual, ct));
+    // ══════════════════════ HU-39 Carga de recursos y alertas de conflicto sobrevenido ══════════════════════
+
+    /// <summary>Panel lateral de la matriz de carga: programaciones del técnico ese día (clic en la celda).</summary>
+    [RequierePermiso("prog_bandeja")]
+    [HttpGet("tecnicos/{idTecnico:long}/dia")]
+    public async Task<IActionResult> TecnicoDia(long idTecnico, [FromQuery] DateTime? fecha, CancellationToken ct = default)
+        => Responder(await obtenerTecnicoDia.EjecutarAsync(idTecnico, fecha, IdUsuarioActual, ct));
+
+    /// <summary>Lista de alertas de conflicto sobrevenido (baja, SSOMA vencido, solapamiento, extensión de duración).</summary>
+    [RequierePermiso("prog_bandeja")]
+    [HttpGet("conflictos")]
+    public async Task<IActionResult> Conflictos(CancellationToken ct = default)
+        => Responder(await obtenerConflictos.EjecutarAsync(IdUsuarioActual, ct));
+
+    /// <summary>Modal "Resolver Conflicto de Programación": servicios, impacto, opciones y recursos sugeridos.</summary>
+    [RequierePermiso("prog_bandeja")]
+    [HttpGet("conflictos/detalle")]
+    public async Task<IActionResult> ConflictoDetalle(
+        [FromQuery] string? tipo, [FromQuery] long idTecnico, [FromQuery] long idOsA, [FromQuery] long? idOsB, CancellationToken ct = default)
+        => Responder(await obtenerConflicto.EjecutarAsync(tipo, idTecnico, idOsA, idOsB, IdUsuarioActual, ct));
+
+    /// <summary>
+    /// "Aplicar Resolución": reasignar o reprogramar con el motivo autocompletado del conflicto. Reutiliza el circuito de la HU-38
+    /// (Jefe: edición directa · Asistente: Solicitud de Reprogramación). Cancelar se hace con programaciones/{id}/cancelar.
+    /// </summary>
+    [RequierePermiso("prog_gestionar")]
+    [RequestSizeLimit(4 * 1024)]
+    [HttpPost("conflictos/resolver")]
+    public async Task<IActionResult> ResolverConflicto([FromBody] ResolverConflictoDto dto, CancellationToken ct = default)
+        => Responder(await resolverConflicto.EjecutarAsync(dto, IdUsuarioActual, ct));
 }

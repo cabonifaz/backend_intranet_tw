@@ -326,7 +326,8 @@ proc: BEGIN
     VALUES ('programacion', p_id_programacion, 'reprogramacion_directa', v_estado_prg, v_estado_nuevo, LEFT(v_desc, 900),
             p_id_usuario, NOW(),
             JSON_OBJECT('idMotivo', p_id_motivo, 'motivo', v_motivo, 'cambiaFechaHora', v_c_horario,
-                        'cambiaTecnicos', v_c_tecnicos, 'cambiaEquipos', v_c_equipos));
+                        'cambiaTecnicos', v_c_tecnicos, 'cambiaEquipos', v_c_equipos,
+                        'horaFinAnterior', TIME_FORMAT(v_fin_act, '%H:%i'), 'horaFinNueva', TIME_FORMAT(v_fin_n, '%H:%i')));
 
     -- Una solicitud pendiente queda sin efecto: el Jefe ya decidió por su cuenta
     UPDATE os_reprogramacion

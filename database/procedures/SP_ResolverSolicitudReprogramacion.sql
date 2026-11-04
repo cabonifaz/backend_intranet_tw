@@ -283,7 +283,8 @@ proc: BEGIN
     VALUES ('programacion', v_id_prog, 'aprobar_reprogramacion', v_estado_prg, v_estado_nuevo, LEFT(v_desc, 900),
             p_id_usuario, NOW(),
             JSON_OBJECT('idSolicitud', p_id_solicitud, 'motivo', v_motivo, 'cambiaFechaHora', v_c_horario,
-                        'cambiaTecnicos', v_c_tecnicos, 'cambiaEquipos', v_c_equipos));
+                        'cambiaTecnicos', v_c_tecnicos, 'cambiaEquipos', v_c_equipos,
+                        'horaFinAnterior', TIME_FORMAT(v_fin_act, '%H:%i'), 'horaFinNueva', TIME_FORMAT(v_fin_n, '%H:%i')));
 
     -- Avisos: el Asistente que pidió el cambio y los técnicos afectados
     INSERT INTO notificacion (id_usuario_destino, id_canal, titulo, cuerpo, entidad_tipo, id_entidad, fecha_creacion, creado_por)
