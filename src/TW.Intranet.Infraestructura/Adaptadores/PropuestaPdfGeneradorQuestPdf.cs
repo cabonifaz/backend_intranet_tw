@@ -66,7 +66,7 @@ public class PropuestaPdfGeneradorQuestPdf : IPropuestaPdfGenerador
             });
             row.ConstantItem(140).AlignRight().Column(col =>
             {
-                col.Item().Text($"{p.Numero} · v{p.Version}")
+                col.Item().Text(p.CodigoFormateado)
                     .FontSize(11).SemiBold().FontColor(ColorTitulo);
                 col.Item().Text(FormatearFecha(p.FechaCreacion))
                     .FontSize(9).FontColor(ColorGrisTexto);
@@ -165,7 +165,7 @@ public class PropuestaPdfGeneradorQuestPdf : IPropuestaPdfGenerador
         container.ShowEntire().Background(ColorFondoClaro).Padding(15).Column(col =>
         {
             col.Spacing(8);
-            col.Item().Text($"{p.Numero}  ·  Versión {p.Version}")
+            col.Item().Text(p.CodigoFormateado)
                 .FontSize(20).Bold().FontColor(ColorPrimario);
             col.Item().PaddingTop(4).Row(row =>
             {

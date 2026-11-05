@@ -24,7 +24,7 @@ public class PropuestaEquipoDto
     // Solo lectura (observaciones 31/10): estado real del equipo en el maestro. Se ignoran al guardar.
     /// <summary>activo | inactivo | borrador (equipo_cliente.estado).</summary>
     public string? EstadoEquipo         { get; set; }
-    /// <summary>Vigente | Inactivo | Borrador.</summary>
+    /// <summary>Activo | Inactivo | Borrador.</summary>
     public string? EstadoEquipoLabel    { get; set; }
     /// <summary>En oficina | En evaluación | En ejecución (si tiene).</summary>
     public string? EstadoOperativoLabel { get; set; }

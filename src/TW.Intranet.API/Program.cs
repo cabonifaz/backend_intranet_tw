@@ -351,6 +351,8 @@ builder.Services.AddScoped<EnviarPropuestaClienteCasoDeUso>();
 builder.Services.AddScoped<SolicitarRevocacionVbCasoDeUso>();
 builder.Services.AddScoped<ResolverRevocacionVbCasoDeUso>();
 builder.Services.AddScoped<IPropuestaPdfGenerador, PropuestaPdfGeneradorQuestPdf>();
+builder.Services.AddScoped<IOrdenServicioPdfGenerador, OrdenServicioPdfGeneradorQuestPdf>();
+builder.Services.AddScoped<GenerarPdfOrdenServicioCasoDeUso>();
 builder.Services.AddScoped<GenerarPdfPropuestaCasoDeUso>();
 builder.Services.AddScoped<GenerarPdfPreviewPropuestaCasoDeUso>();
 

@@ -450,15 +450,19 @@ public class FiltrosBuscarConceptosOsDto
     public string? Busqueda  { get; set; }
     /// <summary>Tipo del suministro (catálogo TIPO_SUMINISTRO de clase servicio).</summary>
     public string? Tipo      { get; set; }
-    /// <summary>Marca (y lista primero) los conceptos cotizados en la propuesta de origen.</summary>
+    /// <summary>Si llega, devuelve solo las líneas de la propuesta de origen (una por ítem, #4435).</summary>
     public long?   IdPropuesta { get; set; }
     public int     Pagina    { get; set; } = 1;
     public int     PorPagina { get; set; } = 20;
 }
 
+/// <summary>Concepto del buscador. Con idPropuesta (#4435) es una línea de la propuesta: IdItem, Alcance, Cantidad, Frecuencia,
+/// PrecioUnitario y Seccion vienen llenos (el mismo suministro con otro alcance es otra fila).</summary>
 public record ConceptoCatalogoOsDto(long IdSuministro, string Codigo, string Descripcion, string? Tipo, string? TipoLabel,
                                     string? Subtipo, string? SubtipoLabel, bool AplicaServicio, bool AplicaMetrologia,
-                                    bool DeLaPropuesta = false);
+                                    bool DeLaPropuesta = false,
+                                    long? IdItem = null, string? Alcance = null, decimal? Cantidad = null,
+                                    decimal? Frecuencia = null, decimal? PrecioUnitario = null, string? Seccion = null);
 
 public record BusquedaConceptosOsDto(List<ConceptoCatalogoOsDto> Items, int Total, List<OpcionImportacionDto> Tipos);
 
@@ -560,3 +564,13 @@ public class ComentarioSolicitudOsDto
 {
     public string? Comentario { get; set; }
 }
+
+// ── #4436 PDF de la OS / OM ────────────────────────────────────────────────
+
+/// <summary>Datos del PDF oficial de la orden: cabecera del detalle, conceptos, equipos, programación y observaciones.</summary>
+public record OrdenServicioPdfDto(
+    DetalleOrdenServicioDto          Detalle,
+    List<ConceptoOrdenServicioDto>   Conceptos,
+    List<EquipoOrdenServicioDto>     Equipos,
+    ProgramacionOrdenServicioDto?    Programacion,
+    string?                          Observaciones);

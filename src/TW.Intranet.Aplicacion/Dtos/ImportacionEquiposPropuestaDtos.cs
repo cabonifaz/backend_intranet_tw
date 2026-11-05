@@ -213,7 +213,7 @@ public class EquipoImportadoDto
     public string  Resultado          { get; init; } = "vinculado";
     /// <summary>Estado real del equipo (observaciones 31/10): activo | inactivo | borrador.</summary>
     public string? EstadoEquipo         { get; init; }
-    /// <summary>Vigente | Inactivo | Borrador.</summary>
+    /// <summary>Activo | Inactivo | Borrador.</summary>
     public string? EstadoEquipoLabel    { get; init; }
     public string? EstadoOperativoLabel { get; init; }
 }

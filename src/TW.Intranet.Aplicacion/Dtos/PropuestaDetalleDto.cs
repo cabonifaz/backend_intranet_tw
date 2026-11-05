@@ -6,6 +6,8 @@ public class PropuestaDetalleDto
     public long    IdPropuesta         { get; set; }
     public string  Numero              { get; set; } = "";
     public int     Version             { get; set; }
+    /// <summary>#4437 — Código para mostrar: "PC: 0012-2-2026" (ya incluye la versión).</summary>
+    public string  CodigoFormateado    => FormatoNumeroPropuesta.Formatear(Numero, Version, FechaCreacion);
     public string  Estado              { get; set; } = "";
     public long?   IdPropuestaPadre    { get; set; }
     /// <summary>true solo en "borrador". Si es false, la pantalla debe quedar en solo lectura.</summary>

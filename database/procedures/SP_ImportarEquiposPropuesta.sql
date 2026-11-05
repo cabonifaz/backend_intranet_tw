@@ -289,7 +289,7 @@ proc: BEGIN
            ec.ubicacion_especifica,
            t.resultado,
            ec.estado                                 AS estado_equipo,
-           CASE ec.estado WHEN 'activo' THEN 'Vigente' WHEN 'inactivo' THEN 'Inactivo'
+           CASE ec.estado WHEN 'activo' THEN 'Activo' WHEN 'inactivo' THEN 'Inactivo'
                           WHEN 'borrador' THEN 'Borrador' ELSE NULL END AS estado_equipo_label,
            (SELECT eo.String1 FROM tabla_maestra eo WHERE eo.IdMaestro = 83 AND eo.IdEmpresa = 1
                AND eo.String2 = ec.estado_operativo LIMIT 1) AS estado_operativo_label

@@ -163,7 +163,13 @@ public class OrdenServicioRepositorio(CadenaConexionBd conexion) : RepositorioSp
         EnteroLargo(r, "id_suministro"), Texto(r, "codigo") ?? "", Texto(r, "descripcion") ?? "",
         TextoSi(r, "tipo"), TextoSi(r, "tipo_label"), TextoSi(r, "subtipo"), TextoSi(r, "subtipo_label"),
         Tiene(r, "aplica_servicio") && Booleano(r, "aplica_servicio"), Tiene(r, "aplica_metrologia") && Booleano(r, "aplica_metrologia"),
-        Tiene(r, "de_la_propuesta") && Booleano(r, "de_la_propuesta"));
+        Tiene(r, "de_la_propuesta") && Booleano(r, "de_la_propuesta"),
+        Tiene(r, "id_item") ? EnteroLargoNulo(r, "id_item") : null,
+        TextoSi(r, "alcance"),
+        Tiene(r, "cantidad") ? DecimalNulo(r, "cantidad") : null,
+        Tiene(r, "frecuencia") ? DecimalNulo(r, "frecuencia") : null,
+        Tiene(r, "precio_unitario") ? DecimalNulo(r, "precio_unitario") : null,
+        TextoSi(r, "seccion"));
 
     private static PropuestaOrigenOsDto LeerPropuesta(MySqlDataReader r, bool ficha) => new()
     {
