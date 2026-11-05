@@ -24,5 +24,18 @@ public record SuministroListaItemDto(
     string? IdPrimerProcedimiento  = null,
     string? PrimerProcedimiento    = null,
     string? IdSegundoProcedimiento = null,
-    string? SegundoProcedimiento   = null
+    string? SegundoProcedimiento   = null,
+    /// <summary>Datos sueltos del procedimiento (maestro de procedimientos): código, norma, versión, año, autor, descripción.</summary>
+    ProcedimientoResumenDto? PrimerProcedimientoDetalle  = null,
+    ProcedimientoResumenDto? SegundoProcedimientoDetalle = null
+);
+
+/// <summary>Resumen del procedimiento técnico asociado al suministro (para la descripción del ítem en la propuesta).</summary>
+public record ProcedimientoResumenDto(
+    string  Codigo,
+    string? Norma,
+    int?    Version,
+    int?    Anio,
+    string? Autor,
+    string? Descripcion
 );

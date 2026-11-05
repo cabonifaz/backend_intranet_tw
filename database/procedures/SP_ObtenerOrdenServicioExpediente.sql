@@ -9,6 +9,9 @@
 --   legible, emisión, rango tentativo, propuesta/RQ, cliente y contacto, observaciones, certificado (tercerizado),
 --   anulación y conteos; sede y tipo de servicio caen a los de la propuesta. Equipos con su avance y
 --   resultado 8 = conceptos de la OS.
+--   Feedback cliente 04/11: + id_requerimiento; conceptos con cantidad, frecuencia y precio del ítem de la propuesta;
+--   resultado 9 = programaciones de la OS (visita = fecha + técnico principal, sin las canceladas) y
+--   resultado 10 = equipos de cada programación.
 DROP PROCEDURE IF EXISTS SP_ObtenerOrdenServicioExpediente;
 
 DELIMITER $$
@@ -19,7 +22,9 @@ CREATE PROCEDURE SP_ObtenerOrdenServicioExpediente(
     IN p_id_os         BIGINT
 )
 proc: BEGIN
-    DECLARE v_id_os BIGINT;
+    DECLARE v_id_os   BIGINT;
+    DECLARE v_id_prop BIGINT;
+    DECLARE v_simbolo VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 
     IF FN_PermisoAccion(p_id_usuario, 'expediente_bandeja') = 0 THEN
         SELECT 1 AS IdTipoMensaje, 'No tienes permiso para ver los expedientes digitales.' AS Mensaje;
@@ -42,6 +47,13 @@ proc: BEGIN
         WHERE id_expediente = p_id_expediente AND eliminado_en IS NULL
         ORDER BY (estado = 'anulada'), id_os LIMIT 1;
     END IF;
+
+    SELECT COALESCE(os.id_propuesta, e.id_propuesta) INTO v_id_prop
+    FROM orden_servicio os LEFT JOIN expediente_digital e ON e.id_expediente = os.id_expediente
+    WHERE os.id_os = v_id_os;
+    SELECT m.String2 INTO v_simbolo
+    FROM propuesta_comercial p JOIN tabla_maestra m ON m.IdMaestro = 1 AND m.IdEmpresa = 1 AND m.Num1 = p.id_moneda
+    WHERE p.id_propuesta = v_id_prop LIMIT 1;
 
     SELECT 2 AS IdTipoMensaje, 'Éxito.' AS Mensaje;
 
@@ -68,7 +80,8 @@ proc: BEGIN
                           WHEN 'anulada' THEN 'Anulada' ELSE os.estado END AS estado_label,
            os.fecha_emision, CONCAT(ue.nombre, ' ', ue.apellido) AS emitido_por,
            os.fecha_programada_desde, os.fecha_programada_hasta,
-           p.id_propuesta, p.numero AS numero_propuesta, p.version AS version_propuesta, r.numero AS numero_rq,
+           p.id_propuesta, p.numero AS numero_propuesta, p.version AS version_propuesta,
+           r.id_requerimiento, r.numero AS numero_rq,
            c.razon_social, c.ruc,
            co.nombres AS contacto, co.cargo AS cargo_contacto, co.telefono_movil AS telefono_contacto, co.correo AS correo_contacto,
            os.observaciones,
@@ -133,10 +146,40 @@ proc: BEGIN
             FROM os_concepto_equipo ce
             JOIN os_equipo oe ON oe.id = ce.id_os_equipo AND oe.eliminado_en IS NULL
             JOIN equipo_cliente ec ON ec.id_equipo = oe.id_equipo
-            WHERE ce.id_os_concepto = oc.id AND ce.eliminado_en IS NULL) AS equipos_aplicados
+            WHERE ce.id_os_concepto = oc.id AND ce.eliminado_en IS NULL) AS equipos_aplicados,
+           pi.id_item, pi.cantidad, pi.frecuencia, pi.precio_unitario, pi.subtotal, v_simbolo AS simbolo_moneda
     FROM os_concepto oc
+    -- Ítem de la propuesta que originó el concepto (mismo suministro y alcance)
+    LEFT JOIN propuesta_item pi ON pi.id_item = (
+              SELECT MIN(i.id_item) FROM propuesta_item i
+              WHERE i.id_propuesta = v_id_prop AND i.id_catalogo_item = oc.id_suministro
+                AND i.eliminado_en IS NULL AND IFNULL(i.es_espaciado, 0) = 0
+                AND IFNULL(NULLIF(TRIM(i.alcance), ''), '') = IFNULL(NULLIF(TRIM(oc.alcance), ''), ''))
     WHERE oc.id_os = v_id_os AND oc.eliminado_en IS NULL
     ORDER BY oc.orden, oc.id;
+
+    -- 9. Programaciones de la OS (Módulo 8): una visita = fecha + técnico principal (+ apoyo)
+    SELECT pg.id_programacion, pg.codigo, pg.fecha_ejecucion,
+           TIME_FORMAT(pg.hora_inicio, '%H:%i') AS hora_inicio, TIME_FORMAT(pg.hora_fin_estimada, '%H:%i') AS hora_fin,
+           pg.estado,
+           CASE pg.estado WHEN 'pendiente_confirmacion' THEN 'Pendiente confirmación cliente'
+                          WHEN 'confirmada' THEN 'Programado' ELSE pg.estado END AS estado_label,
+           pg.id_tecnico_principal AS id_tecnico, CONCAT(ut.nombre, ' ', ut.apellido) AS tecnico,
+           (SELECT GROUP_CONCAT(CONCAT(ua.nombre, ' ', ua.apellido) ORDER BY ua.nombre SEPARATOR ', ')
+            FROM programacion_tecnico pt JOIN usuario ua ON ua.id_usuario = pt.id_usuario
+            WHERE pt.id_programacion = pg.id_programacion AND pt.eliminado_en IS NULL AND pt.rol = 'apoyo') AS tecnicos_apoyo
+    FROM programacion pg
+    LEFT JOIN usuario ut ON ut.id_usuario = pg.id_tecnico_principal
+    WHERE pg.id_os = v_id_os AND pg.eliminado_en IS NULL AND pg.estado <> 'cancelada'
+    ORDER BY pg.fecha_ejecucion, pg.hora_inicio, pg.id_programacion;
+
+    -- 10. Equipos de cada programación
+    SELECT pe.id_programacion, ec.id_equipo, ec.codigo_tw, ec.marca, ec.modelo, ec.num_serie AS numero_serie
+    FROM programacion pg
+    JOIN programacion_equipo pe ON pe.id_programacion = pg.id_programacion AND pe.eliminado_en IS NULL
+    JOIN equipo_cliente ec      ON ec.id_equipo = pe.id_equipo
+    WHERE pg.id_os = v_id_os AND pg.eliminado_en IS NULL AND pg.estado <> 'cancelada'
+    ORDER BY pe.id_programacion, pe.id;
 END$$
 
 DELIMITER ;

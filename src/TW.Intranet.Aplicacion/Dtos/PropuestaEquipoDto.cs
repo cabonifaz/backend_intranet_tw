@@ -28,4 +28,6 @@ public class PropuestaEquipoDto
     public string? EstadoEquipoLabel    { get; set; }
     /// <summary>En oficina | En evaluación | En ejecución (si tiene).</summary>
     public string? EstadoOperativoLabel { get; set; }
+    /// <summary>Activo | Inactivo | Borrador (estado del equipo en el maestro). Null si el equipo no está en el maestro.</summary>
+    public string? Estado               { get; set; }
 }

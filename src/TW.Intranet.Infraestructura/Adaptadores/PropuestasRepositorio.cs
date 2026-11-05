@@ -55,7 +55,7 @@ public class PropuestasRepositorio(CadenaConexionBd conexion)
             }, ct);
 
     // ── Listado (bandeja HU-08) ───────────────────────────────────────────────
-    public Task<RespuestaDto<PropuestasPaginadoDto>> ObtenerPropuestasAsync(FiltrosPropuestasDto f, CancellationToken ct)
+    public Task<RespuestaDto<PropuestasPaginadoDto>> ObtenerPropuestasAsync(FiltrosPropuestasDto f, long idUsuario, CancellationToken ct)
         => EjecutarAsync("SP_ObtenerPropuestas",
             p =>
             {
@@ -68,6 +68,7 @@ public class PropuestasRepositorio(CadenaConexionBd conexion)
                 p.AddWithValue("p_anio",                Valor(f.Anio));
                 p.AddWithValue("p_id_comercial",        Valor(f.IdComercial));
                 p.AddWithValue("p_solo_ultima_version", Bit(f.SoloUltimaVersion));
+                p.AddWithValue("p_id_usuario",          idUsuario);
             },
             async (r, mensaje) =>
             {
@@ -94,12 +95,13 @@ public class PropuestasRepositorio(CadenaConexionBd conexion)
             }, ct);
 
     // ── KPIs (bandeja HU-08) ──────────────────────────────────────────────────
-    public Task<RespuestaDto<KpisPropuestasDto>> ObtenerKpisAsync(int? anio, long? idComercial, CancellationToken ct)
+    public Task<RespuestaDto<KpisPropuestasDto>> ObtenerKpisAsync(int? anio, long? idComercial, long idUsuario, CancellationToken ct)
         => EjecutarAsync("SP_ObtenerKpisPropuestas",
             p =>
             {
                 p.AddWithValue("p_anio",         Valor(anio));
                 p.AddWithValue("p_id_comercial", Valor(idComercial));
+                p.AddWithValue("p_id_usuario",   idUsuario);
             },
             async (r, mensaje) =>
             {
@@ -256,6 +258,13 @@ public class PropuestasRepositorio(CadenaConexionBd conexion)
                         EstadoEquipo         = Texto(r, "estado_equipo"),
                         EstadoEquipoLabel    = Texto(r, "estado_equipo_label"),
                         EstadoOperativoLabel = Texto(r, "estado_operativo_label"),
+                        Estado               = Texto(r, "estado_equipo") switch
+                        {
+                            "activo"   => "Activo",
+                            "inactivo" => "Inactivo",
+                            "borrador" => "Borrador",
+                            _          => null,
+                        },
                     });
 
                 return new RespuestaDto<PropuestaDetalleDto>(2, mensaje, d);

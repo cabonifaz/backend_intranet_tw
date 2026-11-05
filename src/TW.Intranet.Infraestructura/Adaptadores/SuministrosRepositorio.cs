@@ -160,5 +160,17 @@ public class SuministrosRepositorio(CadenaConexionBd conexion)
         IdPrimerProcedimiento:  TieneColumna(r, "primer_procedimiento") ? Texto(r, "id_primer_procedimiento")  : null,
         PrimerProcedimiento:    TieneColumna(r, "primer_procedimiento") ? Texto(r, "primer_procedimiento")               : null,
         IdSegundoProcedimiento: TieneColumna(r, "segundo_procedimiento") ? Texto(r, "id_segundo_procedimiento") : null,
-        SegundoProcedimiento:   TieneColumna(r, "segundo_procedimiento") ? Texto(r, "segundo_procedimiento")              : null);
+        SegundoProcedimiento:   TieneColumna(r, "segundo_procedimiento") ? Texto(r, "segundo_procedimiento")              : null,
+        PrimerProcedimientoDetalle:  ResumenProcedimiento(r, "id_primer_procedimiento",  "p1_"),
+        SegundoProcedimientoDetalle: ResumenProcedimiento(r, "id_segundo_procedimiento", "p2_"));
+
+    /// <summary>Resumen del procedimiento si el SP trae sus columnas (p1_/p2_) y el suministro tiene código.</summary>
+    private static ProcedimientoResumenDto? ResumenProcedimiento(MySqlDataReader r, string colCodigo, string prefijo)
+    {
+        if (!TieneColumna(r, prefijo + "norma")) return null;
+        var codigo = Texto(r, colCodigo);
+        if (string.IsNullOrWhiteSpace(codigo)) return null;
+        return new ProcedimientoResumenDto(codigo.Trim(), Texto(r, prefijo + "norma"), EnteroNulo(r, prefijo + "version"),
+            EnteroNulo(r, prefijo + "anio"), Texto(r, prefijo + "autor"), Texto(r, prefijo + "descripcion"));
+    }
 }

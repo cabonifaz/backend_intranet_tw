@@ -629,6 +629,7 @@ public record DatosOsExpedienteDto
     public long?     IdPropuesta            { get; init; }
     public string?   NumeroPropuesta        { get; init; }
     public int?      VersionPropuesta       { get; init; }
+    public long?     IdRequerimiento        { get; init; }
     public string?   NumeroRq               { get; init; }
     public string?   RazonSocial            { get; init; }
     public string?   Ruc                    { get; init; }
@@ -658,7 +659,16 @@ public record EquipoOsDto(long IdEquipo, string? CodigoTw, string? CodigoCliente
 
 /// <summary>Concepto de la OS/OM (módulo comercial) con los códigos TW de los equipos a los que aplica.</summary>
 public record ConceptoOsExpedienteDto(long IdOsConcepto, int Orden, string? Codigo, string? Descripcion, string? Alcance,
-                                      string? EquiposAplicados);
+                                      string? EquiposAplicados,
+                                      long? IdItem = null, decimal? Cantidad = null, decimal? Frecuencia = null,
+                                      decimal? PrecioUnitario = null, decimal? Subtotal = null, string? SimboloMoneda = null);
+
+/// <summary>Programación de la OS (Módulo 8): una visita = fecha + técnico principal (+ apoyo) con sus equipos.</summary>
+public record ProgramacionVisitaOsDto(long IdProgramacion, string? Codigo, DateTime? Fecha, string? HoraInicio, string? HoraFin,
+                                      string? Estado, string? EstadoLabel, long? IdTecnico, string? Tecnico,
+                                      string? TecnicosApoyo, IReadOnlyList<EquipoProgramadoOsDto> Equipos);
+
+public record EquipoProgramadoOsDto(long IdEquipo, string? CodigoTw, string? Marca, string? Modelo, string? NumeroSerie);
 
 public record GastoOsDto(long IdGasto, string? Tipo, string? Concepto, decimal? Monto, string? SimboloMoneda, string? Descripcion,
                          string? Estado, DateTime? FechaSolicitud, string? Usuario);
@@ -673,7 +683,8 @@ public record TabOrdenServicioExpedienteDto(
     IReadOnlyList<EquipoOsDto>                   Equipos,
     IReadOnlyList<GastoOsDto>                    Gastos,
     IReadOnlyList<OrdenMetrologiaExpedienteDto>  OrdenesMetrologia,
-    IReadOnlyList<ConceptoOsExpedienteDto>?      Conceptos = null);
+    IReadOnlyList<ConceptoOsExpedienteDto>?      Conceptos = null,
+    IReadOnlyList<ProgramacionVisitaOsDto>?      Programacion = null);
 
 // Tab Programación
 public record CalendarioOsDto(long IdOs, string Numero, string Estado, DateTime? FechaEjecucion, string? HoraInicio,

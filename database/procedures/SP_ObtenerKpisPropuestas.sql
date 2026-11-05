@@ -12,11 +12,19 @@ DELIMITER $$
 
 CREATE PROCEDURE SP_ObtenerKpisPropuestas(
     IN p_anio         INT,
-    IN p_id_comercial BIGINT
+    IN p_id_comercial BIGINT,
+    IN p_id_usuario   BIGINT
 )
 BEGIN
     DECLARE v_mes_actual   INT;
     DECLARE v_mes_anterior INT;
+    DECLARE v_ver_todo     TINYINT DEFAULT 0;
+    DECLARE v_solo_propio  TINYINT DEFAULT 1;
+    DECLARE v_ids          TEXT;
+    DECLARE v_area         VARCHAR(40);
+
+    -- Pedido 14: los KPIs se calculan sobre el alcance del usuario
+    CALL SP_ObtenerAlcanceCrm(p_id_usuario, v_ver_todo, v_solo_propio, v_ids, v_area);
 
     DROP TEMPORARY TABLE IF EXISTS tmp_kpi_prop;
     CREATE TEMPORARY TABLE tmp_kpi_prop AS
@@ -32,6 +40,7 @@ BEGIN
         WHERE p.eliminado_en IS NULL
           AND (p_anio IS NULL OR p_anio = 0 OR YEAR(p.fecha_creacion) = p_anio)
           AND (p_id_comercial IS NULL OR p_id_comercial = 0 OR COALESCE(p.id_responsable, p.id_creador) = p_id_comercial)
+          AND (v_ver_todo = 1 OR FIND_IN_SET(COALESCE(p.id_responsable, p.id_creador), v_ids) > 0)
           AND p.version = (SELECT MAX(p2.version) FROM propuesta_comercial p2
                            WHERE p2.numero = p.numero AND p2.eliminado_en IS NULL);
 

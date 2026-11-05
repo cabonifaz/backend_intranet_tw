@@ -352,6 +352,7 @@ builder.Services.AddScoped<SolicitarRevocacionVbCasoDeUso>();
 builder.Services.AddScoped<ResolverRevocacionVbCasoDeUso>();
 builder.Services.AddScoped<IPropuestaPdfGenerador, PropuestaPdfGeneradorQuestPdf>();
 builder.Services.AddScoped<GenerarPdfPropuestaCasoDeUso>();
+builder.Services.AddScoped<GenerarPdfPreviewPropuestaCasoDeUso>();
 
 // ── INYECCIÓN DE DEPENDENCIAS — Ubigeo, áreas del cliente y formatos (reunión 02-oct) ──
 builder.Services.AddScoped<IMaestrosComplementariosRepositorio, MaestrosComplementariosRepositorio>();
@@ -529,7 +530,6 @@ builder.Services.AddScoped<ObtenerTimelineServicioRutaCasoDeUso>();
 builder.Services.AddScoped<ObtenerIncidenciasServicioRutaCasoDeUso>();
 builder.Services.AddScoped<ExportarIncidenciasServicioRutaCasoDeUso>();
 builder.Services.AddScoped<ObtenerCierreServicioRutaCasoDeUso>();
-builder.Services.AddScoped<ObtenerAuditoriaServicioRutaCasoDeUso>(); // HU-54
 
 // HU-53 Registro operativo del Asistente de Seguimiento (Sprint 5): observación, demora/incidente y cambio manual de estado
 builder.Services.AddScoped<IRegistroAsistenteRepositorio, RegistroAsistenteRepositorio>();

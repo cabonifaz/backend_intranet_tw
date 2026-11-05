@@ -1,6 +1,7 @@
 -- Expediente Digital (interno, HU-29/30/33): cálculo compartido de los expedientes (refinamiento Sprint 4).
 -- Llena la tabla temporal tmp_exp. El que llama hace DROP TEMPORARY TABLE tmp_exp al terminar.
 -- p_id_expediente NULL = todos (bandeja). Un id que no existe (o 0) no devuelve filas.
+-- Pedido 14: en el área comercial solo quedan los expedientes del alcance del usuario (SP_ObtenerAlcanceCrm).
 -- También deja tmp_exp_blq (bloqueos y excepciones, ver SP_CargarBloqueosExpediente): el que llama la borra.
 --
 -- El expediente nace con el RQ y es de consulta: la etapa se calcula sola desde los módulos origen (no se guarda ni se
@@ -34,6 +35,11 @@ CREATE PROCEDURE SP_CalcularExpedientes(
     IN p_id_expediente BIGINT
 )
 BEGIN
+    DECLARE v_ver_todo    TINYINT DEFAULT 0;
+    DECLARE v_solo_propio TINYINT DEFAULT 1;
+    DECLARE v_ids         TEXT;
+    DECLARE v_area        VARCHAR(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+
     SET SESSION group_concat_max_len = 1000000;
 
     -- ── 1. Expediente y RQ ──────────────────────────────────────────────────
@@ -371,6 +377,16 @@ BEGIN
                     WHEN 'ssoma'        THEN personal_os > 0 AND personal_no_habilitado = 0
                     WHEN 'cierre'       THEN informe_aprobado = 1
                     ELSE 0 END);
+
+    -- ── Pedido 14: alcance del usuario ─────────────────────────────────────
+    -- El área comercial solo ve los expedientes de su alcance (usuario → responsable comercial actual + suplencias;
+    -- supervisor / visor → su área). Operaciones y las demás áreas conservan la vista completa.
+    CALL SP_ObtenerAlcanceCrm(p_id_usuario, v_ver_todo, v_solo_propio, v_ids, v_area);
+    IF v_ver_todo = 0 AND IFNULL(v_area, '') = 'comercial' THEN
+        DELETE FROM tmp_exp
+        WHERE NOT (FIND_IN_SET(id_responsable, v_ids) > 0
+                   OR (id_responsable IS NULL AND v_solo_propio = 0));
+    END IF;
 END$$
 
 DELIMITER ;

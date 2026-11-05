@@ -32,7 +32,8 @@ public class PropuestasController(
     PrepararEnvioClienteCasoDeUso            prepararEnvioCliente,
     EnviarPropuestaClienteCasoDeUso          enviarPropuestaCliente,
     SolicitarRevocacionVbCasoDeUso           solicitarRevocacionVb,
-    GenerarPdfPropuestaCasoDeUso             generarPdf) : ControllerBase
+    GenerarPdfPropuestaCasoDeUso             generarPdf,
+    GenerarPdfPreviewPropuestaCasoDeUso      generarPdfPreview) : ControllerBase
 {
     private long IdUsuarioActual =>
         long.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub"), out var id)
@@ -60,13 +61,13 @@ public class PropuestasController(
     [RequierePermiso("propuesta_ver")]
     [HttpGet]
     public async Task<IActionResult> ObtenerPropuestas([FromQuery] FiltrosPropuestasDto filtros, CancellationToken ct = default)
-        => Responder(await obtenerPropuestas.EjecutarAsync(filtros, ct));
+        => Responder(await obtenerPropuestas.EjecutarAsync(filtros, IdUsuarioActual, ct));
 
     /// <summary>Tarjetas resumen de la bandeja (HU-08). Filtros opcionales: anio, idComercial.</summary>
     [RequierePermiso("propuesta_ver")]
     [HttpGet("kpis")]
     public async Task<IActionResult> ObtenerKpis([FromQuery] int? anio, [FromQuery] long? idComercial, CancellationToken ct = default)
-        => Responder(await obtenerKpis.EjecutarAsync(anio, idComercial, ct));
+        => Responder(await obtenerKpis.EjecutarAsync(anio, idComercial, IdUsuarioActual, ct));
 
     /// <summary>Propuesta completa: cabecera, ítems, textos, formas de pago y equipos.</summary>
     [RequierePermiso("propuesta_ver")]
@@ -230,5 +231,20 @@ public class PropuestasController(
             return r.IdTipoMensaje == 1 ? BadRequest(new RespuestaDto<object>(1, r.Mensaje))
                                         : StatusCode(500, new RespuestaDto<object>(3, r.Mensaje));
         return File(r.Datos, "application/pdf", $"propuesta-{id}.pdf");
+    }
+
+    /// <summary>
+    /// Vista previa del PDF con el borrador del wizard sin guardar: body = mismo JSON que "Guardar" (POST /api/crm/propuestas).
+    /// No persiste nada.
+    /// </summary>
+    [RequierePermiso("propuesta_guardar", "propuesta_ver")]
+    [HttpPost("{id:long}/pdf-preview")]
+    public async Task<IActionResult> ObtenerPdfPreview(long id, [FromBody] GuardarPropuestaDto borrador, CancellationToken ct = default)
+    {
+        var r = await generarPdfPreview.EjecutarAsync(id, borrador, ct);
+        if (r.IdTipoMensaje != 2 || r.Datos is null)
+            return r.IdTipoMensaje == 1 ? BadRequest(new RespuestaDto<object>(1, r.Mensaje))
+                                        : StatusCode(500, new RespuestaDto<object>(3, r.Mensaje));
+        return File(r.Datos, "application/pdf", $"propuesta-{id}-vista-previa.pdf");
     }
 }

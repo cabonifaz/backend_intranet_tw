@@ -1,5 +1,6 @@
 -- HU-41 (Sprint 4) Bandeja consolidada de Órdenes de Servicio y de Metrología (OS / OM).
 -- Acceso: os_bandeja (Comercial) u os_bandeja_operaciones (Operaciones, consulta). Los borradores solo los ve Comercial.
+-- Pedido 14: en el área comercial se aplica el alcance de SP_ObtenerAlcanceCrm sobre el responsable comercial.
 -- Estado (grupo de la tarjeta):
 --   borrador · emitida · programada (programada, reprogramada) · en_ejecucion (en_ruta, en_ejecucion, pausada,
 --   bloqueada) · finalizada · anulada
@@ -42,6 +43,10 @@ BEGIN
     DECLARE v_busqueda    VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_inicio_sem  DATE;
     DECLARE v_inicio_mes  DATE;
+    DECLARE v_ver_todo    TINYINT DEFAULT 0;
+    DECLARE v_solo_propio TINYINT DEFAULT 1;
+    DECLARE v_ids         TEXT;
+    DECLARE v_area        VARCHAR(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 
     SET v_comercial   = FN_PermisoAccion(p_id_usuario, 'os_bandeja');
     SET v_operaciones = FN_PermisoAccion(p_id_usuario, 'os_bandeja_operaciones');
@@ -62,6 +67,13 @@ BEGIN
         SET v_busqueda   = TRIM(IFNULL(p_busqueda, ''));
         SET v_inicio_sem = DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY);
         SET v_inicio_mes = DATE_FORMAT(CURDATE(), '%Y-%m-01');
+
+        -- Pedido 14: el área comercial ve según su alcance (usuario → sus OS + suplencias; supervisor / visor →
+        -- su área). Operaciones y las demás áreas conservan la vista completa de su módulo.
+        CALL SP_ObtenerAlcanceCrm(p_id_usuario, v_ver_todo, v_solo_propio, v_ids, v_area);
+        IF IFNULL(v_area, '') <> 'comercial' THEN
+            SET v_ver_todo = 1;
+        END IF;
 
         DROP TEMPORARY TABLE IF EXISTS tmp_os_bandeja;
         CREATE TEMPORARY TABLE tmp_os_bandeja AS
@@ -94,7 +106,9 @@ BEGIN
         LEFT JOIN cliente c            ON c.id_cliente = os.id_cliente
         LEFT JOIN expediente_digital e ON e.id_expediente = os.id_expediente
         WHERE os.eliminado_en IS NULL
-          AND (v_comercial = 1 OR os.estado <> 'borrador');
+          AND (v_comercial = 1 OR os.estado <> 'borrador')
+          AND (v_ver_todo = 1 OR FIND_IN_SET(os.id_responsable_comercial, v_ids) > 0
+               OR (os.id_responsable_comercial IS NULL AND v_solo_propio = 0));
 
         DROP TEMPORARY TABLE IF EXISTS tmp_os_filtro;
         CREATE TEMPORARY TABLE tmp_os_filtro AS

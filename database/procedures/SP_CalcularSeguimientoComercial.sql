@@ -39,6 +39,10 @@ CREATE PROCEDURE SP_CalcularSeguimientoComercial(
 BEGIN
     DECLARE v_todas           TINYINT DEFAULT 0;
     DECLARE v_area            VARCHAR(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_ver_todo    TINYINT DEFAULT 0;
+    DECLARE v_solo_propio TINYINT DEFAULT 1;
+    DECLARE v_ids         TEXT;
+    DECLARE v_area_alc    VARCHAR(40);
     DECLARE v_dias_sin_resp   INT DEFAULT 7;
     DECLARE v_meta            INT DEFAULT 8;
     DECLARE v_sla_horas       INT DEFAULT 48;
@@ -56,6 +60,8 @@ BEGIN
       INTO v_sla_horas, v_alerta_horas
     FROM tabla_maestra
     WHERE IdMaestro = 49 AND IdEmpresa = 1 AND String1 = 'propuesta' AND String2 = 'seguimiento';
+
+    CALL SP_ObtenerAlcanceCrm(p_id_usuario, v_ver_todo, v_solo_propio, v_ids, v_area_alc);
 
     SELECT area INTO v_area
     FROM usuario WHERE id_usuario = p_id_usuario AND eliminado_en IS NULL AND estado = 'activo' LIMIT 1;
@@ -107,7 +113,9 @@ BEGIN
       AND p.estado IN ('enviado', 'aceptado', 'aprobado', 'rechazado')
       AND p.version = (SELECT MAX(p2.version) FROM propuesta_comercial p2
                        WHERE p2.numero = p.numero AND p2.eliminado_en IS NULL)
-      AND (v_todas = 1 OR u.area = v_area)
+      AND (v_todas = 1 OR v_ver_todo = 1 OR u.area = v_area)
+      -- Pedido 14: rol 'usuario' → solo lo suyo como responsable actual + suplencias vigentes
+      AND (v_ver_todo = 1 OR FIND_IN_SET(COALESCE(p.id_responsable, p.id_creador), v_ids) > 0)
       AND (IFNULL(p_id_propuesta, 0) = 0 OR p.id_propuesta = p_id_propuesta);
 
     -- ── Paso 2: estado visual, próxima acción y SLA ───────────────────────

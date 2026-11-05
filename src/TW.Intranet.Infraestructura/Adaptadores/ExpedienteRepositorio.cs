@@ -665,6 +665,7 @@ public class ExpedienteRepositorio(CadenaConexionBd conexion)
                     IdPropuesta            = EnteroLargoNulo(x, "id_propuesta"),
                     NumeroPropuesta        = Texto(x, "numero_propuesta"),
                     VersionPropuesta       = EnteroNulo(x, "version_propuesta"),
+                    IdRequerimiento        = EnteroLargoNulo(x, "id_requerimiento"),
                     NumeroRq               = Texto(x, "numero_rq"),
                     RazonSocial            = Texto(x, "razon_social"),
                     Ruc                    = Texto(x, "ruc"),
@@ -701,10 +702,25 @@ public class ExpedienteRepositorio(CadenaConexionBd conexion)
 
                 var conceptos = await LeerListaAsync(r, x => new ConceptoOsExpedienteDto(
                     EnteroLargo(x, "id_os_concepto"), Ent(x, "orden"), Texto(x, "codigo"), Texto(x, "descripcion"),
-                    Texto(x, "alcance"), Texto(x, "equipos_aplicados")), ct);
+                    Texto(x, "alcance"), Texto(x, "equipos_aplicados"),
+                    EnteroLargoNulo(x, "id_item"), DecimalNulo(x, "cantidad"), DecimalNulo(x, "frecuencia"),
+                    DecimalNulo(x, "precio_unitario"), DecimalNulo(x, "subtotal"), Texto(x, "simbolo_moneda")), ct);
+
+                var visitas = await LeerListaAsync(r, x => (
+                    Id: EnteroLargo(x, "id_programacion"), Codigo: Texto(x, "codigo"), Fecha: Fh(x, "fecha_ejecucion"),
+                    HoraInicio: Texto(x, "hora_inicio"), HoraFin: Texto(x, "hora_fin"), Estado: Texto(x, "estado"),
+                    EstadoLabel: Texto(x, "estado_label"), IdTecnico: EnteroLargoNulo(x, "id_tecnico"),
+                    Tecnico: Texto(x, "tecnico"), Apoyo: Texto(x, "tecnicos_apoyo")), ct);
+                var equiposProg = await LeerListaAsync(r, x => (
+                    IdProgramacion: EnteroLargo(x, "id_programacion"),
+                    Equipo: new EquipoProgramadoOsDto(EnteroLargo(x, "id_equipo"), Texto(x, "codigo_tw"), Texto(x, "marca"),
+                                                      Texto(x, "modelo"), Texto(x, "numero_serie"))), ct);
+                var programacion = visitas.Select(v => new ProgramacionVisitaOsDto(
+                    v.Id, v.Codigo, v.Fecha, v.HoraInicio, v.HoraFin, v.Estado, v.EstadoLabel, v.IdTecnico, v.Tecnico, v.Apoyo,
+                    equiposProg.Where(e => e.IdProgramacion == v.Id).Select(e => e.Equipo).ToList())).ToList();
 
                 return new RespuestaDto<TabOrdenServicioExpedienteDto>(2, mensaje,
-                    new TabOrdenServicioExpedienteDto(pills, datos, personal, equipos, gastos, oms, conceptos));
+                    new TabOrdenServicioExpedienteDto(pills, datos, personal, equipos, gastos, oms, conceptos, programacion));
             },
             ct);
 
