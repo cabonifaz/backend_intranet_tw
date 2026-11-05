@@ -19,7 +19,7 @@ internal static partial class EntradaDetalleServicioRuta
     internal static readonly string[] Ordenes = ["reciente", "antiguo"];
     internal static readonly string[] Secciones = ["fotos", "ensayos", "documentos", "observaciones", "mediciones"];
 
-    [GeneratedRegex("^[di][0-9]{1,18}$")]
+    [GeneratedRegex("^[dia][0-9]{1,18}$")]
     private static partial Regex ClaveIncidencia();
 
     internal static string? ErrorIdOs(long idOs) => idOs <= 0 ? "El servicio indicado no es válido." : null;

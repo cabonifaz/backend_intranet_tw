@@ -129,7 +129,7 @@ public class DetalleServicioRutaRepositorio(CadenaConexionBd conexion) : Reposit
                 var eventos = new List<EventoTimelineRutaDto>();
                 while (await r.ReadAsync(ct))
                     eventos.Add(new EventoTimelineRutaDto(Texto(r, "Hora") ?? "", Texto(r, "Categoria") ?? "", Texto(r, "Origen") ?? "", Texto(r, "Titulo") ?? "",
-                        Texto(r, "Detalle"), Texto(r, "Clave") ?? ""));
+                        Texto(r, "Detalle"), Texto(r, "Clave") ?? "", Texto(r, "Badge"), Texto(r, "Registrador"), Texto(r, "Vinculo")));
                 return new RespuestaDto<TimelineServicioRutaDto>(2, mensaje, new TimelineServicioRutaDto(conteos, eventos));
             },
             ct);

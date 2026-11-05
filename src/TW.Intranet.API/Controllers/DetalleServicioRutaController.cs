@@ -77,7 +77,7 @@ public class DetalleServicioRutaController(
     public async Task<IActionResult> Incidencias(long idOs, CancellationToken ct = default)
         => Responder(await incidencias.EjecutarAsync(IdUsuarioActual, idOs, null, ct));
 
-    /// <summary>Detalle completo de un registro (clave d&lt;id&gt; demora o i&lt;id&gt; incidencia): descripción extendida y foto de evidencia.</summary>
+    /// <summary>Detalle completo de un registro (clave d&lt;id&gt; demora, i&lt;id&gt; incidencia o a&lt;id&gt; registro del Asistente, HU-53): descripción extendida y foto de evidencia.</summary>
     [RequierePermiso("seg_bandeja")]
     [HttpGet("incidencias/{clave}")]
     public async Task<IActionResult> Incidencia(long idOs, string clave, CancellationToken ct = default)

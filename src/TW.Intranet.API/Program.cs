@@ -530,6 +530,11 @@ builder.Services.AddScoped<ObtenerIncidenciasServicioRutaCasoDeUso>();
 builder.Services.AddScoped<ExportarIncidenciasServicioRutaCasoDeUso>();
 builder.Services.AddScoped<ObtenerCierreServicioRutaCasoDeUso>();
 
+// HU-53 Registro operativo del Asistente de Seguimiento (Sprint 5): observación, demora/incidente y cambio manual de estado
+builder.Services.AddScoped<IRegistroAsistenteRepositorio, RegistroAsistenteRepositorio>();
+builder.Services.AddScoped<ObtenerFormularioRegistroAsistenteCasoDeUso>();
+builder.Services.AddScoped<RegistrarAsistenteServicioRutaCasoDeUso>();
+
 // ── INYECCIÓN DE DEPENDENCIAS — Expediente Digital (Sprint 4, HU-29 a HU-33) ───
 builder.Services.AddScoped<IExpedienteRepositorio, ExpedienteRepositorio>();
 builder.Services.AddSingleton<IGeneradorPdfTabla, GeneradorPdfTablaQuestPdf>();

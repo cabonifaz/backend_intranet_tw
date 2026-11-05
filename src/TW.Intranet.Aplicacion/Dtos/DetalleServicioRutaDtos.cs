@@ -45,7 +45,8 @@ public record MapaServicioRutaDto(PanelGpsRutaDto Panel, IReadOnlyList<PuntoRuta
 
 // Timeline
 public record ConteoTimelineDto(int Hitos, int Alertas, int Incidencias, int Asistente, int Total);
-public record EventoTimelineRutaDto(string Hora, string Categoria, string Origen, string Titulo, string? Detalle, string Clave);
+public record EventoTimelineRutaDto(string Hora, string Categoria, string Origen, string Titulo, string? Detalle, string Clave,
+    string? Badge = null, string? Registrador = null, string? Vinculo = null);
 public record TimelineServicioRutaDto(ConteoTimelineDto Conteos, IReadOnlyList<EventoTimelineRutaDto> Eventos);
 
 // Demoras / Incidencias

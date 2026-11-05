@@ -2,7 +2,9 @@
 -- Categorías: hito (eventos del técnico: salida, llegada, inicio, fin…) · alerta (automáticas del sistema) · incidencia (demoras/incidencias)
 --             · asistente (registros manuales del Asistente, HU-53). Origen: tecnico (app móvil) | sistema (automático) | asistente (manual).
 -- p_categoria: '' (todas) | hito | alerta | incidencia | asistente. p_orden: reciente (por defecto) | antiguo.
--- Resultados: 1 mensaje · 2 conteos por categoría + total · 3 eventos.
+-- HU-53: las observaciones y los cambios manuales de estado del Asistente (registro_asistente) aparecen con su Badge ([NOTA DEL ASISTENTE],
+--   [DEMORA — REGISTRO DEL ASISTENTE], [CAMBIO MANUAL CRÍTICO — ASISTENTE]), el nombre de quien registró y, si aplica, el evento al que se vinculan.
+-- Resultados: 1 mensaje · 2 conteos por categoría + total · 3 eventos (Hora, Categoria, Origen, Titulo, Detalle, Clave, Badge, Registrador, Vinculo).
 DROP PROCEDURE IF EXISTS SP_ObtenerTimelineServicioRuta;
 
 DELIMITER $$
@@ -52,13 +54,16 @@ proc: BEGIN
     CREATE TEMPORARY TABLE tmp_dt_ev (
         id INT NOT NULL AUTO_INCREMENT, hora DATETIME, categoria VARCHAR(12) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
         origen VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci, titulo VARCHAR(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
-        detalle VARCHAR(400) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci, clave VARCHAR(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci, PRIMARY KEY (id)
+        detalle VARCHAR(400) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci, clave VARCHAR(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+        badge VARCHAR(60) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci, registrador VARCHAR(220) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+        vinculo VARCHAR(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci, PRIMARY KEY (id)
     );
     -- Hitos del técnico (las demoras e incidencias se listan aparte, desde sus propios registros)
     INSERT INTO tmp_dt_ev (hora, categoria, origen, titulo, detalle, clave)
     SELECT CONVERT_TZ(e.timestamp_utc, '+00:00', '-05:00'), 'hito', 'tecnico', m.String1, LEFT(e.notas, 400), CONCAT('e', e.id_evento)
     FROM evento_campo e JOIN tabla_maestra m ON m.Descripcion = 'TIPO_EVENTO_CAMPO' AND m.IdEmpresa = 1 AND m.Num1 = e.id_tipo_evento
-    WHERE e.id_os = p_id_os AND e.eliminado_en IS NULL AND e.timestamp_utc >= v_ini_utc AND m.String2 NOT IN ('DEMORA', 'INCIDENCIA');
+    WHERE e.id_os = p_id_os AND e.eliminado_en IS NULL AND e.timestamp_utc >= v_ini_utc AND m.String2 NOT IN ('DEMORA', 'INCIDENCIA')
+      AND NOT EXISTS (SELECT 1 FROM registro_asistente ra WHERE ra.id_evento_campo = e.id_evento);
     IF v_pre_utc IS NOT NULL THEN
         INSERT INTO tmp_dt_ev (hora, categoria, origen, titulo, detalle, clave)
         VALUES (CONVERT_TZ(v_pre_utc, '+00:00', '-05:00'), 'hito', 'sistema', 'Pre-llegada por proximidad', CONCAT('A menos de ', v_prox, ' m del cliente'), 'pre');
@@ -66,18 +71,33 @@ proc: BEGIN
     INSERT INTO tmp_dt_ev (hora, categoria, origen, titulo, detalle, clave)
     SELECT DATE_SUB(v_ahora, INTERVAL IFNULL(a.minutos, 0) MINUTE), 'alerta', 'sistema', a.titulo, a.detalle, CONCAT('a', a.tipo)
     FROM tmp_sg_alerta a WHERE a.id_os = p_id_os;
-    INSERT INTO tmp_dt_ev (hora, categoria, origen, titulo, detalle, clave)
-    SELECT i.fecha, IF(i.origen = 'asistente', 'asistente', 'incidencia'), i.origen, i.tipo, i.descripcion, i.clave
+    INSERT INTO tmp_dt_ev (hora, categoria, origen, titulo, detalle, clave, badge, registrador)
+    SELECT i.fecha, IF(i.origen = 'asistente', 'asistente', 'incidencia'), i.origen, i.tipo, i.descripcion, i.clave,
+           IF(i.origen = 'asistente', '[DEMORA — REGISTRO DEL ASISTENTE]', NULL),
+           (SELECT TRIM(CONCAT(ua.nombre, ' ', ua.apellido)) FROM registro_asistente ra JOIN usuario ua ON ua.id_usuario = ra.id_usuario
+            WHERE i.clave = CONCAT('a', ra.id_registro))
     FROM tmp_sg_inc i WHERE i.id_os = p_id_os;
+    -- HU-53: observaciones y cambios manuales de estado del Asistente
+    INSERT INTO tmp_dt_ev (hora, categoria, origen, titulo, detalle, clave, badge, registrador, vinculo)
+    SELECT CONVERT_TZ(ra.fecha_utc, '+00:00', '-05:00'), 'asistente', 'asistente',
+           IF(ra.modo = 'observacion', 'Nota del Asistente',
+              CONCAT('Cambio manual de estado: ', IFNULL(ra.estado_nuevo, ''))),
+           LEFT(ra.descripcion, 400), CONCAT('a', ra.id_registro),
+           IF(ra.modo = 'observacion', '[NOTA DEL ASISTENTE]', '[CAMBIO MANUAL CRÍTICO — ASISTENTE]'),
+           TRIM(CONCAT(ua.nombre, ' ', ua.apellido)), ra.vinculo_clave
+    FROM registro_asistente ra JOIN usuario ua ON ua.id_usuario = ra.id_usuario
+    WHERE ra.id_os = p_id_os AND ra.modo IN ('observacion', 'cambio_estado') AND ra.fecha_utc >= v_ini_utc;
 
     SELECT 2 AS IdTipoMensaje, 'OK' AS Mensaje;
     SELECT IFNULL(SUM(categoria = 'hito'), 0) AS Hitos, IFNULL(SUM(categoria = 'alerta'), 0) AS Alertas, IFNULL(SUM(categoria = 'incidencia'), 0) AS Incidencias,
            IFNULL(SUM(categoria = 'asistente'), 0) AS Asistente, COUNT(*) AS Total FROM tmp_dt_ev;
     IF IFNULL(NULLIF(p_orden, ''), 'reciente') = 'reciente' THEN
-        SELECT DATE_FORMAT(hora, '%H:%i') AS Hora, categoria AS Categoria, origen AS Origen, titulo AS Titulo, detalle AS Detalle, clave AS Clave
+        SELECT DATE_FORMAT(hora, '%H:%i') AS Hora, categoria AS Categoria, origen AS Origen, titulo AS Titulo, detalle AS Detalle, clave AS Clave,
+               badge AS Badge, registrador AS Registrador, vinculo AS Vinculo
         FROM tmp_dt_ev WHERE p_categoria = '' OR categoria = p_categoria ORDER BY hora DESC, id DESC LIMIT 500;
     ELSE
-        SELECT DATE_FORMAT(hora, '%H:%i') AS Hora, categoria AS Categoria, origen AS Origen, titulo AS Titulo, detalle AS Detalle, clave AS Clave
+        SELECT DATE_FORMAT(hora, '%H:%i') AS Hora, categoria AS Categoria, origen AS Origen, titulo AS Titulo, detalle AS Detalle, clave AS Clave,
+               badge AS Badge, registrador AS Registrador, vinculo AS Vinculo
         FROM tmp_dt_ev WHERE p_categoria = '' OR categoria = p_categoria ORDER BY hora ASC, id ASC LIMIT 500;
     END IF;
 
