@@ -9,7 +9,12 @@ public record DetalleServicioMovilDto(
     List<RiesgoServicioMovilDto>      Riesgos,
     List<RepuestoServicioMovilDto>    Repuestos,
     List<HistorialServicioMovilDto>   Historial,
-    List<DocumentoServicioMovilDto>   Documentos);
+    List<DocumentoServicioMovilDto>   Documentos,
+    ProgramacionServicioMovilDto?     Programacion,
+    List<EquipoTrabajoMovilDto>       EquipoTrabajo,
+    List<EquipoServicioMovilDto>      Equipos,
+    List<ConceptoServicioMovilDto>    Conceptos,
+    List<RespuestaClienteMovilDto>    Respuestas);
 
 public record ServicioDetalleMovilDto(
     long    IdOs,
@@ -21,6 +26,8 @@ public record ServicioDetalleMovilDto(
     string? TipoServicio,
     string? FechaEjecucion,
     string? HoraInicio,
+    string? HoraFin,
+    decimal? DuracionHoras,
     string  EstadoOs,
     string? Sede,
     string? Direccion,
@@ -51,6 +58,31 @@ public record HistorialServicioMovilDto(
     string?   Usuario);
 
 public record DocumentoServicioMovilDto(long IdDocumento, string NombreArchivo, string? Tipo, int Version, DateTime? FechaCarga);
+
+// Lo que la intranet registra en "Programación Operativa" (modal Detalle de la Programación), visto por el técnico.
+
+/// <summary>Programación vigente de la OS. Estado: pendiente_confirmacion | confirmada.</summary>
+public record ProgramacionServicioMovilDto(string Codigo, string Estado, string EstadoLabel, string? Observaciones);
+
+/// <summary>Integrante del equipo de trabajo. Rol: principal | apoyo. SSOMA actual: conforme | por_vencer | incompleto | pendiente | bloqueado.
+/// El motivo solo viene para el propio técnico (EsUsuario).</summary>
+public record EquipoTrabajoMovilDto(string Nombre, string? Cargo, string Rol, bool EsUsuario, string? SsomaActual, string? MotivoSsoma);
+
+/// <summary>Equipo del cliente que se atiende en el servicio.</summary>
+public record EquipoServicioMovilDto(long IdEquipo, string? CodigoTw, string? Marca, string? Modelo, string? NumeroSerie);
+
+public record ConceptoServicioMovilDto(long IdConcepto, string? Codigo, string Descripcion, string? Alcance);
+
+/// <summary>Respuesta del cliente a la programación. Resultado: acepto | pidio_reprogramar | cancelo.</summary>
+public record RespuestaClienteMovilDto(
+    long      Id,
+    string    Canal,
+    string    CanalLabel,
+    string    Resultado,
+    string    ResultadoLabel,
+    string?   Comentario,
+    DateTime? FechaRegistro,
+    string?   RegistradoPor);
 
 /// <summary>Datos crudos con los que se arma el checklist (salen de SP_ObtenerChecklistSalidaMovil).</summary>
 public record HechosChecklistSalidaDto(

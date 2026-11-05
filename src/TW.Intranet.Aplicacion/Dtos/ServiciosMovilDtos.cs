@@ -20,4 +20,8 @@ public record ServicioProgramadoMovilDto(
     string  EstadoSsoma,
     int     AlertasPredictivas,
     string  EstadoGeneral,
-    string? MotivoBloqueo);
+    string? MotivoBloqueo,
+    string? HoraFin,            // horario del servicio: inicio–fin ("HH:mm")
+    string? TipoServicio,
+    int     NumeroTecnicos,     // equipo de trabajo (principal + apoyo)
+    string? AlertaPredictiva);  // texto de la alerta sin resolver de mayor prioridad (máx. 120 caracteres)

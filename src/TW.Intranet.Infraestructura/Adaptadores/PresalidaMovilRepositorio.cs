@@ -31,6 +31,8 @@ public class PresalidaMovilRepositorio(CadenaConexionBd conexion)
                     Texto(r, "tipo_servicio"),
                     Fecha(r, "fecha_ejecucion"),
                     Texto(r, "hora_inicio"),
+                    Texto(r, "hora_fin"),
+                    DecimalNulo(r, "duracion_horas"),
                     Texto(r, "estado_os") ?? string.Empty,
                     Texto(r, "sede"),
                     Texto(r, "direccion"),
@@ -74,8 +76,42 @@ public class PresalidaMovilRepositorio(CadenaConexionBd conexion)
                     documentos.Add(new DocumentoServicioMovilDto(EnteroLargo(r, "id_documento"), Texto(r, "nombre_archivo") ?? string.Empty,
                         Texto(r, "tipo"), Entero(r, "version"), FechaHora(r, "fecha_carga")));
 
+                // 8. Programación vigente (sin fila si la OS es anterior a la programación operativa)
+                ProgramacionServicioMovilDto? programacion = null;
+                await r.NextResultAsync(ct);
+                if (await r.ReadAsync(ct))
+                    programacion = new ProgramacionServicioMovilDto(Texto(r, "codigo") ?? string.Empty,
+                        Texto(r, "estado") ?? string.Empty, Texto(r, "estado_label") ?? string.Empty, Texto(r, "observaciones"));
+
+                var equipoTrabajo = new List<EquipoTrabajoMovilDto>();
+                await r.NextResultAsync(ct);
+                while (await r.ReadAsync(ct))
+                    equipoTrabajo.Add(new EquipoTrabajoMovilDto(Texto(r, "nombre") ?? string.Empty, Texto(r, "cargo"),
+                        Texto(r, "rol") ?? "apoyo", Booleano(r, "es_usuario"), Texto(r, "ssoma_actual"), Texto(r, "ssoma_motivo")));
+
+                var equipos = new List<EquipoServicioMovilDto>();
+                await r.NextResultAsync(ct);
+                while (await r.ReadAsync(ct))
+                    equipos.Add(new EquipoServicioMovilDto(EnteroLargo(r, "id_equipo"), Texto(r, "codigo_tw"), Texto(r, "marca"),
+                        Texto(r, "modelo"), Texto(r, "num_serie")));
+
+                var conceptos = new List<ConceptoServicioMovilDto>();
+                await r.NextResultAsync(ct);
+                while (await r.ReadAsync(ct))
+                    conceptos.Add(new ConceptoServicioMovilDto(EnteroLargo(r, "id_concepto"), Texto(r, "codigo"),
+                        Texto(r, "descripcion") ?? string.Empty, Texto(r, "alcance")));
+
+                var respuestas = new List<RespuestaClienteMovilDto>();
+                await r.NextResultAsync(ct);
+                while (await r.ReadAsync(ct))
+                    respuestas.Add(new RespuestaClienteMovilDto(EnteroLargo(r, "id"), Texto(r, "canal") ?? string.Empty,
+                        Texto(r, "canal_label") ?? string.Empty, Texto(r, "resultado") ?? string.Empty,
+                        Texto(r, "resultado_label") ?? string.Empty, Texto(r, "comentario"), FechaHora(r, "fecha_registro"),
+                        Texto(r, "registrado_por")));
+
                 return new RespuestaDto<DetalleServicioMovilDto>(2, mensaje,
-                    new DetalleServicioMovilDto(servicio, alertas, riesgos, repuestos, historial, documentos));
+                    new DetalleServicioMovilDto(servicio, alertas, riesgos, repuestos, historial, documentos,
+                        programacion, equipoTrabajo, equipos, conceptos, respuestas));
             }, ct);
 
     public Task<RespuestaDto<HechosChecklistSalidaDto>> ObtenerHechosChecklistAsync(long idUsuario, long idOs, CancellationToken ct) =>
