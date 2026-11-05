@@ -22,6 +22,13 @@ internal static partial class EntradaDetalleServicioRuta
     [GeneratedRegex("^[dia][0-9]{1,18}$")]
     private static partial Regex ClaveIncidencia();
 
+    [GeneratedRegex(@"^(https://[^\s<>""\\]+|/[^/\s<>""\\][^\s<>""\\]*)$")]
+    private static partial Regex UrlPermitida();
+
+    /// <summary>Devuelve la URL solo si es https:// o una ruta del sistema (sin "//", sin ".."), si no null.</summary>
+    internal static string? UrlSegura(string? url)
+        => string.IsNullOrWhiteSpace(url) || url.Length > 500 || url.Contains("..") || !UrlPermitida().IsMatch(url.Trim()) ? null : url.Trim();
+
     internal static string? ErrorIdOs(long idOs) => idOs <= 0 ? "El servicio indicado no es válido." : null;
 
     internal static (ConsultaTimelineNormalizada? Datos, string? Error) NormalizarTimeline(string? categoria, string? orden)
@@ -107,11 +114,37 @@ public class ObtenerIncidenciasServicioRutaCasoDeUso(IDetalleServicioRutaReposit
     }
 }
 
+/// <summary>
+/// HU-54 Cierre del Servicio (observacional). Desarrollo seguro: el SP ya valida las URL del informe y de la firma; aquí se vuelve a filtrar
+/// (defensa en profundidad): solo https:// o una ruta del sistema, nunca javascript:, data:, file:, http ni "//host".
+/// </summary>
 public class ObtenerCierreServicioRutaCasoDeUso(IDetalleServicioRutaRepositorio repositorio)
 {
-    public Task<RespuestaDto<CierreServicioRutaDto>> EjecutarAsync(long idUsuario, long idOs, CancellationToken ct = default)
+    public async Task<RespuestaDto<CierreServicioRutaDto>> EjecutarAsync(long idUsuario, long idOs, CancellationToken ct = default)
+    {
+        if (EntradaDetalleServicioRuta.ErrorIdOs(idOs) is { } e)
+            return new RespuestaDto<CierreServicioRutaDto>(1, e);
+        var r = await repositorio.ObtenerCierreAsync(idUsuario, idOs, ct);
+        if (r.IdTipoMensaje != 2 || r.Datos is null)
+            return r;
+        var d = r.Datos;
+        return r with
+        {
+            Datos = d with
+            {
+                Equipos = d.Equipos.Select(x => x with { UrlInforme = EntradaDetalleServicioRuta.UrlSegura(x.UrlInforme) }).ToList(),
+                Acta = d.Acta is null ? null : d.Acta with { UrlFirma = EntradaDetalleServicioRuta.UrlSegura(d.Acta.UrlFirma) },
+            },
+        };
+    }
+}
+
+/// <summary>HU-54 "Auditoría del servicio": historial del servicio finalizado. Solo lectura; el SP exige servicio finalizado y de la jornada de hoy.</summary>
+public class ObtenerAuditoriaServicioRutaCasoDeUso(IDetalleServicioRutaRepositorio repositorio)
+{
+    public Task<RespuestaDto<AuditoriaServicioRutaDto>> EjecutarAsync(long idUsuario, long idOs, CancellationToken ct = default)
         => EntradaDetalleServicioRuta.ErrorIdOs(idOs) is { } e
-            ? Task.FromResult(new RespuestaDto<CierreServicioRutaDto>(1, e)) : repositorio.ObtenerCierreAsync(idUsuario, idOs, ct);
+            ? Task.FromResult(new RespuestaDto<AuditoriaServicioRutaDto>(1, e)) : repositorio.ObtenerAuditoriaAsync(idUsuario, idOs, ct);
 }
 
 /// <summary>

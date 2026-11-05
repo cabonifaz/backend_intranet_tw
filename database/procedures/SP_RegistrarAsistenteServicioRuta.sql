@@ -6,6 +6,7 @@
 --                 p_evidencia (opcional: https://… o /ruta, ≤500). Si detiene → notifica a quienes tienen seg_alerta_registro (Jefe de Operaciones).
 --   cambio_estado (crítico): p_nuevo_estado (salida|en_ruta|llegada|ingreso|inicio|finalizado; solo avanza), p_id_motivo (catálogo MOTIVO_CAMBIO_MANUAL),
 --                 p_comentario (10..1000, obligatorio). Actualiza la OS, crea el hito del técnico, notifica siempre al Jefe y audita en la OS y el expediente.
+-- Servicio finalizado (HU-54): modo auditoría post-servicio, no admite ningún registro.
 -- Antiduplicado: mismo usuario + OS + modo + texto en 15 s → regla de negocio. Límite: 30 registros por usuario en 10 min.
 -- Resultados: 1 mensaje (1 regla de negocio · 2 éxito · 3 error) · 2 (solo éxito) IdRegistro, Modo, Notificados, EstadoNuevo.
 -- Concurrencia: serializa por usuario con GET_LOCK (doble clic, replay o ráfagas en paralelo no duplican ni saltan el límite) y delega en SP_RegistrarAsistenteServicioRutaInterno.

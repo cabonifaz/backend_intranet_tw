@@ -160,14 +160,50 @@ public class DetalleServicioRutaRepositorio(CadenaConexionBd conexion) : Reposit
             {
                 await r.NextResultAsync(ct);
                 if (!await r.ReadAsync(ct))
-                    return new RespuestaDto<CierreServicioRutaDto>(3, "El procedimiento no devolvió el resumen del cierre.");
-                var resumen = new ResumenCierreRutaDto(Texto(r, "Inicio"), Texto(r, "Fin"), EnteroNulo(r, "DuracionMin"), Entero(r, "EquiposTotal"), Entero(r, "EquiposEjecutados"),
-                    Entero(r, "DemorasIncidencias"), Entero(r, "Fotos"), Entero(r, "Mediciones"), Texto(r, "Observaciones"));
+                    return new RespuestaDto<CierreServicioRutaDto>(3, "El procedimiento no devolvió la cabecera del cierre.");
+                var cab = new CabeceraCierreServicioRutaDto(Texto(r, "Resultado") ?? "", Texto(r, "ResultadoTexto") ?? "", Texto(r, "FinalizadoHora"), EnteroNulo(r, "DuracionMin"),
+                    EnteroNulo(r, "MinutosEstimados"), EnteroNulo(r, "DiferenciaMin"), EnteroLargoNulo(r, "IdTecnico"), Texto(r, "Tecnico"), Texto(r, "Iniciales"),
+                    Texto(r, "Rol") ?? "", Texto(r, "CerradoPor") ?? "", Texto(r, "Subtitulo") ?? "", Entero(r, "EquiposFinalizados"), Entero(r, "EquiposTotal"),
+                    Entero(r, "Informes"), Entero(r, "DemorasIncidencias"), Entero(r, "RegistrosAsistente"), Entero(r, "EquiposParciales"), Entero(r, "EquiposPendientes"),
+                    Entero(r, "EquiposReprogramados"), Entero(r, "EquiposAnulados"), Texto(r, "EstadoCabecera") ?? "", Booleano(r, "ModoAuditoria"), Booleano(r, "RegistrarHabilitado"),
+                    Texto(r, "TooltipRegistrar") ?? "", Texto(r, "ChipModo") ?? "", Texto(r, "TextoActualizacion") ?? "");
+
+                await r.NextResultAsync(ct);
+                var equipos = new List<EquipoCierreRutaDto>();
+                while (await r.ReadAsync(ct))
+                    equipos.Add(new EquipoCierreRutaDto(EnteroLargo(r, "IdEquipo"), Texto(r, "Nombre") ?? "", Texto(r, "Serie"), Texto(r, "TipoServicio"), Texto(r, "Estado") ?? "",
+                        Texto(r, "EstadoTexto") ?? "", Texto(r, "Hora"), Texto(r, "Informe"), Texto(r, "UrlInforme"), Booleano(r, "ConObservaciones"), Texto(r, "Info"),
+                        Texto(r, "Vinculo"), Booleano(r, "Destacado")));
+
+                await r.NextResultAsync(ct);
+                ActaConformidadRutaDto? acta = null;
+                if (await r.ReadAsync(ct))
+                    acta = new ActaConformidadRutaDto(Texto(r, "Hora"), Texto(r, "Estado") ?? "", Texto(r, "Chip") ?? "", Texto(r, "Firmante"), Texto(r, "Cargo"), Texto(r, "Metodo") ?? "",
+                        Texto(r, "Tipo") ?? "", Booleano(r, "GpsVerificado"), Texto(r, "Gps") ?? "", Texto(r, "UrlFirma"), Texto(r, "Observaciones"), Texto(r, "Nota") ?? "");
+
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<CierreServicioRutaDto>(3, "El procedimiento no devolvió el pie del cierre.");
+                var pie = new PieCierreRutaDto(EnteroLargoNulo(r, "IdExpediente"), Texto(r, "Expediente"), Entero(r, "Documentos"), Entero(r, "EventosAuditoria"));
+
                 await r.NextResultAsync(ct);
                 var ordenes = new List<OrdenCierreRutaDto>();
                 while (await r.ReadAsync(ct))
                     ordenes.Add(new OrdenCierreRutaDto(Texto(r, "Numero") ?? "", Texto(r, "Estado") ?? "", Texto(r, "Certificado"), Texto(r, "FechaEmision")));
-                return new RespuestaDto<CierreServicioRutaDto>(2, mensaje, new CierreServicioRutaDto(resumen, ordenes));
+                return new RespuestaDto<CierreServicioRutaDto>(2, mensaje, new CierreServicioRutaDto(cab, equipos, acta, pie, ordenes));
+            },
+            ct);
+
+    public Task<RespuestaDto<AuditoriaServicioRutaDto>> ObtenerAuditoriaAsync(long idUsuario, long idOs, CancellationToken ct)
+        => EjecutarAsync("SP_ObtenerAuditoriaServicioRuta",
+            p => { p.AddWithValue("p_id_usuario", idUsuario); p.AddWithValue("p_id_os", idOs); },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                var filas = new List<AuditoriaEntradaRutaDto>();
+                while (await r.ReadAsync(ct))
+                    filas.Add(new AuditoriaEntradaRutaDto(Texto(r, "Fecha") ?? "", Texto(r, "Origen") ?? "", Texto(r, "Accion") ?? "", Texto(r, "Usuario"), Texto(r, "Descripcion")));
+                return new RespuestaDto<AuditoriaServicioRutaDto>(2, mensaje, new AuditoriaServicioRutaDto(filas));
             },
             ct);
 }

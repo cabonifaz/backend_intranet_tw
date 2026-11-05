@@ -130,8 +130,9 @@ proc: BEGIN
     SELECT TRIM(CONCAT(nombre, ' ', apellido)) INTO v_asistente FROM usuario WHERE id_usuario = p_id_usuario;
     SELECT id_expediente INTO v_exp FROM orden_servicio WHERE id_os = p_id_os;
 
-    IF v_estado_os = 'finalizada' AND p_modo <> 'observacion' THEN
-        SELECT 1 AS IdTipoMensaje, 'El servicio ya está finalizado: solo se pueden agregar notas.' AS Mensaje; LEAVE proc;
+    -- HU-54: servicio finalizado = modo auditoría post-servicio, el tab Registrar queda deshabilitado (ningún modo)
+    IF v_estado_os = 'finalizada' THEN
+        SELECT 1 AS IdTipoMensaje, 'Servicio finalizado — Para registrar observaciones post-cierre, pedir reapertura al Jefe de Operaciones.' AS Mensaje; LEAVE proc;
     END IF;
 
     -- Vínculo: debe ser un evento del timeline de ESTE servicio y de hoy (e<id> hito · a<id> registro del Asistente · d/i<id> demora/incidencia)

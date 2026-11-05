@@ -17,7 +17,7 @@ public record RegistroAsistenteNormalizado(
 public record RegistroAsistenteCreadoDto(long IdRegistro, string Modo, int Notificados, string? EstadoNuevo);
 
 public record ContextoRegistroAsistenteDto(
-    string RegistrandoComo, string HoraActual, string Numero, string? Tecnico, string EstadoActual, int NivelActual, bool PuedeRegistrar);
+    string RegistrandoComo, string HoraActual, string Numero, string? Tecnico, string EstadoActual, int NivelActual, bool PuedeRegistrar, string? MensajeBloqueo = null);
 public record OpcionRegistroAsistenteDto(int Id, string Nombre, string Codigo);
 public record EstadoRegistroAsistenteDto(string Codigo, string Nombre, int Nivel, bool Permitido);
 public record EventoVinculableDto(string Clave, string Hora, string Titulo);

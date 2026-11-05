@@ -57,9 +57,26 @@ public record IncidenciaServicioRutaDto(
 public record IncidenciasServicioRutaDto(KpisIncidenciasRutaDto Kpis, IReadOnlyList<IncidenciaServicioRutaDto> Filas);
 
 // Cierre (HU-54, observacional)
-public record ResumenCierreRutaDto(string? Inicio, string? Fin, int? DuracionMin, int EquiposTotal, int EquiposEjecutados, int DemorasIncidencias, int Fotos, int Mediciones, string? Observaciones);
+public record CabeceraCierreServicioRutaDto(
+    string Resultado, string ResultadoTexto, string? FinalizadoHora, int? DuracionMin, int? MinutosEstimados, int? DiferenciaMin,
+    long? IdTecnico, string? Tecnico, string? Iniciales, string Rol, string CerradoPor, string Subtitulo,
+    int EquiposFinalizados, int EquiposTotal, int Informes, int DemorasIncidencias, int RegistrosAsistente,
+    int EquiposParciales, int EquiposPendientes, int EquiposReprogramados, int EquiposAnulados,
+    string EstadoCabecera, bool ModoAuditoria, bool RegistrarHabilitado, string TooltipRegistrar, string ChipModo, string TextoActualizacion);
+public record EquipoCierreRutaDto(
+    long IdEquipo, string Nombre, string? Serie, string? TipoServicio, string Estado, string EstadoTexto, string? Hora,
+    string? Informe, string? UrlInforme, bool ConObservaciones, string? Info, string? Vinculo, bool Destacado);
+public record ActaConformidadRutaDto(
+    string? Hora, string Estado, string Chip, string? Firmante, string? Cargo, string Metodo, string Tipo,
+    bool GpsVerificado, string Gps, string? UrlFirma, string? Observaciones, string Nota);
+public record PieCierreRutaDto(long? IdExpediente, string? Expediente, int Documentos, int EventosAuditoria);
 public record OrdenCierreRutaDto(string Numero, string Estado, string? Certificado, string? FechaEmision);
-public record CierreServicioRutaDto(ResumenCierreRutaDto Resumen, IReadOnlyList<OrdenCierreRutaDto> Ordenes);
+public record CierreServicioRutaDto(
+    CabeceraCierreServicioRutaDto Cabecera, IReadOnlyList<EquipoCierreRutaDto> Equipos, ActaConformidadRutaDto? Acta,
+    PieCierreRutaDto Pie, IReadOnlyList<OrdenCierreRutaDto> Ordenes);
+
+public record AuditoriaEntradaRutaDto(string Fecha, string Origen, string Accion, string? Usuario, string? Descripcion);
+public record AuditoriaServicioRutaDto(IReadOnlyList<AuditoriaEntradaRutaDto> Entradas);
 
 /// <summary>Archivo CSV generado por el servidor (exportación de Demoras / Incidencias).</summary>
 public record ArchivoCsvDto(string NombreArchivo, byte[] Contenido);

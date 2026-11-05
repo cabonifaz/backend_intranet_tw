@@ -529,6 +529,7 @@ builder.Services.AddScoped<ObtenerTimelineServicioRutaCasoDeUso>();
 builder.Services.AddScoped<ObtenerIncidenciasServicioRutaCasoDeUso>();
 builder.Services.AddScoped<ExportarIncidenciasServicioRutaCasoDeUso>();
 builder.Services.AddScoped<ObtenerCierreServicioRutaCasoDeUso>();
+builder.Services.AddScoped<ObtenerAuditoriaServicioRutaCasoDeUso>(); // HU-54
 
 // HU-53 Registro operativo del Asistente de Seguimiento (Sprint 5): observación, demora/incidente y cambio manual de estado
 builder.Services.AddScoped<IRegistroAsistenteRepositorio, RegistroAsistenteRepositorio>();

@@ -25,6 +25,7 @@ public class DetalleServicioRutaController(
     ObtenerIncidenciasServicioRutaCasoDeUso    incidencias,
     ExportarIncidenciasServicioRutaCasoDeUso   exportar,
     ObtenerCierreServicioRutaCasoDeUso         cierre,
+    ObtenerAuditoriaServicioRutaCasoDeUso      auditoria,
     ILogger<DetalleServicioRutaController> logger) : ControllerBase
 {
     private long IdUsuarioActual =>
@@ -96,9 +97,30 @@ public class DetalleServicioRutaController(
         return File(r.Datos.Contenido, "text/csv; charset=utf-8", r.Datos.NombreArchivo);
     }
 
-    /// <summary>Pestaña condicional Cierre del Servicio (HU-54): solo si el servicio está finalizado; si no, 400.</summary>
+    /// <summary>
+    /// Pestaña condicional Cierre del Servicio (HU-54, observacional): resultado del cierre, equipos con sus 5 estados, acta de conformidad y accesos del pie.
+    /// Solo si el servicio está finalizado; si no, 400. Incluye datos del firmante: sin caché ni sniffing.
+    /// </summary>
     [RequierePermiso("seg_bandeja")]
     [HttpGet("cierre")]
     public async Task<IActionResult> Cierre(long idOs, CancellationToken ct = default)
-        => Responder(await cierre.EjecutarAsync(IdUsuarioActual, idOs, ct));
+    {
+        NoCache();
+        return Responder(await cierre.EjecutarAsync(IdUsuarioActual, idOs, ct));
+    }
+
+    /// <summary>"Auditoría del servicio" del cierre (HU-54): historial del servicio finalizado (acciones auditadas e hitos). Solo lectura.</summary>
+    [RequierePermiso("seg_bandeja")]
+    [HttpGet("cierre/auditoria")]
+    public async Task<IActionResult> AuditoriaCierre(long idOs, CancellationToken ct = default)
+    {
+        NoCache();
+        return Responder(await auditoria.EjecutarAsync(IdUsuarioActual, idOs, ct));
+    }
+
+    private void NoCache()
+    {
+        Response.Headers.CacheControl = "no-store";
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
+    }
 }

@@ -1,4 +1,4 @@
--- HU-53 (Sprint 5) Datos para armar la pestaña "Registrar" del detalle del servicio. SOLO LECTURA. Permiso seg_bandeja (ver); PuedeRegistrar indica si además tiene seg_registrar.
+-- HU-53 (Sprint 5) Datos para armar la pestaña "Registrar" del detalle del servicio. SOLO LECTURA. Permiso seg_bandeja (ver); PuedeRegistrar indica si además tiene seg_registrar y el servicio no está finalizado (HU-54: modo auditoría; MensajeBloqueo trae el tooltip).
 -- Resultados: 1 mensaje · 2 contexto (1 fila: quién registra, hora actual de Lima, servicio, estado actual y nivel) · 3 tipos de demora/incidente
 --   · 4 motivos del cambio manual · 5 estados (Codigo, Nombre, Nivel, Permitido) · 6 eventos vinculables del día (Clave, Hora, Titulo)
 --   · 7 "Mis registros de hoy" del usuario en este servicio (IdRegistro, Modo, Hora, Texto, Fuente, Badge, HaceMin).
@@ -51,7 +51,8 @@ proc: BEGIN
     SELECT 2 AS IdTipoMensaje, 'OK' AS Mensaje;
     SELECT (SELECT TRIM(CONCAT(nombre, ' ', apellido)) FROM usuario WHERE id_usuario = p_id_usuario) AS RegistrandoComo,
            DATE_FORMAT(v_ahora, '%H:%i:%s') AS HoraActual, v_numero AS Numero, v_tecnico AS Tecnico, v_estado AS EstadoActual, v_nivel AS NivelActual,
-           FN_PermisoAccion(p_id_usuario, 'seg_registrar') AS PuedeRegistrar;
+           IF(v_estado = 'finalizada', 0, FN_PermisoAccion(p_id_usuario, 'seg_registrar')) AS PuedeRegistrar,
+           IF(v_estado = 'finalizada', 'Servicio finalizado — Para registrar observaciones post-cierre, pedir reapertura al Jefe de Operaciones.', NULL) AS MensajeBloqueo;
     SELECT m.Num1 AS IdTipo, m.String1 AS Nombre, m.String2 AS Codigo FROM tabla_maestra m
     WHERE m.Descripcion = 'TIPO_DEMORA_INCIDENTE' AND m.IdEmpresa = 1 AND m.eliminado_en IS NULL ORDER BY m.Num1;
     SELECT m.Num1 AS IdMotivo, m.String1 AS Nombre, m.String2 AS Codigo FROM tabla_maestra m

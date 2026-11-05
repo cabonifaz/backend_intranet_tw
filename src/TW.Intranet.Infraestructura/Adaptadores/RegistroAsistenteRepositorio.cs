@@ -16,7 +16,7 @@ public class RegistroAsistenteRepositorio(CadenaConexionBd conexion) : Repositor
                 if (!await r.ReadAsync(ct))
                     return new RespuestaDto<FormularioRegistroAsistenteDto>(3, "El procedimiento no devolvió el contexto.");
                 var ctx = new ContextoRegistroAsistenteDto(Texto(r, "RegistrandoComo") ?? "", Texto(r, "HoraActual") ?? "", Texto(r, "Numero") ?? "", Texto(r, "Tecnico"),
-                    Texto(r, "EstadoActual") ?? "", Entero(r, "NivelActual"), Booleano(r, "PuedeRegistrar"));
+                    Texto(r, "EstadoActual") ?? "", Entero(r, "NivelActual"), Booleano(r, "PuedeRegistrar"), Texto(r, "MensajeBloqueo"));
 
                 await r.NextResultAsync(ct);
                 var tipos = new List<OpcionRegistroAsistenteDto>();

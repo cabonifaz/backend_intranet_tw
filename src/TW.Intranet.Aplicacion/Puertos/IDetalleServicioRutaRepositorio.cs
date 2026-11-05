@@ -12,4 +12,5 @@ public interface IDetalleServicioRutaRepositorio
     Task<RespuestaDto<TimelineServicioRutaDto>>  ObtenerTimelineAsync(long idUsuario, long idOs, ConsultaTimelineNormalizada q, CancellationToken ct);
     Task<RespuestaDto<IncidenciasServicioRutaDto>> ObtenerIncidenciasAsync(long idUsuario, long idOs, string? clave, CancellationToken ct);
     Task<RespuestaDto<CierreServicioRutaDto>>    ObtenerCierreAsync(long idUsuario, long idOs, CancellationToken ct);
+    Task<RespuestaDto<AuditoriaServicioRutaDto>> ObtenerAuditoriaAsync(long idUsuario, long idOs, CancellationToken ct);
 }
