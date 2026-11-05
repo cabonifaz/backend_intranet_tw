@@ -16,6 +16,9 @@ QuestPDF.Settings.UseEnvironmentFonts = true;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Desarrollo seguro (HU-52, hallazgo de las pruebas de Ethical Hacking): no revelar la tecnología del servidor en la cabecera "Server".
+builder.WebHost.ConfigureKestrel(opciones => opciones.AddServerHeader = false);
+
 // Carga appsettings.Local.json si existe (para desarrollo local, no se sube a git)
 builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: false);
 
@@ -515,6 +518,17 @@ builder.Services.AddScoped<ObtenerTecnicosSeguimientoCasoDeUso>();
 builder.Services.AddScoped<ObtenerIncidenciasSeguimientoCasoDeUso>();
 builder.Services.AddScoped<ObtenerFiltrosSeguimientoCasoDeUso>();
 builder.Services.AddScoped<RegistrarUbicacionMovilCasoDeUso>();
+
+// HU-52 Detalle del Servicio en Ruta (Sprint 5): solo lectura
+builder.Services.AddScoped<IDetalleServicioRutaRepositorio, DetalleServicioRutaRepositorio>();
+builder.Services.AddScoped<ObtenerDetalleServicioRutaCasoDeUso>();
+builder.Services.AddScoped<ObtenerAvanceServicioRutaCasoDeUso>();
+builder.Services.AddScoped<ObtenerSeccionEquipoServicioRutaCasoDeUso>();
+builder.Services.AddScoped<ObtenerMapaServicioRutaCasoDeUso>();
+builder.Services.AddScoped<ObtenerTimelineServicioRutaCasoDeUso>();
+builder.Services.AddScoped<ObtenerIncidenciasServicioRutaCasoDeUso>();
+builder.Services.AddScoped<ExportarIncidenciasServicioRutaCasoDeUso>();
+builder.Services.AddScoped<ObtenerCierreServicioRutaCasoDeUso>();
 
 // ── INYECCIÓN DE DEPENDENCIAS — Expediente Digital (Sprint 4, HU-29 a HU-33) ───
 builder.Services.AddScoped<IExpedienteRepositorio, ExpedienteRepositorio>();
