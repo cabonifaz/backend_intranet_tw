@@ -102,6 +102,7 @@ proc: BEGIN
 
     -- 3. Calendario: una fila por servicio de la semana y persona asignada (principal o apoyo)
     SELECT b.id_os, b.tipo, b.numero, b.estado, b.sub_estado,
+           b.id_programacion,
            s.id_usuario                        AS id_tecnico,
            s.nombre                            AS tecnico,
            s.rol,

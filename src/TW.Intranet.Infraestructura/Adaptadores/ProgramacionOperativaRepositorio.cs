@@ -52,7 +52,8 @@ public class ProgramacionOperativaRepositorio(CadenaConexionBd conexion) : Repos
                         Texto(r, "rol") ?? "principal", Texto(r, "tecnico_principal"),
                         Fecha(r, "fecha_ejecucion"), Texto(r, "hora_inicio"), Texto(r, "hora_fin"),
                         DecimalNulo(r, "horas"), Texto(r, "cliente"), Texto(r, "sede"), Texto(r, "tipo_servicio"),
-                        Booleano(r, "en_conflicto"), Booleano(r, "confirmacion_cliente")));
+                        Booleano(r, "en_conflicto"), Booleano(r, "confirmacion_cliente"),
+                        EnteroLargoNulo(r, "id_programacion")));
 
                 // 4. Carga por técnico y día (se conserva el orden del SP)
                 await r.NextResultAsync(ct);

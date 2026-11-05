@@ -7,7 +7,7 @@ public class FiltrosProgramacionDto
 {
     /// <summary>Pendientes: todos (defecto), pendiente_programar, pendiente_conf_cliente, pendiente_reprogramacion o pendiente_ssoma.</summary>
     public string?   SubEstado { get; set; }
-    /// <summary>Programados: todos, hoy, esta_semana (defecto), proxima_semana o personalizado (usa FechaDesde / FechaHasta).</summary>
+    /// <summary>Programados: todos (defecto), hoy, esta_semana, proxima_semana o personalizado (usa FechaDesde / FechaHasta).</summary>
     public string?   Rango     { get; set; }
     public DateTime? FechaDesde { get; set; }
     public DateTime? FechaHasta { get; set; }
@@ -70,7 +70,9 @@ public record ServicioCalendarioDto(
     string?  Sede,
     string?  TipoServicio,
     bool     EnConflicto,
-    bool     ConfirmadoCliente);
+    bool     ConfirmadoCliente,
+    /// <summary>Programación activa de la orden (abre el modal detalle desde la matriz de carga).</summary>
+    long?    IdProgramacion = null);
 
 /// <summary>Carga de un técnico en un día. Nivel: libre, baja, optimo, alta o sobrecarga.</summary>
 public record CargaDiaDto(string Fecha, decimal Horas, string Nivel, bool Conflicto, int Servicios);

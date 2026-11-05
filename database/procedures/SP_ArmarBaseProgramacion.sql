@@ -14,7 +14,8 @@
 --   tmp_prog_conf_os  : OS/OM con algún asignado cuyo horario se cruza con otra suya el mismo día
 --   tmp_prog_conf_ud  : técnico y día con horarios cruzados (para la matriz de carga)
 -- sub_estado (excluyentes, en este orden de prioridad):
---   pendiente_reprogramacion  programada y con una solicitud de reprogramación pendiente (os_reprogramacion)
+--   pendiente_reprogramacion  programada, sin confirmación del cliente y con una solicitud de reprogramación pendiente
+--                             (os_reprogramacion). Si ya está confirmada, la solicitud no la saca de Programados.
 --   pendiente_ssoma           programada y una validación SSOMA la bloquea: personal con SSOMA pendiente o bloqueado,
 --                             última versión de un documento observada o vencida, documento que vence antes del día del
 --                             servicio, o bloqueo SSOMA abierto en el expediente (ssoma_motivo dice cuál)
@@ -168,8 +169,11 @@ BEGIN
     CREATE TEMPORARY TABLE tmp_prog_base AS
     SELECT t.*,
            CASE
+               -- Una solicitud del Asistente sobre una programación ya confirmada por el cliente NO la saca de Programados
+               -- (el detalle muestra "Solicitud pendiente"); solo cuenta mientras falta la confirmación del cliente.
                WHEN t.id_reprogramacion_pendiente IS NOT NULL
-                    AND t.estado IN ('programada', 'reprogramada')               THEN 'pendiente_reprogramacion'
+                    AND t.estado IN ('programada', 'reprogramada')
+                    AND t.confirmacion_cliente = 0                               THEN 'pendiente_reprogramacion'
                WHEN t.ssoma_motivo IS NOT NULL                                   THEN 'pendiente_ssoma'
                WHEN t.estado = 'emitida'                                         THEN 'pendiente_programar'
                WHEN t.estado IN ('programada', 'reprogramada')

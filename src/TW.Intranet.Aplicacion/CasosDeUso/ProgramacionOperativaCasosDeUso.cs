@@ -24,7 +24,7 @@ internal static class EntradaProgramacion
     internal const int MaxPagina    = 10_000;
     internal const int MaxDiasRango = 366;
 
-    /// <param name="programados">true para el tab Programados (rango de fechas, por defecto "esta_semana"); false para Pendientes.</param>
+    /// <param name="programados">true para el tab Programados (rango de fechas, por defecto "todos"); false para Pendientes.</param>
     internal static (FiltrosProgramacionDto? Filtros, string? Error) Normalizar(FiltrosProgramacionDto f, bool programados)
     {
         var subEstado = f.SubEstado?.Trim().ToLowerInvariant() ?? "";
@@ -42,7 +42,7 @@ internal static class EntradaProgramacion
         DateTime? desde = null, hasta = null;
         if (programados)
         {
-            if (rango == "") rango = "esta_semana";
+            if (rango == "") rango = "todos";   // sin rango = todas las fechas (el front no envía el parámetro para "Todos")
             if (rango == "personalizado")
             {
                 desde = f.FechaDesde?.Date;
