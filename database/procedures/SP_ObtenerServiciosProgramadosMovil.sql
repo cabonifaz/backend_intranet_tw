@@ -7,8 +7,10 @@
 -- técnico es principal o integra el personal (os_personal).
 -- Estado general de la tarjeta:
 --   BLOQUEADO : OS bloqueada, expediente con bloqueo sin resolver o SSOMA bloqueado.
---   LISTO     : cliente confirmado y SSOMA habilitado.
---   PENDIENTE : cualquier otro caso.
+--   LISTO     : llegó el día programado (hoy o antes: servicio en curso o atrasado).
+--   PENDIENTE : programado para una fecha posterior a hoy.
+--   (Cliente confirmado y SSOMA se muestran aparte en la tarjeta; no cambian LISTO/PENDIENTE.)
+-- "Hoy" = fecha de Lima (UTC-5), calculada desde UTC; es la misma regla de SP_ObtenerSalidaHabilitadaMovil.
 -- La regla de BLOQUEADO está también en SP_ObtenerBloqueoServicioMovil (la usa el detalle): si se cambia, cambiar las dos.
 -- Datos de la programación operativa (intranet, HU-36/38): horario inicio–fin, tipo de servicio, cantidad de técnicos y
 --   objetivos = equipos que se confirmaron en la programación vigente (sin selección, todos los equipos de la OS).
@@ -27,12 +29,14 @@ CREATE PROCEDURE SP_ObtenerServiciosProgramadosMovil(
 proc: BEGIN
     DECLARE v_filtro   VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_busqueda VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_hoy      DATE;
 
     IF NOT EXISTS (SELECT 1 FROM usuario WHERE id_usuario = p_id_usuario AND eliminado_en IS NULL) THEN
         SELECT 1 AS IdTipoMensaje, 'Usuario no encontrado.' AS Mensaje;
         LEAVE proc;
     END IF;
 
+    SET v_hoy      = DATE(UTC_TIMESTAMP() - INTERVAL 5 HOUR);
     SET v_filtro   = LOWER(TRIM(IFNULL(p_filtro, '')));
     SET v_busqueda = NULLIF(TRIM(IFNULL(p_busqueda, '')), '');
 
@@ -48,7 +52,7 @@ proc: BEGIN
         FROM   orden_servicio os
         WHERE  os.eliminado_en IS NULL
           AND  os.estado IN ('programada', 'en_ruta', 'en_ejecucion', 'pausada', 'reprogramada', 'bloqueada')
-          AND  (os.fecha_ejecucion >= CURDATE() OR os.estado IN ('en_ruta', 'en_ejecucion', 'pausada'))
+          AND  (os.fecha_ejecucion >= v_hoy OR os.estado IN ('en_ruta', 'en_ejecucion', 'pausada'))
           AND  (os.id_tecnico_principal = p_id_usuario
                 OR EXISTS (SELECT 1 FROM os_personal op
                            WHERE op.id_os = os.id_os AND op.id_usuario = p_id_usuario AND op.eliminado_en IS NULL))
@@ -128,7 +132,7 @@ proc: BEGIN
                CASE
                    WHEN d.estado_os = 'bloqueada' OR d.bloqueo_expediente IS NOT NULL OR d.estado_ssoma = 'bloqueado'
                        THEN 'BLOQUEADO'
-                   WHEN d.cliente_confirmado = 1 AND d.estado_ssoma = 'habilitado'
+                   WHEN d.fecha_ejecucion <= v_hoy
                        THEN 'LISTO'
                    ELSE 'PENDIENTE'
                END AS estado_general,
@@ -144,7 +148,7 @@ proc: BEGIN
            alertas_predictivas, estado_general, motivo_bloqueo, hora_fin, tipo_servicio, n_tecnicos, alerta_predictiva
     FROM   con_estado
     WHERE  (v_filtro IN ('', 'todos')
-            OR (v_filtro = 'hoy'          AND fecha_ejecucion = CURDATE())
+            OR (v_filtro = 'hoy'          AND fecha_ejecucion = v_hoy)
             OR (v_filtro = 'pendientes'   AND estado_general = 'PENDIENTE')
             OR (v_filtro = 'en_ejecucion' AND estado_os IN ('en_ruta', 'en_ejecucion', 'pausada')))
       AND  (v_busqueda IS NULL
