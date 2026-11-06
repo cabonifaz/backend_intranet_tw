@@ -13,8 +13,8 @@ namespace TW.Intranet.Aplicacion.CasosDeUso;
 ///                 repuestos asignados y alertas predictivas resueltas.
 ///   Opcional:     OC cargada.
 ///   Visto bueno del encargado del área del servicio según la RQ (Jefe de Servicio Técnico o
-///   Jefe de Metrología; lo da desde la intranet): con él se puede salir aunque queden
-///   obligatorios pendientes.
+///   Jefe de Metrología; lo da desde la intranet o la app): con él se puede salir aunque queden
+///   obligatorios pendientes. Los pendientes se muestran como "aprobado" (Autorizado por el jefe) y todo queda conforme.
 /// </summary>
 public static class ReglasChecklistSalida
 {
@@ -99,7 +99,8 @@ public static class ReglasChecklistSalida
             },
             autorizacion?.Estado switch
             {
-                "aprobada"  => $"Aprobado por {autorizacion.Jefe ?? "el jefe"}." + (string.IsNullOrWhiteSpace(autorizacion.Comentario) ? "" : $" {autorizacion.Comentario}"),
+                "aprobada"  => $"{autorizacion.Jefe ?? "El jefe"}" + (autorizacion.ResueltaEn is { } hora ? $" · {hora:HH:mm}" : "")
+                               + (string.IsNullOrWhiteSpace(autorizacion.Comentario) ? "" : $" · Condición: {autorizacion.Comentario}"),
                 "rechazada" => $"No autorizado por {autorizacion.Jefe ?? "el jefe"}." + (string.IsNullOrWhiteSpace(autorizacion.Comentario) ? "" : $" {autorizacion.Comentario}"),
                 "pendiente" => $"Solicitud enviada {aQuien}: esperando respuesta.",
                 _           => area.Cargo is null
@@ -117,11 +118,20 @@ public static class ReglasChecklistSalida
         var completo          = faltantes.Count == 0;
         var puedeIniciar      = editable && (completo || vistoBuenoVigente);
 
+        // Con el visto bueno vigente, los pendientes obligatorios se muestran APROBADOS ("Autorizado por el Jefe …") y todo queda conforme
+        if (vistoBuenoVigente)
+            items = items
+                .Select(i => i.Obligatorio && i.Estado is "pendiente" or "bloqueado"
+                    ? i with { Estado = "aprobado", Detalle = $"Autorizado por {quienAutoriza}" }
+                    : i)
+                .ToList();
+
         return new ChecklistSalidaMovilDto(
             h.IdOs, h.NumeroOs, h.Cliente, h.FechaEjecucion, h.HoraInicio, h.Tecnico, h.EstadoOs,
             items,
             faltantes,
             PuedeIniciar:               puedeIniciar,
+            TodoConforme:               editable && (completo || vistoBuenoVigente),
             SaleConVistoBueno:          puedeIniciar && !completo,
             PuedeSolicitarAutorizacion: editable && !completo && autorizacion?.Estado is not ("pendiente" or "aprobada"),
             TrasladoIniciado:           !programada && h.EstadoOs is "en_ruta" or "en_ejecucion" or "pausada" or "finalizada",

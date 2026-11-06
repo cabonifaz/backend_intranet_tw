@@ -9,7 +9,8 @@
 --     de Operaciones o el supervisor del área Operaciones (supervisión general) o un administrador. El encargado de la otra área NO.
 --   - Si hay una solicitud pendiente del técnico, la resuelve; si no, registra el visto bueno igual.
 --   - Solo mientras la OS siga programada/reprogramada.
---   - Notifica al técnico principal y al personal de la OS. Deja registro en auditoria_evento.
+--   - Notifica al técnico principal y al personal de la OS ("Autorización de salida aprobada/rechazada" con el jefe, su cargo y la
+--     condición o el motivo). Deja registro en auditoria_evento.
 -- ============================================================
 DROP PROCEDURE IF EXISTS SP_ResolverAutorizacionSalida;
 
@@ -33,6 +34,8 @@ proc: BEGIN
     DECLARE v_area_jefe  VARCHAR(30)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_general    TINYINT DEFAULT 0;
     DECLARE v_area_sol   VARCHAR(30)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_cargo_jefe VARCHAR(150) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_cliente    VARCHAR(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -43,11 +46,12 @@ proc: BEGIN
 
     -- Quién es: encargado de un área (v_area_jefe) o supervisión general (v_general)
     SELECT TRIM(CONCAT(IFNULL(u.nombre, ''), ' ', IFNULL(u.apellido, ''))),
+           IFNULL(c.String1, NULLIF(u.cargo, '')),
            COALESCE(IF(c.String2 LIKE 'jefe\_%' AND c.String3 IN ('servicio_tecnico', 'metrologia'), c.String3, NULL),
                     IF(u.rol_sistema = 'supervisor' AND u.area = 'metrologia', 'metrologia', NULL)),
            (u.cargo IN ('jefe_operaciones', 'coordinador_operaciones') OR u.rol_sistema IN ('administrador', 'admin')
             OR (u.rol_sistema = 'supervisor' AND u.area = 'operaciones'))
-    INTO   v_jefe, v_area_jefe, v_general
+    INTO   v_jefe, v_cargo_jefe, v_area_jefe, v_general
     FROM   usuario u
     LEFT JOIN tabla_maestra c ON c.IdMaestro = 80 AND c.IdEmpresa = 1 AND c.String2 = u.cargo
     WHERE  u.id_usuario = p_id_jefe AND u.eliminado_en IS NULL AND u.estado = 'activo'
@@ -62,9 +66,10 @@ proc: BEGIN
 
     START TRANSACTION;
 
-    SELECT os.estado, os.numero, os.id_tecnico_principal, asr.area_usuario
-    INTO   v_estado, v_numero, v_principal, v_area
+    SELECT os.estado, os.numero, os.id_tecnico_principal, asr.area_usuario, COALESCE(NULLIF(cl.nombre_comercial, ''), cl.razon_social)
+    INTO   v_estado, v_numero, v_principal, v_area, v_cliente
     FROM   orden_servicio os
+    LEFT JOIN cliente            cl  ON cl.id_cliente       = os.id_cliente
     LEFT JOIN expediente_digital ed  ON ed.id_expediente    = os.id_expediente
     LEFT JOIN requerimiento      rq  ON rq.id_requerimiento = ed.id_requerimiento
     LEFT JOIN area_servicio_rq   asr ON asr.id_area_rq      = rq.id_area
@@ -115,9 +120,11 @@ proc: BEGIN
     -- Aviso al técnico principal y al personal de la OS
     INSERT INTO notificacion (id_usuario_destino, id_canal, titulo, cuerpo, entidad_tipo, id_entidad, fecha_creacion, creado_por)
     SELECT d.id_usuario, 5,
-           CONCAT(IF(p_aprobar = 1, 'Visto bueno de salida: ', 'Salida no autorizada: '), v_numero),
-           CONCAT(v_jefe, IF(p_aprobar = 1, ' aprobó tu salida', ' no autorizó tu salida'), ' para la ', v_numero, '.',
-                  IF(NULLIF(TRIM(p_comentario), '') IS NULL, '', CONCAT(' Comentario: ', TRIM(p_comentario)))),
+           IF(p_aprobar = 1, 'Autorización de salida aprobada', 'Autorización de salida rechazada'),
+           LEFT(CONCAT(v_numero, IF(v_cliente IS NULL, '', CONCAT(' · ', v_cliente)), ' · ', v_jefe,
+                       IF(v_cargo_jefe IS NULL, '', CONCAT(' (', v_cargo_jefe, ')')),
+                       IF(p_aprobar = 1, ' dio el visto bueno.', ' no autorizó tu salida.'),
+                       IF(NULLIF(TRIM(p_comentario), '') IS NULL, '', CONCAT(IF(p_aprobar = 1, ' Condición: ', ' Motivo: '), TRIM(p_comentario)))), 3000),
            'orden_servicio', p_id_os, NOW(), p_id_jefe
     FROM (
         SELECT v_principal AS id_usuario FROM DUAL WHERE v_principal IS NOT NULL

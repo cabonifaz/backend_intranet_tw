@@ -208,6 +208,14 @@ builder.Services.AddScoped<ObtenerResumenMenuMovilCasoDeUso>();
 // App Mobile HU-03 — agenda de servicios programados
 builder.Services.AddScoped<IServiciosMovilRepositorio, ServiciosMovilRepositorio>();
 builder.Services.AddScoped<ObtenerServiciosProgramadosMovilCasoDeUso>();
+// App Mobile HU-02 / HU-04 — notificaciones del usuario
+builder.Services.AddScoped<INotificacionesMovilRepositorio, NotificacionesMovilRepositorio>();
+builder.Services.AddScoped<ObtenerNotificacionesMovilCasoDeUso>();
+builder.Services.AddScoped<MarcarNotificacionMovilCasoDeUso>();
+// App Mobile HU-05 — registro de demoras en ruta
+builder.Services.AddScoped<IDemorasMovilRepositorio, DemorasMovilRepositorio>();
+builder.Services.AddScoped<ObtenerDemorasMovilCasoDeUso>();
+builder.Services.AddScoped<RegistrarDemoraMovilCasoDeUso>();
 // App Mobile HU-28 / HU-31 — menú de Jefatura y centro de aprobaciones
 builder.Services.AddScoped<ObtenerMenuJefaturaMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerAprobacionesMovilCasoDeUso>();

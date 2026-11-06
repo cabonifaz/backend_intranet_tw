@@ -117,7 +117,7 @@ public record HechosChecklistSalidaDto(
     bool      SalidaHabilitada,     // la salida se valida solo desde el día programado
     string?   SalidaMensaje);       // "Aún no es el día del servicio. Podrás validar la salida el dd/mm/aaaa."
 
-/// <summary>Un ítem del checklist. Estado: conforme | pendiente | bloqueado | no_aplica | opcional.</summary>
+/// <summary>Un ítem del checklist. Estado: conforme | pendiente | bloqueado | aprobado (pendiente autorizado por el jefe) | no_aplica | opcional.</summary>
 public record ItemChecklistSalidaDto(
     string  Codigo,
     string  Nombre,
@@ -145,6 +145,7 @@ public record ChecklistSalidaMovilDto(
     List<ItemChecklistSalidaDto>  Items,
     List<string>                  Faltantes,
     bool                          PuedeIniciar,
+    bool                          TodoConforme,        // todo cumplido o con el visto bueno vigente: "Ya puedes iniciar el traslado a planta"
     bool                          SaleConVistoBueno,
     bool                          PuedeSolicitarAutorizacion,
     bool                          TrasladoIniciado,
