@@ -66,6 +66,8 @@ public class RegistrarDemoraMovilCasoDeUso(IDemorasMovilRepositorio repositorio,
         {
             Tipo        = demora.Tipo!.Trim().ToLowerInvariant(),
             Descripcion = LimpiarTexto(demora.Descripcion),
+            // La hora del teléfono se envía como UTC sin zona (el SP la valida contra la del servidor)
+            CapturadoUtc = demora.CapturadoUtc is { } c ? DateTime.SpecifyKind(c.ToUniversalTime(), DateTimeKind.Unspecified) : null,
         };
 
         // Foto opcional: se valida y se guarda ANTES de registrar, y se borra si el SP rechaza la demora
@@ -89,8 +91,8 @@ public class RegistrarDemoraMovilCasoDeUso(IDemorasMovilRepositorio repositorio,
 
         var r = await repositorio.RegistrarAsync(idUsuario, idOs, limpia.Tipo!, limpia, ruta, ct);
 
-        // Si no se registró (o ya existía la misma demora y no usó la foto), no dejar archivos huérfanos
-        if (ruta is not null && r.IdTipoMensaje != 2)
+        // Si no se registró, o el envío ya estaba registrado (reintento de la app) y no usó la foto, no dejar archivos huérfanos
+        if (ruta is not null && (r.IdTipoMensaje != 2 || r.Datos?.Repetida == true))
             await almacen.EliminarAsync(ruta, CancellationToken.None);
 
         return r;

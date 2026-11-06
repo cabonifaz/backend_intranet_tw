@@ -230,15 +230,19 @@ DELIMITER ;
 --   - El técnico sale del token; la OS debe ser suya (principal o personal) y estar en el estado que permite ese tipo:
 --       llegada : OS EN RUTA y sin llegada registrada. Recalcula la ETA de llegada.
 --       ingreso : OS en ruta o en ejecución, con la llegada registrada y sin inicio del trabajo. Recalcula el inicio del trabajo.
---   - Solo se captura el GPS y la hora: la hora la pone el servidor (Lima, UTC-5), nunca el teléfono. Foto opcional (la ruta ya
---     guardada en el almacenamiento de archivos; la valida y guarda el back antes de llamar a este SP).
+--   - Solo se captura el GPS y la hora (en Lima, UTC-5): la pone el servidor, salvo una demora guardada sin conexión (ver más abajo).
+--     Foto opcional (la ruta ya guardada en el almacenamiento de archivos; la valida y guarda el back antes de llamar a este SP).
 --   - El tipo de demora (motivo) debe existir en MOTIVO_DEMORA_RUTA y corresponder al ámbito (traslado | ingreso | ambos).
 --   - Duración de 1 a 480 minutos. Las horas se recalculan con las reglas de SP_ObtenerEtaDemorasMovil.
 --   - Antirrebote: la misma demora (mismo tipo, motivo y duración) del mismo técnico en los últimos 20 s no se duplica: se responde
 --     con la ya registrada y sin avisar de nuevo.
+--   - Sin conexión: la app guarda la demora en el teléfono y la envía al recuperar la señal, con la hora en que se registró
+--     (p_capturado_utc, hora UTC del teléfono). Esa hora solo se respeta si no es futura (tolerancia 5 min) ni tiene más de 24 h; si no,
+--     vale la hora del servidor. Una demora "diferida" (llegó más de 2 min después) queda con la hora en que ocurrió y, si el envío se
+--     repite (la respuesta se perdió), se reconoce como la misma y no se duplica ni se avisa de nuevo.
 --   - Avisa a Operaciones (supervisor o administrador del área Operaciones, o Jefe/Coordinador de Operaciones; si no hay, a los
 --     administradores) y deja el registro en auditoria_evento. El impacto queda en 'retrasa' (lo lee el Seguimiento Operativo).
--- Resultados: 1 mensaje; 2 la demora (id_demora, tipo, eta_original, eta_anterior, eta_recalculada, notificados).
+-- Resultados: 1 mensaje; 2 la demora (id_demora, tipo, eta_original, eta_anterior, eta_recalculada, notificados, repetida, diferida).
 -- ============================================================
 DROP PROCEDURE IF EXISTS SP_RegistrarDemoraMovil;
 
@@ -254,7 +258,8 @@ CREATE PROCEDURE SP_RegistrarDemoraMovil(
     IN p_latitud    DECIMAL(10,7),
     IN p_longitud   DECIMAL(10,7),
     IN p_precision  DECIMAL(8,1),
-    IN p_foto       VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci
+    IN p_foto       VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_capturado_utc DATETIME
 )
 proc: BEGIN
     DECLARE v_tipo       VARCHAR(10)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
@@ -269,6 +274,9 @@ proc: BEGIN
     DECLARE v_llegada    DATETIME;
     DECLARE v_inicio_vig DATETIME;
     DECLARE v_ahora      DATETIME;
+    DECLARE v_capt       DATETIME;
+    DECLARE v_registro   DATETIME;
+    DECLARE v_diferida   TINYINT DEFAULT 0;
     DECLARE v_eta_ant    DATETIME DEFAULT NULL;
     DECLARE v_eta_nueva  DATETIME DEFAULT NULL;
     DECLARE v_inicio_trab TINYINT DEFAULT 0;
@@ -317,6 +325,20 @@ proc: BEGIN
     END IF;
 
     SET v_ahora = UTC_TIMESTAMP() - INTERVAL 5 HOUR;
+
+    -- Hora en que el técnico registró la demora (la marca el teléfono, en UTC). Se respeta solo si no es futura ni muy antigua
+    SET v_capt = v_ahora;
+    IF p_capturado_utc IS NOT NULL THEN
+        SET v_capt = p_capturado_utc - INTERVAL 5 HOUR;
+        IF v_capt > v_ahora + INTERVAL 5 MINUTE OR v_capt < v_ahora - INTERVAL 24 HOUR THEN
+            SET v_capt = v_ahora;
+        ELSEIF v_capt > v_ahora THEN
+            SET v_capt = v_ahora;
+        END IF;
+    END IF;
+    -- Diferida = llegó más de 2 min después de ocurrir (se guardó sin conexión): vale la hora del teléfono; si no, la del servidor
+    SET v_diferida = IF(v_capt < v_ahora - INTERVAL 2 MINUTE, 1, 0);
+    SET v_registro = IF(v_diferida = 1, v_capt, v_ahora);
 
     START TRANSACTION;
 
@@ -395,11 +417,14 @@ proc: BEGIN
         END IF;
     END IF;
 
-    -- Antirrebote: la misma demora hace menos de 20 s ya está registrada
+    -- Antirrebote: la misma demora hace menos de 20 s ya está registrada. Si llegó diferida (sin conexión), también cuenta la que
+    -- quedó registrada alrededor de la hora en que ocurrió (el envío se repitió porque la respuesta no llegó al teléfono).
     SELECT d.id_demora, d.eta_anterior, d.eta_recalculada INTO v_id_dem, v_eta_ant, v_eta_nueva
     FROM   demora_registro d
     WHERE  d.id_os = p_id_os AND d.id_usuario = p_id_usuario AND d.tipo = v_tipo AND d.id_motivo = p_id_motivo
-      AND  d.duracion_minutos = p_duracion AND d.eliminado_en IS NULL AND d.fecha_registro >= v_ahora - INTERVAL 20 SECOND
+      AND  d.duracion_minutos = p_duracion AND d.eliminado_en IS NULL
+      AND  (d.fecha_registro >= v_ahora - INTERVAL 20 SECOND
+            OR (v_diferida = 1 AND d.fecha_registro BETWEEN v_capt - INTERVAL 2 MINUTE AND v_capt + INTERVAL 2 MINUTE))
     ORDER BY d.id_demora DESC LIMIT 1;
 
     IF v_id_dem IS NOT NULL THEN
@@ -410,7 +435,7 @@ proc: BEGIN
             SET v_eta_ant   = IF(v_eta_orig IS NULL, NULL, v_eta_orig + INTERVAL v_min_lleg MINUTE);
             SET v_eta_nueva = IF(v_eta_ant IS NULL, NULL, v_eta_ant + INTERVAL p_duracion MINUTE);
         ELSE
-            SET v_eta_ant   = GREATEST(IFNULL(v_inicio_vig, v_ahora), v_ahora);
+            SET v_eta_ant   = GREATEST(IFNULL(v_inicio_vig, v_registro), v_registro);
             SET v_eta_nueva = v_eta_ant + INTERVAL p_duracion MINUTE;
         END IF;
 
@@ -419,13 +444,14 @@ proc: BEGIN
              latitud, longitud, precision_metros, eta_anterior, eta_recalculada, fecha_registro, creado_por)
         VALUES
             (p_id_os, p_id_usuario, p_id_motivo, v_tipo, NULLIF(TRIM(IFNULL(p_descripcion, '')), ''), p_duracion, 'retrasa',
-             NULLIF(TRIM(IFNULL(p_foto, '')), ''), p_latitud, p_longitud, p_precision, v_eta_ant, v_eta_nueva, v_ahora, p_id_usuario);
+             NULLIF(TRIM(IFNULL(p_foto, '')), ''), p_latitud, p_longitud, p_precision, v_eta_ant, v_eta_nueva, v_registro, p_id_usuario);
         SET v_id_dem = LAST_INSERT_ID();
 
         -- Aviso a Operaciones
         SELECT TRIM(CONCAT(IFNULL(nombre, ''), ' ', IFNULL(apellido, ''))) INTO v_tecnico FROM usuario WHERE id_usuario = p_id_usuario;
         SET v_texto = LEFT(CONCAT(v_numero, ' · ', IF(v_tipo = 'llegada', 'Llegar a planta', 'Ingreso a planta'), ' +', p_duracion, ' min · ',
-                                  v_motivo, ' · ', IFNULL(v_tecnico, '')), 400);
+                                  v_motivo, ' · ', IFNULL(v_tecnico, ''),
+                                  IF(v_diferida = 1, CONCAT(' · sin conexión, reportada ', TIME_FORMAT(v_registro, '%H:%i')), '')), 400);
 
         INSERT INTO notificacion (id_usuario_destino, id_canal, titulo, cuerpo, entidad_tipo, id_entidad, fecha_creacion, creado_por)
         SELECT u.id_usuario, 5, 'Demora en ruta', v_texto, 'orden_servicio', p_id_os, NOW(), p_id_usuario
@@ -449,7 +475,7 @@ proc: BEGIN
         VALUES ('orden_servicio', p_id_os, 'registrar_demora', v_estado, v_estado,
                 LEFT(CONCAT('Demora ', IF(v_tipo = 'llegada', 'al llegar a planta', 'en el ingreso a planta'), ': ', v_motivo, ', ', p_duracion, ' min.'), 900),
                 p_id_usuario, NOW(),
-                JSON_OBJECT('id_demora', v_id_dem, 'tipo', v_tipo, 'minutos', p_duracion, 'notificados', v_notif));
+                JSON_OBJECT('id_demora', v_id_dem, 'tipo', v_tipo, 'minutos', p_duracion, 'notificados', v_notif, 'diferida', v_diferida = 1));
     END IF;
 
     COMMIT;
@@ -461,7 +487,8 @@ proc: BEGIN
                   IF(v_repetida = 1, 'Ya estaba registrada.',
                      IF(v_notif > 0, 'Se avisó a Operaciones.', 'No hay un responsable de Operaciones activo para avisar: informa a tu jefe.'))) AS Mensaje;
 
-    SELECT v_id_dem AS id_demora, v_tipo AS tipo, v_eta_orig AS eta_original, v_eta_ant AS eta_anterior, v_eta_nueva AS eta_recalculada, v_notif AS notificados;
+    SELECT v_id_dem AS id_demora, v_tipo AS tipo, v_eta_orig AS eta_original, v_eta_ant AS eta_anterior, v_eta_nueva AS eta_recalculada, v_notif AS notificados,
+           v_repetida AS repetida, v_diferida AS diferida;
 END$$
 
 DELIMITER ;

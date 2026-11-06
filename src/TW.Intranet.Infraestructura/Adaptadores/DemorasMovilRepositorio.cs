@@ -84,6 +84,7 @@ public class DemorasMovilRepositorio(CadenaConexionBd conexion)
                 p.AddWithValue("p_longitud",    Valor(d.Longitud));
                 p.AddWithValue("p_precision",   Valor(d.PrecisionMetros));
                 p.AddWithValue("p_foto",        Valor(rutaFoto));
+                p.AddWithValue("p_capturado_utc", Valor(d.CapturadoUtc));
             },
             async (r, mensaje) =>
             {
@@ -97,6 +98,8 @@ public class DemorasMovilRepositorio(CadenaConexionBd conexion)
                     FechaHora(r, "eta_original"),
                     FechaHora(r, "eta_anterior"),
                     FechaHora(r, "eta_recalculada"),
-                    Entero(r, "notificados")));
+                    Entero(r, "notificados"),
+                    Booleano(r, "repetida"),
+                    Booleano(r, "diferida")));
             }, ct);
 }

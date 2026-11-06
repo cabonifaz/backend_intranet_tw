@@ -50,7 +50,11 @@ public record DemoraRegistradaMovilDto(
     decimal?  Latitud,
     decimal?  Longitud);
 
-/// <summary>Lo que el técnico envía al registrar una demora (la foto se recibe aparte).</summary>
+/// <summary>
+/// Lo que el técnico envía al registrar una demora (la foto se recibe aparte).
+/// CapturadoUtc = hora (UTC) en que el técnico la registró en el teléfono. Si no había conexión y la app la guardó para enviarla
+/// después, el SP respeta esa hora (no futura, máx. 24 h); si no viene, vale la hora del servidor.
+/// </summary>
 public record NuevaDemoraMovilDto(
     string?  Tipo,
     int      IdMotivo,
@@ -58,13 +62,19 @@ public record NuevaDemoraMovilDto(
     string?  Descripcion,
     decimal? Latitud,
     decimal? Longitud,
-    decimal? PrecisionMetros);
+    decimal? PrecisionMetros,
+    DateTime? CapturadoUtc = null);
 
-/// <summary>Resultado del registro: las horas antes y después, y a cuántas personas de Operaciones se avisó.</summary>
+/// <summary>
+/// Resultado del registro: las horas antes y después, y a cuántas personas de Operaciones se avisó.
+/// Repetida = el envío ya estaba registrado (no se duplicó ni se avisó de nuevo). Diferida = se guardó sin conexión y llegó después.
+/// </summary>
 public record ResultadoDemoraMovilDto(
     long      IdDemora,
     string    Tipo,
     DateTime? EtaOriginal,
     DateTime? EtaAnterior,
     DateTime? EtaRecalculada,
-    int       Notificados);
+    int       Notificados,
+    bool      Repetida = false,
+    bool      Diferida = false);

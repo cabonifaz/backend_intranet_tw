@@ -28,6 +28,8 @@ public class DemorasMovilController(
         public string? Latitud { get; set; }
         public string? Longitud { get; set; }
         public string? PrecisionMetros { get; set; }
+        /// <summary>Hora en que el teléfono registró la demora (ISO 8601, UTC). Si no hay conexión, la app la envía después con esa hora.</summary>
+        public string? CapturadoEn { get; set; }
         public IFormFile? Foto { get; set; }
     }
 
@@ -51,11 +53,18 @@ public class DemorasMovilController(
     {
         var dto = new NuevaDemoraMovilDto(
             f.Tipo, f.IdMotivo, f.DuracionMinutos, f.Descripcion,
-            Decimal(f.Latitud), Decimal(f.Longitud), Decimal(f.PrecisionMetros));
+            Decimal(f.Latitud), Decimal(f.Longitud), Decimal(f.PrecisionMetros), FechaUtc(f.CapturadoEn));
 
         await using var contenido = f.Foto?.OpenReadStream();
         return Responder(await registrar.EjecutarAsync(IdUsuarioActual, idOs, dto, contenido, f.Foto?.Length ?? 0, ct));
     }
+
+    /// <summary>ISO 8601 con zona ("2026-11-06T17:43:10.000Z") → UTC; sin zona se toma como UTC. Texto inválido = null (vale la hora del servidor).</summary>
+    private static DateTime? FechaUtc(string? texto) =>
+        texto is { Length: <= 40 }
+        && DateTimeOffset.TryParse(texto, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var f)
+            ? f.UtcDateTime
+            : null;
 
     private static decimal? Decimal(string? texto) =>
         decimal.TryParse(texto, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : null;
