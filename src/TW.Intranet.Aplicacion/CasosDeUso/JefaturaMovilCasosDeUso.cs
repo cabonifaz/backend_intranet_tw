@@ -6,8 +6,9 @@ namespace TW.Intranet.Aplicacion.CasosDeUso;
 // ── App Mobile HU-28 / HU-31 — Menú de Jefatura y Centro de aprobaciones ────────────────────
 
 /// <summary>
-/// Menú de Jefatura: resumen del día del área del jefe que inició sesión. El SP valida el cargo (hoy, Jefe de Metrología) y filtra
-/// por el área según la RQ; a quien no es jefe de un área con Jefatura le responde que no tiene ese menú.
+/// Menú de Jefatura: resumen del día para los usuarios con rol Supervisor o Administrador de cualquier área menos Servicio Técnico.
+/// El SP valida el rol y el área; Metrología se filtra por el área según la RQ y las demás áreas ven todos los servicios.
+/// A quien no corresponde (técnicos, metrólogos, personal de Servicio Técnico) le responde que no tiene ese menú.
 /// </summary>
 public class ObtenerMenuJefaturaMovilCasoDeUso(IMenuMovilRepositorio repositorio)
 {
@@ -39,6 +40,12 @@ public class ObtenerAprobacionesMovilCasoDeUso(IAutorizacionSalidaRepositorio au
             return new(1, "No se pudo identificar al usuario.");
 
         var r = await autorizaciones.ObtenerAsync(idUsuario, "pendiente", ct);
+
+        // Con Jefatura pueden entrar usuarios de varias áreas, pero solo algunos resuelven salidas (encargado de su área o supervisión
+        // general). Quien no puede (el SP responde con un mensaje de negocio) ve la bandeja vacía en vez de un error.
+        if (r.IdTipoMensaje == 1)
+            return new(2, "Sin autorizaciones asignadas a tu usuario.", Armar([], HoraLima.Hoy()));
+
         if (r.IdTipoMensaje != 2 || r.Datos is null)
             return new(r.IdTipoMensaje, r.Mensaje);
 

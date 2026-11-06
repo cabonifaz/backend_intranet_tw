@@ -1,21 +1,22 @@
 -- ============================================================
 -- SP_ObtenerMenuJefaturaMovil  (App Mobile HU-28 — Menú de Jefatura)
--- Resumen del día del ÁREA del Jefe de Metrología que inició sesión.
---   El menú depende del ROL y el ÁREA: el supervisor (rol_sistema = 'supervisor') del área Metrología es el Jefe de Metrología.
---   El Jefe de Servicio Técnico usa el menú de campo (no tiene menú de Jefatura). Quien no es jefe de una de las áreas con
---   Jefatura recibe un mensaje y la app le muestra el menú de campo. Para sumar otra área con Jefatura: agregar su condición
---   aquí (y en utilidades/perfil.ts y modulosJefatura de la app).
---   Toda la información se filtra por el área del jefe según la RQ de cada servicio:
---     orden_servicio → expediente_digital → requerimiento.id_area → area_servicio_rq.area_usuario.
+-- Resumen del día para quien tiene el menú de Jefatura en la app: los usuarios con rol SUPERVISOR o ADMINISTRADOR de CUALQUIER
+-- área excepto Servicio Técnico (cuyo personal usa el menú de campo). El rol y el área son catálogos; el cargo es texto libre
+-- y no se usa. Quien no cumple recibe un mensaje y la app le muestra el menú de campo (técnicos, metrólogos y usuarios comunes).
+--   - Metrología: se filtra por el área de la RQ de cada servicio (orden_servicio → expediente_digital → requerimiento.id_area →
+--     area_servicio_rq.area_usuario = 'metrologia').
+--   - Otras áreas (Operaciones, TI, Gerencia, Comercial…): no tienen área en la RQ, así que ven el resumen de TODOS los servicios.
 -- Resultados:
 --   1. Mensaje
---   2. Una fila: area_codigo, area_nombre, sede, y los contadores de HOY (fecha de Lima, UTC-5):
---        programados      : servicios del área programados para hoy (en cualquier estado activo)
+--   2. Una fila: area_codigo (el área del usuario), area_nombre, sede, y los contadores de HOY (fecha de Lima, UTC-5):
+--        programados      : servicios programados para hoy (en cualquier estado activo)
 --        en_ruta          : de esos, en ruta
 --        en_ejecucion     : de esos, en ejecución o pausados (ya están en planta)
 --        con_demora       : de esos, con una demora registrada hoy
---        aprobaciones_pendientes : solicitudes de salida esperando su decisión. Misma regla que
---                           SP_ObtenerAutorizacionesSalida para el encargado del área (las de su área y las que la RQ no ubica en un área).
+--        aprobaciones_pendientes : solicitudes de salida que ESTE usuario puede resolver. Misma regla que
+--                           SP_ObtenerAutorizacionesSalida: supervisor de Metrología → las de su área y las que la RQ no ubica en
+--                           un área; supervisión general (Jefe/Coordinador de Operaciones, supervisor de Operaciones, administrador)
+--                           → todas; el resto → 0.
 -- Solo lectura.
 -- ============================================================
 DROP PROCEDURE IF EXISTS SP_ObtenerMenuJefaturaMovil;
@@ -29,11 +30,15 @@ proc: BEGIN
     DECLARE v_area VARCHAR(30)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
     DECLARE v_sede VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
     DECLARE v_hoy  DATE;
+    DECLARE v_aut_area    VARCHAR(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
+    DECLARE v_aut_general TINYINT DEFAULT 0;
 
-    -- Jefe de Metrología = SUPERVISOR del área Metrología (no depende de cómo se escriba el cargo, que es texto libre).
-    SELECT IF(u.rol_sistema = 'supervisor' AND u.area = 'metrologia', 'metrologia', NULL),
-           s.String1
-    INTO   v_area, v_sede
+    SELECT IF(u.rol_sistema IN ('supervisor', 'administrador') AND IFNULL(u.area, '') NOT IN ('', 'servicio_tecnico'), u.area, NULL),
+           s.String1,
+           IF(u.rol_sistema = 'supervisor' AND u.area = 'metrologia', 'metrologia', NULL),
+           (u.cargo IN ('jefe_operaciones', 'coordinador_operaciones') OR u.rol_sistema IN ('administrador', 'admin')
+            OR (u.rol_sistema = 'supervisor' AND u.area = 'operaciones'))
+    INTO   v_area, v_sede, v_aut_area, v_aut_general
     FROM   usuario u
     LEFT JOIN tabla_maestra s ON s.IdMaestro = 69 AND s.IdEmpresa = 1 AND s.String2 = u.sede_operativa
     WHERE  u.id_usuario = p_id_usuario AND u.eliminado_en IS NULL AND u.estado = 'activo'
@@ -51,13 +56,15 @@ proc: BEGIN
     WITH os_area AS (
         SELECT os.id_os, os.estado
         FROM   orden_servicio os
-        LEFT JOIN expediente_digital ed  ON ed.id_expediente    = os.id_expediente
-        LEFT JOIN requerimiento      rq  ON rq.id_requerimiento = ed.id_requerimiento
-        LEFT JOIN area_servicio_rq   asr ON asr.id_area_rq      = rq.id_area
         WHERE  os.eliminado_en IS NULL
-          AND  asr.area_usuario = v_area
           AND  os.estado IN ('programada', 'reprogramada', 'en_ruta', 'en_ejecucion', 'pausada', 'bloqueada')
           AND  os.fecha_ejecucion = v_hoy
+          AND  (v_area <> 'metrologia'
+                OR EXISTS (SELECT 1
+                           FROM   expediente_digital ed
+                           JOIN   requerimiento      rq  ON rq.id_requerimiento = ed.id_requerimiento
+                           JOIN   area_servicio_rq   asr ON asr.id_area_rq      = rq.id_area
+                           WHERE  ed.id_expediente = os.id_expediente AND asr.area_usuario = 'metrologia'))
     )
     SELECT v_area                                                           AS area_codigo,
            (SELECT t.String1 FROM tabla_maestra t
@@ -73,7 +80,8 @@ proc: BEGIN
            (SELECT COUNT(*)
             FROM   autorizacion_salida_os a
             WHERE  a.eliminado_en IS NULL AND a.estado = 'pendiente'
-              AND  (a.area_destino IS NULL OR a.area_destino = v_area))     AS aprobaciones_pendientes
+              AND  (v_aut_general = 1
+                    OR (v_aut_area IS NOT NULL AND (a.area_destino IS NULL OR a.area_destino = v_aut_area)))) AS aprobaciones_pendientes
     FROM   os_area;
 END$$
 

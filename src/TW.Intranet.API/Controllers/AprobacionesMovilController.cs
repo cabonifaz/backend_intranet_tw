@@ -6,7 +6,7 @@ using TW.Intranet.Aplicacion.Dtos;
 
 namespace TW.Intranet.API.Controllers;
 
-/// <summary>App Mobile HU-31 — Centro de aprobaciones del Jefe de Metrología (el SP valida que sea encargado de su área según la RQ).</summary>
+/// <summary>App Mobile HU-31 — Centro de aprobaciones (el SP valida quién puede resolver salidas: encargado de su área según la RQ o supervisión general).</summary>
 [ApiController]
 [Authorize]
 [Route("api/movil/aprobaciones")]

@@ -3,8 +3,8 @@ namespace TW.Intranet.Aplicacion.Dtos;
 // ── App Mobile HU-28 / HU-31 — Menú de Jefatura y Centro de aprobaciones ────────────────────
 
 /// <summary>
-/// Resumen del día del área del Jefe de Metrología (según el cargo del usuario; el Jefe de Servicio Técnico usa el menú de campo).
-/// AreaCodigo: metrologia. Todo se filtra por el área según la RQ de cada servicio.
+/// Resumen del día del menú de Jefatura (supervisores y administradores de cualquier área menos Servicio Técnico).
+/// AreaCodigo: el área del usuario. Metrología se filtra por el área según la RQ; las demás áreas ven todos los servicios.
 /// </summary>
 public record MenuJefaturaMovilDto(
     string  AreaCodigo,
