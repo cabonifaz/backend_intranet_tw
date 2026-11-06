@@ -6,6 +6,9 @@
 --   2) servicios_hoy       : de esas, las programadas para hoy (Ruta del Día).
 --   3) Próximo servicio    : la OS en curso o la siguiente por fecha y hora
 --                            (banner "Próximo Hit"). 0 filas si no hay.
+--   4) Viáticos y Gastos   : saldo por rendir (viáticos activos), cantidad de viáticos activos y gastos en revisión
+--                            (monto y cantidad). Las reglas están en SP_ObtenerViaticosUsuarioMovil (se leen en el
+--                            mismo resultado de indicadores: viaticos_saldo, viaticos_activos, gastos_revision_monto, gastos_revision_n).
 -- Fechas en hora de Lima (CURDATE / NOW, migración 63).
 -- Solo lectura; no modifica datos.
 -- ============================================================
@@ -17,10 +20,36 @@ CREATE PROCEDURE SP_ObtenerResumenMenuMovil(
     IN p_id_usuario BIGINT
 )
 proc: BEGIN
+    DECLARE v_vi_saldo   DECIMAL(12,2) DEFAULT 0;
+    DECLARE v_vi_activos INT DEFAULT 0;
+    DECLARE v_vi_final   INT DEFAULT 0;
+    DECLARE v_gs_monto   DECIMAL(12,2) DEFAULT 0;
+    DECLARE v_gs_n       INT DEFAULT 0;
+    DECLARE v_gs_obs     INT DEFAULT 0;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        GET DIAGNOSTICS CONDITION 1 @err_msg = MESSAGE_TEXT, @err_code = MYSQL_ERRNO;
+        DROP TEMPORARY TABLE IF EXISTS tmp_viat_mov;
+        DROP TEMPORARY TABLE IF EXISTS tmp_gasto_mov;
+        SELECT 3 AS IdTipoMensaje, CONCAT('[MySQL ', @err_code, '] ', @err_msg) AS Mensaje;
+    END;
+
     IF NOT EXISTS (SELECT 1 FROM usuario WHERE id_usuario = p_id_usuario AND eliminado_en IS NULL) THEN
         SELECT 1 AS IdTipoMensaje, 'Usuario no encontrado.' AS Mensaje;
         LEAVE proc;
     END IF;
+
+    -- El indicador de viáticos no debe tumbar el menú: si falla, esos números quedan en 0 y el resto del menú se muestra.
+    BEGIN
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            SET v_vi_saldo = 0, v_vi_activos = 0, v_gs_monto = 0, v_gs_n = 0;
+        END;
+        CALL SP_ObtenerViaticosUsuarioMovil(p_id_usuario, v_vi_saldo, v_vi_activos, v_vi_final, v_gs_monto, v_gs_n, v_gs_obs);
+    END;
+    DROP TEMPORARY TABLE IF EXISTS tmp_viat_mov;
+    DROP TEMPORARY TABLE IF EXISTS tmp_gasto_mov;
 
     SELECT 2 AS IdTipoMensaje, 'Éxito.' AS Mensaje;
 
@@ -36,7 +65,11 @@ proc: BEGIN
                            WHERE op.id_os = os.id_os AND op.id_usuario = p_id_usuario AND op.eliminado_en IS NULL))
     )
     SELECT COUNT(*)                                       AS servicios_asignados,
-           COALESCE(SUM(fecha_ejecucion = CURDATE()), 0)  AS servicios_hoy
+           COALESCE(SUM(fecha_ejecucion = CURDATE()), 0)  AS servicios_hoy,
+           v_vi_saldo                                     AS viaticos_saldo,
+           v_vi_activos                                   AS viaticos_activos,
+           v_gs_monto                                     AS gastos_revision_monto,
+           v_gs_n                                         AS gastos_revision_n
     FROM   os_tecnico;
 
     -- Próximo servicio (en curso primero; luego el más cercano por fecha y hora)

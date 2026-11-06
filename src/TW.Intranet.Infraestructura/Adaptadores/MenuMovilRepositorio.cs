@@ -15,11 +15,16 @@ public class MenuMovilRepositorio(CadenaConexionBd conexion)
             {
                 // 2do resultado: indicadores
                 await r.NextResultAsync(ct);
-                int asignados = 0, hoy = 0;
+                int asignados = 0, hoy = 0, viaticosActivos = 0, gastosRevisionN = 0;
+                decimal viaticosSaldo = 0, gastosRevision = 0;
                 if (await r.ReadAsync(ct))
                 {
-                    asignados = Entero(r, "servicios_asignados");
-                    hoy       = Entero(r, "servicios_hoy");
+                    asignados       = Entero(r, "servicios_asignados");
+                    hoy             = Entero(r, "servicios_hoy");
+                    viaticosSaldo   = DecimalNulo(r, "viaticos_saldo") ?? 0m;
+                    viaticosActivos = Entero(r, "viaticos_activos");
+                    gastosRevision  = DecimalNulo(r, "gastos_revision_monto") ?? 0m;
+                    gastosRevisionN = Entero(r, "gastos_revision_n");
                 }
 
                 // 3er resultado: próximo servicio (puede no haber)
@@ -38,6 +43,6 @@ public class MenuMovilRepositorio(CadenaConexionBd conexion)
                         Texto(r, "estado") ?? string.Empty);
                 }
 
-                return new RespuestaDto<ResumenMenuMovilDto>(2, mensaje, new ResumenMenuMovilDto(asignados, hoy, proximo));
+                return new RespuestaDto<ResumenMenuMovilDto>(2, mensaje, new ResumenMenuMovilDto(asignados, hoy, proximo, viaticosSaldo, viaticosActivos, gastosRevision, gastosRevisionN));
             }, ct);
 }

@@ -208,6 +208,9 @@ builder.Services.AddScoped<ObtenerResumenMenuMovilCasoDeUso>();
 // App Mobile HU-03 — agenda de servicios programados
 builder.Services.AddScoped<IServiciosMovilRepositorio, ServiciosMovilRepositorio>();
 builder.Services.AddScoped<ObtenerServiciosProgramadosMovilCasoDeUso>();
+// App Mobile HU-25 / HU-26 — viáticos asignados al programar y gastos rendidos
+builder.Services.AddScoped<IViaticosMovilRepositorio, ViaticosMovilRepositorio>();
+builder.Services.AddScoped<ObtenerViaticosMovilCasoDeUso>();
 // App Mobile HU-04 — detalle del servicio y checklist de pre-salida
 builder.Services.AddScoped<IPresalidaMovilRepositorio, PresalidaMovilRepositorio>();
 builder.Services.AddScoped<ObtenerDetalleServicioMovilCasoDeUso>();
