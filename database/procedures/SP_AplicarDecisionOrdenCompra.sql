@@ -43,7 +43,7 @@ BEGIN
         modificado_por = p_id_usuario
     WHERE id_oc = p_id_oc AND eliminado_en IS NULL;
 
-    SELECT GROUP_CONCAT(CONCAT(p.numero, ' v', p.version, ': ', UPPER(op.estado_validacion),
+    SELECT GROUP_CONCAT(CONCAT(p.numero, ': ', UPPER(op.estado_validacion),
                                IFNULL(CONCAT(' (', REPLACE(op.tipo_observacion, '_', ' '), ')'), ''))
                         ORDER BY op.id SEPARATOR ', ')
       INTO v_resumen

@@ -45,7 +45,7 @@ BEGIN
         oc.fecha_oc, oc.fecha_recepcion, oc.vigencia_hasta, oc.fecha_registro, oc.creado_por,
         oc.factura_igual_oc, oc.referencia,
         (oc.url_archivo_pdf IS NOT NULL)                                       AS tiene_pdf,
-        p.id_propuesta, p.numero AS numero_propuesta, p.version AS version_propuesta, p.codigo_formateado AS codigo_formateado_propuesta, p.id_requerimiento,
+        p.id_propuesta, p.numero AS numero_propuesta, p.version AS version_propuesta, p.id_requerimiento,
         COALESCE(p.id_responsable, p.id_creador, oc.creado_por)                AS id_responsable,
         (SELECT COUNT(*) FROM oc_propuesta op WHERE op.id_oc = oc.id_oc AND op.eliminado_en IS NULL)
                                                                                AS propuestas_vinculadas,

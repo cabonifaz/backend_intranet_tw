@@ -70,7 +70,7 @@ BEGIN
     DROP TEMPORARY TABLE IF EXISTS tmp_seg_base;
     CREATE TEMPORARY TABLE tmp_seg_base AS
     SELECT
-        p.id_propuesta, p.numero, p.version, p.codigo_formateado, p.id_requerimiento, p.id_cliente,
+        p.id_propuesta, p.numero, p.version, p.id_requerimiento, p.id_cliente,
         -- Observaciones 31/10: el contacto es el de la propuesta y, si no tiene, el del RQ
         COALESCE(p.id_contacto, (SELECT rq.id_contacto FROM requerimiento rq
                                   WHERE rq.id_requerimiento = p.id_requerimiento)) AS id_contacto,
@@ -87,7 +87,7 @@ BEGIN
         -- del detalle), sin contar el registro de cierre (aceptación / rechazo del cliente).
         (SELECT COUNT(*) FROM seguimiento_comercial s
          JOIN propuesta_comercial pv ON pv.id_propuesta = s.id_propuesta AND pv.eliminado_en IS NULL
-         WHERE pv.numero = p.numero AND s.eliminado_en IS NULL AND s.estado = 'activo') AS interacciones,
+         WHERE pv.numero_base = p.numero_base AND s.eliminado_en IS NULL AND s.estado = 'activo') AS interacciones,
         (SELECT MAX(s.fecha_interaccion) FROM seguimiento_comercial s
          JOIN tabla_maestra rs ON rs.IdMaestro = 27 AND rs.IdEmpresa = 1 AND rs.Num1 = s.id_resultado
          WHERE s.id_propuesta = p.id_propuesta AND s.eliminado_en IS NULL
@@ -112,7 +112,7 @@ BEGIN
     WHERE p.eliminado_en IS NULL
       AND p.estado IN ('enviado', 'aceptado', 'aprobado', 'rechazado')
       AND p.version = (SELECT MAX(p2.version) FROM propuesta_comercial p2
-                       WHERE p2.numero = p.numero AND p2.eliminado_en IS NULL)
+                       WHERE p2.numero_base = p.numero_base AND p2.eliminado_en IS NULL)
       AND (v_todas = 1 OR v_ver_todo = 1 OR u.area = v_area)
       -- Pedido 14: rol 'usuario' → solo lo suyo como responsable actual + suplencias vigentes
       AND (v_ver_todo = 1 OR FIND_IN_SET(COALESCE(p.id_responsable, p.id_creador), v_ids) > 0)

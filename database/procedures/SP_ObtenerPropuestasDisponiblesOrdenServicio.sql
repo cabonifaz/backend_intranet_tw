@@ -76,10 +76,10 @@ proc: BEGIN
             WHERE pe.id_propuesta = p.id_propuesta AND pe.id_equipo IS NOT NULL
               AND NOT EXISTS (SELECT 1 FROM os_equipo oe
                               JOIN orden_servicio os ON os.id_os = oe.id_os AND os.eliminado_en IS NULL AND os.estado <> 'anulada'
-                              JOIN propuesta_comercial po ON po.id_propuesta = os.id_propuesta AND po.numero = p.numero
+                              JOIN propuesta_comercial po ON po.id_propuesta = os.id_propuesta AND po.numero_base = p.numero_base
                               WHERE oe.id_equipo = pe.id_equipo AND oe.eliminado_en IS NULL)) AS equipos_pendientes,
            (SELECT COUNT(*) FROM orden_servicio os
-            JOIN propuesta_comercial po ON po.id_propuesta = os.id_propuesta AND po.numero = p.numero
+            JOIN propuesta_comercial po ON po.id_propuesta = os.id_propuesta AND po.numero_base = p.numero_base
             WHERE os.eliminado_en IS NULL AND os.estado <> 'anulada')                 AS os_activas,
            (SELECT COUNT(*) FROM propuesta_item i WHERE i.id_propuesta = p.id_propuesta AND i.seccion = 'principal'
               AND IFNULL(i.es_espaciado, 0) = 0 AND i.eliminado_en IS NULL)          AS conceptos_cotizados,
@@ -95,7 +95,7 @@ proc: BEGIN
       AND p.estado = 'aceptado'
       -- solo la última versión aceptada de cada número
       AND NOT EXISTS (SELECT 1 FROM propuesta_comercial p2
-                      WHERE p2.numero = p.numero AND p2.estado = 'aceptado' AND p2.eliminado_en IS NULL AND p2.version > p.version)
+                      WHERE p2.numero_base = p.numero_base AND p2.estado = 'aceptado' AND p2.eliminado_en IS NULL AND p2.version > p.version)
       AND (v_todas = 1 OR COALESCE(p.id_responsable, p.id_creador) = p_id_usuario)
       AND (v_busqueda = ''
            OR p.numero       LIKE CONCAT('%', v_busqueda, '%')

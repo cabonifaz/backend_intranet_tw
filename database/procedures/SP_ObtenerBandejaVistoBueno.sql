@@ -56,7 +56,7 @@ BEGIN
             vb.id_vb, vb.id_propuesta, vb.estado AS estado_vb, IFNULL(vb.tipo, 'aprobacion') AS tipo_vb,
             vb.sla_horas, vb.fecha_solicitud, vb.fecha_respuesta, vb.resuelto_por,
             vb.comentario AS comentario_solicitud, vb.comentario_respuesta, vb.motivo_revocacion,
-            p.numero, p.version, p.codigo_formateado, p.id_requerimiento, p.id_cliente, p.referencia, p.total, p.id_moneda,
+            p.numero, p.version, p.id_requerimiento, p.id_cliente, p.referencia, p.total, p.id_moneda,
             p.descuento_pct, p.estado AS estado_propuesta,
             a.id_usuario AS id_comercial, CONCAT(a.nombre, ' ', a.apellido) AS comercial,
             a.area AS area_comercial
@@ -109,7 +109,7 @@ BEGIN
             vb.sla_horas, vb.fecha_solicitud, vb.fecha_respuesta, vb.resuelto_por,
             vb.comentario AS comentario_solicitud, vb.comentario_respuesta, vb.motivo_revocacion,
             vb.id_vb_padre, vb.creado_por AS solicitante_id,
-            p.numero, p.version, p.codigo_formateado, p.id_requerimiento, p.id_cliente, p.referencia, p.total, p.id_moneda,
+            p.numero, p.version, p.id_requerimiento, p.id_cliente, p.referencia, p.total, p.id_moneda,
             p.descuento_pct, p.estado AS estado_propuesta,
             a.id_usuario AS id_comercial, CONCAT(a.nombre, ' ', a.apellido) AS comercial,
             a.area AS area_comercial
@@ -147,7 +147,7 @@ BEGIN
           AND (IFNULL(p_id_moneda, 0)    = 0 OR a.id_moneda    = p_id_moneda)
     )
     SELECT
-        b.id_vb, b.id_propuesta, b.numero, b.version, b.codigo_formateado, b.id_requerimiento,
+        b.id_vb, b.id_propuesta, b.numero, b.version, b.id_requerimiento,
         r.numero                                   AS numero_rq,
         b.id_cliente, c.razon_social, c.ruc, b.referencia,
         b.total, b.id_moneda, m.String3            AS moneda, m.String2 AS moneda_simbolo,

@@ -43,8 +43,6 @@ public record TarjetasOrdenesServicioDto(
 /// <summary>Fila de la bandeja.</summary>
 public record ItemBandejaOrdenServicioDto
 {
-    /// <summary>#4437 Código de la propuesta para mostrar: "PC: 0012-2-2026" (ya incluye la versión).</summary>
-    public string? CodigoFormateadoPropuesta { get; init; }
 
     public long      IdOs                   { get; init; }
     /// <summary>OS u OM.</summary>
@@ -167,8 +165,6 @@ public record ContactoClienteOsDto(long IdContacto, string Nombres, string? Carg
 /// <summary>Los 10 campos de contexto de la propuesta aceptada (sección 2 de la ficha y tab Propuesta Origen).</summary>
 public record PropuestaOrigenOsDto
 {
-    /// <summary>#4437 Código de la propuesta para mostrar: "PC: 0012-2-2026" (ya incluye la versión).</summary>
-    public string? CodigoFormateado { get; init; }
 
     public long      IdPropuesta        { get; init; }
     public string    Numero             { get; init; } = "";
@@ -380,8 +376,6 @@ public record AvanceOrdenServicioDto(int Total, int Pendientes, int EnProceso, i
 /// <summary>Cabecera + tab Resumen + Avance por equipos del Modal de Detalle.</summary>
 public record DetalleOrdenServicioDto
 {
-    /// <summary>#4437 Código de la propuesta para mostrar: "PC: 0012-2-2026" (ya incluye la versión).</summary>
-    public string? CodigoFormateadoPropuesta { get; init; }
 
     public long      IdOs                   { get; init; }
     public string    Tipo                   { get; init; } = "OS";

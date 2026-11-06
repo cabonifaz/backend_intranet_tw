@@ -23,7 +23,8 @@ CREATE PROCEDURE SP_EnviarPropuestaCliente(
 )
 proc: BEGIN
     DECLARE v_estado      VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
-    DECLARE v_numero      VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_numero      VARCHAR(30)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_numero_base VARCHAR(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_version     INT;
     DECLARE v_id_rq       BIGINT;
     DECLARE v_autor       BIGINT;
@@ -46,6 +47,7 @@ proc: BEGIN
       INTO v_estado, v_numero, v_version, v_id_rq, v_autor
     FROM propuesta_comercial
     WHERE id_propuesta = p_id_propuesta AND eliminado_en IS NULL;
+    SELECT numero_base INTO v_numero_base FROM propuesta_comercial WHERE numero = v_numero LIMIT 1;
 
     IF v_estado IS NULL THEN
         SELECT 1 AS IdTipoMensaje, 'Propuesta no encontrada.' AS Mensaje;
@@ -59,7 +61,7 @@ proc: BEGIN
     END IF;
 
     SET v_es_ultima = NOT EXISTS (SELECT 1 FROM propuesta_comercial
-                                  WHERE numero = v_numero AND version > v_version AND eliminado_en IS NULL);
+                                  WHERE numero_base = v_numero_base AND version > v_version AND eliminado_en IS NULL);
     IF v_es_ultima = 0 THEN
         SELECT 1 AS IdTipoMensaje, 'Solo se puede enviar la última versión de la propuesta.' AS Mensaje;
         LEAVE proc;
@@ -112,7 +114,7 @@ proc: BEGIN
     IF v_id_rq IS NOT NULL THEN
         INSERT INTO historial_requerimiento (id_requerimiento, tipo, tipo_label, icono, descripcion, usuario, fecha, creado_en, creado_por)
         VALUES (v_id_rq, 'propuesta', 'Propuesta enviada al cliente', 'send',
-                CONCAT('Propuesta ', v_numero, ' v', v_version, ' enviada al cliente. Entra al pipeline de seguimiento comercial.',
+                CONCAT('Propuesta ', v_numero, ' enviada al cliente. Entra al pipeline de seguimiento comercial.',
                        IF(v_tipo_accion IS NULL, '',
                           CONCAT(' Primera acción: llamada al cliente antes de las ', DATE_FORMAT(v_fecha_accion, '%H:%i'), '.'))),
                 v_usu_nombre, NOW(), NOW(), p_id_usuario);
@@ -134,7 +136,7 @@ proc: BEGIN
 
     INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion, id_usuario, registrado_en, metadata)
     VALUES ('propuesta', p_id_propuesta, 'envio_cliente', 'aprobado', 'enviado',
-            CONCAT('Propuesta ', v_numero, ' v', v_version, ' enviada al cliente por ', v_usu_nombre, '.'),
+            CONCAT('Propuesta ', v_numero, ' enviada al cliente por ', v_usu_nombre, '.'),
             p_id_usuario, NOW(),
             JSON_OBJECT('numero', v_numero, 'version', v_version, 'id_requerimiento', v_id_rq));
 

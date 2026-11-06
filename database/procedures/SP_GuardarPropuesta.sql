@@ -59,7 +59,8 @@ CREATE PROCEDURE SP_GuardarPropuesta(
 )
 proc: BEGIN
     DECLARE v_id            BIGINT;
-    DECLARE v_numero        VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_numero        VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;  -- numero_base (agrupa versiones)
+    DECLARE v_numero_pc     VARCHAR(30)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;  -- número visible PC-0012-1-2026
     DECLARE v_version       INT;
     DECLARE v_padre         BIGINT;
     DECLARE v_estado        VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
@@ -94,10 +95,10 @@ proc: BEGIN
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
-        ROLLBACK;
-        GET DIAGNOSTICS CONDITION 1
+        GET DIAGNOSTICS CONDITION 1            -- antes del ROLLBACK: el ROLLBACK limpia el error y el mensaje salía NULL
             @err_msg  = MESSAGE_TEXT,
             @err_code = MYSQL_ERRNO;
+        ROLLBACK;
         DROP TEMPORARY TABLE IF EXISTS tmp_prop_eq_prev;
         SELECT 3 AS IdTipoMensaje,
                CONCAT('[MySQL ', @err_code, '] ', @err_msg) AS Mensaje;
@@ -180,7 +181,7 @@ proc: BEGIN
             LEAVE proc;
         END IF;
     ELSEIF IFNULL(p_id_propuesta_base, 0) <> 0 THEN
-        SELECT numero, id_requerimiento INTO v_numero, v_id_rq_actual
+        SELECT numero_base, id_requerimiento INTO v_numero, v_id_rq_actual
         FROM propuesta_comercial
         WHERE id_propuesta = p_id_propuesta_base AND eliminado_en IS NULL;
 
@@ -194,14 +195,14 @@ proc: BEGIN
         END IF;
         IF EXISTS (
             SELECT 1 FROM propuesta_comercial
-            WHERE numero = v_numero AND estado = 'borrador' AND eliminado_en IS NULL
+            WHERE numero_base = v_numero AND estado = 'borrador' AND eliminado_en IS NULL
         ) THEN
             SELECT 1 AS IdTipoMensaje,
-                   CONCAT('Ya existe una versión en borrador de ', v_numero, '. Edítela en lugar de crear otra.') AS Mensaje;
+                   CONCAT('Ya existe una versión en borrador de ', (SELECT numero FROM propuesta_comercial WHERE id_propuesta = p_id_propuesta_base), '. Edítela en lugar de crear otra.') AS Mensaje;
             LEAVE proc;
         END IF;
 
-        SELECT MAX(version) + 1 INTO v_version FROM propuesta_comercial WHERE numero = v_numero;
+        SELECT MAX(version) + 1 INTO v_version FROM propuesta_comercial WHERE numero_base = v_numero;
         SET v_padre = p_id_propuesta_base;
     END IF;
 
@@ -358,7 +359,7 @@ proc: BEGIN
     IF p_id_propuesta = 0 THEN
         SET v_es_nueva = 1;
         INSERT INTO propuesta_comercial (
-            numero, version, id_requerimiento, id_cliente, id_sede, id_contacto, id_responsable,
+            numero_base, version, id_requerimiento, id_cliente, id_sede, id_contacto, id_responsable,
             id_moneda, subtotal, descuento_monto, descuento_pct, id_motivo_descuento,
             igv_pct, igv_monto, total, aplica_igv, precios_incluyen_igv,
             plazo_entrega_dias, plazo_entrega_unidad, plazo_entrega_condicion, vigencia_dias,
@@ -369,7 +370,7 @@ proc: BEGIN
             estado, id_propuesta_padre, id_creador, fecha_creacion, fecha_expiracion,
             creado_en, creado_por
         ) VALUES (
-            IFNULL(v_numero, 'PROP-TEMP'), IFNULL(v_version, 1), p_id_requerimiento, v_id_cliente,
+            IFNULL(v_numero, 'PROP-000000'), IFNULL(v_version, 1), p_id_requerimiento, v_id_cliente,  -- PROP-000000 provisional: se reemplaza con el id justo después
             COALESCE(p_id_sede, v_sede_rq), COALESCE(p_id_contacto, v_contacto_rq), COALESCE(p_id_responsable, p_id_usuario),
             p_id_moneda, v_sub, v_desc, NULLIF(p_descuento_pct, 0), p_id_motivo_descuento,
             v_igv_pct, v_igv, v_total, IFNULL(p_aplica_igv, 1), IFNULL(p_precios_incluyen_igv, 0),
@@ -387,7 +388,7 @@ proc: BEGIN
         IF v_numero IS NULL THEN
             SET v_numero  = CONCAT('PROP-', LPAD(v_id, 6, '0'));
             SET v_version = 1;
-            UPDATE propuesta_comercial SET numero = v_numero WHERE id_propuesta = v_id;
+            UPDATE propuesta_comercial SET numero_base = v_numero WHERE id_propuesta = v_id;
         END IF;
     ELSE
         SET v_id = p_id_propuesta;
@@ -431,8 +432,9 @@ proc: BEGIN
             modificado_por          = p_id_usuario
         WHERE id_propuesta = v_id;
 
-        SELECT numero, version INTO v_numero, v_version FROM propuesta_comercial WHERE id_propuesta = v_id;
+        SELECT numero_base, version INTO v_numero, v_version FROM propuesta_comercial WHERE id_propuesta = v_id;
     END IF;
+    SELECT numero INTO v_numero_pc FROM propuesta_comercial WHERE id_propuesta = v_id;
 
     -- ── Ítems ───────────────────────────────────────────────────────────
     DELETE FROM propuesta_item WHERE id_propuesta = v_id;
@@ -543,21 +545,21 @@ proc: BEGIN
         INSERT INTO historial_requerimiento (id_requerimiento, tipo, tipo_label, icono, descripcion, usuario, fecha, creado_en, creado_por)
         VALUES (p_id_requerimiento, 'propuesta',
                 IF(v_version > 1, 'Nueva versión de propuesta', 'Propuesta creada'), 'description',
-                CONCAT('Propuesta ', v_numero, ' v', v_version, ' registrada en borrador.'),
+                CONCAT('Propuesta ', v_numero_pc, ' registrada en borrador.'),
                 v_usu_nombre, NOW(), NOW(), p_id_usuario);
     END IF;
 
     IF v_es_nueva = 0 AND v_estado = 'aprobado' THEN
         INSERT INTO historial_requerimiento (id_requerimiento, tipo, tipo_label, icono, descripcion, usuario, fecha, creado_en, creado_por)
         VALUES (p_id_requerimiento, 'propuesta', 'Propuesta editada tras VB', 'edit_note',
-                CONCAT('Propuesta ', v_numero, ' v', v_version, ' editada después del visto bueno: vuelve a borrador.'),
+                CONCAT('Propuesta ', v_numero_pc, ' editada después del visto bueno: vuelve a borrador.'),
                 v_usu_nombre, NOW(), NOW(), p_id_usuario);
     END IF;
 
     INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion, id_usuario, registrado_en, metadata)
     VALUES ('propuesta', v_id, IF(v_es_nueva = 1, IF(v_version > 1, 'nueva_version', 'creacion'), 'edicion'),
             IF(v_es_nueva = 1, NULL, v_estado), 'borrador',
-            CONCAT('Propuesta ', v_numero, ' v', v_version, IF(v_es_nueva = 1, ' creada.',
+            CONCAT('Propuesta ', v_numero_pc, IF(v_es_nueva = 1, ' creada.',
                    IF(v_estado = 'aprobado', ' editada después del visto bueno: vuelve a borrador y debe pasar otra vez por VB.', ' actualizada.'))),
             p_id_usuario, NOW(),
             JSON_OBJECT('total', v_total, 'total_opcionales', v_total_opc));
@@ -565,11 +567,10 @@ proc: BEGIN
     COMMIT;
 
     SELECT 2 AS IdTipoMensaje,
-           IF(v_es_nueva = 1, CONCAT('Propuesta ', v_numero, ' v', v_version, ' creada en borrador.'),
+           IF(v_es_nueva = 1, CONCAT('Propuesta ', v_numero_pc, ' creada en borrador.'),
                               IF(v_estado = 'aprobado', 'Propuesta guardada. Volvió a borrador: envíela nuevamente a visto bueno.',
                                  'Propuesta guardada correctamente.')) AS Mensaje;
-    SELECT v_id AS id_propuesta, v_numero AS numero, v_version AS version,
-           (SELECT pc.codigo_formateado FROM propuesta_comercial pc WHERE pc.id_propuesta = v_id) AS codigo_formateado,
+    SELECT v_id AS id_propuesta, v_numero_pc AS numero, v_version AS version,
            v_sub AS subtotal, v_desc AS descuento_monto, v_igv AS igv_monto, v_total AS total,
            v_sub_opc AS subtotal_opcionales, v_desc_opc AS descuento_opcionales, v_total_opc AS total_opcionales;
 END$$

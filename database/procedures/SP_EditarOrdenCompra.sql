@@ -212,7 +212,7 @@ proc: BEGIN
     INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion,
                                   id_usuario, registrado_en, metadata)
     SELECT 'orden_compra', p_id_oc, 'desvincular_propuesta', op.estado_validacion, NULL,
-           CONCAT('Se quitó la propuesta ', p.numero, ' v', p.version, ' (', FORMAT(op.monto_asignado, 2), ').'),
+           CONCAT('Se quitó la propuesta ', p.numero, ' (', FORMAT(op.monto_asignado, 2), ').'),
            p_id_usuario, NOW(), JSON_OBJECT('id_propuesta', op.id_propuesta, 'monto_asignado', op.monto_asignado)
     FROM oc_propuesta op JOIN propuesta_comercial p ON p.id_propuesta = op.id_propuesta
     WHERE op.id_oc = p_id_oc AND op.eliminado_en IS NULL

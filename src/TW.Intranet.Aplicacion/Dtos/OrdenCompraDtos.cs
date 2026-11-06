@@ -527,8 +527,6 @@ public record ItemBandejaOrdenCompraDto(
     /// <summary>Se puede registrar la OC del cliente que la reemplaza (autogenerada o pendiente_reemplazo).</summary>
     bool      PuedeReemplazar)
 {
-    /// <summary>#4437 Código de la propuesta para mostrar: "PC: 0012-2-2026" (ya incluye la versión).</summary>
-    public string? CodigoFormateadoPropuesta { get; init; }
 }
 
 public record BandejaOrdenesCompraDto(
@@ -622,8 +620,6 @@ public record CabeceraDetalleOcDto
 
 public record PropuestaVinculadaOcDto
 {
-    /// <summary>#4437 Código de la propuesta para mostrar: "PC: 0012-2-2026" (ya incluye la versión).</summary>
-    public string? CodigoFormateado { get; init; }
 
     public long      IdPropuesta             { get; init; }
     public string    Numero                  { get; init; } = "";

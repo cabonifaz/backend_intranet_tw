@@ -33,7 +33,8 @@ CREATE PROCEDURE SP_ResolverVistoBueno(
 proc: BEGIN
     DECLARE v_id_vb        BIGINT;
     DECLARE v_estado_p     VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
-    DECLARE v_numero       VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_numero       VARCHAR(30)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_numero_base VARCHAR(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_version      INT;
     DECLARE v_id_rq        BIGINT;
     DECLARE v_autor        BIGINT;
@@ -110,6 +111,7 @@ proc: BEGIN
       INTO v_estado_p, v_numero, v_version, v_id_rq, v_autor
     FROM propuesta_comercial p
     WHERE p.id_propuesta = p_id_propuesta AND p.eliminado_en IS NULL;
+    SELECT numero_base INTO v_numero_base FROM propuesta_comercial WHERE numero = v_numero LIMIT 1;
 
     IF v_estado_p IS NULL THEN
         SELECT 1 AS IdTipoMensaje, 'Propuesta no encontrada.' AS Mensaje;
@@ -126,7 +128,7 @@ proc: BEGIN
         -- comercial, se avisa en vez del genérico "no tiene VB pendiente".
         IF v_estado_p = 'anulado' AND EXISTS (
             SELECT 1 FROM propuesta_comercial
-            WHERE numero = v_numero AND version > v_version AND eliminado_en IS NULL
+            WHERE numero_base = v_numero_base AND version > v_version AND eliminado_en IS NULL
         ) THEN
             SELECT 1 AS IdTipoMensaje,
                    CONCAT('El comercial generó una nueva versión de ', v_numero,
@@ -199,7 +201,7 @@ proc: BEGIN
     -- Canal 5 = Notificación en la plataforma
     INSERT INTO notificacion (id_usuario_destino, id_canal, titulo, cuerpo, entidad_tipo, id_entidad, fecha_creacion, creado_por)
     VALUES (v_autor, 5,
-            CONCAT('Propuesta ', v_etiqueta, ': ', v_numero, ' v', v_version),
+            CONCAT('Propuesta ', v_etiqueta, ': ', v_numero),
             CONCAT(v_usu_nombre, ' ',
                    CASE p_accion WHEN 'aprobar'  THEN 'aprobó la propuesta. Ya puede enviarla al cliente. '
                                  WHEN 'corregir' THEN CONCAT('solicitó correcciones en ', v_areas_label,
@@ -212,7 +214,7 @@ proc: BEGIN
         INSERT INTO historial_requerimiento (id_requerimiento, tipo, tipo_label, icono, descripcion, usuario, fecha, creado_en, creado_por)
         VALUES (v_id_rq, 'propuesta', CONCAT('Visto bueno: ', v_etiqueta),
                 CASE p_accion WHEN 'aprobar' THEN 'verified' WHEN 'corregir' THEN 'undo' ELSE 'block' END,
-                CONCAT('Propuesta ', v_numero, ' v', v_version, ' ', v_etiqueta, '.'),
+                CONCAT('Propuesta ', v_numero, ' ', v_etiqueta, '.'),
                 v_usu_nombre, NOW(), NOW(), p_id_usuario);
     END IF;
 

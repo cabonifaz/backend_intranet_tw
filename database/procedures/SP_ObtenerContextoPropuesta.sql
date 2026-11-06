@@ -15,7 +15,8 @@ CREATE PROCEDURE SP_ObtenerContextoPropuesta(
     IN p_id_propuesta BIGINT
 )
 proc: BEGIN
-    DECLARE v_numero      VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_numero      VARCHAR(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_numero_base VARCHAR(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_version     INT;
     DECLARE v_estado      VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_id_rq       BIGINT;
@@ -25,6 +26,7 @@ proc: BEGIN
       INTO v_numero, v_version, v_estado, v_id_rq, v_id_cliente
     FROM propuesta_comercial
     WHERE id_propuesta = p_id_propuesta AND eliminado_en IS NULL;
+    SELECT numero_base INTO v_numero_base FROM propuesta_comercial WHERE numero = v_numero LIMIT 1;
 
     IF v_numero IS NULL THEN
         SELECT 1 AS IdTipoMensaje, 'Propuesta no encontrada.' AS Mensaje;
@@ -40,7 +42,7 @@ proc: BEGIN
         p.fecha_envio,
         p.fecha_expiracion,
         NOT EXISTS (SELECT 1 FROM propuesta_comercial x
-                    WHERE x.numero = v_numero AND x.version > v_version
+                    WHERE x.numero_base = v_numero_base AND x.version > v_version
                       AND x.eliminado_en IS NULL)                       AS es_ultima_version,
         EXISTS (SELECT 1 FROM orden_compra oc
                 WHERE oc.eliminado_en IS NULL AND oc.estado <> 'anulada'
@@ -125,7 +127,7 @@ proc: BEGIN
     LEFT JOIN usuario u        ON u.id_usuario = v.id_creador
     LEFT JOIN tabla_maestra tm ON tm.IdMaestro = 11 AND tm.IdEmpresa = 1
                               AND tm.Num1 = v.id_motivo_nueva_version
-    WHERE v.numero = v_numero AND v.eliminado_en IS NULL
+    WHERE v.numero_base = v_numero_base AND v.eliminado_en IS NULL
     ORDER BY v.version DESC;
 
     -- 5. Actividad

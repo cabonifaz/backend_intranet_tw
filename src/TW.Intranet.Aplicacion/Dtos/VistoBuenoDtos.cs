@@ -19,8 +19,6 @@ public record KpisVistoBuenoDto(int Pendientes, int ProximosVencer, int Vencidos
 
 public record ItemBandejaVistoBuenoDto
 {
-    /// <summary>#4437 Código de la propuesta para mostrar: "PC: 0012-2-2026" (ya incluye la versión).</summary>
-    public string? CodigoFormateado { get; init; }
 
     public long      IdVb                 { get; init; }
     public long      IdPropuesta          { get; init; }

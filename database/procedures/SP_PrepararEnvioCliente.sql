@@ -21,7 +21,8 @@ CREATE PROCEDURE SP_PrepararEnvioCliente(
 )
 proc: BEGIN
     DECLARE v_estado      VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
-    DECLARE v_numero      VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_numero      VARCHAR(30)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_numero_base VARCHAR(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_version     INT;
     DECLARE v_id_cliente  BIGINT;
     DECLARE v_id_contacto BIGINT;
@@ -33,6 +34,7 @@ proc: BEGIN
       INTO v_estado, v_numero, v_version, v_id_cliente, v_id_contacto, v_autor
     FROM propuesta_comercial
     WHERE id_propuesta = p_id_propuesta AND eliminado_en IS NULL;
+    SELECT numero_base INTO v_numero_base FROM propuesta_comercial WHERE numero = v_numero LIMIT 1;
 
     IF v_estado IS NULL THEN
         SELECT 1 AS IdTipoMensaje, 'Propuesta no encontrada.' AS Mensaje;
@@ -46,7 +48,7 @@ proc: BEGIN
     END IF;
 
     SET v_es_ultima = NOT EXISTS (SELECT 1 FROM propuesta_comercial
-                                  WHERE numero = v_numero AND version > v_version AND eliminado_en IS NULL);
+                                  WHERE numero_base = v_numero_base AND version > v_version AND eliminado_en IS NULL);
     IF v_es_ultima = 0 THEN
         SELECT 1 AS IdTipoMensaje, 'Solo se puede enviar la última versión de la propuesta.' AS Mensaje;
         LEAVE proc;

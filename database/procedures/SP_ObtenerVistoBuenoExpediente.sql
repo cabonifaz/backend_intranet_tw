@@ -16,11 +16,12 @@ DELIMITER $$
 CREATE PROCEDURE SP_ObtenerVistoBuenoExpediente(
     IN p_id_usuario    BIGINT,
     IN p_id_expediente BIGINT,
-    IN p_numero        VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci
+    IN p_numero        VARCHAR(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci
 )
 proc: BEGIN
     DECLARE v_id_rq   BIGINT;
-    DECLARE v_numero  VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_numero  VARCHAR(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_numero_base VARCHAR(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_ultima  BIGINT;
     DECLARE v_vb      BIGINT;
     DECLARE v_id_apr  BIGINT;
@@ -36,8 +37,11 @@ proc: BEGIN
     SELECT id_requerimiento INTO v_id_rq FROM expediente_digital WHERE id_expediente = p_id_expediente;
 
     IF NULLIF(TRIM(IFNULL(p_numero, '')), '') IS NOT NULL THEN
-        SELECT MAX(p.numero) INTO v_numero FROM propuesta_comercial p
-        WHERE p.id_requerimiento = v_id_rq AND p.eliminado_en IS NULL AND p.numero = TRIM(p_numero);
+        SELECT MAX(p.numero_base) INTO v_numero FROM propuesta_comercial p
+        WHERE p.id_requerimiento = v_id_rq AND p.eliminado_en IS NULL
+          AND (p.numero = TRIM(p_numero) OR p.numero_base = TRIM(p_numero));
+        SELECT numero_base INTO v_numero_base FROM propuesta_comercial
+        WHERE numero = v_numero OR numero_base = v_numero LIMIT 1;
         IF v_numero IS NULL THEN
             SELECT 1 AS IdTipoMensaje, 'La propuesta no pertenece a este expediente.' AS Mensaje;
             LEAVE proc;
@@ -46,21 +50,25 @@ proc: BEGIN
         -- Propuesta activa del expediente (la más avanzada entre las últimas versiones)
         SELECT p.numero INTO v_numero FROM propuesta_comercial p
         WHERE p.id_requerimiento = v_id_rq AND p.eliminado_en IS NULL AND p.estado <> 'anulado'
-          AND p.version = (SELECT MAX(p2.version) FROM propuesta_comercial p2 WHERE p2.numero = p.numero AND p2.eliminado_en IS NULL)
+          AND p.version = (SELECT MAX(p2.version) FROM propuesta_comercial p2 WHERE p2.numero_base = p.numero_base AND p2.eliminado_en IS NULL)
         ORDER BY CASE p.estado WHEN 'aceptado' THEN 1 WHEN 'enviado' THEN 2 WHEN 'aprobado' THEN 2
                                WHEN 'pendiente_vb' THEN 3 WHEN 'pendiente_revocacion' THEN 3 WHEN 'rechazado' THEN 6 ELSE 4 END,
                  p.id_propuesta DESC
         LIMIT 1;
+        SELECT numero_base INTO v_numero_base FROM propuesta_comercial WHERE numero = v_numero LIMIT 1;
     END IF;
+    -- Número visible (PC-…) = el de la última versión de la propuesta
+    SELECT p.numero INTO v_numero FROM propuesta_comercial p
+    WHERE p.numero_base = v_numero_base AND p.eliminado_en IS NULL ORDER BY p.version DESC LIMIT 1;
 
     SELECT MAX(p.id_propuesta) INTO v_ultima FROM propuesta_comercial p
-    WHERE p.numero = v_numero AND p.eliminado_en IS NULL
-      AND p.version = (SELECT MAX(p2.version) FROM propuesta_comercial p2 WHERE p2.numero = v_numero AND p2.eliminado_en IS NULL);
+    WHERE p.numero_base = v_numero_base AND p.eliminado_en IS NULL
+      AND p.version = (SELECT MAX(p2.version) FROM propuesta_comercial p2 WHERE p2.numero_base = v_numero_base AND p2.eliminado_en IS NULL);
 
     -- VB vigente: el último de la propuesta (pendiente o resuelto)
     SELECT v.id_vb INTO v_vb FROM visto_bueno v
     JOIN propuesta_comercial p ON p.id_propuesta = v.id_propuesta
-    WHERE p.numero = v_numero AND v.tipo = 'aprobacion' AND v.eliminado_en IS NULL AND v.estado <> 'reasignado'
+    WHERE p.numero_base = v_numero_base AND v.tipo = 'aprobacion' AND v.eliminado_en IS NULL AND v.estado <> 'reasignado'
     ORDER BY v.fecha_solicitud DESC, v.id_vb DESC LIMIT 1;
 
     SET v_id_apr = FN_AprobadorVistoBuenoExpediente(v_vb);
@@ -68,10 +76,12 @@ proc: BEGIN
     SELECT 2 AS IdTipoMensaje, 'Éxito.' AS Mensaje;
 
     -- 2. Propuestas (pills)
-    SELECT p.numero, MAX(p.version) AS version, (p.numero = v_numero) AS seleccionada
+    --    Una pill por propuesta, con el número de su última versión (PC-0012-2-2026)
+    SELECT p.numero, p.version, (p.numero_base = v_numero_base) AS seleccionada
     FROM propuesta_comercial p
     WHERE p.id_requerimiento = v_id_rq AND p.eliminado_en IS NULL
-    GROUP BY p.numero ORDER BY MIN(p.id_propuesta);
+      AND p.version = (SELECT MAX(p2.version) FROM propuesta_comercial p2 WHERE p2.numero_base = p.numero_base AND p2.eliminado_en IS NULL)
+    ORDER BY p.numero_base;
 
     -- 3. Estado actual del VB
     SELECT v_numero AS numero, pu.id_propuesta AS id_propuesta_revision, pu.version AS version_revision,
@@ -99,7 +109,7 @@ proc: BEGIN
     LEFT JOIN tabla_maestra aa ON aa.IdMaestro = 79 AND aa.IdEmpresa = 1 AND aa.String2 = ua.area
     LEFT JOIN visto_bueno va ON va.id_vb = (SELECT v2.id_vb FROM visto_bueno v2
                                             JOIN propuesta_comercial p2 ON p2.id_propuesta = v2.id_propuesta
-                                            WHERE p2.numero = v_numero AND v2.tipo = 'aprobacion' AND v2.estado = 'aprobado'
+                                            WHERE p2.numero_base = v_numero_base AND v2.tipo = 'aprobacion' AND v2.estado = 'aprobado'
                                               AND v2.eliminado_en IS NULL
                                             ORDER BY v2.fecha_respuesta DESC LIMIT 1)
     LEFT JOIN propuesta_comercial pa ON pa.id_propuesta = va.id_propuesta
@@ -118,7 +128,7 @@ proc: BEGIN
     LEFT JOIN usuario ua ON ua.id_usuario = FN_AprobadorVistoBuenoExpediente(v.id_vb)
     LEFT JOIN usuario ur ON ur.id_usuario = FN_AprobadorVistoBuenoExpediente(v.id_vb)
     LEFT JOIN tabla_maestra mr ON mr.IdMaestro = 10 AND mr.IdEmpresa = 1 AND mr.Num1 = v.id_motivo_rechazo
-    WHERE p.numero = v_numero AND v.tipo = 'aprobacion' AND v.eliminado_en IS NULL AND v.estado <> 'reasignado'
+    WHERE p.numero_base = v_numero_base AND v.tipo = 'aprobacion' AND v.eliminado_en IS NULL AND v.estado <> 'reasignado'
     ORDER BY v.fecha_solicitud DESC, v.id_vb DESC;
 
     -- 5. Historial de reasignación del aprobador
@@ -135,7 +145,7 @@ proc: BEGIN
     LEFT JOIN usuario un ON un.id_usuario = n.id_aprobador
     LEFT JOIN usuario ue ON ue.id_usuario = IFNULL(v.resuelto_por, n.creado_por)
     LEFT JOIN tabla_maestra mo ON mo.IdMaestro = 92 AND mo.IdEmpresa = 1 AND mo.Num1 = IFNULL(n.id_motivo_reasignacion, v.id_motivo_reasignacion)
-    WHERE p.numero = v_numero AND v.tipo = 'aprobacion' AND v.eliminado_en IS NULL AND v.estado = 'reasignado'
+    WHERE p.numero_base = v_numero_base AND v.tipo = 'aprobacion' AND v.eliminado_en IS NULL AND v.estado = 'reasignado'
     ORDER BY v.fecha_respuesta DESC;
 
     -- 6. Métricas de aprobación
@@ -150,7 +160,7 @@ proc: BEGIN
            SUM(v.fecha_respuesta IS NOT NULL)                                               AS decisiones
     FROM visto_bueno v
     JOIN propuesta_comercial p ON p.id_propuesta = v.id_propuesta
-    WHERE p.numero = v_numero AND v.tipo = 'aprobacion' AND v.eliminado_en IS NULL AND v.estado <> 'reasignado';
+    WHERE p.numero_base = v_numero_base AND v.tipo = 'aprobacion' AND v.eliminado_en IS NULL AND v.estado <> 'reasignado';
 END$$
 
 DELIMITER ;

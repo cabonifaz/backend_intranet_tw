@@ -112,15 +112,15 @@ proc: BEGIN
             SELECT 1 AS IdTipoMensaje, 'La OS/OM solo se genera desde una propuesta aceptada por el cliente.' AS Mensaje; LEAVE proc;
         END IF;
         IF EXISTS (SELECT 1 FROM propuesta_comercial p, propuesta_comercial p2
-                   WHERE p.id_propuesta = v_id_prop AND p2.numero = p.numero AND p2.estado = 'aceptado'
+                   WHERE p.id_propuesta = v_id_prop AND p2.numero_base = p.numero_base AND p2.estado = 'aceptado'
                      AND p2.eliminado_en IS NULL AND p2.version > p.version) THEN
             SELECT 1 AS IdTipoMensaje, 'Hay una versión aceptada más reciente de esta propuesta: genere la orden desde esa versión.' AS Mensaje;
             LEAVE proc;
         END IF;
         -- Varias OS/OM por propuesta: mientras queden equipos cotizados sin OS/OM activa
-        SELECT numero INTO v_num_prop FROM propuesta_comercial WHERE id_propuesta = v_id_prop;
+        SELECT numero_base INTO v_num_prop FROM propuesta_comercial WHERE id_propuesta = v_id_prop;
         SELECT COUNT(*) INTO v_os_activas
-        FROM orden_servicio os JOIN propuesta_comercial po ON po.id_propuesta = os.id_propuesta AND po.numero = v_num_prop
+        FROM orden_servicio os JOIN propuesta_comercial po ON po.id_propuesta = os.id_propuesta AND po.numero_base = v_num_prop
         WHERE os.eliminado_en IS NULL AND os.estado <> 'anulada';
         SELECT COUNT(DISTINCT pe.id_equipo) INTO v_eq_cot
         FROM propuesta_equipo pe WHERE pe.id_propuesta = v_id_prop AND pe.id_equipo IS NOT NULL;
@@ -129,7 +129,7 @@ proc: BEGIN
         WHERE pe.id_propuesta = v_id_prop AND pe.id_equipo IS NOT NULL
           AND NOT EXISTS (SELECT 1 FROM os_equipo oe
                           JOIN orden_servicio os ON os.id_os = oe.id_os AND os.eliminado_en IS NULL AND os.estado <> 'anulada'
-                          JOIN propuesta_comercial po ON po.id_propuesta = os.id_propuesta AND po.numero = v_num_prop
+                          JOIN propuesta_comercial po ON po.id_propuesta = os.id_propuesta AND po.numero_base = v_num_prop
                           WHERE oe.id_equipo = pe.id_equipo AND oe.eliminado_en IS NULL);
         IF (v_eq_cot > 0 AND v_eq_pend = 0) OR (v_eq_cot = 0 AND v_os_activas > 0) THEN
             SELECT 1 AS IdTipoMensaje,

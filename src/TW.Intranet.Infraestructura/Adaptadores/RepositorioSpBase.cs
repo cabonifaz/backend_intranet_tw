@@ -95,15 +95,6 @@ public abstract class RepositorioSpBase(CadenaConexionBd conexion)
         };
     }
 
-    /// <summary>Texto de una columna opcional: null si el SP no la devuelve.</summary>
-    protected static string? TextoSiExiste(MySqlDataReader r, string col)
-    {
-        for (var i = 0; i < r.FieldCount; i++)
-            if (string.Equals(r.GetName(i), col, StringComparison.OrdinalIgnoreCase))
-                return r.IsDBNull(i) ? null : Convert.ToString(r.GetValue(i));
-        return null;
-    }
-
     /// <summary>Lee el resultado de "total" de un SP paginado.</summary>
     protected static async Task<int> LeerTotalAsync(MySqlDataReader r, CancellationToken ct)
     {

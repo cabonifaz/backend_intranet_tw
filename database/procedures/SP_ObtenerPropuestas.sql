@@ -126,7 +126,7 @@ BEGIN
       AND (v_ver_todo = 1 OR FIND_IN_SET(COALESCE(p.id_responsable, p.id_creador), v_ids) > 0)
       AND (IFNULL(p_solo_ultima_version, 1) = 0
            OR p.version = (SELECT MAX(p2.version) FROM propuesta_comercial p2
-                           WHERE p2.numero = p.numero AND p2.eliminado_en IS NULL))
+                           WHERE p2.numero_base = p.numero_base AND p2.eliminado_en IS NULL))
       AND (
           p_busqueda IS NULL OR p_busqueda = ''
           OR p.numero       LIKE CONCAT('%', p_busqueda, '%')
@@ -177,7 +177,7 @@ BEGIN
       AND (v_ver_todo = 1 OR FIND_IN_SET(COALESCE(p.id_responsable, p.id_creador), v_ids) > 0)
       AND (IFNULL(p_solo_ultima_version, 1) = 0
            OR p.version = (SELECT MAX(p2.version) FROM propuesta_comercial p2
-                           WHERE p2.numero = p.numero AND p2.eliminado_en IS NULL))
+                           WHERE p2.numero_base = p.numero_base AND p2.eliminado_en IS NULL))
       AND (
           p_busqueda IS NULL OR p_busqueda = ''
           OR p.numero       LIKE CONCAT('%', p_busqueda, '%')

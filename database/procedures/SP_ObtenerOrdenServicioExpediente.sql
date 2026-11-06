@@ -80,7 +80,7 @@ proc: BEGIN
                           WHEN 'anulada' THEN 'Anulada' ELSE os.estado END AS estado_label,
            os.fecha_emision, CONCAT(ue.nombre, ' ', ue.apellido) AS emitido_por,
            os.fecha_programada_desde, os.fecha_programada_hasta,
-           p.id_propuesta, p.numero AS numero_propuesta, p.version AS version_propuesta, p.codigo_formateado AS codigo_formateado_propuesta,
+           p.id_propuesta, p.numero AS numero_propuesta, p.version AS version_propuesta,
            r.id_requerimiento, r.numero AS numero_rq,
            c.razon_social, c.ruc,
            co.nombres AS contacto, co.cargo AS cargo_contacto, co.telefono_movil AS telefono_contacto, co.correo AS correo_contacto,

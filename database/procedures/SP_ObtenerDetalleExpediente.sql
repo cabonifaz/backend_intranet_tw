@@ -83,7 +83,7 @@ proc: BEGIN
         x.id_responsable, CONCAT(u.nombre, ' ', u.apellido) AS responsable, u.cargo AS cargo_responsable,
         x.id_responsable_etapa, CONCAT(ue.nombre, ' ', ue.apellido) AS responsable_etapa,
         x.id_requerimiento, x.numero_rq,
-        x.id_propuesta, x.numero_propuesta, x.version_propuesta, x.codigo_formateado_propuesta, x.estado_propuesta, x.tipo_servicio,
+        x.id_propuesta, x.numero_propuesta, x.version_propuesta, x.estado_propuesta, x.tipo_servicio,
         x.total_propuesta AS monto_total, x.id_moneda, mo.String1 AS moneda, mo.String2 AS simbolo_moneda,
         x.fecha_creacion, x.fecha_cierre, x.dias_transcurridos,
         x.inicio_etapa, x.sla_horas, x.fecha_limite, x.sla_estado, x.sla_minutos_restantes,

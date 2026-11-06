@@ -167,8 +167,7 @@ public class OrdenServicioPdfGeneradorQuestPdf : IOrdenServicioPdfGenerador
                 });
                 row.ConstantItem(190).Column(c =>
                 {
-                    FilaDato(c, "PROPUESTA", d.NumeroPropuesta is null ? "—"
-                        : d.VersionPropuesta is { } v ? $"{d.NumeroPropuesta} · v{v}" : d.NumeroPropuesta);
+                    FilaDato(c, "PROPUESTA", d.NumeroPropuesta ?? "—");   // PC-0012-1-2026 ya incluye la versión
                     FilaDato(c, "REQUERIMIENTO", d.NumeroRq ?? "—");
                     FilaDato(c, "RESPONSABLE COMERCIAL", d.Responsable ?? "—");
                     FilaDato(c, "FECHA DE EMISIÓN", FormatearFecha(d.FechaEmision ?? d.FechaDocumento));

@@ -44,7 +44,7 @@ proc: BEGIN
     SELECT 2 AS IdTipoMensaje, 'Éxito.' AS Mensaje;
 
     IF p_tab = 'propuesta' THEN
-        SELECT p.id_propuesta, p.numero, p.version, p.codigo_formateado, p.estado,
+        SELECT p.id_propuesta, p.numero, p.version, p.estado,
                COALESCE(NULLIF(TRIM(IF(p.tipo_servicio REGEXP '^[0-9]+$',
                                        (SELECT ts.String1 FROM tabla_maestra ts WHERE ts.IdMaestro = 3 AND ts.IdEmpresa = 1
                                           AND ts.Num1 = CAST(p.tipo_servicio AS UNSIGNED) LIMIT 1), p.tipo_servicio)), ''),
@@ -64,7 +64,7 @@ proc: BEGIN
                p.total AS monto_total, m.String2 AS simbolo_moneda,
                (SELECT COUNT(*) FROM propuesta_equipo pe WHERE pe.id_propuesta = p.id_propuesta) AS equipos_cotizados,
                (SELECT COUNT(*) FROM orden_servicio o2 JOIN propuesta_comercial p2 ON p2.id_propuesta = o2.id_propuesta
-                WHERE p2.numero = p.numero AND o2.eliminado_en IS NULL AND o2.estado <> 'anulada') AS os_activas,
+                WHERE p2.numero_base = p.numero_base AND o2.eliminado_en IS NULL AND o2.estado <> 'anulada') AS os_activas,
                (SELECT COUNT(*) FROM propuesta_item i WHERE i.id_propuesta = p.id_propuesta AND i.seccion = 'principal'
                   AND IFNULL(i.es_espaciado, 0) = 0 AND i.eliminado_en IS NULL) AS conceptos_cotizados,
                COALESCE((SELECT cp.String1 FROM tabla_maestra cp WHERE cp.IdMaestro = 39 AND cp.IdEmpresa = 1

@@ -50,7 +50,7 @@ proc: BEGIN
            os.id_responsable_comercial AS id_responsable, CONCAT(ur.nombre, ' ', ur.apellido) AS responsable,
            os.fecha_emision, COALESCE(os.fecha_emision, os.fecha_creacion, os.creado_en) AS fecha_documento,
            os.fecha_programada_desde, os.fecha_programada_hasta,
-           COALESCE(os.id_propuesta, e.id_propuesta) AS id_propuesta, p.numero AS numero_propuesta, p.version AS version_propuesta, p.codigo_formateado AS codigo_formateado_propuesta,
+           COALESCE(os.id_propuesta, e.id_propuesta) AS id_propuesta, p.numero AS numero_propuesta, p.version AS version_propuesta,
            COALESCE(os.id_requerimiento, p.id_requerimiento, e.id_requerimiento) AS id_requerimiento, r.numero AS numero_rq,
            os.id_expediente,
            (SELECT COUNT(*) FROM os_equipo oe WHERE oe.id_os = os.id_os AND oe.eliminado_en IS NULL)   AS n_equipos,

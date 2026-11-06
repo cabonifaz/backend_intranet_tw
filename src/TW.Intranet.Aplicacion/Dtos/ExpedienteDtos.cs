@@ -51,8 +51,6 @@ public record FilaExpedienteDto
     public string?   NumeroRq           { get; init; }
     public long?     IdPropuesta        { get; init; }
     public string?   NumeroPropuesta    { get; init; }
-    /// <summary>#4437 Código de la propuesta para mostrar: "PC: 0012-2-2026" (ya incluye la versión).</summary>
-    public string?   CodigoFormateadoPropuesta { get; init; }
     public int?      VersionPropuesta   { get; init; }
     public string?   EstadoPropuesta    { get; init; }
     /// <summary>Otras propuestas del RQ (sub-texto "+N más").</summary>
@@ -129,8 +127,6 @@ public record CabeceraExpedienteDto
     public string?   NumeroRq             { get; init; }
     public long?     IdPropuesta          { get; init; }
     public string?   NumeroPropuesta      { get; init; }
-    /// <summary>#4437 Código de la propuesta para mostrar: "PC: 0012-2-2026" (ya incluye la versión).</summary>
-    public string?   CodigoFormateadoPropuesta { get; init; }
     public int?      VersionPropuesta     { get; init; }
     public string?   EstadoPropuesta      { get; init; }
     public string?   TipoPropuesta        { get; init; }
@@ -298,14 +294,10 @@ public record VersionPropuestaExpedienteDto(
     long IdPropuesta, string Numero, int Version, string Estado, decimal? Total, string? SimboloMoneda, DateTime? FechaCreacion,
     bool EsUltima, bool EsActiva, bool Seleccionada)
 {
-    /// <summary>#4437 Código de la propuesta para mostrar: "PC: 0012-2-2026" (ya incluye la versión).</summary>
-    public string? CodigoFormateado { get; init; }
 }
 
 public record DetallePropuestaExpedienteDto
 {
-    /// <summary>#4437 Código de la propuesta para mostrar: "PC: 0012-2-2026" (ya incluye la versión).</summary>
-    public string? CodigoFormateado { get; init; }
 
     public long      IdPropuesta        { get; init; }
     public string    Numero             { get; init; } = "";
@@ -639,8 +631,6 @@ public record DatosOsExpedienteDto
     public DateTime? FechaProgramadaHasta   { get; init; }
     public long?     IdPropuesta            { get; init; }
     public string?   NumeroPropuesta        { get; init; }
-    /// <summary>#4437 Código de la propuesta para mostrar: "PC: 0012-2-2026" (ya incluye la versión).</summary>
-    public string?   CodigoFormateadoPropuesta { get; init; }
     public int?      VersionPropuesta       { get; init; }
     public long?     IdRequerimiento        { get; init; }
     public string?   NumeroRq               { get; init; }

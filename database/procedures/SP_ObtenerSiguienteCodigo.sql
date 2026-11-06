@@ -17,7 +17,8 @@ BEGIN
         SET v_codigo = CONCAT('RQ-', LPAD(v_n, 4, '0'), '-', YEAR(NOW()));
     ELSEIF p_entidad = 'propuesta' THEN
         SELECT IFNULL(MAX(id_propuesta), 0) + 1 INTO v_n FROM propuesta_comercial;
-        SET v_codigo = CONCAT('PROP-', LPAD(v_n, 6, '0'));
+        -- Mismo formato que propuesta_comercial.numero (migración 95): PC-<correlativo>-<versión 1>-<año>
+        SET v_codigo = CONCAT('PC-', IF(CHAR_LENGTH(CAST(v_n AS CHAR)) >= 4, CAST(v_n AS CHAR), LPAD(v_n, 4, '0')), '-1-', YEAR(NOW()));
     ELSEIF p_entidad = 'suministro' THEN
         SELECT IFNULL(MAX(id_suministro), 0) + 1 INTO v_n FROM suministros;
         SET v_codigo = CONCAT('SUM-', LPAD(v_n, 4, '0'));

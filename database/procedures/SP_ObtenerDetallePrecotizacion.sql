@@ -21,7 +21,7 @@ proc: BEGIN
     DECLARE v_fecha          DATETIME;
     DECLARE v_grupo          VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_id_gen         BIGINT;
-    DECLARE v_numero_gen     VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_numero_gen     VARCHAR(30)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_version_gen    INT;
     DECLARE v_estado_gen     VARCHAR(30)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_fecha_conv     DATETIME;
@@ -47,7 +47,7 @@ proc: BEGIN
            IF(b.estado_grupo = 'convertida', 'Convertida en Propuesta', 'Pendiente de Cotizar')           AS estado_detalle,
            (v_convertir = 1 AND b.estado_grupo = 'pendiente')                                           AS puede_convertir,
            IF(b.estado_grupo = 'convertida',
-              CONCAT('Esta precotización fue convertida en la Propuesta Comercial ', b.numero_propuesta_generada, ' v', b.version_propuesta_generada,
+              CONCAT('Esta precotización fue convertida en la Propuesta Comercial ', b.numero_propuesta_generada,
                      IF(b.convertido_por IS NULL, '', CONCAT(' por ', b.convertido_por)),
                      IF(b.fecha_conversion IS NULL, '', CONCAT(' el ', DATE_FORMAT(b.fecha_conversion, '%d/%m/%Y %H:%i'))), '.'),
               NULL)                                                                                      AS mensaje_conversion
@@ -82,7 +82,7 @@ proc: BEGIN
                v_fecha_rq AS fecha, 1 AS completado, 0 AS actual
         FROM DUAL WHERE v_numero_rq IS NOT NULL
         UNION ALL
-        SELECT 2, 'propuesta_origen', CONCAT(p.numero, ' v', p.version, ' ', IF(p.estado = 'aceptado', 'aceptada', p.estado)),
+        SELECT 2, 'propuesta_origen', CONCAT(p.numero, ' ', IF(p.estado = 'aceptado', 'aceptada', p.estado)),
                'Propuesta del servicio', COALESCE(p.fecha_envio_cliente, p.fecha_creacion), 1, 0
         FROM propuesta_comercial p WHERE p.id_propuesta = v_id_prop_origen
         UNION ALL
@@ -100,7 +100,7 @@ proc: BEGIN
         FROM DUAL
         UNION ALL
         SELECT 6, 'propuesta_derivada',
-               IF(v_id_gen IS NULL, 'Propuesta derivada', CONCAT(v_numero_gen, ' v', v_version_gen, ' generada')),
+               IF(v_id_gen IS NULL, 'Propuesta derivada', CONCAT(v_numero_gen, ' generada')),
                IF(v_id_gen IS NULL, 'Pendiente', CONCAT('Estado: ', v_estado_gen)),
                v_fecha_conv, IF(v_id_gen IS NULL, 0, 1), IF(v_id_gen IS NULL, 0, 1)
         FROM DUAL

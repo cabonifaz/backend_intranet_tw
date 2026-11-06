@@ -23,7 +23,7 @@ public class GeminiAsistenteOrdenCompra(HttpClient http, ConfiguracionGemini con
         - No inventes datos: si un dato no aparece, devuélvelo como null.
         - ruc y razonSocial son los del CLIENTE que emite la orden (no los de Total Weight, RUC 20...).
           El RUC peruano tiene 11 dígitos; devuélvelo solo con dígitos.
-        - numeroPropuesta: el número de cotización/propuesta de Total Weight que menciona la OC (ej. PROP-0012-2026), si existe.
+        - numeroPropuesta: el número de cotización/propuesta de Total Weight que menciona la OC (ej. PC-0012-1-2026; en documentos antiguos PROP-000012), si existe.
         - moneda: código ISO (PEN, USD, EUR). "S/" o "soles" = PEN; "US$" o "dólares" = USD.
         - montoTotal: el total final a pagar de la orden (con IGV si lo incluye). Números con punto decimal, sin separador de miles.
         - formaPago: el texto de la forma/condición de pago tal como figura (ej. "Crédito 30 días", "Contado").

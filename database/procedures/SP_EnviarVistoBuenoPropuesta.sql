@@ -25,7 +25,8 @@ CREATE PROCEDURE SP_EnviarVistoBuenoPropuesta(
 )
 proc: BEGIN
     DECLARE v_estado        VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
-    DECLARE v_numero        VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_numero        VARCHAR(30)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_numero_base VARCHAR(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_version       INT;
     DECLARE v_id_cliente    BIGINT;
     DECLARE v_id_contacto   BIGINT;
@@ -67,6 +68,7 @@ proc: BEGIN
            v_autor, v_subtotal, v_descuento, v_total
     FROM propuesta_comercial
     WHERE id_propuesta = p_id_propuesta AND eliminado_en IS NULL;
+    SELECT numero_base INTO v_numero_base FROM propuesta_comercial WHERE numero = v_numero LIMIT 1;
 
     IF v_estado IS NULL THEN
         SELECT 1 AS IdTipoMensaje, 'Propuesta no encontrada.' AS Mensaje;
@@ -74,7 +76,7 @@ proc: BEGIN
     END IF;
 
     IF EXISTS (SELECT 1 FROM propuesta_comercial
-               WHERE numero = v_numero AND version > v_version AND eliminado_en IS NULL) THEN
+               WHERE numero_base = v_numero_base AND version > v_version AND eliminado_en IS NULL) THEN
         SELECT 1 AS IdTipoMensaje, 'Solo la última versión de la propuesta puede enviarse a visto bueno.' AS Mensaje;
         LEAVE proc;
     END IF;
@@ -210,8 +212,8 @@ proc: BEGIN
         -- y administradores activos del área del comercial autor (equipo aprobador).
         INSERT INTO notificacion (id_usuario_destino, id_canal, titulo, cuerpo, entidad_tipo, id_entidad, fecha_creacion, creado_por)
         SELECT u.id_usuario, 5,
-               CONCAT('Visto bueno pendiente: ', v_numero, ' v', v_version),
-               CONCAT(v_usu_nombre, ' envió la propuesta ', v_numero, ' v', v_version,
+               CONCAT('Visto bueno pendiente: ', v_numero),
+               CONCAT(v_usu_nombre, ' envió la propuesta ', v_numero,
                       ' para visto bueno. Plazo: ', v_sla, ' horas.',
                       IF(v_requiere_esp = 1, ' Requiere aprobación especial.', '')),
                'propuesta', p_id_propuesta, NOW(), p_id_usuario
@@ -224,12 +226,12 @@ proc: BEGIN
 
         INSERT INTO historial_requerimiento (id_requerimiento, tipo, tipo_label, icono, descripcion, usuario, fecha, creado_en, creado_por)
         VALUES (v_id_rq, 'propuesta', 'Propuesta enviada a VB', 'task_alt',
-                CONCAT('Propuesta ', v_numero, ' v', v_version, ' enviada a visto bueno.'),
+                CONCAT('Propuesta ', v_numero, ' enviada a visto bueno.'),
                 v_usu_nombre, NOW(), NOW(), p_id_usuario);
 
         INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion, id_usuario, registrado_en, metadata)
         VALUES ('propuesta', p_id_propuesta, 'envio_vb', 'borrador', 'pendiente_vb',
-                CONCAT('Propuesta ', v_numero, ' v', v_version, ' enviada a visto bueno del equipo del área.'),
+                CONCAT('Propuesta ', v_numero, ' enviada a visto bueno del equipo del área.'),
                 p_id_usuario, NOW(),
                 JSON_OBJECT('id_vb',                  v_id_vb,
                             'sla_horas',              v_sla,

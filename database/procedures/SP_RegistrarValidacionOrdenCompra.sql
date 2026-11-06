@@ -52,7 +52,7 @@ BEGIN
       INTO v_detalle
     FROM (SELECT * FROM tmp_oc_cmp ORDER BY orden) x;
 
-    SELECT CONCAT(numero, ' v', version) INTO v_numero FROM propuesta_comercial WHERE id_propuesta = p_id_propuesta;
+    SELECT numero INTO v_numero FROM propuesta_comercial WHERE id_propuesta = p_id_propuesta;
 
     -- Conceptos: los que evaluó la IA; si no hay evaluación, los ítems de la propuesta sin comparar
     IF p_eval_ia IS NOT NULL AND JSON_LENGTH(JSON_EXTRACT(p_eval_ia, '$.conceptos')) > 0 THEN

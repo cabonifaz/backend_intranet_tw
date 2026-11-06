@@ -25,7 +25,7 @@ proc: BEGIN
     DECLARE v_id_creador  BIGINT;
     DECLARE v_prop_rq     BIGINT;
     DECLARE v_prop_cli    BIGINT;
-    DECLARE v_prop_num    VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_prop_num    VARCHAR(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_prop_ver    INT;
     DECLARE v_prop_existe INT DEFAULT 0;
 
@@ -80,25 +80,25 @@ proc: BEGIN
 
     INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion, id_usuario, registrado_en, metadata)
     VALUES ('precotizacion', p_id_precotizacion, 'convertida', v_estado, 'convertido_propuesta',
-            CONCAT('Convertida en la propuesta ', v_prop_num, ' v', v_prop_ver), p_id_usuario, NOW(),
+            CONCAT('Convertida en la propuesta ', v_prop_num), p_id_usuario, NOW(),
             JSON_OBJECT('id_propuesta', p_id_propuesta));
     IF v_id_informe IS NOT NULL THEN
         INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, descripcion, id_usuario, registrado_en, metadata)
         VALUES ('informe_tecnico', v_id_informe, 'precotizacion_convertida',
-                CONCAT('Comercial convirtió la precotización ', v_numero, ' en la propuesta ', v_prop_num, ' v', v_prop_ver),
+                CONCAT('Comercial convirtió la precotización ', v_numero, ' en la propuesta ', v_prop_num),
                 p_id_usuario, NOW(), JSON_OBJECT('categoria', 'precotizacion', 'id_propuesta', p_id_propuesta));
     END IF;
 
     IF v_id_creador IS NOT NULL AND v_id_creador <> p_id_usuario THEN
         INSERT INTO notificacion (id_usuario_destino, id_canal, titulo, cuerpo, entidad_tipo, id_entidad, fecha_creacion, creado_por)
         VALUES (v_id_creador, 5, CONCAT('Precotización ', v_numero, ' convertida'),
-                CONCAT('Comercial generó la propuesta ', v_prop_num, ' v', v_prop_ver, ' a partir de tu precotización ', v_numero, '.'),
+                CONCAT('Comercial generó la propuesta ', v_prop_num, ' a partir de tu precotización ', v_numero, '.'),
                 'precotizacion', p_id_precotizacion, NOW(), p_id_usuario);
     END IF;
 
     COMMIT;
 
-    SELECT 2 AS IdTipoMensaje, CONCAT('Precotización ', v_numero, ' convertida en la propuesta ', v_prop_num, ' v', v_prop_ver, '.') AS Mensaje;
+    SELECT 2 AS IdTipoMensaje, CONCAT('Precotización ', v_numero, ' convertida en la propuesta ', v_prop_num, '.') AS Mensaje;
     SELECT p_id_precotizacion AS id_precotizacion, v_numero AS numero, 'convertido_propuesta' AS estado,
            p_id_propuesta AS id_propuesta, v_prop_num AS numero_propuesta, v_prop_ver AS version_propuesta;
 END$$

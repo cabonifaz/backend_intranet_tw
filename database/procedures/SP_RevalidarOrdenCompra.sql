@@ -93,7 +93,7 @@ proc: BEGIN
     DROP TEMPORARY TABLE IF EXISTS tmp_oc_cmp;
 
     SELECT 2 AS IdTipoMensaje, 'Validación ejecutada.' AS Mensaje;
-    SELECT v.id_validacion, v.id_propuesta, CONCAT(p.numero, ' v', p.version) AS numero, v.corrida, v.resultado,
+    SELECT v.id_validacion, v.id_propuesta, p.numero AS numero, v.corrida, v.resultado,
            v.coincidencias, v.advertencias, v.criticas, v.total_campos, v.sugerencia, v.fecha_validacion
     FROM orden_compra_validacion v
     JOIN tmp_oc_rev t ON t.id_propuesta = v.id_propuesta

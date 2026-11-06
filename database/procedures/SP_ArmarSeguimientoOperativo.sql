@@ -89,7 +89,7 @@ BEGIN
     SELECT os.id_os, p.id_programacion, os.numero, os.tipo, os.id_cliente, c.razon_social, c.ruc, os.id_sede, sc.nombre, sc.direccion_exacta, COALESCE(s.latitud, os.latitud_llegada), COALESCE(s.longitud, os.longitud_llegada),
            p.id_tecnico_principal, TRIM(CONCAT(u.nombre, ' ', u.apellido)), u.nombre, COALESCE(zn.String1, u.sede_operativa),
            p.hora_inicio, p.hora_fin_estimada, os.estado,
-           IF(pr.id_propuesta IS NULL, NULL, CONCAT(pr.numero, ' v', pr.version)),
+           IF(pr.id_propuesta IS NULL, NULL, pr.numero),
            (SELECT COUNT(*) FROM os_equipo e WHERE e.id_os = os.id_os AND e.eliminado_en IS NULL),
            (SELECT COUNT(*) FROM os_equipo e WHERE e.id_os = os.id_os AND e.eliminado_en IS NULL AND e.estado_ejecucion = 'ejecutado'),
            IF(os.hora_llegada_real IS NULL, NULL, TIMESTAMP(v_hoy, os.hora_llegada_real)),

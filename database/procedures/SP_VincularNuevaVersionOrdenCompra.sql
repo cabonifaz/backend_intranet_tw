@@ -26,10 +26,10 @@ proc: BEGIN
         LEAVE proc;
     END IF;
 
-    SELECT CONCAT(n.numero, ' v', n.version) INTO v_numero
+    SELECT n.numero INTO v_numero
     FROM propuesta_comercial n
     JOIN propuesta_comercial o ON o.id_propuesta = p_id_propuesta
-    WHERE n.id_propuesta = p_id_propuesta_nueva AND n.numero = o.numero AND n.version > o.version;
+    WHERE n.id_propuesta = p_id_propuesta_nueva AND n.numero_base = o.numero_base AND n.version > o.version;
     IF v_numero IS NULL THEN
         SELECT 1 AS IdTipoMensaje, 'La versión nueva no corresponde a la propuesta.' AS Mensaje;
         LEAVE proc;

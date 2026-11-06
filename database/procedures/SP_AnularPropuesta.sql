@@ -29,7 +29,8 @@ CREATE PROCEDURE SP_AnularPropuestaInterno(
 )
 proc: BEGIN
     DECLARE v_estado        VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
-    DECLARE v_numero        VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_numero        VARCHAR(30)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_numero_base VARCHAR(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_version       INT;
     DECLARE v_id_rq         BIGINT;
     DECLARE v_es_ultima     TINYINT DEFAULT 1;
@@ -67,6 +68,7 @@ proc: BEGIN
       INTO v_estado, v_numero, v_version, v_id_rq
     FROM propuesta_comercial
     WHERE id_propuesta = p_id_propuesta AND eliminado_en IS NULL;
+    SELECT numero_base INTO v_numero_base FROM propuesta_comercial WHERE numero = v_numero LIMIT 1;
 
     IF v_estado IS NULL THEN
         SELECT 1 AS IdTipoMensaje, 'Propuesta no encontrada.' AS Mensaje;
@@ -75,7 +77,7 @@ proc: BEGIN
 
     -- ── ¿Se puede anular? ───────────────────────────────────────────────
     SET v_es_ultima = NOT EXISTS (SELECT 1 FROM propuesta_comercial
-                                  WHERE numero = v_numero AND version > v_version AND eliminado_en IS NULL);
+                                  WHERE numero_base = v_numero_base AND version > v_version AND eliminado_en IS NULL);
 
     -- OC de la propuesta (las registradas a partir de ella), OS vinculadas y otras propuestas que esas OC cubren
     SELECT COUNT(*), GROUP_CONCAT(numero_oc ORDER BY id_oc SEPARATOR ', ') INTO v_n_ocs, v_ocs
@@ -85,7 +87,7 @@ proc: BEGIN
     FROM oc_propuesta op JOIN orden_compra oc ON oc.id_oc = op.id_oc AND oc.eliminado_en IS NULL AND oc.estado <> 'anulada'
     WHERE op.id_propuesta = p_id_propuesta AND op.eliminado_en IS NULL AND IFNULL(oc.id_propuesta, 0) <> p_id_propuesta;
 
-    SELECT GROUP_CONCAT(DISTINCT CONCAT(p2.numero, ' v', p2.version) ORDER BY p2.numero SEPARATOR ', ') INTO v_props_afect
+    SELECT GROUP_CONCAT(DISTINCT p2.numero ORDER BY p2.numero SEPARATOR ', ') INTO v_props_afect
     FROM oc_propuesta op
     JOIN orden_compra oc       ON oc.id_oc = op.id_oc AND oc.id_propuesta = p_id_propuesta
                               AND oc.eliminado_en IS NULL AND oc.estado <> 'anulada'
@@ -182,13 +184,13 @@ proc: BEGIN
         -- HU-28: OC de la propuesta anuladas y montos distribuidos por otras OC liberados
         INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion, id_usuario, registrado_en)
         SELECT 'orden_compra', oc.id_oc, 'anular_oc', oc.estado, 'anulada',
-               CONCAT('Anulada por la anulación de la propuesta ', v_numero, ' v', v_version, ' (', v_motivo_label, ').'),
+               CONCAT('Anulada por la anulación de la propuesta ', v_numero, ' (', v_motivo_label, ').'),
                p_id_usuario, NOW()
         FROM orden_compra oc
         WHERE oc.id_propuesta = p_id_propuesta AND oc.eliminado_en IS NULL AND oc.estado <> 'anulada';
 
         UPDATE orden_compra SET estado = 'anulada', fecha_anulacion = NOW(), anulado_por = p_id_usuario,
-                                justificacion_anulacion = LEFT(CONCAT('Anulada por la anulación de la propuesta ', v_numero, ' v', v_version,
+                                justificacion_anulacion = LEFT(CONCAT('Anulada por la anulación de la propuesta ', v_numero,
                                                                       ' (', v_motivo_label, ').'), 1000),
                                 modificado_por = p_id_usuario
         WHERE id_propuesta = p_id_propuesta AND eliminado_en IS NULL AND estado <> 'anulada';
@@ -221,7 +223,7 @@ proc: BEGIN
         IF v_id_exp IS NOT NULL AND IFNULL(v_exp_liberado, 0) = 0 THEN
             INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion, id_usuario, registrado_en)
             VALUES ('expediente', v_id_exp, 'propuesta_anulada', NULL, NULL,
-                    CONCAT('Propuesta ', v_numero, ' v', v_version, ' anulada. El expediente sigue abierto con el RQ.'), p_id_usuario, NOW());
+                    CONCAT('Propuesta ', v_numero, ' anulada. El expediente sigue abierto con el RQ.'), p_id_usuario, NOW());
         END IF;
         -- Expediente ya liberado: se anula el proceso operativo. El expediente es del RQ (que sigue vivo y puede tener
         -- otra propuesta), así que vuelve a la etapa comercial: se cancelan la etapa operativa en curso, sus bloqueos y
@@ -232,7 +234,7 @@ proc: BEGIN
             WHERE id_expediente = v_id_exp AND resuelto = 0 AND eliminado_en IS NULL;
 
             UPDATE expediente_etapa SET fecha_fin = NOW(), resultado = 'cancelado',
-                                        comentario = LEFT(CONCAT('Cancelada por la anulación de la propuesta ', v_numero, ' v', v_version, '.'), 1000),
+                                        comentario = LEFT(CONCAT('Cancelada por la anulación de la propuesta ', v_numero, '.'), 1000),
                                         UsuMod = CAST(p_id_usuario AS CHAR), FchMod = NOW()
             WHERE id_expediente = v_id_exp AND fecha_fin IS NULL AND SoftDelete = 0;
 
@@ -244,7 +246,7 @@ proc: BEGIN
             INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion, id_usuario,
                                           registrado_en, metadata)
             VALUES ('expediente', v_id_exp, 'anular_proceso', NULL, 'requerimiento',
-                    CONCAT('Proceso operativo anulado por la anulación de la propuesta ', v_numero, ' v', v_version,
+                    CONCAT('Proceso operativo anulado por la anulación de la propuesta ', v_numero,
                            '. El expediente vuelve a la etapa comercial del RQ.'), p_id_usuario, NOW(),
                     JSON_OBJECT('etapa', 'requerimiento'));
         END IF;
@@ -252,7 +254,7 @@ proc: BEGIN
         -- Avisos: Operaciones (si el expediente ya estaba liberado) y responsables de propuestas que pierden cobertura
         INSERT INTO notificacion (id_usuario_destino, id_canal, titulo, cuerpo, entidad_tipo, id_entidad, fecha_creacion, creado_por)
         SELECT u.id_usuario, 5, LEFT(CONCAT('Proceso anulado: ', v_numero), 150),
-               CONCAT(v_usu_nombre, ' anuló la propuesta ', v_numero, ' v', v_version, ' (', v_motivo_label, ').',
+               CONCAT(v_usu_nombre, ' anuló la propuesta ', v_numero, ' (', v_motivo_label, ').',
                       IFNULL(CONCAT(' OC anuladas: ', v_ocs, '.'), ''), ' El proceso operativo del expediente fue anulado y no debe programarse.'),
                'propuesta', p_id_propuesta, NOW(), p_id_usuario
         FROM usuario u
@@ -262,7 +264,7 @@ proc: BEGIN
         INSERT INTO notificacion (id_usuario_destino, id_canal, titulo, cuerpo, entidad_tipo, id_entidad, fecha_creacion, creado_por)
         SELECT DISTINCT COALESCE(p2.id_responsable, p2.id_creador), 5,
                LEFT(CONCAT('Cobertura perdida: ', p2.numero), 150),
-               CONCAT('La propuesta ', p2.numero, ' v', p2.version, ' perdió la cobertura de la OC ', oc.numero_oc,
+               CONCAT('La propuesta ', p2.numero, ' perdió la cobertura de la OC ', oc.numero_oc,
                       ' por la anulación de la propuesta ', v_numero, '.'),
                'propuesta', p2.id_propuesta, NOW(), p_id_usuario
         FROM oc_propuesta op
@@ -288,12 +290,12 @@ proc: BEGIN
 
         INSERT INTO historial_requerimiento (id_requerimiento, tipo, tipo_label, icono, descripcion, usuario, fecha, creado_en, creado_por)
         VALUES (v_id_rq, 'propuesta', 'Propuesta anulada', 'block',
-                CONCAT('Propuesta ', v_numero, ' v', v_version, ' anulada: ', v_motivo_label, '.'),
+                CONCAT('Propuesta ', v_numero, ' anulada: ', v_motivo_label, '.'),
                 v_usu_nombre, NOW(), NOW(), p_id_usuario);
 
         INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion, id_usuario, registrado_en, metadata)
         VALUES ('propuesta', p_id_propuesta, 'anulacion', v_estado, 'anulado',
-                CONCAT('Propuesta ', v_numero, ' v', v_version, ' anulada (', v_motivo_label, '): ', TRIM(p_justificacion)),
+                CONCAT('Propuesta ', v_numero, ' anulada (', v_motivo_label, '): ', TRIM(p_justificacion)),
                 p_id_usuario, NOW(),
                 JSON_OBJECT('id_motivo',          p_id_motivo,
                             'motivo',             v_motivo_label,

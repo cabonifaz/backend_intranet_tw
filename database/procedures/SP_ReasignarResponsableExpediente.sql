@@ -150,7 +150,7 @@ proc: BEGIN
     IF v_modo IN ('entidad', 'cascada') THEN
         CALL SP_CargarEntidadesExpediente(p_id_expediente);
 
-        SELECT clave, IF(entidad_tipo = 'propuesta', CONCAT(codigo, ' v', version), codigo), id_responsable
+        SELECT clave, codigo, id_responsable
           INTO v_raiz_clave, v_raiz_codigo, v_raiz_resp
         FROM tmp_exp_ent
         WHERE entidad_tipo = v_tipo AND id_entidad = p_id_entidad AND activa = 1;
@@ -167,7 +167,7 @@ proc: BEGIN
         -- Raíz y, en cascada, sus descendientes activos (RQ → todo; propuesta → sus OC y OS)
         INSERT INTO tmp_reas_sel
         SELECT p_id_expediente, e.entidad_tipo, e.id_entidad,
-               IF(e.entidad_tipo = 'propuesta', CONCAT(e.codigo, ' v', e.version), e.codigo), e.id_responsable
+               e.codigo, e.id_responsable
         FROM tmp_exp_ent e
         WHERE e.activa = 1 AND e.entidad_tipo IN ('requerimiento', 'propuesta', 'orden_compra', 'orden_servicio')
           AND (e.clave = v_raiz_clave

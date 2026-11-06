@@ -42,7 +42,7 @@ BEGIN
           AND (p_id_comercial IS NULL OR p_id_comercial = 0 OR COALESCE(p.id_responsable, p.id_creador) = p_id_comercial)
           AND (v_ver_todo = 1 OR FIND_IN_SET(COALESCE(p.id_responsable, p.id_creador), v_ids) > 0)
           AND p.version = (SELECT MAX(p2.version) FROM propuesta_comercial p2
-                           WHERE p2.numero = p.numero AND p2.eliminado_en IS NULL);
+                           WHERE p2.numero_base = p.numero_base AND p2.eliminado_en IS NULL);
 
     SELECT COUNT(*) INTO v_mes_actual FROM tmp_kpi_prop
     WHERE estado IN ('borrador', 'pendiente_vb')

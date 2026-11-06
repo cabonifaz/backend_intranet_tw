@@ -45,7 +45,6 @@ public class VistoBuenoRepositorio(CadenaConexionBd conexion)
                         IdPropuesta         = EnteroLargo(r, "id_propuesta"),
                         Numero              = Texto(r, "numero") ?? "",
                         Version             = Ent(r, "version"),
-                        CodigoFormateado    = TextoSiExiste(r, "codigo_formateado"),
                         IdRequerimiento     = EnteroLargoNulo(r, "id_requerimiento"),
                         NumeroRq            = Texto(r, "numero_rq"),
                         IdCliente           = EnteroLargo(r, "id_cliente"),

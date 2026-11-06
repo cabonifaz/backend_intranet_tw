@@ -30,7 +30,8 @@ CREATE PROCEDURE SP_ResolverRevocacionVB(
 proc: BEGIN
     DECLARE v_id_vb         BIGINT;
     DECLARE v_estado_prop   VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
-    DECLARE v_numero        VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_numero        VARCHAR(30)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_numero_nueva  VARCHAR(30)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_version       INT;
     DECLARE v_version_nueva INT;
     DECLARE v_id_rq         BIGINT;
@@ -154,7 +155,7 @@ proc: BEGIN
 
         -- Cabecera clonada
         INSERT INTO propuesta_comercial (
-            numero, version, id_requerimiento, id_cliente, id_sede, id_contacto, id_responsable,
+            numero_base, version, id_requerimiento, id_cliente, id_sede, id_contacto, id_responsable,
             id_moneda, subtotal, descuento_monto, descuento_pct, id_motivo_descuento,
             igv_pct, igv_monto, total, aplica_igv, precios_incluyen_igv,
             plazo_entrega_dias, plazo_entrega_unidad, plazo_entrega_condicion, vigencia_dias,
@@ -167,7 +168,7 @@ proc: BEGIN
             creado_en, creado_por
         )
         SELECT
-            o.numero, v_version_nueva, o.id_requerimiento, o.id_cliente,
+            o.numero_base, v_version_nueva, o.id_requerimiento, o.id_cliente,
             o.id_sede, o.id_contacto, o.id_responsable, o.id_moneda,
             0,
             o.descuento_monto, o.descuento_pct, o.id_motivo_descuento,
@@ -186,6 +187,7 @@ proc: BEGIN
         WHERE o.id_propuesta = p_id_propuesta;
 
         SET v_id_nueva = LAST_INSERT_ID();
+        SELECT numero INTO v_numero_nueva FROM propuesta_comercial WHERE id_propuesta = v_id_nueva;
 
         -- Ítems
         INSERT INTO propuesta_item (
@@ -265,7 +267,7 @@ proc: BEGIN
         -- Auditoría de la nueva versión
         INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion, id_usuario, registrado_en, metadata)
         VALUES ('propuesta', v_id_nueva, 'nueva_version_por_revocacion', NULL, 'borrador',
-                CONCAT('Propuesta ', v_numero, ' v', v_version_nueva, ' creada en borrador tras aprobación de revocación de VB.'),
+                CONCAT('Propuesta ', v_numero_nueva, ' creada en borrador tras aprobación de revocación de VB.'),
                 p_id_usuario, NOW(),
                 JSON_OBJECT('id_propuesta_origen', p_id_propuesta,
                             'version_origen',      v_version,
@@ -277,10 +279,10 @@ proc: BEGIN
     INSERT INTO notificacion (id_usuario_destino, id_canal, titulo, cuerpo, entidad_tipo, id_entidad, fecha_creacion, creado_por)
     VALUES (v_solicitante, 5,
             CONCAT('Solicitud de revocación ',
-                   IF(p_accion = 'aprobar', 'aprobada: ', 'rechazada: '), v_numero, ' v', v_version),
+                   IF(p_accion = 'aprobar', 'aprobada: ', 'rechazada: '), v_numero),
             CONCAT(v_usu_nombre, ' ',
                    IF(p_accion = 'aprobar',
-                      CONCAT('aprobó revocar la aprobación. Se creó la v', v_version + 1, ' en borrador para que la ajustes y la reenvíes a VB.'),
+                      CONCAT('aprobó revocar la aprobación. Se creó la ', IFNULL(v_numero_nueva, CONCAT('v', v_version + 1)), ' en borrador para que la ajustes y la reenvíes a VB.'),
                       CONCAT('rechazó revocar la aprobación: ', IFNULL(p_comentario, '')))),
             'propuesta', IF(p_accion = 'aprobar', v_id_nueva, p_id_propuesta), NOW(), p_id_usuario);
 
@@ -290,7 +292,7 @@ proc: BEGIN
         VALUES (v_id_rq, 'propuesta',
                 CONCAT('Revocación ', IF(p_accion = 'aprobar', 'aprobada', 'rechazada')),
                 IF(p_accion = 'aprobar', 'restart_alt', 'cancel'),
-                CONCAT('Propuesta ', v_numero, ' v', v_version, ': ', v_etiqueta, '.'),
+                CONCAT('Propuesta ', v_numero, ': ', v_etiqueta, '.'),
                 v_usu_nombre, NOW(), NOW(), p_id_usuario);
     END IF;
 

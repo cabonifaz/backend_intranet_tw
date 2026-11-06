@@ -29,7 +29,8 @@ BEGIN
     DECLARE v_abierta        INT DEFAULT 0;
     DECLARE v_id_cliente     BIGINT;
     DECLARE v_id_contacto    BIGINT;
-    DECLARE v_numero         VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_numero         VARCHAR(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_numero_base VARCHAR(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_registrar      TINYINT DEFAULT 0;
     DECLARE v_cerrar         TINYINT DEFAULT 0;
     DECLARE v_reprogramar    TINYINT DEFAULT 0;
@@ -53,6 +54,7 @@ BEGIN
         END IF;
     ELSE
         SELECT numero INTO v_numero FROM propuesta_comercial WHERE id_propuesta = p_id_propuesta;
+        SELECT numero_base INTO v_numero_base FROM propuesta_comercial WHERE numero = v_numero LIMIT 1;
         SET v_registrar = FN_PermisoAccion(p_id_usuario, 'propuesta_seguimiento_registrar');
         SET v_cerrar    = FN_PermisoAccion(p_id_usuario, 'propuesta_seguimiento_cerrar');
         SET v_reprogramar = FN_PermisoAccion(p_id_usuario, 'propuesta_seguimiento_reprogramar');
@@ -62,7 +64,7 @@ BEGIN
 
         -- 2. Cabecera
         SELECT
-            t.id_propuesta, t.numero, t.version, t.codigo_formateado,
+            t.id_propuesta, t.numero, t.version,
             t.id_requerimiento, r.numero                      AS numero_rq,
             t.id_cliente, c.razon_social, c.ruc,
             t.id_contacto, co.nombres                         AS contacto, co.cargo AS cargo_contacto,
@@ -126,7 +128,7 @@ BEGIN
                    NULL AS duracion_minutos, NULL AS asunto, 0 AS adjuntos
             FROM propuesta_comercial p
             LEFT JOIN usuario u ON u.id_usuario = p.id_creador
-            WHERE p.numero = v_numero AND p.eliminado_en IS NULL
+            WHERE p.numero_base = v_numero_base AND p.eliminado_en IS NULL
 
             UNION ALL
             -- Solicitud de visto bueno
@@ -137,7 +139,7 @@ BEGIN
             FROM visto_bueno vb
             JOIN propuesta_comercial p ON p.id_propuesta = vb.id_propuesta
             LEFT JOIN usuario u ON u.id_usuario = vb.creado_por
-            WHERE p.numero = v_numero AND p.eliminado_en IS NULL AND vb.eliminado_en IS NULL
+            WHERE p.numero_base = v_numero_base AND p.eliminado_en IS NULL AND vb.eliminado_en IS NULL
 
             UNION ALL
             -- Respuesta del visto bueno
@@ -155,7 +157,7 @@ BEGIN
             FROM visto_bueno vb
             JOIN propuesta_comercial p ON p.id_propuesta = vb.id_propuesta
             LEFT JOIN usuario u ON u.id_usuario = vb.resuelto_por
-            WHERE p.numero = v_numero AND p.eliminado_en IS NULL AND vb.eliminado_en IS NULL
+            WHERE p.numero_base = v_numero_base AND p.eliminado_en IS NULL AND vb.eliminado_en IS NULL
               AND vb.fecha_respuesta IS NOT NULL
 
             UNION ALL
@@ -166,7 +168,7 @@ BEGIN
                    NULL, NULL, NULL, NULL, NULL, NULL, 0
             FROM propuesta_comercial p
             LEFT JOIN usuario u ON u.id_usuario = COALESCE(p.enviado_cliente_por, p.id_responsable, p.id_creador)
-            WHERE p.numero = v_numero AND p.eliminado_en IS NULL
+            WHERE p.numero_base = v_numero_base AND p.eliminado_en IS NULL
               AND COALESCE(p.fecha_envio_cliente, p.fecha_envio) IS NOT NULL
 
             UNION ALL
@@ -206,7 +208,7 @@ BEGIN
             LEFT JOIN tabla_maestra mr  ON mr.IdMaestro = 10 AND mr.IdEmpresa = 1 AND mr.Num1 = s.id_motivo_cierre AND s.estado = 'cerrado_rechazo'
             LEFT JOIN contacto_cliente cc ON cc.id_contacto = s.id_contacto
             LEFT JOIN usuario u ON u.id_usuario = COALESCE(s.creado_por, s.id_responsable)
-            WHERE p.numero = v_numero AND p.eliminado_en IS NULL AND s.eliminado_en IS NULL
+            WHERE p.numero_base = v_numero_base AND p.eliminado_en IS NULL AND s.eliminado_en IS NULL
 
             UNION ALL
             -- Reprogramaciones de la próxima acción (HU-20)
@@ -222,7 +224,7 @@ BEGIN
             LEFT JOIN tabla_maestra ta ON ta.Descripcion = 'TIPO_ACCION_SEGUIMIENTO' AND ta.IdEmpresa = 1 AND ta.Num1 = r.id_tipo_accion_nueva
             LEFT JOIN tabla_maestra mo ON mo.Descripcion = 'MOTIVO_REPROGRAMACION_SEGUIMIENTO' AND mo.IdEmpresa = 1 AND mo.Num1 = r.id_motivo
             LEFT JOIN usuario u ON u.id_usuario = r.creado_por
-            WHERE p.numero = v_numero AND p.eliminado_en IS NULL AND r.eliminado_en IS NULL
+            WHERE p.numero_base = v_numero_base AND p.eliminado_en IS NULL AND r.eliminado_en IS NULL
 
             UNION ALL
             -- Órdenes de compra
@@ -232,7 +234,7 @@ BEGIN
                    p.version, oc.creado_por, CONCAT(u.nombre, ' ', u.apellido),
                    NULL, NULL, NULL, NULL, NULL, NULL, 0
             FROM orden_compra oc
-            JOIN propuesta_comercial p ON p.numero = v_numero AND p.eliminado_en IS NULL
+            JOIN propuesta_comercial p ON p.numero_base = v_numero_base AND p.eliminado_en IS NULL
                                       AND (oc.id_propuesta = p.id_propuesta
                                            OR oc.id_oc IN (SELECT op.id_oc FROM oc_propuesta op
                                                            WHERE op.id_propuesta = p.id_propuesta AND op.eliminado_en IS NULL))
@@ -307,7 +309,7 @@ BEGIN
                    CONCAT('/api/crm/propuestas/', p.id_propuesta, '/pdf') AS url,
                    p.estado
             FROM propuesta_comercial p
-            WHERE p.numero = v_numero AND p.eliminado_en IS NULL
+            WHERE p.numero_base = v_numero_base AND p.eliminado_en IS NULL
 
             UNION ALL
             SELECT 'orden_compra', CONCAT('OC ', oc.numero_oc), oc.fecha_registro,
@@ -315,7 +317,7 @@ BEGIN
                    IF(oc.url_archivo_pdf IS NULL, NULL, CONCAT('/api/crm/ordenes-compra/', oc.id_oc, '/pdf')),
                    oc.estado
             FROM orden_compra oc
-            JOIN propuesta_comercial p ON p.numero = v_numero AND p.eliminado_en IS NULL
+            JOIN propuesta_comercial p ON p.numero_base = v_numero_base AND p.eliminado_en IS NULL
                                       AND (oc.id_propuesta = p.id_propuesta
                                            OR oc.id_oc IN (SELECT op.id_oc FROM oc_propuesta op
                                                            WHERE op.id_propuesta = p.id_propuesta AND op.eliminado_en IS NULL))
@@ -327,7 +329,7 @@ BEGIN
             FROM seguimiento_adjunto a
             JOIN seguimiento_comercial s ON s.id_seguimiento = a.id_seguimiento AND s.eliminado_en IS NULL
             JOIN propuesta_comercial p   ON p.id_propuesta   = s.id_propuesta
-            WHERE p.numero = v_numero AND p.eliminado_en IS NULL AND a.eliminado_en IS NULL
+            WHERE p.numero_base = v_numero_base AND p.eliminado_en IS NULL AND a.eliminado_en IS NULL
         ) d
         ORDER BY d.fecha DESC;
     END IF;

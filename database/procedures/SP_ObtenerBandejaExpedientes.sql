@@ -111,7 +111,7 @@ proc: BEGIN
     -- 3. Filas: primero lo que requiere atención (bloqueados, SLA vencido, con excepción), luego el más reciente
     SELECT
         f.id_expediente, f.numero, f.id_requerimiento, f.numero_rq,
-        f.id_propuesta, f.numero_propuesta, f.version_propuesta, f.codigo_formateado_propuesta, f.estado_propuesta, f.propuestas_otras,
+        f.id_propuesta, f.numero_propuesta, f.version_propuesta, f.estado_propuesta, f.propuestas_otras,
         f.id_cliente, f.razon_social, f.ruc,
         f.cantidad_oc, f.numeros_oc, f.numero_os_om, f.numeros_os, f.numeros_om,
         f.tipo_servicio,

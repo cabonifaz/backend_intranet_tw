@@ -63,7 +63,7 @@ BEGIN
     CREATE TEMPORARY TABLE tmp_exp_prop AS
     WITH versiones AS (
         SELECT b.id_expediente, p.id_propuesta, p.numero, p.version, p.estado,
-               ROW_NUMBER() OVER (PARTITION BY b.id_expediente, p.numero ORDER BY p.version DESC, p.id_propuesta DESC) AS rn
+               ROW_NUMBER() OVER (PARTITION BY b.id_expediente, p.numero_base ORDER BY p.version DESC, p.id_propuesta DESC) AS rn
         FROM tmp_exp_1 b
         JOIN propuesta_comercial p ON p.eliminado_en IS NULL
              AND (p.id_requerimiento = b.id_requerimiento OR (b.id_requerimiento IS NULL AND p.id_propuesta = b.id_propuesta_exp))
@@ -98,7 +98,7 @@ BEGIN
     CREATE TEMPORARY TABLE tmp_exp_2 AS
     SELECT b.*,
         a.id_propuesta, IFNULL(a.rango, 0) AS rango_propuesta, GREATEST(IFNULL(a.propuestas_vigentes, 0) - 1, 0) AS propuestas_otras,
-        p.numero AS numero_propuesta, p.version AS version_propuesta, p.codigo_formateado AS codigo_formateado_propuesta, p.estado AS estado_propuesta, p.tipo_servicio,
+        p.numero AS numero_propuesta, p.version AS version_propuesta, p.estado AS estado_propuesta, p.tipo_servicio,
         COALESCE(p.id_responsable, p.id_creador) AS id_responsable_propuesta, p.id_moneda, p.total AS total_propuesta,
         COALESCE(p.fecha_envio_cliente, p.fecha_envio) AS fecha_envio, p.modificado_en AS propuesta_modificada,
         (SELECT MIN(p2.fecha_creacion) FROM propuesta_comercial p2
@@ -107,7 +107,7 @@ BEGIN
          + (SELECT COUNT(*) FROM propuesta_equipo pe WHERE pe.id_propuesta = a.id_propuesta))           AS items_propuesta,
         -- VB de la propuesta activa (todas sus versiones)
         (SELECT MIN(v.fecha_solicitud) FROM visto_bueno v JOIN propuesta_comercial pv ON pv.id_propuesta = v.id_propuesta
-         WHERE pv.numero = p.numero AND v.tipo = 'aprobacion' AND v.eliminado_en IS NULL)                AS fecha_primera_vb,
+         WHERE pv.numero_base = p.numero_base AND v.tipo = 'aprobacion' AND v.eliminado_en IS NULL)                AS fecha_primera_vb,
         (SELECT MAX(v.fecha_respuesta) FROM visto_bueno v
          WHERE v.id_propuesta = a.id_propuesta AND v.tipo = 'aprobacion' AND v.estado = 'aprobado' AND v.eliminado_en IS NULL)
                                                                                                          AS fecha_aprobacion_vb,
@@ -233,9 +233,10 @@ BEGIN
     UPDATE tmp_exp_blq b
     JOIN propuesta_comercial p ON p.id_propuesta = b.id_entidad
     JOIN tmp_exp_2 c ON c.id_expediente = b.id_expediente
+    LEFT JOIN propuesta_comercial pa ON pa.id_propuesta = c.id_propuesta
     SET b.activo = 0, b.resolucion = IFNULL(b.resolucion, CONCAT('Sin efecto: el expediente continúa con la propuesta ', c.numero_propuesta, '.'))
     WHERE b.activo = 1 AND b.tipo IN ('vb_rechazado', 'vb_devuelto') AND b.entidad_tipo = 'propuesta'
-      AND c.rango_propuesta IN (1, 2) AND p.numero <> c.numero_propuesta;
+      AND c.rango_propuesta IN (1, 2) AND p.numero_base <> pa.numero_base;
 
     DROP TEMPORARY TABLE IF EXISTS tmp_exp_blq_cnt;
     CREATE TEMPORARY TABLE tmp_exp_blq_cnt (PRIMARY KEY (id_expediente)) AS
