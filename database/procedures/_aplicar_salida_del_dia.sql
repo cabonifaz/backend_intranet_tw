@@ -552,3 +552,18 @@ WHERE  ROUTINE_SCHEMA = DATABASE()
   AND  ROUTINE_NAME IN ('SP_ObtenerSalidaHabilitadaMovil','SP_ObtenerChecklistSalidaMovil','SP_MarcarChecklistSalidaMovil',
                         'SP_SolicitarAutorizacionSalidaMovil','SP_IniciarTrasladoMovil')
 ORDER BY ROUTINE_NAME;
+
+-- ============================================================
+-- COMPROBACIÓN (solo lectura, no modifica datos). OS-000003 = id_os 6, técnico Pedro Salazar = id_usuario 16.
+-- Mientras hoy sea anterior al 09/11/2026 se espera:
+-- ============================================================
+
+-- 1) Regla: habilitada = 0 y mensaje "Aún no es el día del servicio. Podrás validar la salida el 09/11/2026."
+CALL SP_ObtenerSalidaHabilitadaMovil(6, @habilitada, @mensaje);
+SELECT @habilitada AS habilitada, @mensaje AS mensaje;
+
+-- 2) Checklist: en la 2.ª pestaña, al final de la fila, salida_habilitada = 0 y el mismo salida_mensaje
+CALL SP_ObtenerChecklistSalidaMovil(16, 6);
+
+-- 3) Detalle: SIGUE devolviendo todo (servicio, alertas, riesgos, repuestos, historial, documentos, programación, equipo, equipos, conceptos, respuestas)
+CALL SP_ObtenerDetalleServicioMovil(16, 6);
