@@ -208,6 +208,11 @@ builder.Services.AddScoped<ObtenerResumenMenuMovilCasoDeUso>();
 // App Mobile HU-03 — agenda de servicios programados
 builder.Services.AddScoped<IServiciosMovilRepositorio, ServiciosMovilRepositorio>();
 builder.Services.AddScoped<ObtenerServiciosProgramadosMovilCasoDeUso>();
+// App Mobile HU-28 / HU-31 — menú de Jefatura y centro de aprobaciones
+builder.Services.AddScoped<ObtenerMenuJefaturaMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerAprobacionesMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerAprobacionSalidaMovilCasoDeUso>();
+builder.Services.AddScoped<ResolverAprobacionSalidaMovilCasoDeUso>();
 // App Mobile HU-25 / HU-26 — viáticos asignados al programar y gastos rendidos
 builder.Services.AddScoped<IViaticosMovilRepositorio, ViaticosMovilRepositorio>();
 builder.Services.AddScoped<ObtenerViaticosMovilCasoDeUso>();

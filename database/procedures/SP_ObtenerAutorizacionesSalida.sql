@@ -4,6 +4,7 @@
 --   p_estado: pendiente | aprobada | rechazada | (vacío = todas)
 --   Encargado de área (Jefe de Servicio Técnico / Jefe de Metrología): solo las de SU área
 --   (y las que no tienen área en la RQ). Jefe/Coordinador de Operaciones y administradores: todas.
+-- id_tecnico (última columna): quién la pidió; la app móvil del Jefe lo usa para mostrar el checklist de ese técnico.
 -- Solo lectura.
 -- ============================================================
 DROP PROCEDURE IF EXISTS SP_ObtenerAutorizacionesSalida;
@@ -58,7 +59,8 @@ proc: BEGIN
            a.solicitado_en,
            NULLIF(TRIM(CONCAT(IFNULL(jf.nombre, ''), ' ', IFNULL(jf.apellido, ''))), '') AS jefe,
            a.resuelto_en,
-           a.comentario
+           a.comentario,
+           a.id_tecnico
     FROM   autorizacion_salida_os a
     JOIN   orden_servicio os ON os.id_os = a.id_os AND os.eliminado_en IS NULL
     LEFT JOIN cliente cl ON cl.id_cliente = os.id_cliente

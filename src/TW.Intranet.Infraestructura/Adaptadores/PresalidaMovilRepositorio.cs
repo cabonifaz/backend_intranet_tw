@@ -226,7 +226,8 @@ public class AutorizacionSalidaRepositorio(CadenaConexionBd conexion)
                         FechaHora(r, "solicitado_en"),
                         Texto(r, "jefe"),
                         FechaHora(r, "resuelto_en"),
-                        Texto(r, "comentario")));
+                        Texto(r, "comentario"),
+                        EnteroLargo(r, "id_tecnico")));
                 return new RespuestaDto<List<AutorizacionSalidaBandejaDto>>(2, mensaje, lista);
             }, ct);
 

@@ -5,10 +5,10 @@
 --   p_anexo / p_troncal / p_fecha_nacimiento: contacto interno (reunión 02-oct)
 --   p_rol_sistema: nivel (administrador | supervisor | usuario | visor)
 --   p_id_supervisor: se ignora; el supervisor se calcula solo (SP_RecalcularSupervisores)
---   p_nombre_usuario: usuario de la app móvil (App Mobile HU-01). Solo lo gestiona la ficha para el
---                     área 'servicio_tecnico'; los demás usuarios conservan lo asignado con SP_AsignarAccesoMovil.
+--   p_nombre_usuario: usuario de la app móvil (App Mobile HU-01). La ficha lo gestiona para TODAS las áreas (Servicio Técnico
+--                     lo sugiere y los demás lo dejan en blanco si no usarán la app). El menú de la app sale del cargo (HU-28).
 --                       - con valor ........ lo asigna (único entre vigentes) y habilita el canal: intranet -> todos.
---                       - vacío en edición . si el usuario es / era de Servicio Técnico, quita el acceso
+--                       - vacío en edición . si el usuario tenía usuario de app, quita el acceso
 --                                            (todos -> intranet) y cierra la sesión de la app.
 --                       - vacío en otro caso no toca nombre_usuario ni canal_acceso.
 --   Requiere la migración 75 (columna usuario.nombre_usuario).
@@ -49,6 +49,7 @@ proc: BEGIN
     DECLARE v_nombre_usuario  VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_area_anterior   VARCHAR(60) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_canal_anterior  VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_usuario_anterior VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_asignar_app     TINYINT DEFAULT 0;
     DECLARE v_quitar_app      TINYINT DEFAULT 0;
 
@@ -125,8 +126,8 @@ proc: BEGIN
     SET v_nombre_usuario = NULLIF(LOWER(TRIM(IFNULL(p_nombre_usuario, ''))), '');
 
     IF p_id_usuario <> 0 THEN
-        SELECT area, canal_acceso
-        INTO   v_area_anterior, v_canal_anterior
+        SELECT area, canal_acceso, nombre_usuario
+        INTO   v_area_anterior, v_canal_anterior, v_usuario_anterior
         FROM   usuario
         WHERE  id_usuario = p_id_usuario AND eliminado_en IS NULL;
     END IF;
@@ -149,8 +150,7 @@ proc: BEGIN
         END IF;
 
         SET v_asignar_app = 1;
-    ELSEIF p_id_usuario <> 0
-       AND (IFNULL(v_area_anterior, '') = 'servicio_tecnico' OR IFNULL(p_area, '') = 'servicio_tecnico') THEN
+    ELSEIF p_id_usuario <> 0 AND v_usuario_anterior IS NOT NULL THEN
         SET v_quitar_app = 1;
     END IF;
 

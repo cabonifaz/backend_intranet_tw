@@ -182,4 +182,5 @@ public record AutorizacionSalidaBandejaDto(
     DateTime? SolicitadaEn,
     string?   Jefe,
     DateTime? ResueltaEn,
-    string?   Comentario);
+    string?   Comentario,
+    long      IdTecnico = 0);
