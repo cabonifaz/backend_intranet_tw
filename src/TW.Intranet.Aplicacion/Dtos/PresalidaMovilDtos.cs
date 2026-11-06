@@ -113,7 +113,9 @@ public record HechosChecklistSalidaDto(
     string?   AreaAutorizaCodigo,   // servicio_tecnico | metrologia | null (la RQ no indica área)
     string?   AreaAutoriza,         // "Servicio Técnico" | "Metrología"
     string?   CargoEncargado,       // "Jefe de Servicio Técnico" | "Jefe de Metrología"
-    string?   EncargadoArea);       // nombre(s) del encargado activo
+    string?   EncargadoArea,        // nombre(s) del encargado activo
+    bool      SalidaHabilitada,     // la salida se valida solo desde el día programado
+    string?   SalidaMensaje);       // "Aún no es el día del servicio. Podrás validar la salida el dd/mm/aaaa."
 
 /// <summary>Un ítem del checklist. Estado: conforme | pendiente | bloqueado | no_aplica | opcional.</summary>
 public record ItemChecklistSalidaDto(
@@ -147,7 +149,9 @@ public record ChecklistSalidaMovilDto(
     bool                          PuedeSolicitarAutorizacion,
     bool                          TrasladoIniciado,
     AutorizacionSalidaDto?        Autorizacion,
-    AreaAutorizaSalidaDto         AreaAutoriza);
+    AreaAutorizaSalidaDto         AreaAutoriza,
+    bool                          SalidaHabilitada,
+    string?                       SalidaMensaje);
 
 /// <summary>El técnico marca o desmarca un ítem manual del checklist.</summary>
 public record MarcarItemChecklistDto(bool Confirmado);

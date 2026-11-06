@@ -6,6 +6,8 @@
 --   1. Encabezado
 --   2. Una fila: datos de la tarjeta + estado de cada ítem + autorización vigente
 --      + área que autoriza la salida (según la RQ) y su(s) encargado(s)
+--      + salida_habilitada / salida_mensaje: la salida se valida solo desde el día programado
+--        (regla en SP_ObtenerSalidaHabilitadaMovil; la consulta sigue disponible antes de ese día).
 -- ============================================================
 DROP PROCEDURE IF EXISTS SP_ObtenerChecklistSalidaMovil;
 
@@ -16,6 +18,9 @@ CREATE PROCEDURE SP_ObtenerChecklistSalidaMovil(
     IN p_id_os      BIGINT
 )
 proc: BEGIN
+    DECLARE v_salida_ok  TINYINT DEFAULT 1;
+    DECLARE v_salida_msg VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
+
     IF NOT EXISTS (SELECT 1 FROM orden_servicio os
                    WHERE os.id_os = p_id_os AND os.eliminado_en IS NULL
                      AND (os.id_tecnico_principal = p_id_usuario
@@ -24,6 +29,8 @@ proc: BEGIN
         SELECT 1 AS IdTipoMensaje, 'Servicio no encontrado o no asignado a tu usuario.' AS Mensaje;
         LEAVE proc;
     END IF;
+
+    CALL SP_ObtenerSalidaHabilitadaMovil(p_id_os, v_salida_ok, v_salida_msg);
 
     SELECT 2 AS IdTipoMensaje, 'Éxito.' AS Mensaje;
 
@@ -80,7 +87,10 @@ proc: BEGIN
             FROM   usuario u
             JOIN   tabla_maestra c ON c.IdMaestro = 80 AND c.IdEmpresa = 1 AND c.String2 = u.cargo
             WHERE  u.eliminado_en IS NULL AND u.estado = 'activo' AND c.String2 LIKE 'jefe\_%'
-              AND  c.String3 = COALESCE(au.area_destino, asr.area_usuario))                 AS encargado_area
+              AND  c.String3 = COALESCE(au.area_destino, asr.area_usuario))                 AS encargado_area,
+           -- La salida solo se valida desde el día programado
+           v_salida_ok                                                      AS salida_habilitada,
+           v_salida_msg                                                     AS salida_mensaje
     FROM   orden_servicio os
     LEFT JOIN cliente            cl ON cl.id_cliente    = os.id_cliente
     LEFT JOIN usuario            tp ON tp.id_usuario    = os.id_tecnico_principal

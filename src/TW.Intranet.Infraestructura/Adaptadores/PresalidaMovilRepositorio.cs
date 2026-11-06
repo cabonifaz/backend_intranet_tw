@@ -155,7 +155,9 @@ public class PresalidaMovilRepositorio(CadenaConexionBd conexion)
                     Texto(r, "area_autoriza_codigo"),
                     Texto(r, "area_autoriza"),
                     Texto(r, "cargo_encargado"),
-                    Texto(r, "encargado_area")));
+                    Texto(r, "encargado_area"),
+                    Booleano(r, "salida_habilitada"),
+                    Texto(r, "salida_mensaje")));
             }, ct);
 
     public Task<RespuestaDto<bool>> MarcarItemAsync(long idUsuario, long idOs, string codigo, bool confirmado, CancellationToken ct) =>
