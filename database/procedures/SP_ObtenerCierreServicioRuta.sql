@@ -8,6 +8,7 @@
 --   · parcial (en proceso, observado o con etapa iniciada) · pendiente (sin ejecutar: espera decisión del Jefe de Operaciones).
 -- Modo auditoría post-cierre: la cabecera trae ModoAuditoria, RegistrarHabilitado=0 y el tooltip del tab Registrar (HU-53 rechaza registros en servicios finalizados).
 -- Requiere las migraciones 90 a 92.
+-- Fix 06/11: los equipos de la OS son de equipo_cliente (os_equipo.id_equipo), no de la tabla equipo (activos TW).
 DROP PROCEDURE IF EXISTS SP_ObtenerCierreServicioRuta;
 
 DELIMITER $$
@@ -100,10 +101,11 @@ proc: BEGIN
            IF(inf.url_pdf REGEXP '^(https://[^[:space:][:cntrl:]<>"\\\\]+|/[^/[:space:][:cntrl:]<>"\\\\][^[:space:][:cntrl:]<>"\\\\]*)$', inf.url_pdf, NULL),
            IF(oe.estado_ejecucion = 'observado' OR IFNULL(oe.observacion_ejecucion, '') <> ''
               OR EXISTS (SELECT 1 FROM os_equipo_observacion ob WHERE ob.id_os = oe.id_os AND ob.id_equipo = oe.id_equipo AND ob.eliminado_en IS NULL)
-              OR IFNULL(inf.estado, '') = 'observado', 1, 0),
+              OR IFNULL(inf.estado, '') = 'observado'
+              OR EXISTS (SELECT 1 FROM informe_observacion io WHERE io.id_informe = inf.id_informe AND io.eliminado_en IS NULL), 1, 0),
            nv.numero
     FROM os_equipo oe
-    JOIN equipo e ON e.id_equipo = oe.id_equipo
+    JOIN (SELECT ec.id_equipo, ec.codigo_tw, ec.modelo, ec.num_serie AS numero_serie, ec.estado_operativo FROM equipo_cliente ec) e ON e.id_equipo = oe.id_equipo
     JOIN orden_servicio osr ON osr.id_os = oe.id_os
     LEFT JOIN tabla_maestra ti ON ti.IdMaestro = 31 AND ti.IdEmpresa = 1 AND ti.Num1 = oe.id_tipo_intervencion
     LEFT JOIN tabla_maestra ts ON ts.IdEmpresa = 1 AND ts.Descripcion = 'TIPO_SERVICIO' AND ts.Num1 = osr.id_tipo_servicio

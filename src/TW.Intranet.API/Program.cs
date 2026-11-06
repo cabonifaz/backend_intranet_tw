@@ -541,6 +541,21 @@ builder.Services.AddScoped<IRegistroAsistenteRepositorio, RegistroAsistenteRepos
 builder.Services.AddScoped<ObtenerFormularioRegistroAsistenteCasoDeUso>();
 builder.Services.AddScoped<RegistrarAsistenteServicioRutaCasoDeUso>();
 
+// Revisión Técnica (Sprint 5, HU-56 a HU-59) y Precotizaciones Técnicas del CRM (HU-60)
+builder.Services.AddScoped<IRevisionTecnicaRepositorio, RevisionTecnicaRepositorio>();
+builder.Services.AddScoped<ObtenerBandejaInformesCasoDeUso>();
+builder.Services.AddScoped<ExportarBandejaInformesCasoDeUso>();
+builder.Services.AddScoped<ObtenerDetalleInformeCasoDeUso>();
+builder.Services.AddScoped<GuardarInformeTecnicoCasoDeUso>();
+builder.Services.AddScoped<GuardarPrecotizacionInformeCasoDeUso>();
+builder.Services.AddScoped<PrepararRevisionInformeCasoDeUso>();
+builder.Services.AddScoped<RegistrarRevisionInformeCasoDeUso>();
+builder.Services.AddScoped<ObtenerHistorialInformeCasoDeUso>();
+builder.Services.AddScoped<ObtenerBandejaPrecotizacionesCasoDeUso>();
+builder.Services.AddScoped<ObtenerDetallePrecotizacionCasoDeUso>();
+builder.Services.AddScoped<ObtenerPrecargaPrecotizacionCasoDeUso>();
+builder.Services.AddScoped<ConvertirPrecotizacionCasoDeUso>();
+
 // ── INYECCIÓN DE DEPENDENCIAS — Expediente Digital (Sprint 4, HU-29 a HU-33) ───
 builder.Services.AddScoped<IExpedienteRepositorio, ExpedienteRepositorio>();
 builder.Services.AddSingleton<IGeneradorPdfTabla, GeneradorPdfTablaQuestPdf>();

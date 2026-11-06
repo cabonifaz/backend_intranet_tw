@@ -1,6 +1,7 @@
 -- HU-52 (Sprint 5) Pestaña "Avance por Equipos": por equipo, mini-checklist Limpieza → Desmontaje → Pruebas → Montaje → Cierre con hora y estado
 -- (pendiente | en_curso | completada) y chips de conteo (fotos, ensayos, certificado preliminar, observaciones, mediciones). SOLO LECTURA.
 -- Resultados: 1 mensaje · 2 equipos (una fila por equipo) · 3 etapas (una fila por equipo y etapa; las 5 siempre).
+-- Fix 06/11: los equipos de la OS son de equipo_cliente (os_equipo.id_equipo), no de la tabla equipo (activos TW).
 DROP PROCEDURE IF EXISTS SP_ObtenerAvanceServicioRuta;
 
 DELIMITER $$
@@ -46,7 +47,7 @@ proc: BEGIN
            (SELECT IF(MIN(g.inicio_utc) IS NULL, NULL, GREATEST(0, TIMESTAMPDIFF(MINUTE, MIN(g.inicio_utc),
                       IF(oe.estado_ejecucion = 'ejecutado', MAX(g.fin_utc), UTC_TIMESTAMP()))))
               FROM os_equipo_etapa g WHERE g.id_os = oe.id_os AND g.id_equipo = oe.id_equipo AND g.eliminado_en IS NULL) AS Minutos
-    FROM os_equipo oe JOIN equipo e ON e.id_equipo = oe.id_equipo
+    FROM os_equipo oe JOIN (SELECT ec.id_equipo, ec.codigo_tw, ec.modelo, ec.num_serie AS numero_serie, ec.estado_operativo FROM equipo_cliente ec) e ON e.id_equipo = oe.id_equipo
     WHERE oe.id_os = p_id_os AND oe.eliminado_en IS NULL
     ORDER BY oe.orden, oe.id;
 

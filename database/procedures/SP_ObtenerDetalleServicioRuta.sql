@@ -1,6 +1,7 @@
 -- HU-52 (Sprint 5) Detalle del Servicio en Ruta: cabecera fija, pestaña Resumen y contadores de las pestañas. SOLO LECTURA.
 -- Resultados: 1 mensaje · 2 cabecera+programación+métricas (1 fila) · 3 equipos a intervenir · 4 responsables · 5 contacto en planta (0 o 1 fila).
 -- Estado del servicio: el mismo de la bandeja (HU-51). "Cierre del Servicio" solo se muestra si el estado es finalizado (campo MostrarCierre).
+-- Fix 06/11: los equipos de la OS son de equipo_cliente (os_equipo.id_equipo), no de la tabla equipo (activos TW).
 DROP PROCEDURE IF EXISTS SP_ObtenerDetalleServicioRuta;
 
 DELIMITER $$
@@ -90,7 +91,7 @@ proc: BEGIN
               ORDER BY g.inicio_utc DESC LIMIT 1) AS EtapaActual,
            DATE_FORMAT(CONVERT_TZ(oe.fecha_ejecucion, '+00:00', '-05:00'), '%H:%i') AS HoraCompletado,
            IF(e.estado_operativo = 'observado', 1, 0) AS Observado
-    FROM os_equipo oe JOIN equipo e ON e.id_equipo = oe.id_equipo
+    FROM os_equipo oe JOIN (SELECT ec.id_equipo, ec.codigo_tw, ec.modelo, ec.num_serie AS numero_serie, ec.estado_operativo FROM equipo_cliente ec) e ON e.id_equipo = oe.id_equipo
     WHERE oe.id_os = p_id_os AND oe.eliminado_en IS NULL
     ORDER BY oe.orden, oe.id;
 
