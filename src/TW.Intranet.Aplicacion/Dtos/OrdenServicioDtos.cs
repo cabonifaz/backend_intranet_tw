@@ -43,6 +43,9 @@ public record TarjetasOrdenesServicioDto(
 /// <summary>Fila de la bandeja.</summary>
 public record ItemBandejaOrdenServicioDto
 {
+    /// <summary>#4437 Código de la propuesta para mostrar: "PC: 0012-2-2026" (ya incluye la versión).</summary>
+    public string? CodigoFormateadoPropuesta { get; init; }
+
     public long      IdOs                   { get; init; }
     /// <summary>OS u OM.</summary>
     public string    Tipo                   { get; init; } = "OS";
@@ -143,6 +146,8 @@ public record EquipoOrdenServicioDto
 public record ConceptoOrdenServicioDto
 {
     public long?   IdOsConcepto      { get; init; }
+    /// <summary>#4435 Línea de la propuesta (propuesta_item) de la que sale el concepto: única aunque se repita el suministro.</summary>
+    public long?   IdItem            { get; init; }
     public long?   IdSuministro      { get; init; }
     public string? Codigo            { get; init; }
     public string  Descripcion       { get; init; } = "";
@@ -162,6 +167,9 @@ public record ContactoClienteOsDto(long IdContacto, string Nombres, string? Carg
 /// <summary>Los 10 campos de contexto de la propuesta aceptada (sección 2 de la ficha y tab Propuesta Origen).</summary>
 public record PropuestaOrigenOsDto
 {
+    /// <summary>#4437 Código de la propuesta para mostrar: "PC: 0012-2-2026" (ya incluye la versión).</summary>
+    public string? CodigoFormateado { get; init; }
+
     public long      IdPropuesta        { get; init; }
     public string    Numero             { get; init; } = "";
     public int       Version            { get; init; }
@@ -252,6 +260,8 @@ public class EquipoGuardarOsDto
 public class ConceptoGuardarOsDto
 {
     public long    IdSuministro { get; set; }
+    /// <summary>#4435 Línea de la propuesta elegida en el modal (idItem del catálogo de conceptos).</summary>
+    public long?   IdItem       { get; set; }
     public string? Alcance      { get; set; }
     /// <summary>Concepto ya guardado en la orden (edición).</summary>
     public long?   IdOsConcepto { get; set; }
@@ -370,6 +380,9 @@ public record AvanceOrdenServicioDto(int Total, int Pendientes, int EnProceso, i
 /// <summary>Cabecera + tab Resumen + Avance por equipos del Modal de Detalle.</summary>
 public record DetalleOrdenServicioDto
 {
+    /// <summary>#4437 Código de la propuesta para mostrar: "PC: 0012-2-2026" (ya incluye la versión).</summary>
+    public string? CodigoFormateadoPropuesta { get; init; }
+
     public long      IdOs                   { get; init; }
     public string    Tipo                   { get; init; } = "OS";
     public string    Numero                 { get; init; } = "";

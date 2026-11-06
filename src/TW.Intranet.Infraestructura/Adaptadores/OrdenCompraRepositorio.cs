@@ -151,7 +151,8 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
                         Dec(r, "monto_oc"), Dec(r, "monto_asignado"), Dec(r, "saldo_oc"), Dec(r, "asignado_pct"),
                         Texto(r, "estado") ?? "", Texto(r, "estado_visual") ?? "", Texto(r, "resultado_ia"), Ent(r, "alertas_ia"),
                         EnteroLargoNulo(r, "id_responsable"), Texto(r, "responsable"),
-                        Booleano(r, "tiene_pdf"), Texto(r, "url_pdf"), Booleano(r, "puede_anular"), Booleano(r, "puede_reemplazar")));
+                        Booleano(r, "tiene_pdf"), Texto(r, "url_pdf"), Booleano(r, "puede_anular"), Booleano(r, "puede_reemplazar"))
+                        { CodigoFormateadoPropuesta = TextoSiExiste(r, "codigo_formateado_propuesta") });
 
                 var total        = await LeerTotalAsync(r, ct);
                 var clientes     = await LeerOpcionesAsync(r, ct);
@@ -258,6 +259,7 @@ public class OrdenCompraRepositorio(CadenaConexionBd conexion)
                         IdPropuesta             = EnteroLargo(r, "id_propuesta"),
                         Numero                  = Texto(r, "numero") ?? "",
                         Version                 = Ent(r, "version"),
+                        CodigoFormateado        = TextoSiExiste(r, "codigo_formateado"),
                         EstadoPropuesta         = Texto(r, "estado_propuesta"),
                         Aceptada                = Booleano(r, "aceptada"),
                         MontoPropuesta          = Dec(r, "monto_propuesta"),

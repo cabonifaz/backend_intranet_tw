@@ -62,7 +62,7 @@ BEGIN
 
         -- 2. Cabecera
         SELECT
-            t.id_propuesta, t.numero, t.version,
+            t.id_propuesta, t.numero, t.version, t.codigo_formateado,
             t.id_requerimiento, r.numero                      AS numero_rq,
             t.id_cliente, c.razon_social, c.ruc,
             t.id_contacto, co.nombres                         AS contacto, co.cargo AS cargo_contacto,

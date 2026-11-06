@@ -32,6 +32,9 @@ public record KpisSeguimientoDto(
 
 public record ItemBandejaSeguimientoDto
 {
+    /// <summary>#4437 Código de la propuesta para mostrar: "PC: 0012-2-2026" (ya incluye la versión).</summary>
+    public string? CodigoFormateado { get; init; }
+
     public long      IdPropuesta           { get; init; }
     public string    Numero                { get; init; } = "";
     public int       Version               { get; init; }
@@ -102,6 +105,9 @@ public record BandejaSeguimientoDto(
 /// <summary>Panel superior, datos de la oportunidad, próxima acción y permisos de los botones.</summary>
 public record CabeceraDetalleSeguimientoDto
 {
+    /// <summary>#4437 Código de la propuesta para mostrar: "PC: 0012-2-2026" (ya incluye la versión).</summary>
+    public string? CodigoFormateado { get; init; }
+
     public long      IdPropuesta           { get; init; }
     public string    Numero                { get; init; } = "";
     public int       Version               { get; init; }

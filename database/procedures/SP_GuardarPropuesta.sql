@@ -569,6 +569,7 @@ proc: BEGIN
                               IF(v_estado = 'aprobado', 'Propuesta guardada. Volvió a borrador: envíela nuevamente a visto bueno.',
                                  'Propuesta guardada correctamente.')) AS Mensaje;
     SELECT v_id AS id_propuesta, v_numero AS numero, v_version AS version,
+           (SELECT pc.codigo_formateado FROM propuesta_comercial pc WHERE pc.id_propuesta = v_id) AS codigo_formateado,
            v_sub AS subtotal, v_desc AS descuento_monto, v_igv AS igv_monto, v_total AS total,
            v_sub_opc AS subtotal_opcionales, v_desc_opc AS descuento_opcionales, v_total_opc AS total_opcionales;
 END$$

@@ -114,7 +114,7 @@ BEGIN
             t.fecha_oc, t.fecha_recepcion, t.fecha_registro,
             t.id_cliente, t.razon_social, t.ruc,
             t.id_requerimiento, t.numero_rq,
-            t.id_propuesta, t.numero_propuesta, t.version_propuesta,
+            t.id_propuesta, t.numero_propuesta, t.version_propuesta, t.codigo_formateado_propuesta,
             t.propuestas_vinculadas,
             GREATEST(t.propuestas_vinculadas - 1, 0)                                          AS propuestas_adicionales,
             t.id_moneda, t.moneda, t.moneda_simbolo,

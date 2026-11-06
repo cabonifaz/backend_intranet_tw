@@ -58,6 +58,7 @@ public class OrdenServicioRepositorio(CadenaConexionBd conexion) : RepositorioSp
                         IdPropuesta            = EnteroLargoNulo(r, "id_propuesta"),
                         NumeroPropuesta        = Texto(r, "numero_propuesta"),
                         VersionPropuesta       = EnteroNulo(r, "version_propuesta"),
+                        CodigoFormateadoPropuesta = TextoSiExiste(r, "codigo_formateado_propuesta"),
                         IdRequerimiento        = EnteroLargoNulo(r, "id_requerimiento"),
                         NumeroRequerimiento    = Texto(r, "numero_requerimiento"),
                         IdExpediente           = EnteroLargoNulo(r, "id_expediente"),
@@ -176,6 +177,7 @@ public class OrdenServicioRepositorio(CadenaConexionBd conexion) : RepositorioSp
         IdPropuesta        = EnteroLargo(r, "id_propuesta"),
         Numero             = Texto(r, ficha ? "numero_propuesta" : "numero") ?? "",
         Version            = Entero(r, ficha ? "version_propuesta" : "version"),
+        CodigoFormateado   = TextoSiExiste(r, ficha ? "codigo_formateado_propuesta" : "codigo_formateado"),
         Estado             = Texto(r, ficha ? "estado_propuesta" : "estado"),
         TipoServicio       = Texto(r, "tipo_servicio"),
         FechaAceptacion    = FechaHora(r, "fecha_aceptacion"),
@@ -326,6 +328,7 @@ public class OrdenServicioRepositorio(CadenaConexionBd conexion) : RepositorioSp
                     conceptos.Add(new ConceptoOrdenServicioDto
                     {
                         IdOsConcepto  = EnteroLargoNulo(r, "id_os_concepto"),
+                        IdItem        = Tiene(r, "id_item") ? EnteroLargoNulo(r, "id_item") : null,
                         IdSuministro  = EnteroLargoNulo(r, "id_suministro"),
                         Codigo        = Texto(r, "codigo"),
                         Descripcion   = Texto(r, "descripcion") ?? "",
@@ -369,7 +372,7 @@ public class OrdenServicioRepositorio(CadenaConexionBd conexion) : RepositorioSp
                     ["certContacto"]         = d.CertContacto,
                 }));
                 p.AddWithValue("p_conceptos", Json(d.ConceptosDetalle is { } detalle
-                    ? detalle.Select(c => (object)new { idSuministro = c.IdSuministro, alcance = c.Alcance, idOsConcepto = c.IdOsConcepto })
+                    ? detalle.Select(c => (object)new { idSuministro = c.IdSuministro, alcance = c.Alcance, idOsConcepto = c.IdOsConcepto, idItem = c.IdItem })
                     : d.Conceptos.Select(c => (object)new { idSuministro = c })));
                 p.AddWithValue("p_equipos", Json(d.Equipos.Select(e => e.ConceptosIdx is { } idx
                     ? (object)new { idEquipo = e.IdEquipo, conceptosIdx = idx }
@@ -532,6 +535,7 @@ public class OrdenServicioRepositorio(CadenaConexionBd conexion) : RepositorioSp
                     IdPropuesta            = EnteroLargoNulo(r, "id_propuesta"),
                     NumeroPropuesta        = Texto(r, "numero_propuesta"),
                     VersionPropuesta       = EnteroNulo(r, "version_propuesta"),
+                    CodigoFormateadoPropuesta = TextoSiExiste(r, "codigo_formateado_propuesta"),
                     IdRequerimiento        = EnteroLargoNulo(r, "id_requerimiento"),
                     NumeroRq               = Texto(r, "numero_rq"),
                     IdExpediente           = EnteroLargoNulo(r, "id_expediente"),
@@ -600,6 +604,7 @@ public class OrdenServicioRepositorio(CadenaConexionBd conexion) : RepositorioSp
                 lista.Add(new ConceptoOrdenServicioDto
                 {
                     IdOsConcepto     = EnteroLargoNulo(r, "id_os_concepto"),
+                    IdItem           = Tiene(r, "id_item") ? EnteroLargoNulo(r, "id_item") : null,
                     IdSuministro     = EnteroLargoNulo(r, "id_suministro"),
                     Codigo           = Texto(r, "codigo"),
                     Descripcion      = Texto(r, "descripcion") ?? "",

@@ -373,7 +373,7 @@ public class PropuestasRepositorio(CadenaConexionBd conexion)
                     DecimalNulo(r, "total") ?? 0,
                     DecimalNulo(r, "subtotal_opcionales") ?? 0,
                     DecimalNulo(r, "descuento_opcionales") ?? 0,
-                    DecimalNulo(r, "total_opcionales") ?? 0));
+                    DecimalNulo(r, "total_opcionales") ?? 0) { CodigoFormateado = TextoSiExiste(r, "codigo_formateado") });
             }, ct);
     }
 
@@ -475,7 +475,7 @@ public class PropuestasRepositorio(CadenaConexionBd conexion)
                     EnteroLargo(r, "id_propuesta"),
                     Texto(r, "numero") ?? "",
                     Entero(r, "version"),
-                    Booleano(r, "version_anterior_anulada")));
+                    Booleano(r, "version_anterior_anulada")) { CodigoFormateado = TextoSiExiste(r, "codigo_formateado") });
             }, ct);
 
     // ── HU-11: descuento global ──────────────────────────────────────────────

@@ -145,7 +145,7 @@ proc: BEGIN
         CONCAT(ur.nombre, ' ', ur.apellido)                                    AS responsable,
         ur.cargo                                                               AS cargo_responsable,
         -- 2. Propuesta origen
-        p.id_propuesta, p.numero AS numero_propuesta, p.version AS version_propuesta, p.estado AS estado_propuesta,
+        p.id_propuesta, p.numero AS numero_propuesta, p.version AS version_propuesta, p.codigo_formateado AS codigo_formateado_propuesta, p.estado AS estado_propuesta,
         COALESCE(NULLIF(TRIM(IF(p.tipo_servicio REGEXP '^[0-9]+$',
                                 (SELECT ts.String1 FROM tabla_maestra ts WHERE ts.IdMaestro = 3 AND ts.IdEmpresa = 1
                                    AND ts.Num1 = CAST(p.tipo_servicio AS UNSIGNED) LIMIT 1), p.tipo_servicio)), ''),
@@ -211,24 +211,24 @@ proc: BEGIN
 
     -- 4. Conceptos (guardados o, en una OS nueva, los suministros de servicio de la propuesta como sugerencia)
     DROP TEMPORARY TABLE IF EXISTS tmp_os_conc;
-    CREATE TEMPORARY TABLE tmp_os_conc (id_os_concepto BIGINT, id_suministro BIGINT, codigo VARCHAR(30), descripcion VARCHAR(300),
+    CREATE TEMPORARY TABLE tmp_os_conc (id_os_concepto BIGINT, id_item BIGINT, id_suministro BIGINT, codigo VARCHAR(30), descripcion VARCHAR(300),
                                         alcance VARCHAR(100), orden INT, orden2 INT, sugerido TINYINT)
                                         DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
     IF v_id_os IS NOT NULL THEN
         INSERT INTO tmp_os_conc
-        SELECT oc.id, oc.id_suministro, oc.codigo, oc.descripcion, oc.alcance, oc.orden, oc.id, 0
+        SELECT oc.id, oc.id_item, oc.id_suministro, oc.codigo, oc.descripcion, oc.alcance, oc.orden, oc.id, 0
         FROM os_concepto oc WHERE oc.id_os = v_id_os AND oc.eliminado_en IS NULL;
     ELSE
         -- Un concepto por ítem de servicio de la propuesta (no se fusionan los del mismo suministro)
         INSERT INTO tmp_os_conc
-        SELECT NULL, s.id_suministro, s.codigo, s.descripcion, NULLIF(TRIM(i.alcance), ''),
+        SELECT NULL, i.id_item, s.id_suministro, s.codigo, s.descripcion, NULLIF(TRIM(i.alcance), ''),
                (CASE i.seccion WHEN 'principal' THEN 0 ELSE 100000 END) + IFNULL(i.orden, 0), i.id_item, 1
         FROM propuesta_item i
         JOIN suministros s ON s.id_suministro = i.id_catalogo_item AND s.clase = 'servicio' AND s.eliminado_en IS NULL
         WHERE i.id_propuesta = v_id_prop AND i.eliminado_en IS NULL AND IFNULL(i.es_espaciado, 0) = 0;
     END IF;
 
-    SELECT t.id_os_concepto, t.id_suministro, t.codigo, t.descripcion, t.alcance, t.sugerido,
+    SELECT t.id_os_concepto, t.id_item, t.id_suministro, t.codigo, t.descripcion, t.alcance, t.sugerido,
            tt.String1 AS clasificacion,
            EXISTS (SELECT 1 FROM propuesta_item pi WHERE pi.id_propuesta = v_id_prop AND pi.id_catalogo_item = t.id_suministro
                      AND pi.eliminado_en IS NULL AND IFNULL(pi.es_espaciado, 0) = 0) AS de_la_propuesta

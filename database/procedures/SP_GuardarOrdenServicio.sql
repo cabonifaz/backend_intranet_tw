@@ -5,7 +5,7 @@
 --     OS/OM (los equipos se dividen en lotes) mientras le queden equipos cotizados sin OS/OM activa.
 --   p_datos: { idContacto, fechaProgramadaDesde, fechaProgramadaHasta (solo OS, AAAA-MM-DD), observaciones,
 --              certRazonSocial, certRuc, certDireccion, certContacto (solo OM; editables solo si es tercerizado) }
---   p_conceptos: [{ idSuministro, alcance?, idOsConcepto? }]  suministros de clase servicio, sin precios, en orden. Se
+--   p_conceptos: [{ idSuministro, alcance?, idOsConcepto?, idItem? }]  (idItem = línea de la propuesta, #4435)  suministros de clase servicio, sin precios, en orden. Se
 --     admite el mismo suministro varias veces (otro alcance = otro concepto). Sin alcance, se toma el del concepto
 --     guardado (idOsConcepto) o, por orden de aparición, el del ítem de la propuesta / concepto anterior del mismo suministro.
 --   p_equipos: [{ idEquipo, conceptosIdx: [posición 0..n-1 en p_conceptos] }]  o, compatible, { idEquipo,
@@ -198,15 +198,16 @@ proc: BEGIN
     -- Conceptos: uno por posición (se admite el mismo suministro varias veces). k = aparición del suministro en la lista.
     DROP TEMPORARY TABLE IF EXISTS tmp_os_g_conc;
     CREATE TEMPORARY TABLE tmp_os_g_conc (pos INT PRIMARY KEY, id_suministro BIGINT, alcance VARCHAR(100), id_os_concepto BIGINT,
-                                          k INT) DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
+                                          k INT, id_item BIGINT NULL) DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
     INSERT INTO tmp_os_g_conc
     SELECT j.pos, j.id, NULLIF(TRIM(LEFT(j.alcance, 100)), ''), j.id_oc,
-           ROW_NUMBER() OVER (PARTITION BY j.id ORDER BY j.pos)
+           ROW_NUMBER() OVER (PARTITION BY j.id ORDER BY j.pos), NULLIF(j.id_item, 0)
     FROM JSON_TABLE(IFNULL(p_conceptos, JSON_ARRAY()), '$[*]'
                     COLUMNS (pos FOR ORDINALITY,
                              id      BIGINT        PATH '$.idSuministro',
                              alcance VARCHAR(200)  PATH '$.alcance',
-                             id_oc   BIGINT        PATH '$.idOsConcepto')) j
+                             id_oc   BIGINT        PATH '$.idOsConcepto',
+                             id_item BIGINT        PATH '$.idItem')) j
     WHERE j.id IS NOT NULL;
 
     -- idOsConcepto que no es de esta orden: se trata como concepto nuevo
@@ -360,11 +361,12 @@ proc: BEGIN
         oc.eliminado_por  = IF(t.pos IS NULL, p_id_usuario, oc.eliminado_por),
         oc.orden          = IFNULL(t.pos, oc.orden),
         oc.alcance        = IF(t.pos IS NULL, oc.alcance, t.alcance),
+        oc.id_item        = IF(t.pos IS NULL, oc.id_item, IFNULL(t.id_item, oc.id_item)),
         oc.modificado_por = p_id_usuario
     WHERE oc.id_os = v_id_os AND oc.eliminado_en IS NULL;
 
-    INSERT INTO os_concepto (id_os, id_suministro, codigo, descripcion, alcance, orden, creado_por)
-    SELECT v_id_os, s.id_suministro, s.codigo, LEFT(s.descripcion, 300), t.alcance, t.pos, p_id_usuario
+    INSERT INTO os_concepto (id_os, id_suministro, id_item, codigo, descripcion, alcance, orden, creado_por)
+    SELECT v_id_os, s.id_suministro, t.id_item, s.codigo, LEFT(s.descripcion, 300), t.alcance, t.pos, p_id_usuario
     FROM tmp_os_g_conc t
     JOIN suministros s ON s.id_suministro = t.id_suministro
     WHERE t.id_os_concepto IS NULL

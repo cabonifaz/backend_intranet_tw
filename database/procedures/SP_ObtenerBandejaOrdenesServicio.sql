@@ -115,6 +115,7 @@ BEGIN
         SELECT t.*,
                p.numero                                                           AS numero_propuesta,
                p.version                                                          AS version_propuesta,
+               p.codigo_formateado                                                AS codigo_formateado_propuesta,
                r.id_requerimiento                                                 AS id_requerimiento,
                r.numero                                                           AS numero_requerimiento,
                NULLIF(TRIM(CONCAT(IFNULL(u.nombre, ''), ' ', IFNULL(u.apellido, ''))), '') AS responsable
@@ -169,7 +170,7 @@ BEGIN
             END                                                                          AS estado_label,
             t.fecha_emision, t.emitida_registrada,
             t.id_cliente, t.razon_social, t.ruc,
-            t.id_propuesta, t.numero_propuesta, t.version_propuesta,
+            t.id_propuesta, t.numero_propuesta, t.version_propuesta, t.codigo_formateado_propuesta,
             t.id_requerimiento, t.numero_requerimiento,
             t.id_expediente,
             t.id_responsable, t.responsable,

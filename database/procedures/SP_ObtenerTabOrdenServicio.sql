@@ -44,7 +44,7 @@ proc: BEGIN
     SELECT 2 AS IdTipoMensaje, 'Éxito.' AS Mensaje;
 
     IF p_tab = 'propuesta' THEN
-        SELECT p.id_propuesta, p.numero, p.version, p.estado,
+        SELECT p.id_propuesta, p.numero, p.version, p.codigo_formateado, p.estado,
                COALESCE(NULLIF(TRIM(IF(p.tipo_servicio REGEXP '^[0-9]+$',
                                        (SELECT ts.String1 FROM tabla_maestra ts WHERE ts.IdMaestro = 3 AND ts.IdEmpresa = 1
                                           AND ts.Num1 = CAST(p.tipo_servicio AS UNSIGNED) LIMIT 1), p.tipo_servicio)), ''),
@@ -103,7 +103,7 @@ proc: BEGIN
         ORDER BY IFNULL(oe.orden, oe.id), oe.id;
 
     ELSEIF p_tab = 'conceptos' THEN
-        SELECT oc.id AS id_os_concepto, oc.orden, oc.id_suministro, oc.codigo, oc.descripcion, oc.alcance,
+        SELECT oc.id AS id_os_concepto, oc.id_item, oc.orden, oc.id_suministro, oc.codigo, oc.descripcion, oc.alcance,
                EXISTS (SELECT 1 FROM propuesta_item pi WHERE pi.id_propuesta = v_id_prop AND pi.id_catalogo_item = oc.id_suministro
                          AND pi.eliminado_en IS NULL AND IFNULL(pi.es_espaciado, 0) = 0) AS de_la_propuesta,
                (SELECT GROUP_CONCAT(ec.codigo_tw ORDER BY IFNULL(oe.orden, oe.id) SEPARATOR ',')

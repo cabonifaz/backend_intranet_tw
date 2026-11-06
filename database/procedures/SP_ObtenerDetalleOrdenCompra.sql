@@ -86,7 +86,7 @@ proc: BEGIN
     DROP TEMPORARY TABLE IF EXISTS tmp_oc;
 
     -- 3. Propuestas vinculadas
-    SELECT op.id_propuesta, p.numero, p.version, p.estado AS estado_propuesta,
+    SELECT op.id_propuesta, p.numero, p.version, p.codigo_formateado, p.estado AS estado_propuesta,
            (p.estado NOT IN ('anulado', 'revocada'))                                                      AS aceptada,
            p.total AS monto_propuesta, op.monto_asignado, op.monto_cubierto, p.id_moneda AS id_moneda_propuesta,
            (SELECT MAX(m.String2) FROM tabla_maestra m WHERE m.IdMaestro = 1 AND m.IdEmpresa = 1 AND m.Num1 = p.id_moneda) AS moneda_simbolo_propuesta,

@@ -158,6 +158,7 @@ public class ExpedienteRepositorio(CadenaConexionBd conexion)
                     IdPropuesta        = EnteroLargoNulo(x, "id_propuesta"),
                     NumeroPropuesta    = Texto(x, "numero_propuesta"),
                     VersionPropuesta   = EntNulo(x, "version_propuesta"),
+                    CodigoFormateadoPropuesta = TextoSiExiste(x, "codigo_formateado_propuesta"),
                     EstadoPropuesta    = Texto(x, "estado_propuesta"),
                     PropuestasOtras    = Ent(x, "propuestas_otras"),
                     IdCliente          = EnteroLargoNulo(x, "id_cliente"),
@@ -236,6 +237,7 @@ public class ExpedienteRepositorio(CadenaConexionBd conexion)
                     IdPropuesta          = EnteroLargoNulo(r, "id_propuesta"),
                     NumeroPropuesta      = Texto(r, "numero_propuesta"),
                     VersionPropuesta     = EntNulo(r, "version_propuesta"),
+                    CodigoFormateadoPropuesta = TextoSiExiste(r, "codigo_formateado_propuesta"),
                     EstadoPropuesta      = Texto(r, "estado_propuesta"),
                     TipoPropuesta        = Texto(r, "tipo_servicio"),
                     MontoTotal           = DecimalNulo(r, "monto_total"),
@@ -347,12 +349,13 @@ public class ExpedienteRepositorio(CadenaConexionBd conexion)
                 var versiones = await LeerListaAsync(r, x => new VersionPropuestaExpedienteDto(
                     EnteroLargo(x, "id_propuesta"), Texto(x, "numero") ?? "", Ent(x, "version"), Texto(x, "estado") ?? "",
                     DecimalNulo(x, "total"), Texto(x, "simbolo_moneda"), Fh(x, "fecha_creacion"), Bool(x, "es_ultima"),
-                    Bool(x, "es_activa"), Bool(x, "seleccionada")), ct);
+                    Bool(x, "es_activa"), Bool(x, "seleccionada")) { CodigoFormateado = TextoSiExiste(x, "codigo_formateado") }, ct);
                 var detalle = await LeerUnoAsync(r, x => new DetallePropuestaExpedienteDto
                 {
                     IdPropuesta        = EnteroLargo(x, "id_propuesta"),
                     Numero             = Texto(x, "numero") ?? "",
                     Version            = Ent(x, "version"),
+                    CodigoFormateado   = TextoSiExiste(x, "codigo_formateado"),
                     Estado             = Texto(x, "estado") ?? "",
                     TipoPropuesta      = Texto(x, "tipo_servicio"),
                     Referencia         = Texto(x, "referencia"),
@@ -665,6 +668,7 @@ public class ExpedienteRepositorio(CadenaConexionBd conexion)
                     IdPropuesta            = EnteroLargoNulo(x, "id_propuesta"),
                     NumeroPropuesta        = Texto(x, "numero_propuesta"),
                     VersionPropuesta       = EnteroNulo(x, "version_propuesta"),
+                    CodigoFormateadoPropuesta = TextoSiExiste(x, "codigo_formateado_propuesta"),
                     IdRequerimiento        = EnteroLargoNulo(x, "id_requerimiento"),
                     NumeroRq               = Texto(x, "numero_rq"),
                     RazonSocial            = Texto(x, "razon_social"),

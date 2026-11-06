@@ -70,7 +70,7 @@ BEGIN
     DROP TEMPORARY TABLE IF EXISTS tmp_seg_base;
     CREATE TEMPORARY TABLE tmp_seg_base AS
     SELECT
-        p.id_propuesta, p.numero, p.version, p.id_requerimiento, p.id_cliente,
+        p.id_propuesta, p.numero, p.version, p.codigo_formateado, p.id_requerimiento, p.id_cliente,
         -- Observaciones 31/10: el contacto es el de la propuesta y, si no tiene, el del RQ
         COALESCE(p.id_contacto, (SELECT rq.id_contacto FROM requerimiento rq
                                   WHERE rq.id_requerimiento = p.id_requerimiento)) AS id_contacto,

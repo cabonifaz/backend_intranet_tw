@@ -39,7 +39,7 @@ proc: BEGIN
 
     DROP TEMPORARY TABLE IF EXISTS tmp_exp_pv;
     CREATE TEMPORARY TABLE tmp_exp_pv AS
-    SELECT p.id_propuesta, p.numero, p.version, p.estado, p.total, p.id_moneda, p.fecha_creacion,
+    SELECT p.id_propuesta, p.numero, p.version, p.codigo_formateado, p.estado, p.total, p.id_moneda, p.fecha_creacion,
            (p.version = (SELECT MAX(p2.version) FROM propuesta_comercial p2 WHERE p2.numero = p.numero AND p2.eliminado_en IS NULL)) AS es_ultima
     FROM propuesta_comercial p
     WHERE p.eliminado_en IS NULL AND p.id_requerimiento = v_id_rq;
@@ -66,7 +66,7 @@ proc: BEGIN
     SELECT 2 AS IdTipoMensaje, 'Éxito.' AS Mensaje;
 
     -- 2. Versiones (pills)
-    SELECT v.id_propuesta, v.numero, v.version, v.estado, v.total, m.String2 AS simbolo_moneda, v.fecha_creacion,
+    SELECT v.id_propuesta, v.numero, v.version, v.codigo_formateado, v.estado, v.total, m.String2 AS simbolo_moneda, v.fecha_creacion,
            v.es_ultima, (v.numero = (SELECT p.numero FROM propuesta_comercial p WHERE p.id_propuesta = v_activa)) AS es_activa,
            (v.id_propuesta = v_id_prop) AS seleccionada
     FROM tmp_exp_pv v
@@ -76,7 +76,7 @@ proc: BEGIN
     DROP TEMPORARY TABLE IF EXISTS tmp_exp_pv;
 
     -- 3. Detalle de la versión elegida
-    SELECT p.id_propuesta, p.numero, p.version, p.estado, p.tipo_servicio, p.referencia,
+    SELECT p.id_propuesta, p.numero, p.version, p.codigo_formateado, p.estado, p.tipo_servicio, p.referencia,
            COALESCE(p.id_responsable, p.id_creador) AS id_responsable, CONCAT(u.nombre, ' ', u.apellido) AS responsable,
            p.id_moneda, m.String1 AS moneda, m.String2 AS simbolo_moneda,
            p.subtotal, IFNULL(p.descuento_monto, 0) AS descuento_monto, IFNULL(p.descuento_pct, 0) AS descuento_pct,

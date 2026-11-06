@@ -343,6 +343,7 @@ proc: BEGIN
            CONCAT('Versión v', v_version, ' de ', v_numero, ' creada en borrador.') AS Mensaje;
 
     SELECT v_id_nueva AS id_propuesta, v_numero AS numero, v_version AS version,
+           (SELECT pc.codigo_formateado FROM propuesta_comercial pc WHERE pc.id_propuesta = v_id_nueva) AS codigo_formateado,
            v_anula_origen AS version_anterior_anulada;
 END$$
 
