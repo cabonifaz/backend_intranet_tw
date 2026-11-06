@@ -4,7 +4,8 @@
 --   - Área de la OS: la de la solicitud (area_destino) o, si no hay solicitud, la de la RQ
 --     (requerimiento.id_area → area_servicio_rq).
 --   - Pueden resolver: el encargado de ESA área (cargo jefe_* del área: Jefe de Servicio Técnico
---     o Jefe de Metrología; si la RQ no tiene área, cualquiera de los dos), el Jefe/Coordinador
+--     o Jefe de Metrología; y también el SUPERVISOR del área Metrología, que es su jefe en la app móvil;
+--     si la RQ no tiene área, cualquiera de los dos), el Jefe/Coordinador
 --     de Operaciones (supervisión general) o un administrador. El encargado de la otra área NO.
 --   - Si hay una solicitud pendiente del técnico, la resuelve; si no, registra el visto bueno igual.
 --   - Solo mientras la OS siga programada/reprogramada.
@@ -42,7 +43,8 @@ proc: BEGIN
 
     -- Quién es: encargado de un área (v_area_jefe) o supervisión general (v_general)
     SELECT TRIM(CONCAT(IFNULL(u.nombre, ''), ' ', IFNULL(u.apellido, ''))),
-           IF(c.String2 LIKE 'jefe\_%' AND c.String3 IN ('servicio_tecnico', 'metrologia'), c.String3, NULL),
+           COALESCE(IF(c.String2 LIKE 'jefe\_%' AND c.String3 IN ('servicio_tecnico', 'metrologia'), c.String3, NULL),
+                    IF(u.rol_sistema = 'supervisor' AND u.area = 'metrologia', 'metrologia', NULL)),
            (u.cargo IN ('jefe_operaciones', 'coordinador_operaciones') OR u.rol_sistema IN ('administrador', 'admin'))
     INTO   v_jefe, v_area_jefe, v_general
     FROM   usuario u

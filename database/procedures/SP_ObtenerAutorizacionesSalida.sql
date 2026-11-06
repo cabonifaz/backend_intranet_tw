@@ -2,7 +2,7 @@
 -- SP_ObtenerAutorizacionesSalida  (Intranet · App Mobile HU-04)
 -- Bandeja de solicitudes de visto bueno de salida de los técnicos.
 --   p_estado: pendiente | aprobada | rechazada | (vacío = todas)
---   Encargado de área (Jefe de Servicio Técnico / Jefe de Metrología): solo las de SU área
+--   Encargado de área (Jefe de Servicio Técnico / Jefe de Metrología, o el supervisor del área Metrología): solo las de SU área
 --   (y las que no tienen área en la RQ). Jefe/Coordinador de Operaciones y administradores: todas.
 -- id_tecnico (última columna): quién la pidió; la app móvil del Jefe lo usa para mostrar el checklist de ese técnico.
 -- Solo lectura.
@@ -22,7 +22,8 @@ proc: BEGIN
     DECLARE v_existe    TINYINT DEFAULT 0;
 
     SELECT 1,
-           IF(c.String2 LIKE 'jefe\_%' AND c.String3 IN ('servicio_tecnico', 'metrologia'), c.String3, NULL),
+           COALESCE(IF(c.String2 LIKE 'jefe\_%' AND c.String3 IN ('servicio_tecnico', 'metrologia'), c.String3, NULL),
+                    IF(u.rol_sistema = 'supervisor' AND u.area = 'metrologia', 'metrologia', NULL)),
            (u.cargo IN ('jefe_operaciones', 'coordinador_operaciones') OR u.rol_sistema IN ('administrador', 'admin'))
     INTO   v_existe, v_area_jefe, v_general
     FROM   usuario u

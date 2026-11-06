@@ -1,9 +1,10 @@
 -- ============================================================
 -- SP_ObtenerMenuJefaturaMovil  (App Mobile HU-28 — Menú de Jefatura)
 -- Resumen del día del ÁREA del Jefe de Metrología que inició sesión.
---   El menú depende del cargo (CARGO_USUARIO: cargo "jefe_*" cuya área es metrologia). El Jefe de Servicio Técnico usa el menú de
---   campo (no tiene menú de Jefatura). Quien no es jefe de una de las áreas con Jefatura recibe un mensaje y la app le muestra el
---   menú de campo. Para sumar otra área con Jefatura: agregarla a la lista del IN (y a modulosJefatura en la app).
+--   El menú depende del ROL y el ÁREA: el supervisor (rol_sistema = 'supervisor') del área Metrología es el Jefe de Metrología.
+--   El Jefe de Servicio Técnico usa el menú de campo (no tiene menú de Jefatura). Quien no es jefe de una de las áreas con
+--   Jefatura recibe un mensaje y la app le muestra el menú de campo. Para sumar otra área con Jefatura: agregar su condición
+--   aquí (y en utilidades/perfil.ts y modulosJefatura de la app).
 --   Toda la información se filtra por el área del jefe según la RQ de cada servicio:
 --     orden_servicio → expediente_digital → requerimiento.id_area → area_servicio_rq.area_usuario.
 -- Resultados:
@@ -29,11 +30,11 @@ proc: BEGIN
     DECLARE v_sede VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
     DECLARE v_hoy  DATE;
 
-    SELECT IF(c.String2 LIKE 'jefe\_%' AND c.String3 IN ('metrologia'), c.String3, NULL),
+    -- Jefe de Metrología = SUPERVISOR del área Metrología (no depende de cómo se escriba el cargo, que es texto libre).
+    SELECT IF(u.rol_sistema = 'supervisor' AND u.area = 'metrologia', 'metrologia', NULL),
            s.String1
     INTO   v_area, v_sede
     FROM   usuario u
-    LEFT JOIN tabla_maestra c ON c.IdMaestro = 80 AND c.IdEmpresa = 1 AND c.String2 = u.cargo
     LEFT JOIN tabla_maestra s ON s.IdMaestro = 69 AND s.IdEmpresa = 1 AND s.String2 = u.sede_operativa
     WHERE  u.id_usuario = p_id_usuario AND u.eliminado_en IS NULL AND u.estado = 'activo'
     LIMIT 1;
