@@ -4,7 +4,8 @@
 -- Todas las horas son de Lima (UTC-5).
 --   p_eta_original   : hora programada del servicio (fecha_ejecucion + hora_inicio). Es la ETA de llegada original.
 --   p_minutos_llegada: suma de las demoras de tipo "llegada" ya registradas. ETA vigente = ETA original + estos minutos.
---   p_llegada_en     : cuándo el técnico registró su llegada a la planta (evento LLEGADA, HU-06); NULL si aún no la registró.
+--   p_llegada_en     : cuándo el técnico registró su llegada a la planta (evento LLEGADA, HU-06) en este viaje (posterior a la última
+--                      SALIDA_BASE); NULL si aún no la registró.
 --   p_inicio_vigente : hora de inicio del trabajo prevista tras la última demora de tipo "ingreso"; NULL si no hay.
 -- Solo lectura.
 -- ============================================================
@@ -36,7 +37,10 @@ BEGIN
     SELECT MAX(CONVERT_TZ(e.timestamp_utc, '+00:00', '-05:00')) INTO p_llegada_en
     FROM   evento_campo e
     JOIN   tabla_maestra m ON m.IdMaestro = 29 AND m.IdEmpresa = 1 AND m.Num1 = e.id_tipo_evento AND m.String2 = 'LLEGADA'
-    WHERE  e.id_os = p_id_os AND e.eliminado_en IS NULL;
+    WHERE  e.id_os = p_id_os AND e.eliminado_en IS NULL
+      AND  e.timestamp_utc >= IFNULL((SELECT MAX(s.timestamp_utc) FROM evento_campo s
+                                      JOIN tabla_maestra ms ON ms.IdMaestro = 29 AND ms.IdEmpresa = 1 AND ms.Num1 = s.id_tipo_evento AND ms.String2 = 'SALIDA_BASE'
+                                      WHERE s.id_os = p_id_os AND s.eliminado_en IS NULL), '1000-01-01');
 
     SELECT d.eta_recalculada INTO p_inicio_vigente
     FROM   demora_registro d

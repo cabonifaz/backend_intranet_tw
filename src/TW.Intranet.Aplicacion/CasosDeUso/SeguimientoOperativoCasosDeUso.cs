@@ -133,6 +133,10 @@ public class RegistrarUbicacionMovilCasoDeUso(ISeguimientoOperativoRepositorio r
             return Task.FromResult(new RespuestaDto<UbicacionRegistradaDto>(1, "La ubicación no es válida."));
         if (d.PrecisionMetros is < 0m or > 5000m)
             return Task.FromResult(new RespuestaDto<UbicacionRegistradaDto>(1, "La precisión de la ubicación no es válida."));
-        return repositorio.RegistrarUbicacionAsync(idUsuario, idOs, Math.Round(lat, 7), Math.Round(lon, 7), d.PrecisionMetros is { } p ? Math.Round(p, 1) : null, ct);
+        // Velocidad y altitud son opcionales: fuera de rango se descartan (no rechazan la posición)
+        decimal? velocidad = d.VelocidadKmh is >= 0m and <= 400m ? Math.Round(d.VelocidadKmh.Value, 1) : null;
+        decimal? altitud   = d.AltitudM is >= -500m and <= 9000m ? Math.Round(d.AltitudM.Value, 1) : null;
+        return repositorio.RegistrarUbicacionAsync(idUsuario, idOs, Math.Round(lat, 7), Math.Round(lon, 7), d.PrecisionMetros is { } p ? Math.Round(p, 1) : null,
+            velocidad, altitud, ct);
     }
 }

@@ -11,5 +11,5 @@ public interface ISeguimientoOperativoRepositorio
     Task<RespuestaDto<IncidenciasSeguimientoDto>>    ObtenerIncidenciasAsync(ConsultaSeguimientoNormalizada q, long idUsuario, CancellationToken ct);
     Task<RespuestaDto<OpcionesFiltrosSeguimientoDto>> ObtenerFiltrosAsync(long idUsuario, CancellationToken ct);
     /// <summary>App móvil: registra la posición GPS del técnico (única escritura del paquete; la bandeja sigue siendo de solo lectura).</summary>
-    Task<RespuestaDto<UbicacionRegistradaDto>>       RegistrarUbicacionAsync(long idUsuario, long idOs, decimal latitud, decimal longitud, decimal? precisionMetros, CancellationToken ct);
+    Task<RespuestaDto<UbicacionRegistradaDto>>       RegistrarUbicacionAsync(long idUsuario, long idOs, decimal latitud, decimal longitud, decimal? precisionMetros, decimal? velocidadKmh, decimal? altitudM, CancellationToken ct);
 }

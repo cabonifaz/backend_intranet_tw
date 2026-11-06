@@ -165,7 +165,8 @@ public class SeguimientoOperativoRepositorio(CadenaConexionBd conexion) : Reposi
                 while (await r.ReadAsync(ct))
                     filas.Add(new IncidenciaSeguimientoDto(Texto(r, "Clave") ?? "", Texto(r, "Hora") ?? "", EnteroLargo(r, "IdUsuario"), Texto(r, "Tecnico") ?? "",
                         Texto(r, "Iniciales") ?? "", EnteroLargo(r, "IdOs"), Texto(r, "Numero") ?? "", Texto(r, "Cliente") ?? "", Texto(r, "TipoCodigo") ?? "",
-                        Texto(r, "Tipo") ?? "", Texto(r, "Descripcion"), EnteroNulo(r, "DuracionMin"), Texto(r, "Impacto") ?? "retrasa", Texto(r, "Origen") ?? "tecnico"));
+                        Texto(r, "Tipo") ?? "", Texto(r, "Descripcion"), EnteroNulo(r, "DuracionMin"), Texto(r, "Impacto") ?? "retrasa", Texto(r, "Origen") ?? "tecnico",
+                        Texto(r, "Momento")));
 
                 return new RespuestaDto<IncidenciasSeguimientoDto>(2, mensaje, new IncidenciasSeguimientoDto(tarjetas, filas));
             },
@@ -197,7 +198,7 @@ public class SeguimientoOperativoRepositorio(CadenaConexionBd conexion) : Reposi
             ct);
 
     public Task<RespuestaDto<UbicacionRegistradaDto>> RegistrarUbicacionAsync(
-        long idUsuario, long idOs, decimal latitud, decimal longitud, decimal? precisionMetros, CancellationToken ct)
+        long idUsuario, long idOs, decimal latitud, decimal longitud, decimal? precisionMetros, decimal? velocidadKmh, decimal? altitudM, CancellationToken ct)
         => EjecutarAsync("SP_RegistrarUbicacionMovil",
             p =>
             {
@@ -206,6 +207,8 @@ public class SeguimientoOperativoRepositorio(CadenaConexionBd conexion) : Reposi
                 p.AddWithValue("p_latitud",    latitud);
                 p.AddWithValue("p_longitud",   longitud);
                 p.AddWithValue("p_precision",  Valor(precisionMetros));
+                p.AddWithValue("p_velocidad",  Valor(velocidadKmh));
+                p.AddWithValue("p_altitud",    Valor(altitudM));
             },
             async (r, mensaje) =>
             {

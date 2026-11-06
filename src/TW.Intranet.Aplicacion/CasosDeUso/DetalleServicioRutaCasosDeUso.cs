@@ -173,9 +173,9 @@ public class ExportarIncidenciasServicioRutaCasoDeUso(IDetalleServicioRutaReposi
             return new RespuestaDto<ArchivoCsvDto>(r.IdTipoMensaje, r.Mensaje);
 
         var sb = new StringBuilder();
-        sb.Append("Hora,Tipo,Descripción,Duración (min),Impacto,Origen,Registrado por,Evidencia\r\n");
+        sb.Append("Hora,Tipo,Momento,Descripción,Duración (min),Impacto,Origen,Registrado por,Evidencia\r\n");
         foreach (var f in r.Datos.Filas)
-            sb.Append(string.Join(',', Celda(f.Hora), Celda(f.Tipo), Celda(f.Descripcion), Celda(f.DuracionMin?.ToString(CultureInfo.InvariantCulture)),
+            sb.Append(string.Join(',', Celda(f.Hora), Celda(f.Tipo), Celda(f.Momento), Celda(f.Descripcion), Celda(f.DuracionMin?.ToString(CultureInfo.InvariantCulture)),
                 Celda(f.Impacto == "detiene" ? "Detiene" : "Retrasa"), Celda(f.Origen == "asistente" ? "Asistente" : "Técnico"), Celda(f.Registrador),
                 Celda(f.TieneEvidencia ? "Sí" : "No"))).Append("\r\n");
         var bytes = new UTF8Encoding(true).GetPreamble().Concat(Encoding.UTF8.GetBytes(sb.ToString())).ToArray();

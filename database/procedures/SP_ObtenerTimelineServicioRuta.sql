@@ -72,7 +72,9 @@ proc: BEGIN
     SELECT DATE_SUB(v_ahora, INTERVAL IFNULL(a.minutos, 0) MINUTE), 'alerta', 'sistema', a.titulo, a.detalle, CONCAT('a', a.tipo)
     FROM tmp_sg_alerta a WHERE a.id_os = p_id_os;
     INSERT INTO tmp_dt_ev (hora, categoria, origen, titulo, detalle, clave, badge, registrador)
-    SELECT i.fecha, IF(i.origen = 'asistente', 'asistente', 'incidencia'), i.origen, i.tipo, i.descripcion, i.clave,
+    SELECT i.fecha, IF(i.origen = 'asistente', 'asistente', 'incidencia'), i.origen,
+           LEFT(CONCAT(CASE i.fase WHEN 'llegada' THEN 'Demora en ruta: ' WHEN 'ingreso' THEN 'Demora en ingreso a planta: ' ELSE '' END, i.tipo), 120),
+           i.descripcion, i.clave,
            IF(i.origen = 'asistente', '[DEMORA — REGISTRO DEL ASISTENTE]', NULL),
            (SELECT TRIM(CONCAT(ua.nombre, ' ', ua.apellido)) FROM registro_asistente ra JOIN usuario ua ON ua.id_usuario = ra.id_usuario
             WHERE i.clave = CONCAT('a', ra.id_registro))

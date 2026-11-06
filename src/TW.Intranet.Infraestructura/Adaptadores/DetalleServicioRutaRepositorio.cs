@@ -112,7 +112,14 @@ public class DetalleServicioRutaRepositorio(CadenaConexionBd conexion) : Reposit
                 var crono = new List<HitoGpsDto>();
                 while (await r.ReadAsync(ct))
                     crono.Add(new HitoGpsDto(Texto(r, "Hito") ?? "", Texto(r, "Hora")));
-                return new RespuestaDto<MapaServicioRutaDto>(2, mensaje, new MapaServicioRutaDto(panel, ruta, crono));
+
+                // 5. Demoras de la app con el GPS del técnico (en ruta o en el ingreso a planta)
+                await r.NextResultAsync(ct);
+                var demoras = new List<DemoraMapaDto>();
+                while (await r.ReadAsync(ct))
+                    demoras.Add(new DemoraMapaDto(DecimalNulo(r, "Latitud") ?? 0m, DecimalNulo(r, "Longitud") ?? 0m, Texto(r, "Hora") ?? "",
+                        Texto(r, "Fase") ?? "llegada", Texto(r, "Motivo") ?? "Demora", Entero(r, "DuracionMin")));
+                return new RespuestaDto<MapaServicioRutaDto>(2, mensaje, new MapaServicioRutaDto(panel, ruta, crono, demoras));
             },
             ct);
 
@@ -148,7 +155,7 @@ public class DetalleServicioRutaRepositorio(CadenaConexionBd conexion) : Reposit
                 while (await r.ReadAsync(ct))
                     filas.Add(new IncidenciaServicioRutaDto(Texto(r, "Clave") ?? "", Texto(r, "Hora") ?? "", Texto(r, "TipoCodigo") ?? "", Texto(r, "Tipo") ?? "",
                         Texto(r, "Descripcion"), EnteroNulo(r, "DuracionMin"), Texto(r, "Impacto") ?? "retrasa", Texto(r, "Origen") ?? "tecnico", Texto(r, "Registrador"),
-                        Texto(r, "Evidencia"), Booleano(r, "TieneEvidencia")));
+                        Texto(r, "Evidencia"), Booleano(r, "TieneEvidencia"), Texto(r, "Momento"), DecimalNulo(r, "Latitud"), DecimalNulo(r, "Longitud")));
                 return new RespuestaDto<IncidenciasServicioRutaDto>(2, mensaje, new IncidenciasServicioRutaDto(kpis, filas));
             },
             ct);

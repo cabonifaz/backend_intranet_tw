@@ -1,7 +1,8 @@
 -- HU-52 (Sprint 5) Pestaña "Mapa GPS": posición actual del técnico, ruta recorrida hoy, pin del cliente con radio de proximidad y panel GPS. SOLO LECTURA.
 -- Conexión: sin_senal (sin posición o más del umbral SEG_PERDIDA_CONTACTO_MIN) | gps_parado (mismo punto por SEG_GPS_PARADO_MIN o más) | gps_activo.
 -- Velocidad, altitud, satélites y latencia salen de ubicacion_tecnico (migración 91; los envía la app; NULL si no los envía).
--- Resultados: 1 mensaje · 2 panel (1 fila) · 3 ruta (puntos del día, máx. 300) · 4 cronograma GPS (salida, pre-llegada, llegada).
+-- Resultados: 1 mensaje · 2 panel (1 fila) · 3 ruta (puntos del día, máx. 300) · 4 cronograma GPS (salida, pre-llegada, llegada)
+--   · 5 demoras de la app con su GPS (Fase: llegada = en ruta, ingreso = ingreso a planta).
 DROP PROCEDURE IF EXISTS SP_ObtenerMapaServicioRuta;
 
 DELIMITER $$
@@ -75,6 +76,14 @@ proc: BEGIN
         UNION ALL SELECT 'llegada', MIN(e.timestamp_utc), 3 FROM evento_campo e JOIN tabla_maestra m ON m.Descripcion = 'TIPO_EVENTO_CAMPO' AND m.IdEmpresa = 1 AND m.Num1 = e.id_tipo_evento
           WHERE e.id_os = p_id_os AND e.eliminado_en IS NULL AND e.timestamp_utc >= v_ini_utc AND m.String2 = 'LLEGADA'
     ) c ORDER BY c.n;
+
+    SELECT d.latitud AS Latitud, d.longitud AS Longitud, DATE_FORMAT(d.fecha_registro, '%H:%i') AS Hora, d.tipo AS Fase,
+           COALESCE(m.String1, 'Demora') AS Motivo, d.duracion_minutos AS DuracionMin
+    FROM demora_registro d
+    LEFT JOIN tabla_maestra m ON m.Descripcion = 'MOTIVO_DEMORA_RUTA' AND m.IdEmpresa = 1 AND m.Num1 = d.id_motivo
+    WHERE d.id_os = p_id_os AND d.eliminado_en IS NULL AND d.latitud IS NOT NULL AND d.longitud IS NOT NULL
+      AND d.fecha_registro >= CONVERT_TZ(v_ini_utc, '+00:00', '-05:00')
+    ORDER BY d.fecha_registro, d.id_demora;
 
     CALL SP_LimpiarSeguimientoOperativo();
 END$$

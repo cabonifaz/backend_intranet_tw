@@ -70,7 +70,7 @@ public record TarjetasIncidenciasDto(int Retrasan, int Detienen, int Registradas
 
 public record IncidenciaSeguimientoDto(
     string Clave, string Hora, long IdUsuario, string Tecnico, string Iniciales, long IdOs, string Numero, string Cliente,
-    string TipoCodigo, string Tipo, string? Descripcion, int? DuracionMin, string Impacto, string Origen);
+    string TipoCodigo, string Tipo, string? Descripcion, int? DuracionMin, string Impacto, string Origen, string? Momento = null);
 
 /// <summary>Pestaña 4 Incidencias del Día (orden cronológico).</summary>
 public record IncidenciasSeguimientoDto(TarjetasIncidenciasDto Tarjetas, IReadOnlyList<IncidenciaSeguimientoDto> Filas);
@@ -89,6 +89,9 @@ public class RegistrarUbicacionDto
     public decimal? Latitud         { get; set; }
     public decimal? Longitud        { get; set; }
     public decimal? PrecisionMetros { get; set; }
+    /// <summary>Opcionales (los envía la app para el panel "Estado de la señal GPS"): velocidad en km/h y altitud en metros.</summary>
+    public decimal? VelocidadKmh    { get; set; }
+    public decimal? AltitudM        { get; set; }
 }
 
 public record UbicacionRegistradaDto(bool Guardada);

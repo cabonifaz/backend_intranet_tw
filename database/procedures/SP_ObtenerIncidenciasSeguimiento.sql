@@ -1,6 +1,7 @@
 -- HU-51 (Sprint 5) Pestaña 4 "Incidencias del Día": demoras e incidencias de hoy en orden cronológico, de todos los técnicos, con sus tarjetas resumen.
 -- Origen: Técnico (lo registró el propio técnico desde la app) o Asistente (registro del Asistente de Seguimiento, HU-53). Impacto: Retrasa o Detiene.
 -- Filtros: Técnico, Cliente, Zona/Sede, buscador, Tipo (código del catálogo) e Impacto. Las demoras sin impacto registrado cuentan como "Retrasa".
+-- Momento (demoras de la app): "En ruta (llegar a planta)" o "Ingreso a planta".
 -- Resultados: 1 mensaje, 2 tarjetas, 3 filas.
 DROP PROCEDURE IF EXISTS SP_ObtenerIncidenciasSeguimiento;
 
@@ -59,7 +60,8 @@ proc: BEGIN
     FROM tmp_sg_inc;
     SELECT i.clave AS Clave, DATE_FORMAT(i.fecha, '%H:%i') AS Hora, i.id_usuario AS IdUsuario, i.tecnico AS Tecnico, i.iniciales AS Iniciales,
            i.id_os AS IdOs, i.numero AS Numero, i.cliente AS Cliente, i.tipo_codigo AS TipoCodigo, i.tipo AS Tipo, i.descripcion AS Descripcion,
-           i.duracion_min AS DuracionMin, i.impacto AS Impacto, i.origen AS Origen
+           i.duracion_min AS DuracionMin, i.impacto AS Impacto, i.origen AS Origen,
+           CASE i.fase WHEN 'llegada' THEN 'En ruta (llegar a planta)' WHEN 'ingreso' THEN 'Ingreso a planta' END AS Momento
     FROM tmp_sg_inc i
     ORDER BY i.fecha, i.clave
     LIMIT 500;

@@ -41,7 +41,10 @@ public record PanelGpsRutaDto(
     int MinutosEnPunto, int? PrecisionM, decimal? VelocidadKmh, decimal? AltitudM, int? Satelites, int? LatenciaMs);
 public record PuntoRutaDto(decimal Latitud, decimal Longitud, string Hora);
 public record HitoGpsDto(string Hito, string? Hora);
-public record MapaServicioRutaDto(PanelGpsRutaDto Panel, IReadOnlyList<PuntoRutaDto> Ruta, IReadOnlyList<HitoGpsDto> Cronograma);
+/// <summary>Demora registrada desde la app con el GPS del técnico en ese momento. Fase: llegada (en ruta) | ingreso (ingreso a planta).</summary>
+public record DemoraMapaDto(decimal Latitud, decimal Longitud, string Hora, string Fase, string Motivo, int DuracionMin);
+public record MapaServicioRutaDto(PanelGpsRutaDto Panel, IReadOnlyList<PuntoRutaDto> Ruta, IReadOnlyList<HitoGpsDto> Cronograma,
+    IReadOnlyList<DemoraMapaDto>? Demoras = null);
 
 // Timeline
 public record ConteoTimelineDto(int Hitos, int Alertas, int Incidencias, int Asistente, int Total);
@@ -53,7 +56,7 @@ public record TimelineServicioRutaDto(ConteoTimelineDto Conteos, IReadOnlyList<E
 public record KpisIncidenciasRutaDto(int Total, int Retrasan, int Detienen, int PorTecnico, int PorAsistente);
 public record IncidenciaServicioRutaDto(
     string Clave, string Hora, string TipoCodigo, string Tipo, string? Descripcion, int? DuracionMin, string Impacto, string Origen, string? Registrador,
-    string? Evidencia, bool TieneEvidencia);
+    string? Evidencia, bool TieneEvidencia, string? Momento = null, decimal? Latitud = null, decimal? Longitud = null);
 public record IncidenciasServicioRutaDto(KpisIncidenciasRutaDto Kpis, IReadOnlyList<IncidenciaServicioRutaDto> Filas);
 
 // Cierre (HU-54, observacional)

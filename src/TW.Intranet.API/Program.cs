@@ -216,6 +216,11 @@ builder.Services.AddScoped<MarcarNotificacionMovilCasoDeUso>();
 builder.Services.AddScoped<IDemorasMovilRepositorio, DemorasMovilRepositorio>();
 builder.Services.AddScoped<ObtenerDemorasMovilCasoDeUso>();
 builder.Services.AddScoped<RegistrarDemoraMovilCasoDeUso>();
+// App Mobile HU-06 — registro de llegada y Hard Stop
+builder.Services.AddScoped<ILlegadaMovilRepositorio, LlegadaMovilRepositorio>();
+builder.Services.AddScoped<ObtenerLlegadaMovilCasoDeUso>();
+builder.Services.AddScoped<ValidarLlegadaMovilCasoDeUso>();
+builder.Services.AddScoped<RegistrarLlegadaMovilCasoDeUso>();
 // App Mobile HU-28 / HU-31 — menú de Jefatura y centro de aprobaciones
 builder.Services.AddScoped<ObtenerMenuJefaturaMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerAprobacionesMovilCasoDeUso>();
