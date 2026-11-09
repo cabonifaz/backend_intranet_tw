@@ -93,6 +93,7 @@ builder.Services.AddSingleton(configuracionAlmacenamiento);
 builder.Services.AddSingleton<IAlmacenArchivos, AlmacenArchivosLocal>();
 
 // ── AUTENTICACIÓN JWT ─────────────────────────────────────────────────────────
+const string MotivoSesionMovilItem = "motivo_sesion_movil";
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -145,8 +146,15 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                     }
                     var repositorioMovil = context.HttpContext.RequestServices
                         .GetRequiredService<IAutenticacionMovilRepositorio>();
-                    esValido = await repositorioMovil.VerificarSesionAsync(
+                    var verificacion = await repositorioMovil.VerificarSesionAsync(
                         idUsuario, tokenClaim.Value, context.HttpContext.RequestAborted);
+                    esValido = verificacion.IdTipoMensaje == 2;
+                    if (!esValido)
+                        // El 401 lleva el motivo (p. ej. "se inició sesión con tu usuario en otro equipo") para que la app lo muestre.
+                        // Si falló la BD (IdTipoMensaje 3) no se expone su detalle.
+                        context.HttpContext.Items[MotivoSesionMovilItem] = verificacion.IdTipoMensaje == 1 && !string.IsNullOrWhiteSpace(verificacion.Mensaje)
+                            ? verificacion.Mensaje
+                            : "Tu sesión terminó. Vuelve a iniciar sesión.";
                 }
                 else if (TW.Intranet.API.Seguridad.SeguridadAppMovil.EsRutaApp(rutaPedida))
                 {
@@ -164,6 +172,19 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
                 if (!esValido)
                     context.Fail("Sesión invalidada. Por favor inicia sesión nuevamente.");
+            },
+
+            // 401 de un token de la app con sesión cerrada: cuerpo con el sobre estándar y el motivo.
+            // Los demás 401 (intranet, firma inválida, JWT vencido) siguen igual que antes.
+            OnChallenge = async context =>
+            {
+                if (context.HttpContext.Items.TryGetValue(MotivoSesionMovilItem, out var motivo) && motivo is string mensaje)
+                {
+                    context.HandleResponse();
+                    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                    context.Response.Headers.WWWAuthenticate = "Bearer";
+                    await context.Response.WriteAsJsonAsync(new { idTipoMensaje = 1, mensaje });
+                }
             }
         };
     });
@@ -181,12 +202,12 @@ builder.Services.AddScoped<CambiarContrasenaCasoDeUso>();
 builder.Services.AddScoped<ObtenerMisDatosCasoDeUso>();
 
 // ── APP MÓVIL DE CAMPO — acceso con usuario y 1 equipo a la vez (App Mobile HU-01) ──
-// Variables (opcionales): AppMovil__HorasExpiracion (12), AppMovil__ReemplazarSesionAnterior (false).
+// Variables (opcionales): AppMovil__HorasExpiracion (12), AppMovil__ReemplazarSesionAnterior (true).
+//   true (por defecto) = sesión única: el nuevo equipo cierra la sesión del anterior; el primer equipo recibe 401 con el motivo.
 //   false = si el usuario ya tiene sesión en otro equipo, el nuevo ingreso se rechaza.
-//   true  = el nuevo equipo cierra la sesión del anterior.
 builder.Services.AddSingleton(new TW.Intranet.Aplicacion.Dtos.OpcionesSesionMovil(
     HorasExpiracion:          int.TryParse(cfg["AppMovil:HorasExpiracion"], out var horasSesionMovil) ? horasSesionMovil : 12,
-    ReemplazarSesionAnterior: bool.TryParse(cfg["AppMovil:ReemplazarSesionAnterior"], out var reemplazarSesionMovil) && reemplazarSesionMovil));
+    ReemplazarSesionAnterior: !bool.TryParse(cfg["AppMovil:ReemplazarSesionAnterior"], out var reemplazarSesionMovil) || reemplazarSesionMovil));
 // Desarrollo seguro (opcionales): AppMovil__MaxIntentosFallidos (5), AppMovil__MinutosBloqueo (15),
 // AppMovil__IngresosPorMinutoPorIp (10). Solo afectan al ingreso de la app, no al de la intranet.
 var opcionesSeguridadMovil = new TW.Intranet.Aplicacion.Dtos.OpcionesSeguridadMovil(

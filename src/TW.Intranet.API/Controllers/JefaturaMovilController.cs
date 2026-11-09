@@ -5,7 +5,7 @@ using TW.Intranet.Aplicacion.CasosDeUso;
 
 namespace TW.Intranet.API.Controllers;
 
-/// <summary>App Mobile HU-28 — Menú de Jefatura (supervisores y administradores de cualquier área menos Servicio Técnico).</summary>
+/// <summary>App Mobile HU-28 — Menú de Jefatura único (jefes de área: Servicio Técnico, Metrología, Operaciones…; supervisores y administradores con área).</summary>
 [ApiController]
 [Authorize]
 [Route("api/movil/jefatura")]

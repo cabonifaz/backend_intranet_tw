@@ -60,18 +60,14 @@ public class AutenticacionMovilRepositorio(CadenaConexionBd conexion)
                     FechaHora(r, "fecha_expiracion") ?? DateTime.Now.AddHours(horasExpiracion)));
             }, ct);
 
-    public async Task<bool> VerificarSesionAsync(long idUsuario, string sesionToken, CancellationToken ct)
-    {
-        var r = await EjecutarAsync<bool>("SP_VerificarSesionMovil",
+    public Task<RespuestaDto<bool>> VerificarSesionAsync(long idUsuario, string sesionToken, CancellationToken ct) =>
+        EjecutarAsync<bool>("SP_VerificarSesionMovil",
             p =>
             {
                 p.AddWithValue("p_id_usuario",   idUsuario);
                 p.AddWithValue("p_sesion_token", sesionToken);
             },
             (_, mensaje) => Task.FromResult(new RespuestaDto<bool>(2, mensaje, true)), ct);
-
-        return r.IdTipoMensaje == 2;
-    }
 
     public Task<RespuestaDto<bool>> CerrarSesionAsync(long idUsuario, string sesionToken, CancellationToken ct) =>
         EjecutarAsync<bool>("SP_CerrarSesionMovil",

@@ -5,8 +5,9 @@ namespace TW.Intranet.Aplicacion.Dtos;
 /// <summary>
 /// Configuración de la sesión de la app (sección AppMovil del appsettings / variables de Railway).
 ///   HorasExpiracion .......... duración de la sesión y del JWT de la app (por defecto 12 h).
-///   ReemplazarSesionAnterior . false = si hay una sesión vigente en otro equipo se rechaza el ingreso;
-///                              true  = el nuevo equipo cierra la sesión del anterior.
+///   ReemplazarSesionAnterior . true (por defecto) = sesión única: el nuevo equipo cierra la sesión del anterior, que al
+///                              consultar de nuevo recibe 401 con el motivo y vuelve al login;
+///                              false = si hay una sesión vigente en otro equipo se rechaza el nuevo ingreso.
 /// </summary>
 public record OpcionesSesionMovil(int HorasExpiracion, bool ReemplazarSesionAnterior);
 

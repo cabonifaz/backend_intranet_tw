@@ -6,9 +6,10 @@ namespace TW.Intranet.Aplicacion.CasosDeUso;
 // ── App Mobile HU-28 / HU-31 — Menú de Jefatura y Centro de aprobaciones ────────────────────
 
 /// <summary>
-/// Menú de Jefatura: resumen del día para los usuarios con rol Supervisor o Administrador de cualquier área menos Servicio Técnico.
-/// El SP valida el rol y el área; Metrología se filtra por el área según la RQ y las demás áreas ven todos los servicios.
-/// A quien no corresponde (técnicos, metrólogos, personal de Servicio Técnico) le responde que no tiene ese menú.
+/// Menú de Jefatura único: resumen del día para los jefes de área (cargo "Jefe de …") y para los usuarios con rol Supervisor o
+/// Administrador con un área definida. El SP valida el cargo, el rol y el área; Servicio Técnico y Metrología se filtran por el área
+/// según la RQ y las demás áreas ven todos los servicios.
+/// A quien no corresponde (técnicos, metrólogos y usuarios comunes) le responde que no tiene ese menú.
 /// </summary>
 public class ObtenerMenuJefaturaMovilCasoDeUso(IMenuMovilRepositorio repositorio)
 {
