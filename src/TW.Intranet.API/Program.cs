@@ -242,6 +242,13 @@ builder.Services.AddScoped<ILlegadaMovilRepositorio, LlegadaMovilRepositorio>();
 builder.Services.AddScoped<ObtenerLlegadaMovilCasoDeUso>();
 builder.Services.AddScoped<ValidarLlegadaMovilCasoDeUso>();
 builder.Services.AddScoped<RegistrarLlegadaMovilCasoDeUso>();
+// App Mobile HU-07 — lista de objetivos y selección de equipos
+builder.Services.AddScoped<IObjetivosMovilRepositorio, ObjetivosMovilRepositorio>();
+builder.Services.AddScoped<ObtenerObjetivosMovilCasoDeUso>();
+builder.Services.AddScoped<BuscarEquipoQrMovilCasoDeUso>();
+builder.Services.AddScoped<CambiarEstadoEquipoMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerOpcionesEquipoNuevoMovilCasoDeUso>();
+builder.Services.AddScoped<RegistrarEquipoNuevoMovilCasoDeUso>();
 // App Mobile HU-28 / HU-31 — menú de Jefatura y centro de aprobaciones
 builder.Services.AddScoped<ObtenerMenuJefaturaMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerAprobacionesMovilCasoDeUso>();
