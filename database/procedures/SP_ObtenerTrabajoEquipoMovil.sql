@@ -41,6 +41,8 @@ proc: BEGIN
     DECLARE v_sigla       VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
     DECLARE v_tipo_int    VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
     DECLARE v_conformes   INT DEFAULT 0;
+    DECLARE v_ens_final   DATETIME DEFAULT NULL;
+    DECLARE v_ens_motivo  VARCHAR(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -106,7 +108,7 @@ proc: BEGIN
     SELECT COUNT(*) INTO v_n_fotos
     FROM   evidencia_fotografica f WHERE f.id_os = p_id_os AND f.id_equipo = v_id_equipo AND f.eliminado_en IS NULL;
 
-    SELECT it.id_informe INTO v_informe
+    SELECT it.id_informe, it.ensayos_finalizado_en, it.error_critico_motivo INTO v_informe, v_ens_final, v_ens_motivo
     FROM   informe_tecnico it
     WHERE  it.id_os = p_id_os AND it.id_equipo = v_id_equipo AND it.eliminado_en IS NULL
     ORDER BY it.id_informe DESC LIMIT 1;
@@ -125,8 +127,11 @@ proc: BEGIN
             IF(v_vars > 0, v_det_vars, 'Temperatura, humedad y procedencia'), 1),
         (2, 'fotos', 'Registro fotográfico', IF(v_n_fotos > 0, 'en_curso', 'pendiente'),
             IF(v_n_fotos > 0, CONCAT(v_n_fotos, IF(v_n_fotos = 1, ' foto registrada', ' fotos registradas')), 'Fotos del equipo y del informe a mano'), 0),
-        (3, 'ensayos', 'Ensayos y Calibración', IF(v_vars = 0, 'bloqueado', IF(v_n_ensayos > 0, 'en_curso', 'pendiente')),
-            IF(v_vars = 0, 'Se habilita al guardar las variables ambientales', 'Verificación de pesaje tras el ajuste'), 0),
+        (3, 'ensayos', 'Ensayos y Calibración',
+            IF(v_vars = 0, 'bloqueado', IF(v_ens_final IS NOT NULL, 'conforme', IF(v_n_ensayos > 0, 'en_curso', 'pendiente'))),
+            IF(v_vars = 0, 'Se habilita al guardar las variables ambientales',
+               IF(v_ens_final IS NOT NULL, IF(v_ens_motivo IS NULL, 'Pesaje y excentricidad conformes', 'Finalizado con error crítico: se avisó al encargado'),
+                  IF(v_n_ensayos > 0, CONCAT(v_n_ensayos, ' lecturas guardadas · falta finalizar'), 'Verificación de pesaje tras el ajuste'))), 1),
         (4, 'cabecera', 'Cabecera del informe', IF(v_informe IS NOT NULL, 'en_curso', 'pendiente'), 'Datos · Detalle Serv. · Observación y pruebas', 0),
         (5, 'correlativo', 'Correlativo y certificado', 'pendiente', 'Correlativo de Metrología → N° de certificado', 0);
 

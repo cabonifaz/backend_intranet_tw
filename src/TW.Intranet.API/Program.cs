@@ -253,6 +253,11 @@ builder.Services.AddScoped<RegistrarEquipoNuevoMovilCasoDeUso>();
 builder.Services.AddScoped<ITrabajoEquipoMovilRepositorio, TrabajoEquipoMovilRepositorio>();
 builder.Services.AddScoped<ObtenerTrabajoEquipoMovilCasoDeUso>();
 builder.Services.AddScoped<GuardarVariablesAmbientalesMovilCasoDeUso>();
+// App Mobile HU-10 — ensayos y calibración (pesaje y excentricidad)
+builder.Services.AddScoped<IEnsayosMovilRepositorio, EnsayosMovilRepositorio>();
+builder.Services.AddScoped<ObtenerEnsayosMovilCasoDeUso>();
+builder.Services.AddScoped<GuardarEnsayosMovilCasoDeUso>();
+builder.Services.AddScoped<RegistrarLlamadaEnsayoMovilCasoDeUso>();
 // App Mobile HU-28 / HU-31 — menú de Jefatura y centro de aprobaciones
 builder.Services.AddScoped<ObtenerMenuJefaturaMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerAprobacionesMovilCasoDeUso>();
