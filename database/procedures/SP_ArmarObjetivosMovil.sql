@@ -6,6 +6,7 @@
 --   Objetivos = equipos de la OS que se confirmaron en la programación vigente (sin selección, todos) + los registrados en campo (NEW).
 --   estado: por_iniciar | en_ejecucion | pausado | completado | observado
 --   Observados (contador) = observado + pausados que esperan aprobación de un supervisor (esos NO se pueden reanudar).
+--   Tipo de intervención = el del equipo en la OS; si no lo tiene, el tipo de servicio de la OS (TIPO_SERVICIO), sin sigla.
 --   Tiempo estimado = Num2 del tipo de intervención (TIPO_INTERVENCION_EQUIPO) o el parámetro OBJETIVO_MINUTOS_POR_DEFECTO (60).
 --   Nombre = descripción del suministro del equipo ("Balanza industrial unicelda de piso"); sin suministro, su clasificación (Equipo / Instrumento / Pesa).
 --   Bloqueado (no se puede seleccionar) = equipo inactivo o "En Evaluación" (en el laboratorio, no está en la planta).
@@ -65,7 +66,7 @@ BEGIN
                              estado_equipo, bloqueado, en_campo, falta_equipo, estado, observado_cuenta, tiempo_estimado_min, tiempo_real_min, iniciado_utc,
                              motivo_pausa, requiere_aprobacion, ultima_intervencion, ultima_parte, alertas_pendientes)
     SELECT oe.id, oe.id_equipo, IFNULL(oe.orden, oe.id),
-           ti.String1, NULLIF(ti.String3, ''),
+           LEFT(COALESCE(ti.String1, tsv.String1), 100), NULLIF(ti.String3, ''),
            LEFT(COALESCE(NULLIF(TRIM(su.descripcion), ''), tc.String1, ec.clasificacion, 'Equipo'), 150),
            ec.codigo_tw, NULLIF(ec.codigo_cliente, ''), ec.marca, ec.modelo, NULLIF(TRIM(ec.num_serie), ''), NULLIF(ec.ubicacion_especifica, ''),
            teo.String1,
@@ -90,6 +91,8 @@ BEGIN
     FROM   os_equipo oe
     JOIN   equipo_cliente ec ON ec.id_equipo = oe.id_equipo
     LEFT JOIN tabla_maestra ti  ON ti.Descripcion  = 'TIPO_INTERVENCION_EQUIPO' AND ti.IdEmpresa  = 1 AND ti.Num1 = oe.id_tipo_intervencion
+    LEFT JOIN orden_servicio osv ON osv.id_os = oe.id_os
+    LEFT JOIN tabla_maestra tsv ON tsv.Descripcion = 'TIPO_SERVICIO' AND tsv.IdEmpresa = 1 AND tsv.Num1 = osv.id_tipo_servicio
     LEFT JOIN suministros   su  ON su.id_suministro = ec.id_suministro
     LEFT JOIN tabla_maestra tc  ON tc.IdMaestro    = 71                         AND tc.IdEmpresa  = 1 AND tc.String2 = ec.clasificacion
     LEFT JOIN tabla_maestra teo ON teo.Descripcion = 'ESTADO_OPERATIVO_EQUIPO'   AND teo.IdEmpresa = 1 AND teo.String2 = ec.estado_operativo

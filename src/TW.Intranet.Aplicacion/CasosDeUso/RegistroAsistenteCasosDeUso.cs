@@ -86,15 +86,25 @@ public class ObtenerFormularioRegistroAsistenteCasoDeUso(IRegistroAsistenteRepos
             ? Task.FromResult(new RespuestaDto<FormularioRegistroAsistenteDto>(1, e)) : repositorio.ObtenerFormularioAsync(idUsuario, idOs, ct);
 }
 
-public class RegistrarAsistenteServicioRutaCasoDeUso(IRegistroAsistenteRepositorio repositorio)
+public class RegistrarAsistenteServicioRutaCasoDeUso(IRegistroAsistenteRepositorio repositorio, IAlmacenArchivos almacen)
 {
-    public Task<RespuestaDto<RegistroAsistenteCreadoDto>> EjecutarAsync(long idUsuario, long idOs, RegistrarAsistenteSolicitudDto? solicitud, CancellationToken ct = default)
+    public async Task<RespuestaDto<RegistroAsistenteCreadoDto>> EjecutarAsync(long idUsuario, long idOs, RegistrarAsistenteSolicitudDto? solicitud, CancellationToken ct = default)
     {
         if (EntradaRegistroAsistente.ErrorIdOs(idOs) is { } e)
-            return Task.FromResult(new RespuestaDto<RegistroAsistenteCreadoDto>(1, e));
+            return new RespuestaDto<RegistroAsistenteCreadoDto>(1, e);
         var (datos, error) = EntradaRegistroAsistente.Normalizar(solicitud);
-        return error is not null || datos is null
-            ? Task.FromResult(new RespuestaDto<RegistroAsistenteCreadoDto>(1, error ?? "La solicitud no es válida."))
-            : repositorio.RegistrarAsync(idUsuario, idOs, datos, ct);
+        if (error is not null || datos is null)
+            return new RespuestaDto<RegistroAsistenteCreadoDto>(1, error ?? "La solicitud no es válida.");
+
+        // Foto subida con POST /registros/evidencia: debe ser de esta misma OS y existir (no se acepta una ruta a otro archivo del sistema)
+        if (datos.EvidenciaUrl is { } ev && ev.StartsWith('/'))
+        {
+            if (!EvidenciaSeguimiento.EsRutaDeLaOs(ev, idOs))
+                return new RespuestaDto<RegistroAsistenteCreadoDto>(1, "La foto de evidencia no corresponde a este servicio. Vuelve a adjuntarla.");
+            await using var foto = await almacen.AbrirLecturaAsync(ev.TrimStart('/'), ct);
+            if (foto is null)
+                return new RespuestaDto<RegistroAsistenteCreadoDto>(1, "No se encontró la foto de evidencia. Vuelve a adjuntarla.");
+        }
+        return await repositorio.RegistrarAsync(idUsuario, idOs, datos, ct);
     }
 }
