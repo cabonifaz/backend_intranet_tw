@@ -19,11 +19,12 @@ DELIMITER $$
 CREATE PROCEDURE SP_ObtenerSeguimientoExpediente(
     IN p_id_usuario    BIGINT,
     IN p_id_expediente BIGINT,
-    IN p_numero        VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci
+    IN p_numero        VARCHAR(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci
 )
 proc: BEGIN
     DECLARE v_id_rq    BIGINT;
-    DECLARE v_numero   VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_numero   VARCHAR(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_numero_base VARCHAR(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_ultima   BIGINT;
     DECLARE v_envio    DATETIME;
     DECLARE v_cierre   BIGINT;
@@ -42,8 +43,11 @@ proc: BEGIN
     SELECT id_requerimiento INTO v_id_rq FROM expediente_digital WHERE id_expediente = p_id_expediente;
 
     IF NULLIF(TRIM(IFNULL(p_numero, '')), '') IS NOT NULL THEN
-        SELECT MAX(p.numero) INTO v_numero FROM propuesta_comercial p
-        WHERE p.id_requerimiento = v_id_rq AND p.eliminado_en IS NULL AND p.numero = TRIM(p_numero);
+        SELECT MAX(p.numero_base) INTO v_numero FROM propuesta_comercial p
+        WHERE p.id_requerimiento = v_id_rq AND p.eliminado_en IS NULL
+          AND (p.numero = TRIM(p_numero) OR p.numero_base = TRIM(p_numero));
+        SELECT numero_base INTO v_numero_base FROM propuesta_comercial
+        WHERE numero = v_numero OR numero_base = v_numero LIMIT 1;
         IF v_numero IS NULL THEN
             SELECT 1 AS IdTipoMensaje, 'La propuesta no pertenece a este expediente.' AS Mensaje;
             LEAVE proc;
@@ -51,26 +55,30 @@ proc: BEGIN
     ELSE
         SELECT p.numero INTO v_numero FROM propuesta_comercial p
         WHERE p.id_requerimiento = v_id_rq AND p.eliminado_en IS NULL AND p.estado <> 'anulado'
-          AND p.version = (SELECT MAX(p2.version) FROM propuesta_comercial p2 WHERE p2.numero = p.numero AND p2.eliminado_en IS NULL)
+          AND p.version = (SELECT MAX(p2.version) FROM propuesta_comercial p2 WHERE p2.numero_base = p.numero_base AND p2.eliminado_en IS NULL)
         ORDER BY CASE p.estado WHEN 'aceptado' THEN 1 WHEN 'enviado' THEN 2 WHEN 'aprobado' THEN 2
                                WHEN 'pendiente_vb' THEN 3 WHEN 'pendiente_revocacion' THEN 3 WHEN 'rechazado' THEN 6 ELSE 4 END,
                  p.id_propuesta DESC
         LIMIT 1;
+        SELECT numero_base INTO v_numero_base FROM propuesta_comercial WHERE numero = v_numero LIMIT 1;
     END IF;
+    -- Número visible (PC-…) = el de la última versión de la propuesta
+    SELECT p.numero INTO v_numero FROM propuesta_comercial p
+    WHERE p.numero_base = v_numero_base AND p.eliminado_en IS NULL ORDER BY p.version DESC LIMIT 1;
 
     SELECT MAX(p.id_propuesta) INTO v_ultima FROM propuesta_comercial p
-    WHERE p.numero = v_numero AND p.eliminado_en IS NULL
-      AND p.version = (SELECT MAX(p2.version) FROM propuesta_comercial p2 WHERE p2.numero = v_numero AND p2.eliminado_en IS NULL);
+    WHERE p.numero_base = v_numero_base AND p.eliminado_en IS NULL
+      AND p.version = (SELECT MAX(p2.version) FROM propuesta_comercial p2 WHERE p2.numero_base = v_numero_base AND p2.eliminado_en IS NULL);
     -- Envío al cliente: fecha_envio_cliente (HU-10b); si no está, el evento de auditoría envio_cliente
     SELECT MIN(COALESCE(p.fecha_envio_cliente, p.fecha_envio)) INTO v_envio FROM propuesta_comercial p
-    WHERE p.numero = v_numero AND p.eliminado_en IS NULL;
+    WHERE p.numero_base = v_numero_base AND p.eliminado_en IS NULL;
     IF v_envio IS NULL THEN
         SELECT MIN(a.registrado_en) INTO v_envio FROM auditoria_evento a
-        JOIN propuesta_comercial p ON p.id_propuesta = a.id_entidad AND p.numero = v_numero
+        JOIN propuesta_comercial p ON p.id_propuesta = a.id_entidad AND p.numero_base = v_numero_base
         WHERE a.entidad_tipo = 'propuesta' AND a.accion = 'envio_cliente';
     END IF;
     SELECT s.id_seguimiento INTO v_cierre FROM seguimiento_comercial s
-    JOIN propuesta_comercial p ON p.id_propuesta = s.id_propuesta AND p.numero = v_numero
+    JOIN propuesta_comercial p ON p.id_propuesta = s.id_propuesta AND p.numero_base = v_numero_base
     WHERE s.eliminado_en IS NULL AND s.estado IN ('cerrado_aceptacion', 'cerrado_rechazo')
     ORDER BY s.id_seguimiento DESC LIMIT 1;
     SELECT CAST(MAX(Num2) AS SIGNED) INTO v_sla FROM tabla_maestra
@@ -80,16 +88,18 @@ proc: BEGIN
     CREATE TEMPORARY TABLE tmp_exp_seg AS
     SELECT s.*, p.numero, p.version
     FROM seguimiento_comercial s
-    JOIN propuesta_comercial p ON p.id_propuesta = s.id_propuesta AND p.numero = v_numero
+    JOIN propuesta_comercial p ON p.id_propuesta = s.id_propuesta AND p.numero_base = v_numero_base
     WHERE s.eliminado_en IS NULL;
 
     SELECT 2 AS IdTipoMensaje, 'Éxito.' AS Mensaje;
 
     -- 2. Propuestas (pills)
-    SELECT p.numero, MAX(p.version) AS version, (p.numero = v_numero) AS seleccionada
+    --    Una pill por propuesta, con el número de su última versión (PC-0012-2-2026)
+    SELECT p.numero, p.version, (p.numero_base = v_numero_base) AS seleccionada
     FROM propuesta_comercial p
     WHERE p.id_requerimiento = v_id_rq AND p.eliminado_en IS NULL
-    GROUP BY p.numero ORDER BY MIN(p.id_propuesta);
+      AND p.version = (SELECT MAX(p2.version) FROM propuesta_comercial p2 WHERE p2.numero_base = p.numero_base AND p2.eliminado_en IS NULL)
+    ORDER BY p.numero_base;
 
     -- 3. Estado actual
     SELECT v_numero AS numero, pu.id_propuesta, pu.version, pu.estado AS estado_propuesta,
@@ -147,7 +157,7 @@ proc: BEGIN
                LEFT(TRIM(REGEXP_REPLACE(REGEXP_REPLACE(IFNULL(sc.cuerpo_html, ''), '<[^>]*>', ' '), '[[:space:]]+', ' ')), 300),
                NULL
         FROM seguimiento_correo sc
-        JOIN propuesta_comercial p ON p.id_propuesta = sc.id_propuesta AND p.numero = v_numero
+        JOIN propuesta_comercial p ON p.id_propuesta = sc.id_propuesta AND p.numero_base = v_numero_base
         -- "Para": lista de {correo, nombre} o de textos
         LEFT JOIN LATERAL (
             SELECT GROUP_CONCAT(COALESCE(IF(j.nombre IS NULL, j.correo, CONCAT(j.nombre, ' <', j.correo, '>')), j.texto)
@@ -161,7 +171,7 @@ proc: BEGIN
         SELECT a.registrado_en, 'envio', 'Propuesta enviada al cliente', NULL, NULL, NULL, a.descripcion, NULL, NULL, NULL,
                p.version, a.id_usuario, NULL, cp.nombres, NULL, NULL
         FROM auditoria_evento a
-        JOIN propuesta_comercial p ON p.id_propuesta = a.id_entidad AND p.numero = v_numero
+        JOIN propuesta_comercial p ON p.id_propuesta = a.id_entidad AND p.numero_base = v_numero_base
         LEFT JOIN contacto_cliente cp ON cp.id_contacto = p.id_contacto
         WHERE a.entidad_tipo = 'propuesta' AND a.accion = 'envio_cliente'
     ) t

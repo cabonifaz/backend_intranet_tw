@@ -10,7 +10,8 @@ public interface IAutenticacionMovilRepositorio
     Task<RespuestaDto<SesionMovilDto>> IniciarSesionAsync(long idUsuario, string idDispositivo, string? nombreDispositivo,
                                                           string? ipOrigen, int horasExpiracion, bool reemplazarSesion,
                                                           CancellationToken ct);
-    Task<bool>                         VerificarSesionAsync(long idUsuario, string sesionToken, CancellationToken ct);
+    /// <summary>IdTipoMensaje 2 = sesión vigente; cualquier otro = ya no sirve y Mensaje trae el motivo (p. ej. otro equipo ingresó).</summary>
+    Task<RespuestaDto<bool>>           VerificarSesionAsync(long idUsuario, string sesionToken, CancellationToken ct);
     Task<RespuestaDto<bool>>           CerrarSesionAsync(long idUsuario, string sesionToken, CancellationToken ct);
     Task<RespuestaDto<bool>>           LiberarSesionAsync(long idUsuario, long idEjecutor, CancellationToken ct);
     Task<RespuestaDto<bool>>           AsignarAccesoAsync(long idUsuario, string? nombreUsuario, bool habilitar,

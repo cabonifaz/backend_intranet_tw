@@ -23,7 +23,7 @@ proc: BEGIN
     SELECT 2 AS IdTipoMensaje, 'Éxito.' AS Mensaje;
 
     SELECT pc.id_correccion, pc.estado, pc.observaciones, pc.fecha_limite,
-           (pc.estado = 'pendiente' AND pc.fecha_limite < NOW()) AS vencida,
+           (pc.estado = 'pendiente' AND IFNULL(pc.fecha_limite > NOW(), 1) = 0) AS vencida,
            pc.creado_en                            AS solicitado_en,
            CONCAT(us.nombre, ' ', us.apellido)     AS solicitado_por,
            pc.id_responsable,

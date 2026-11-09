@@ -40,7 +40,11 @@ public class ServiciosMovilRepositorio(CadenaConexionBd conexion)
                         Texto(r, "estado_ssoma") ?? "pendiente",
                         Entero(r, "alertas_predictivas"),
                         Texto(r, "estado_general") ?? "PENDIENTE",
-                        Texto(r, "motivo_bloqueo")));
+                        Texto(r, "motivo_bloqueo"),
+                        Texto(r, "hora_fin"),
+                        Texto(r, "tipo_servicio"),
+                        Entero(r, "n_tecnicos"),
+                        Texto(r, "alerta_predictiva")));
                 }
                 return new RespuestaDto<List<ServicioProgramadoMovilDto>>(2, mensaje, lista);
             }, ct);

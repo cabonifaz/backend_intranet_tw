@@ -12,4 +12,6 @@ public record GuardarPropuestaResultadoDto(
     decimal SubtotalOpcionales,
     decimal DescuentoOpcionales,
     decimal TotalOpcionales
-);
+)
+{
+}

@@ -28,6 +28,8 @@ BEGIN
         u.telefono,
         u.anexo,
         u.troncal,
+        u.nombre_usuario,
+        u.canal_acceso,
         CASE u.estado
             WHEN 'activo'     THEN 'Activo'
             WHEN 'inactivo'   THEN 'Inactivo'

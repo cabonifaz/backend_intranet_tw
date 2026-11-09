@@ -525,7 +525,9 @@ public record ItemBandejaOrdenCompraDto(
     string?   UrlPdf,
     bool      PuedeAnular,
     /// <summary>Se puede registrar la OC del cliente que la reemplaza (autogenerada o pendiente_reemplazo).</summary>
-    bool      PuedeReemplazar);
+    bool      PuedeReemplazar)
+{
+}
 
 public record BandejaOrdenesCompraDto(
     TarjetasOrdenesCompraDto        Tarjetas,
@@ -618,6 +620,7 @@ public record CabeceraDetalleOcDto
 
 public record PropuestaVinculadaOcDto
 {
+
     public long      IdPropuesta             { get; init; }
     public string    Numero                  { get; init; } = "";
     public int       Version                 { get; init; }

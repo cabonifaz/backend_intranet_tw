@@ -19,6 +19,7 @@ public record KpisVistoBuenoDto(int Pendientes, int ProximosVencer, int Vencidos
 
 public record ItemBandejaVistoBuenoDto
 {
+
     public long      IdVb                 { get; init; }
     public long      IdPropuesta          { get; init; }
     public string    Numero               { get; init; } = "";

@@ -2,8 +2,9 @@
 -- SP_ObtenerAutorizacionesSalida  (Intranet · App Mobile HU-04)
 -- Bandeja de solicitudes de visto bueno de salida de los técnicos.
 --   p_estado: pendiente | aprobada | rechazada | (vacío = todas)
---   Encargado de área (Jefe de Servicio Técnico / Jefe de Metrología): solo las de SU área
---   (y las que no tienen área en la RQ). Jefe/Coordinador de Operaciones y administradores: todas.
+--   Encargado de área (Jefe de Servicio Técnico / Jefe de Metrología, o el supervisor del área Metrología): solo las de SU área
+--   (y las que no tienen área en la RQ). Jefe/Coordinador de Operaciones, supervisor del área Operaciones y administradores: todas.
+-- id_tecnico (última columna): quién la pidió; la app móvil del Jefe lo usa para mostrar el checklist de ese técnico.
 -- Solo lectura.
 -- ============================================================
 DROP PROCEDURE IF EXISTS SP_ObtenerAutorizacionesSalida;
@@ -21,8 +22,10 @@ proc: BEGIN
     DECLARE v_existe    TINYINT DEFAULT 0;
 
     SELECT 1,
-           IF(c.String2 LIKE 'jefe\_%' AND c.String3 IN ('servicio_tecnico', 'metrologia'), c.String3, NULL),
-           (u.cargo IN ('jefe_operaciones', 'coordinador_operaciones') OR u.rol_sistema IN ('administrador', 'admin'))
+           COALESCE(IF(c.String2 LIKE 'jefe\_%' AND c.String3 IN ('servicio_tecnico', 'metrologia'), c.String3, NULL),
+                    IF(u.rol_sistema = 'supervisor' AND u.area = 'metrologia', 'metrologia', NULL)),
+           (u.cargo IN ('jefe_operaciones', 'coordinador_operaciones') OR u.rol_sistema IN ('administrador', 'admin')
+            OR (u.rol_sistema = 'supervisor' AND u.area = 'operaciones'))
     INTO   v_existe, v_area_jefe, v_general
     FROM   usuario u
     LEFT JOIN tabla_maestra c ON c.IdMaestro = 80 AND c.IdEmpresa = 1 AND c.String2 = u.cargo
@@ -58,7 +61,8 @@ proc: BEGIN
            a.solicitado_en,
            NULLIF(TRIM(CONCAT(IFNULL(jf.nombre, ''), ' ', IFNULL(jf.apellido, ''))), '') AS jefe,
            a.resuelto_en,
-           a.comentario
+           a.comentario,
+           a.id_tecnico
     FROM   autorizacion_salida_os a
     JOIN   orden_servicio os ON os.id_os = a.id_os AND os.eliminado_en IS NULL
     LEFT JOIN cliente cl ON cl.id_cliente = os.id_cliente

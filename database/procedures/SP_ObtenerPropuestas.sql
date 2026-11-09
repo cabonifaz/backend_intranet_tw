@@ -1,6 +1,8 @@
 -- HU-07 / HU-08 — Bandeja de propuestas (listado paginado)
 --   Filtros: requerimiento, estado (BD), grupo de estado (pestañas del front),
 --   año, comercial, búsqueda y "solo versión actual" (por defecto sí).
+--   Pedido 14: p_id_usuario (JWT) limita al alcance del usuario: usuario → responsable actual + suplencias;
+--   supervisor / administrador / visor → su área; gerencia / TI → todo.
 --   Grupos: borrador | por_vb | por_enviar | en_seguimiento | aceptada | rechazada | cerrada | todas
 --   Estado 'aprobado' = visto bueno aprobado, falta enviar al cliente (grupo por_enviar).
 --   Aceptada = la propuesta tiene orden de compra (HU-13) o el cliente la aceptó en el seguimiento (HU-21).
@@ -17,13 +19,21 @@ CREATE PROCEDURE SP_ObtenerPropuestas(
     IN p_grupo_estado        VARCHAR(30)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_anio                INT,
     IN p_id_comercial        BIGINT,
-    IN p_solo_ultima_version TINYINT
+    IN p_solo_ultima_version TINYINT,
+    IN p_id_usuario          BIGINT
 )
 BEGIN
     DECLARE v_por_pagina INT;
     DECLARE v_offset     INT;
+    DECLARE v_ver_todo    TINYINT DEFAULT 0;
+    DECLARE v_solo_propio TINYINT DEFAULT 1;
+    DECLARE v_ids         TEXT;
+    DECLARE v_area        VARCHAR(40);
     SET v_por_pagina = IF(p_por_pagina IS NULL OR p_por_pagina < 1, 10, p_por_pagina);
     SET v_offset     = (GREATEST(IFNULL(p_pagina, 1), 1) - 1) * v_por_pagina;
+
+    -- Pedido 14: alcance por usuario autenticado (SP_ObtenerAlcanceCrm)
+    CALL SP_ObtenerAlcanceCrm(p_id_usuario, v_ver_todo, v_solo_propio, v_ids, v_area);
 
     -- 1. Header
     SELECT 2 AS IdTipoMensaje, 'Éxito.' AS Mensaje;
@@ -113,9 +123,10 @@ BEGIN
            OR (p_grupo_estado = 'cerrada'        AND p.estado IN ('anulado', 'vencido')))
       AND (p_anio IS NULL OR p_anio = 0 OR YEAR(p.fecha_creacion) = p_anio)
       AND (p_id_comercial IS NULL OR p_id_comercial = 0 OR COALESCE(p.id_responsable, p.id_creador) = p_id_comercial)
+      AND (v_ver_todo = 1 OR FIND_IN_SET(COALESCE(p.id_responsable, p.id_creador), v_ids) > 0)
       AND (IFNULL(p_solo_ultima_version, 1) = 0
            OR p.version = (SELECT MAX(p2.version) FROM propuesta_comercial p2
-                           WHERE p2.numero = p.numero AND p2.eliminado_en IS NULL))
+                           WHERE p2.numero_base = p.numero_base AND p2.eliminado_en IS NULL))
       AND (
           p_busqueda IS NULL OR p_busqueda = ''
           OR p.numero       LIKE CONCAT('%', p_busqueda, '%')
@@ -163,9 +174,10 @@ BEGIN
            OR (p_grupo_estado = 'cerrada'        AND p.estado IN ('anulado', 'vencido')))
       AND (p_anio IS NULL OR p_anio = 0 OR YEAR(p.fecha_creacion) = p_anio)
       AND (p_id_comercial IS NULL OR p_id_comercial = 0 OR COALESCE(p.id_responsable, p.id_creador) = p_id_comercial)
+      AND (v_ver_todo = 1 OR FIND_IN_SET(COALESCE(p.id_responsable, p.id_creador), v_ids) > 0)
       AND (IFNULL(p_solo_ultima_version, 1) = 0
            OR p.version = (SELECT MAX(p2.version) FROM propuesta_comercial p2
-                           WHERE p2.numero = p.numero AND p2.eliminado_en IS NULL))
+                           WHERE p2.numero_base = p.numero_base AND p2.eliminado_en IS NULL))
       AND (
           p_busqueda IS NULL OR p_busqueda = ''
           OR p.numero       LIKE CONCAT('%', p_busqueda, '%')

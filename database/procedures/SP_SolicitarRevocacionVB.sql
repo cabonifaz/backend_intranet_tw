@@ -104,7 +104,7 @@ proc: BEGIN
     IF v_id_rq IS NOT NULL THEN
         INSERT INTO historial_requerimiento (id_requerimiento, tipo, tipo_label, icono, descripcion, usuario, fecha, creado_en, creado_por)
         VALUES (v_id_rq, 'propuesta', 'Revocación de VB solicitada', 'undo',
-                CONCAT('Se solicitó revocar la aprobación de VB de la propuesta ', v_numero, ' v', v_version, ': ', p_motivo),
+                CONCAT('Se solicitó revocar la aprobación de VB de la propuesta ', v_numero, ': ', p_motivo),
                 v_usu_nombre, NOW(), NOW(), p_id_usuario);
     END IF;
 

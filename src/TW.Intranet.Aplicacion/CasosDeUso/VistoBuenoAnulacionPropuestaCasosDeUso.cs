@@ -143,7 +143,7 @@ public class EnviarPropuestaClienteCasoDeUso(
         string? avisoPdf = null;
         if (pdfResp.IdTipoMensaje == 2 && pdfResp.Datos is { Length: > 0 })
         {
-            var nombreArchivo = $"{r.Datos.Numero}-v{r.Datos.Version}.pdf";
+            var nombreArchivo = $"{r.Datos.Numero}.pdf";
             adjuntos.Add(new AdjuntoCorreoDto(nombreArchivo, Convert.ToBase64String(pdfResp.Datos)));
         }
         else

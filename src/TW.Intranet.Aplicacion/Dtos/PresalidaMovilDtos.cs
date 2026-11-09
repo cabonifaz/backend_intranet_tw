@@ -9,7 +9,12 @@ public record DetalleServicioMovilDto(
     List<RiesgoServicioMovilDto>      Riesgos,
     List<RepuestoServicioMovilDto>    Repuestos,
     List<HistorialServicioMovilDto>   Historial,
-    List<DocumentoServicioMovilDto>   Documentos);
+    List<DocumentoServicioMovilDto>   Documentos,
+    ProgramacionServicioMovilDto?     Programacion,
+    List<EquipoTrabajoMovilDto>       EquipoTrabajo,
+    List<EquipoServicioMovilDto>      Equipos,
+    List<ConceptoServicioMovilDto>    Conceptos,
+    List<RespuestaClienteMovilDto>    Respuestas);
 
 public record ServicioDetalleMovilDto(
     long    IdOs,
@@ -21,6 +26,8 @@ public record ServicioDetalleMovilDto(
     string? TipoServicio,
     string? FechaEjecucion,
     string? HoraInicio,
+    string? HoraFin,
+    decimal? DuracionHoras,
     string  EstadoOs,
     string? Sede,
     string? Direccion,
@@ -52,6 +59,31 @@ public record HistorialServicioMovilDto(
 
 public record DocumentoServicioMovilDto(long IdDocumento, string NombreArchivo, string? Tipo, int Version, DateTime? FechaCarga);
 
+// Lo que la intranet registra en "Programación Operativa" (modal Detalle de la Programación), visto por el técnico.
+
+/// <summary>Programación vigente de la OS. Estado: pendiente_confirmacion | confirmada.</summary>
+public record ProgramacionServicioMovilDto(string Codigo, string Estado, string EstadoLabel, string? Observaciones);
+
+/// <summary>Integrante del equipo de trabajo. Rol: principal | apoyo. SSOMA actual: conforme | por_vencer | incompleto | pendiente | bloqueado.
+/// El motivo solo viene para el propio técnico (EsUsuario).</summary>
+public record EquipoTrabajoMovilDto(string Nombre, string? Cargo, string Rol, bool EsUsuario, string? SsomaActual, string? MotivoSsoma);
+
+/// <summary>Equipo del cliente que se atiende en el servicio.</summary>
+public record EquipoServicioMovilDto(long IdEquipo, string? CodigoTw, string? Marca, string? Modelo, string? NumeroSerie);
+
+public record ConceptoServicioMovilDto(long IdConcepto, string? Codigo, string Descripcion, string? Alcance);
+
+/// <summary>Respuesta del cliente a la programación. Resultado: acepto | pidio_reprogramar | cancelo.</summary>
+public record RespuestaClienteMovilDto(
+    long      Id,
+    string    Canal,
+    string    CanalLabel,
+    string    Resultado,
+    string    ResultadoLabel,
+    string?   Comentario,
+    DateTime? FechaRegistro,
+    string?   RegistradoPor);
+
 /// <summary>Datos crudos con los que se arma el checklist (salen de SP_ObtenerChecklistSalidaMovil).</summary>
 public record HechosChecklistSalidaDto(
     long      IdOs,
@@ -81,9 +113,11 @@ public record HechosChecklistSalidaDto(
     string?   AreaAutorizaCodigo,   // servicio_tecnico | metrologia | null (la RQ no indica área)
     string?   AreaAutoriza,         // "Servicio Técnico" | "Metrología"
     string?   CargoEncargado,       // "Jefe de Servicio Técnico" | "Jefe de Metrología"
-    string?   EncargadoArea);       // nombre(s) del encargado activo
+    string?   EncargadoArea,        // nombre(s) del encargado activo
+    bool      SalidaHabilitada,     // la salida se valida solo desde el día programado
+    string?   SalidaMensaje);       // "Aún no es el día del servicio. Podrás validar la salida el dd/mm/aaaa."
 
-/// <summary>Un ítem del checklist. Estado: conforme | pendiente | bloqueado | no_aplica | opcional.</summary>
+/// <summary>Un ítem del checklist. Estado: conforme | pendiente | bloqueado | aprobado (pendiente autorizado por el jefe) | no_aplica | opcional.</summary>
 public record ItemChecklistSalidaDto(
     string  Codigo,
     string  Nombre,
@@ -111,11 +145,14 @@ public record ChecklistSalidaMovilDto(
     List<ItemChecklistSalidaDto>  Items,
     List<string>                  Faltantes,
     bool                          PuedeIniciar,
+    bool                          TodoConforme,        // todo cumplido o con el visto bueno vigente: "Ya puedes iniciar el traslado a planta"
     bool                          SaleConVistoBueno,
     bool                          PuedeSolicitarAutorizacion,
     bool                          TrasladoIniciado,
     AutorizacionSalidaDto?        Autorizacion,
-    AreaAutorizaSalidaDto         AreaAutoriza);
+    AreaAutorizaSalidaDto         AreaAutoriza,
+    bool                          SalidaHabilitada,
+    string?                       SalidaMensaje);
 
 /// <summary>El técnico marca o desmarca un ítem manual del checklist.</summary>
 public record MarcarItemChecklistDto(bool Confirmado);
@@ -146,4 +183,5 @@ public record AutorizacionSalidaBandejaDto(
     DateTime? SolicitadaEn,
     string?   Jefe,
     DateTime? ResueltaEn,
-    string?   Comentario);
+    string?   Comentario,
+    long      IdTecnico = 0);

@@ -64,7 +64,7 @@ proc: BEGIN
                p.total AS monto_total, m.String2 AS simbolo_moneda,
                (SELECT COUNT(*) FROM propuesta_equipo pe WHERE pe.id_propuesta = p.id_propuesta) AS equipos_cotizados,
                (SELECT COUNT(*) FROM orden_servicio o2 JOIN propuesta_comercial p2 ON p2.id_propuesta = o2.id_propuesta
-                WHERE p2.numero = p.numero AND o2.eliminado_en IS NULL AND o2.estado <> 'anulada') AS os_activas,
+                WHERE p2.numero_base = p.numero_base AND o2.eliminado_en IS NULL AND o2.estado <> 'anulada') AS os_activas,
                (SELECT COUNT(*) FROM propuesta_item i WHERE i.id_propuesta = p.id_propuesta AND i.seccion = 'principal'
                   AND IFNULL(i.es_espaciado, 0) = 0 AND i.eliminado_en IS NULL) AS conceptos_cotizados,
                COALESCE((SELECT cp.String1 FROM tabla_maestra cp WHERE cp.IdMaestro = 39 AND cp.IdEmpresa = 1
@@ -103,7 +103,7 @@ proc: BEGIN
         ORDER BY IFNULL(oe.orden, oe.id), oe.id;
 
     ELSEIF p_tab = 'conceptos' THEN
-        SELECT oc.id AS id_os_concepto, oc.orden, oc.id_suministro, oc.codigo, oc.descripcion, oc.alcance,
+        SELECT oc.id AS id_os_concepto, oc.id_item, oc.orden, oc.id_suministro, oc.codigo, oc.descripcion, oc.alcance,
                EXISTS (SELECT 1 FROM propuesta_item pi WHERE pi.id_propuesta = v_id_prop AND pi.id_catalogo_item = oc.id_suministro
                          AND pi.eliminado_en IS NULL AND IFNULL(pi.es_espaciado, 0) = 0) AS de_la_propuesta,
                (SELECT GROUP_CONCAT(ec.codigo_tw ORDER BY IFNULL(oe.orden, oe.id) SEPARATOR ',')

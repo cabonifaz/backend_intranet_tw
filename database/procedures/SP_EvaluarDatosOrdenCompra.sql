@@ -186,7 +186,7 @@ proc: BEGIN
                                WHERE op.id_oc = IFNULL(p_id_oc, 0) AND op.id_propuesta = v_id_prop
                                  AND op.eliminado_en IS NULL AND px.id_cliente = p_id_cliente) THEN
             SET p_error = CONCAT('La propuesta ',
-                                 IFNULL((SELECT CONCAT(numero, ' v', version) FROM propuesta_comercial WHERE id_propuesta = v_id_prop), v_id_prop),
+                                 IFNULL((SELECT numero FROM propuesta_comercial WHERE id_propuesta = v_id_prop), v_id_prop),
                                  ' no está aceptada por el cliente, es de otro cliente o ya está cubierta por órdenes de compra.');
         -- En la validación en vivo (sin decisión) el monto 0 es válido: el comercial aún lo está repartiendo
         ELSEIF p_decision IS NOT NULL AND (v_asignado IS NULL OR v_asignado <= 0) THEN
@@ -213,7 +213,7 @@ proc: BEGIN
         CALL SP_CompararOcPropuesta(v_id_prop, p_excluir_oc, v_sin_auto, v_datos, v_asignado, v_eval,
                                     v_res, v_coinc, v_adv, v_crit, v_tot, v_sug, v_cubierto);
 
-        SELECT CONCAT(numero, ' v', version) INTO v_numero_prop FROM propuesta_comercial WHERE id_propuesta = v_id_prop;
+        SELECT numero INTO v_numero_prop FROM propuesta_comercial WHERE id_propuesta = v_id_prop;
 
         INSERT INTO tmp_oc_eval
         SELECT v_i + 1, v_id_prop, v_numero_prop, v_asignado, v_cubierto, v_res, v_coinc, v_adv, v_crit, v_tot, v_sug,

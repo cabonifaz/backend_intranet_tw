@@ -21,6 +21,7 @@ public class UsuariosController(
     ObtenerSedesOperativasCasoDeUso      obtenerSedesOperativas,
     GuardarUsuarioCasoDeUso              guardarUsuario,
     CambiarEstadoUsuarioCasoDeUso        cambiarEstadoUsuario,
+    ValidarNombreUsuarioCasoDeUso        validarNombreUsuario,
     ObtenerSuplentesCasoDeUso            obtenerSuplentes,
     ObtenerSuplentePorIdCasoDeUso        obtenerSuplentePorId,
     ObtenerSuplenciasPorUsuarioCasoDeUso obtenerSuplenciasPorUsuario,
@@ -70,6 +71,18 @@ public class UsuariosController(
     [HttpGet("usuarios/{id:long}")]
     public async Task<IActionResult> ObtenerUsuarioPorId(long id, CancellationToken ct = default)
         => Responder(await obtenerUsuarioPorId.EjecutarAsync(id, ct), noEncontradoComo404: true);
+
+    /// <summary>
+    /// HU-83 + App Mobile HU-01 — Ficha de usuario: ¿está libre el usuario de la app?
+    /// Responde { disponible, sugerencia? }. En edición enviar excluirIdUsuario (el propio usuario).
+    /// </summary>
+    [RequierePermiso("usuario_guardar")]
+    [HttpGet("usuarios/validar-nombre-usuario")]
+    public async Task<IActionResult> ValidarNombreUsuario(
+        [FromQuery] string? nombre,
+        [FromQuery] long? excluirIdUsuario,
+        CancellationToken ct = default)
+        => Responder(await validarNombreUsuario.EjecutarAsync(nombre, excluirIdUsuario, ct));
 
     /// <summary>HU-83 — Sedes operativas (minas, plantas, oficinas) para asignar al usuario.</summary>
     [HttpGet("sedes-operativas")]

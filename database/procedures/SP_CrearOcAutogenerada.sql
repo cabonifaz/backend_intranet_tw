@@ -24,7 +24,7 @@ BEGIN
     DECLARE v_simbolo     VARCHAR(10)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_usuario     VARCHAR(220) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 
-    SELECT CONCAT(p.numero, ' v', p.version), COALESCE(p.id_responsable, p.id_creador), c.razon_social, m.String2
+    SELECT p.numero, COALESCE(p.id_responsable, p.id_creador), c.razon_social, m.String2
       INTO v_numero_prop, v_id_resp, v_cliente, v_simbolo
     FROM propuesta_comercial p
     LEFT JOIN cliente c       ON c.id_cliente = p.id_cliente

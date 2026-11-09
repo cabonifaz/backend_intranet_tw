@@ -30,15 +30,38 @@ CREATE PROCEDURE SP_GuardarCliente(
     IN p_ssoma_examen_medico     TINYINT(1),
     IN p_ssoma_notas             TEXT          CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_id_categoria            INT,
-    IN p_usu_cre                 VARCHAR(100)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci
+    IN p_usu_cre                 VARCHAR(100)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_id_usuario              BIGINT,
+    IN p_id_comercial_cartera    BIGINT
 )
 BEGIN
     -- Las áreas del cliente ahora se manejan por su propio CRUD (SP_GuardarAreaCliente),
     -- fuera de este SP (decisión migración 37). El SP ya no recibe p_areas ni llama a
     -- SP_SincronizarAreasCliente.
     DECLARE v_id BIGINT;
+    DECLARE v_asignar     TINYINT DEFAULT 0;
+    DECLARE v_comercial   BIGINT;
+    DECLARE v_cartera_ant BIGINT;
 
-    IF EXISTS (
+    -- Observaciones 31/10 — Cartera desde la ficha: solo quien tiene cartera_asignar (Administrador).
+    -- Sin la acción, el valor recibido se ignora y queda el actual. NULL o 0 = quitar de la cartera.
+    SET v_comercial = NULLIF(IFNULL(p_id_comercial_cartera, 0), 0);
+    IF IFNULL(p_id_usuario, 0) > 0 AND FN_PermisoAccion(p_id_usuario, 'cartera_asignar') = 1 THEN
+        SET v_asignar = 1;
+        IF p_id_cliente <> 0 THEN
+            SELECT id_comercial_cartera INTO v_cartera_ant FROM cliente WHERE id_cliente = p_id_cliente;
+        END IF;
+        IF v_comercial IS NOT NULL AND NOT EXISTS (
+            SELECT 1 FROM usuario WHERE id_usuario = v_comercial AND eliminado_en IS NULL
+              AND estado = 'activo' AND area = 'comercial') THEN
+            SELECT 1 AS IdTipoMensaje, 'El comercial de la cartera no existe, no está activo o no es del área comercial.' AS Mensaje;
+            SET v_asignar = 2;
+        END IF;
+    END IF;
+
+    IF v_asignar = 2 THEN
+        SET v_asignar = 2;  -- ya se devolvió el mensaje de validación
+    ELSEIF EXISTS (
         SELECT 1 FROM cliente
         WHERE ruc = p_ruc
           AND SoftDelete = 0
@@ -65,6 +88,11 @@ BEGIN
         );
 
         SET v_id = LAST_INSERT_ID();
+
+        IF v_asignar = 1 AND v_comercial IS NOT NULL THEN
+            UPDATE cliente SET id_comercial_cartera = v_comercial, cartera_asignado_en = NOW(), cartera_asignado_por = p_id_usuario
+            WHERE id_cliente = v_id;
+        END IF;
 
         SELECT 2 AS IdTipoMensaje, 'Cliente registrado correctamente.' AS Mensaje;
         SELECT v_id AS id_cliente;
@@ -94,6 +122,18 @@ BEGIN
             UsuMod                  = p_usu_cre,
             FchMod                  = NOW()
         WHERE id_cliente = p_id_cliente AND SoftDelete = 0;
+
+        IF v_asignar = 1 AND NOT (v_comercial <=> v_cartera_ant) THEN
+            UPDATE cliente SET
+                id_comercial_cartera = v_comercial,
+                cartera_asignado_en  = IF(v_comercial IS NULL, NULL, NOW()),
+                cartera_asignado_por = IF(v_comercial IS NULL, NULL, p_id_usuario)
+            WHERE id_cliente = p_id_cliente;
+            INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, descripcion, id_usuario, registrado_en, metadata)
+            VALUES ('cliente', p_id_cliente, 'asignar_cartera',
+                    IF(v_comercial IS NULL, 'Cliente quitado de la cartera desde la ficha.', 'Cartera asignada desde la ficha del cliente.'),
+                    p_id_usuario, NOW(), JSON_OBJECT('id_comercial_anterior', v_cartera_ant, 'id_comercial', v_comercial));
+        END IF;
 
         SELECT 2 AS IdTipoMensaje, 'Cliente actualizado correctamente.' AS Mensaje;
         SELECT p_id_cliente AS id_cliente;

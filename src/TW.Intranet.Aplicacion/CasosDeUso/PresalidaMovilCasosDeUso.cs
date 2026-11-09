@@ -13,8 +13,8 @@ namespace TW.Intranet.Aplicacion.CasosDeUso;
 ///                 repuestos asignados y alertas predictivas resueltas.
 ///   Opcional:     OC cargada.
 ///   Visto bueno del encargado del área del servicio según la RQ (Jefe de Servicio Técnico o
-///   Jefe de Metrología; lo da desde la intranet): con él se puede salir aunque queden
-///   obligatorios pendientes.
+///   Jefe de Metrología; lo da desde la intranet o la app): con él se puede salir aunque queden
+///   obligatorios pendientes. Los pendientes se muestran como "aprobado" (Autorizado por el jefe) y todo queda conforme.
 /// </summary>
 public static class ReglasChecklistSalida
 {
@@ -27,9 +27,20 @@ public static class ReglasChecklistSalida
 
     public static bool EstaProgramada(string estadoOs) => estadoOs is "programada" or "reprogramada";
 
+    /// <summary>
+    /// Mensaje cuando todavía no se puede validar la salida (la OS está programada pero aún no es su día); null si se puede.
+    /// La regla de la fecha vive en SP_ObtenerSalidaHabilitadaMovil; aquí solo se aplica.
+    /// </summary>
+    public static string? SalidaNoDisponible(HechosChecklistSalidaDto h) =>
+        EstaProgramada(h.EstadoOs) && !h.SalidaHabilitada
+            ? h.SalidaMensaje ?? "Aún no es el día del servicio: podrás validar la salida ese día."
+            : null;
+
     public static ChecklistSalidaMovilDto Evaluar(HechosChecklistSalidaDto h)
     {
-        var editable = EstaProgramada(h.EstadoOs);
+        var programada = EstaProgramada(h.EstadoOs);
+        // Antes del día programado el técnico ve el checklist pero no lo puede cambiar ni salir.
+        var editable = programada && h.SalidaHabilitada;
         var items = new List<ItemChecklistSalidaDto>
         {
             Manual("expediente", "Expediente revisado", h.ExpedienteRevisado, editable,
@@ -88,7 +99,8 @@ public static class ReglasChecklistSalida
             },
             autorizacion?.Estado switch
             {
-                "aprobada"  => $"Aprobado por {autorizacion.Jefe ?? "el jefe"}." + (string.IsNullOrWhiteSpace(autorizacion.Comentario) ? "" : $" {autorizacion.Comentario}"),
+                "aprobada"  => $"{autorizacion.Jefe ?? "El jefe"}" + (autorizacion.ResueltaEn is { } hora ? $" · {hora:HH:mm}" : "")
+                               + (string.IsNullOrWhiteSpace(autorizacion.Comentario) ? "" : $" · Condición: {autorizacion.Comentario}"),
                 "rechazada" => $"No autorizado por {autorizacion.Jefe ?? "el jefe"}." + (string.IsNullOrWhiteSpace(autorizacion.Comentario) ? "" : $" {autorizacion.Comentario}"),
                 "pendiente" => $"Solicitud enviada {aQuien}: esperando respuesta.",
                 _           => area.Cargo is null
@@ -106,16 +118,27 @@ public static class ReglasChecklistSalida
         var completo          = faltantes.Count == 0;
         var puedeIniciar      = editable && (completo || vistoBuenoVigente);
 
+        // Con el visto bueno vigente, los pendientes obligatorios se muestran APROBADOS ("Autorizado por el Jefe …") y todo queda conforme
+        if (vistoBuenoVigente)
+            items = items
+                .Select(i => i.Obligatorio && i.Estado is "pendiente" or "bloqueado"
+                    ? i with { Estado = "aprobado", Detalle = $"Autorizado por {quienAutoriza}" }
+                    : i)
+                .ToList();
+
         return new ChecklistSalidaMovilDto(
             h.IdOs, h.NumeroOs, h.Cliente, h.FechaEjecucion, h.HoraInicio, h.Tecnico, h.EstadoOs,
             items,
             faltantes,
             PuedeIniciar:               puedeIniciar,
+            TodoConforme:               editable && (completo || vistoBuenoVigente),
             SaleConVistoBueno:          puedeIniciar && !completo,
             PuedeSolicitarAutorizacion: editable && !completo && autorizacion?.Estado is not ("pendiente" or "aprobada"),
-            TrasladoIniciado:           !editable && h.EstadoOs is "en_ruta" or "en_ejecucion" or "pausada" or "finalizada",
+            TrasladoIniciado:           !programada && h.EstadoOs is "en_ruta" or "en_ejecucion" or "pausada" or "finalizada",
             Autorizacion:               autorizacion,
-            AreaAutoriza:               area);
+            AreaAutoriza:               area,
+            SalidaHabilitada:           h.SalidaHabilitada,
+            SalidaMensaje:              SalidaNoDisponible(h));
     }
 
     private static ItemChecklistSalidaDto Manual(string codigo, string nombre, bool confirmado, bool editable, string? detalle) =>
@@ -173,6 +196,9 @@ public class MarcarItemChecklistSalidaMovilCasoDeUso(IPresalidaMovilRepositorio 
         if (hechos.IdTipoMensaje != 2 || hechos.Datos is null)
             return new(hechos.IdTipoMensaje, hechos.Mensaje);
 
+        if (ReglasChecklistSalida.SalidaNoDisponible(hechos.Datos) is { } antesDelDia)
+            return new(1, antesDelDia);
+
         if (codigoNormalizado == "pesas_patron" && !ReglasChecklistSalida.RequierePesasPatron(hechos.Datos.IdTipoServicio))
             return new(1, "Este tipo de servicio no usa pesas patrón.");
 
@@ -208,6 +234,9 @@ public class SolicitarAutorizacionSalidaMovilCasoDeUso(IPresalidaMovilRepositori
         var hechos = await repositorio.ObtenerHechosChecklistAsync(idUsuario, idOs, ct);
         if (hechos.IdTipoMensaje != 2 || hechos.Datos is null)
             return new(hechos.IdTipoMensaje, hechos.Mensaje);
+
+        if (ReglasChecklistSalida.SalidaNoDisponible(hechos.Datos) is { } antesDelDia)
+            return new(1, antesDelDia);
 
         var checklist = ReglasChecklistSalida.Evaluar(hechos.Datos);
         if (checklist.Faltantes.Count == 0)
@@ -261,7 +290,8 @@ public class IniciarTrasladoMovilCasoDeUso(IPresalidaMovilRepositorio repositori
         {
             var mensaje = !ReglasChecklistSalida.EstaProgramada(checklist.EstadoOs)
                 ? "El servicio ya no está programado."
-                : $"No puedes iniciar el traslado. Faltan: {string.Join(", ", checklist.Faltantes)}.";
+                : checklist.SalidaMensaje
+                  ?? $"No puedes iniciar el traslado. Faltan: {string.Join(", ", checklist.Faltantes)}.";
             return new(1, mensaje, checklist);
         }
 

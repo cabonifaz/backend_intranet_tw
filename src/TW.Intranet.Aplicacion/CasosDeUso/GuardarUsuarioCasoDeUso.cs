@@ -49,6 +49,13 @@ public class GuardarUsuarioCasoDeUso(
                 || nac.Date >= DateTime.Today || nac.Year < 1900))
             return new RespuestaDto<UsuarioGuardadoDto>(1, "La fecha de nacimiento no es válida.");
 
+        // Usuario de la app móvil: opcional; si viene debe tener el formato permitido (nunca un correo).
+        dto.NombreUsuario = string.IsNullOrWhiteSpace(dto.NombreUsuario)
+            ? null
+            : FormatoNombreUsuarioMovil.Normalizar(dto.NombreUsuario);
+        if (dto.NombreUsuario is not null && !FormatoNombreUsuarioMovil.EsValido(dto.NombreUsuario))
+            return new RespuestaDto<UsuarioGuardadoDto>(1, FormatoNombreUsuarioMovil.MensajeFormato);
+
         dto.Anexo   = string.IsNullOrWhiteSpace(dto.Anexo)   ? null : dto.Anexo.Trim().Replace("-", "").Replace(" ", "");
         dto.Troncal = string.IsNullOrWhiteSpace(dto.Troncal) ? null : dto.Troncal.Trim().Replace("-", "");
 

@@ -5,6 +5,13 @@
 --   p_anexo / p_troncal / p_fecha_nacimiento: contacto interno (reunión 02-oct)
 --   p_rol_sistema: nivel (administrador | supervisor | usuario | visor)
 --   p_id_supervisor: se ignora; el supervisor se calcula solo (SP_RecalcularSupervisores)
+--   p_nombre_usuario: usuario de la app móvil (App Mobile HU-01). La ficha lo gestiona para TODAS las áreas (Servicio Técnico
+--                     lo sugiere y los demás lo dejan en blanco si no usarán la app). El menú de la app sale del cargo (HU-28).
+--                       - con valor ........ lo asigna (único entre vigentes) y habilita el canal: intranet -> todos.
+--                       - vacío en edición . si el usuario tenía usuario de app, quita el acceso
+--                                            (todos -> intranet) y cierra la sesión de la app.
+--                       - vacío en otro caso no toca nombre_usuario ni canal_acceso.
+--   Requiere la migración 75 (columna usuario.nombre_usuario).
 DROP PROCEDURE IF EXISTS SP_GuardarUsuario;
 
 DELIMITER $$
@@ -22,7 +29,8 @@ CREATE PROCEDURE SP_GuardarUsuario(
     IN p_fecha_nacimiento               DATE,
     IN p_cargo                          VARCHAR(150) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_area                           VARCHAR(60)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
-    IN p_rol_sistema                    VARCHAR(80)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_nombre_usuario                 VARCHAR(50)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_rol_sistema                   VARCHAR(80)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_sede_operativa                 VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_id_supervisor                  BIGINT,
     IN p_habilitado_firma_inacal        TINYINT,
@@ -37,7 +45,13 @@ CREATE PROCEDURE SP_GuardarUsuario(
     IN p_id_usuario_ejecutor            BIGINT
 )
 proc: BEGIN
-    DECLARE v_id BIGINT;
+    DECLARE v_id              BIGINT;
+    DECLARE v_nombre_usuario  VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_area_anterior   VARCHAR(60) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_canal_anterior  VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_usuario_anterior VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_asignar_app     TINYINT DEFAULT 0;
+    DECLARE v_quitar_app      TINYINT DEFAULT 0;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -108,24 +122,56 @@ proc: BEGIN
         LEAVE proc;
     END IF;
 
+    -- ── Acceso a la app móvil (App Mobile HU-01) ─────────────────────────
+    SET v_nombre_usuario = NULLIF(LOWER(TRIM(IFNULL(p_nombre_usuario, ''))), '');
+
+    IF p_id_usuario <> 0 THEN
+        SELECT area, canal_acceso, nombre_usuario
+        INTO   v_area_anterior, v_canal_anterior, v_usuario_anterior
+        FROM   usuario
+        WHERE  id_usuario = p_id_usuario AND eliminado_en IS NULL;
+    END IF;
+
+    IF v_nombre_usuario IS NOT NULL THEN
+        IF v_canal_anterior = 'extranet' THEN
+            SELECT 1 AS IdTipoMensaje, 'Los usuarios del portal del cliente no pueden usar la app de campo.' AS Mensaje;
+            LEAVE proc;
+        END IF;
+
+        IF EXISTS (
+            SELECT 1 FROM usuario
+            WHERE nombre_usuario = v_nombre_usuario
+              AND eliminado_en IS NULL
+              AND (p_id_usuario = 0 OR id_usuario <> p_id_usuario)
+        ) THEN
+            SELECT 1 AS IdTipoMensaje,
+                   CONCAT('El usuario "', v_nombre_usuario, '" ya está asignado a otra persona.') AS Mensaje;
+            LEAVE proc;
+        END IF;
+
+        SET v_asignar_app = 1;
+    ELSEIF p_id_usuario <> 0 AND v_usuario_anterior IS NOT NULL THEN
+        SET v_quitar_app = 1;
+    END IF;
+
     START TRANSACTION;
 
     IF p_id_usuario = 0 THEN
         INSERT INTO usuario (
             nombre, apellido, tipo_documento, numero_documento, correo,
-            telefono, anexo, troncal, fecha_nacimiento, cargo, area, rol_sistema, sede_operativa,
+            telefono, anexo, troncal, fecha_nacimiento, cargo, area, nombre_usuario, rol_sistema, sede_operativa,
             id_supervisor, habilitado_firma_inacal, numero_registro_inacal,
             fecha_expiracion_certificacion, requiere_induccion_sctr,
             password_hash, forzar_cambio_contrasena, enviar_credenciales_correo,
             autenticacion_2fa, canal_acceso, estado, creado_en, creado_por
         ) VALUES (
             p_nombre, p_apellido, p_tipo_documento, p_numero_documento, p_correo,
-            p_telefono, NULLIF(p_anexo, ''), NULLIF(p_troncal, ''), p_fecha_nacimiento, p_cargo, NULLIF(p_area, ''), p_rol_sistema,
+            p_telefono, NULLIF(p_anexo, ''), NULLIF(p_troncal, ''), p_fecha_nacimiento, p_cargo, NULLIF(p_area, ''), v_nombre_usuario, p_rol_sistema,
             COALESCE(NULLIF(p_sede_operativa, ''), 'lima_central'),
             p_id_supervisor, IFNULL(p_habilitado_firma_inacal, 0), p_numero_registro_inacal,
             p_fecha_expiracion_certificacion, IFNULL(p_requiere_induccion_sctr, 0),
             p_password_hash, IFNULL(p_forzar_cambio_contrasena, 0), IFNULL(p_enviar_credenciales_correo, 1),
-            IFNULL(p_autenticacion_2fa, 0), 'intranet',
+            IFNULL(p_autenticacion_2fa, 0), IF(v_asignar_app = 1, 'todos', 'intranet'),
             IF(p_guardar_como_borrador = 1, 'borrador', 'activo'),
             NOW(), p_id_usuario_ejecutor
         );
@@ -143,6 +189,16 @@ proc: BEGIN
             fecha_nacimiento               = p_fecha_nacimiento,
             cargo                          = p_cargo,
             area                           = NULLIF(p_area, ''),
+            nombre_usuario                 = CASE
+                                                 WHEN v_asignar_app = 1 THEN v_nombre_usuario
+                                                 WHEN v_quitar_app  = 1 THEN NULL
+                                                 ELSE nombre_usuario
+                                             END,
+            canal_acceso                   = CASE
+                                                 WHEN v_asignar_app = 1 THEN IF(canal_acceso = 'intranet', 'todos', canal_acceso)
+                                                 WHEN v_quitar_app  = 1 THEN IF(canal_acceso = 'todos', 'intranet', canal_acceso)
+                                                 ELSE canal_acceso
+                                             END,
             rol_sistema                    = p_rol_sistema,
             sede_operativa                 = COALESCE(NULLIF(p_sede_operativa, ''), sede_operativa, 'lima_central'),
             id_supervisor                  = p_id_supervisor,
@@ -163,6 +219,19 @@ proc: BEGIN
             modificado_por                 = p_id_usuario_ejecutor
         WHERE id_usuario = p_id_usuario;
         SET v_id = p_id_usuario;
+
+        -- Sin usuario de app no hay sesión de app (igual que SP_AsignarAccesoMovil al deshabilitar).
+        IF v_quitar_app = 1 THEN
+            UPDATE sesion_usuario
+            SET    activo            = 0,
+                   fecha_revocacion  = NOW(),
+                   motivo_revocacion = 'ACCESO_DESHABILITADO',
+                   modificado_en     = NOW(),
+                   modificado_por    = p_id_usuario_ejecutor
+            WHERE  id_usuario      = p_id_usuario
+              AND  id_canal_acceso = 2
+              AND  activo          = 1;
+        END IF;
     END IF;
 
     COMMIT;

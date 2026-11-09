@@ -71,6 +71,15 @@ proc: BEGIN
     WHERE id_os = p_id_os AND eliminado_en IS NULL AND tipo = 'viatico_asignado' AND estado IN ('pendiente', 'aprobado');
     SET v_viaticos = ROW_COUNT();
 
+    -- HU-36: la programación vigente de la orden también queda cancelada (no se borra: sirve de historial)
+    UPDATE programacion SET estado = 'cancelada', modificado_por = p_id_usuario
+    WHERE id_os = p_id_os AND estado <> 'cancelada' AND eliminado_en IS NULL;
+
+    -- HU-38: una solicitud de reprogramación pendiente ya no tiene sentido
+    UPDATE os_reprogramacion SET estado = 'cancelada', resuelto_por = p_id_usuario, fecha_resolucion = NOW(),
+           comentario_resolucion = 'La orden fue anulada.', modificado_por = p_id_usuario
+    WHERE id_os = p_id_os AND estado = 'pendiente' AND eliminado_en IS NULL;
+
     UPDATE os_solicitud SET estado = 'cancelada', modificado_por = p_id_usuario
     WHERE id_os = p_id_os AND estado IN ('pendiente', 'aprobada') AND eliminado_en IS NULL;
 

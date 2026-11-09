@@ -76,16 +76,16 @@ proc: BEGIN
         END IF;
 
         IF EXISTS (SELECT 1 FROM propuesta_comercial p, propuesta_comercial p2
-                   WHERE p.id_propuesta = v_id_prop AND p2.numero = p.numero AND p2.estado = 'aceptado'
+                   WHERE p.id_propuesta = v_id_prop AND p2.numero_base = p.numero_base AND p2.estado = 'aceptado'
                      AND p2.eliminado_en IS NULL AND p2.version > p.version) THEN
             SELECT 1 AS IdTipoMensaje, 'Hay una versión aceptada más reciente de esta propuesta: genere la orden desde esa versión.' AS Mensaje;
             LEAVE proc;
         END IF;
 
         -- Varias OS/OM por propuesta: mientras queden equipos cotizados sin OS/OM activa
-        SELECT numero INTO v_num_prop FROM propuesta_comercial WHERE id_propuesta = v_id_prop;
+        SELECT numero_base INTO v_num_prop FROM propuesta_comercial WHERE id_propuesta = v_id_prop;
         SELECT COUNT(*) INTO v_os_activas
-        FROM orden_servicio os JOIN propuesta_comercial po ON po.id_propuesta = os.id_propuesta AND po.numero = v_num_prop
+        FROM orden_servicio os JOIN propuesta_comercial po ON po.id_propuesta = os.id_propuesta AND po.numero_base = v_num_prop
         WHERE os.eliminado_en IS NULL AND os.estado <> 'anulada';
         SELECT COUNT(DISTINCT pe.id_equipo) INTO v_eq_cotizados
         FROM propuesta_equipo pe WHERE pe.id_propuesta = v_id_prop AND pe.id_equipo IS NOT NULL;
@@ -94,7 +94,7 @@ proc: BEGIN
         WHERE pe.id_propuesta = v_id_prop AND pe.id_equipo IS NOT NULL
           AND NOT EXISTS (SELECT 1 FROM os_equipo oe
                           JOIN orden_servicio os ON os.id_os = oe.id_os AND os.eliminado_en IS NULL AND os.estado <> 'anulada'
-                          JOIN propuesta_comercial po ON po.id_propuesta = os.id_propuesta AND po.numero = v_num_prop
+                          JOIN propuesta_comercial po ON po.id_propuesta = os.id_propuesta AND po.numero_base = v_num_prop
                           WHERE oe.id_equipo = pe.id_equipo AND oe.eliminado_en IS NULL);
         IF (v_eq_cotizados > 0 AND v_eq_pend = 0) OR (v_eq_cotizados = 0 AND v_os_activas > 0) THEN
             SELECT 1 AS IdTipoMensaje,
@@ -211,24 +211,24 @@ proc: BEGIN
 
     -- 4. Conceptos (guardados o, en una OS nueva, los suministros de servicio de la propuesta como sugerencia)
     DROP TEMPORARY TABLE IF EXISTS tmp_os_conc;
-    CREATE TEMPORARY TABLE tmp_os_conc (id_os_concepto BIGINT, id_suministro BIGINT, codigo VARCHAR(30), descripcion VARCHAR(300),
+    CREATE TEMPORARY TABLE tmp_os_conc (id_os_concepto BIGINT, id_item BIGINT, id_suministro BIGINT, codigo VARCHAR(30), descripcion VARCHAR(300),
                                         alcance VARCHAR(100), orden INT, orden2 INT, sugerido TINYINT)
                                         DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
     IF v_id_os IS NOT NULL THEN
         INSERT INTO tmp_os_conc
-        SELECT oc.id, oc.id_suministro, oc.codigo, oc.descripcion, oc.alcance, oc.orden, oc.id, 0
+        SELECT oc.id, oc.id_item, oc.id_suministro, oc.codigo, oc.descripcion, oc.alcance, oc.orden, oc.id, 0
         FROM os_concepto oc WHERE oc.id_os = v_id_os AND oc.eliminado_en IS NULL;
     ELSE
         -- Un concepto por ítem de servicio de la propuesta (no se fusionan los del mismo suministro)
         INSERT INTO tmp_os_conc
-        SELECT NULL, s.id_suministro, s.codigo, s.descripcion, NULLIF(TRIM(i.alcance), ''),
+        SELECT NULL, i.id_item, s.id_suministro, s.codigo, s.descripcion, NULLIF(TRIM(i.alcance), ''),
                (CASE i.seccion WHEN 'principal' THEN 0 ELSE 100000 END) + IFNULL(i.orden, 0), i.id_item, 1
         FROM propuesta_item i
         JOIN suministros s ON s.id_suministro = i.id_catalogo_item AND s.clase = 'servicio' AND s.eliminado_en IS NULL
         WHERE i.id_propuesta = v_id_prop AND i.eliminado_en IS NULL AND IFNULL(i.es_espaciado, 0) = 0;
     END IF;
 
-    SELECT t.id_os_concepto, t.id_suministro, t.codigo, t.descripcion, t.alcance, t.sugerido,
+    SELECT t.id_os_concepto, t.id_item, t.id_suministro, t.codigo, t.descripcion, t.alcance, t.sugerido,
            tt.String1 AS clasificacion,
            EXISTS (SELECT 1 FROM propuesta_item pi WHERE pi.id_propuesta = v_id_prop AND pi.id_catalogo_item = t.id_suministro
                      AND pi.eliminado_en IS NULL AND IFNULL(pi.es_espaciado, 0) = 0) AS de_la_propuesta
@@ -263,7 +263,7 @@ proc: BEGIN
         WHERE pe.id_propuesta = v_id_prop AND pe.id_equipo IS NOT NULL
           AND NOT EXISTS (SELECT 1 FROM os_equipo oe
                           JOIN orden_servicio os ON os.id_os = oe.id_os AND os.eliminado_en IS NULL AND os.estado <> 'anulada'
-                          JOIN propuesta_comercial po ON po.id_propuesta = os.id_propuesta AND po.numero = v_num_prop
+                          JOIN propuesta_comercial po ON po.id_propuesta = os.id_propuesta AND po.numero_base = v_num_prop
                           WHERE oe.id_equipo = pe.id_equipo AND oe.eliminado_en IS NULL)
         GROUP BY pe.id_equipo;
     END IF;

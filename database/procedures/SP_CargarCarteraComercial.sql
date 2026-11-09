@@ -32,12 +32,12 @@ BEGIN
 
     -- Propuestas (última versión)
     INSERT INTO tmp_cartera
-    SELECT e.id_expediente, 'propuesta', p.id_propuesta, CONCAT(p.numero, ' v', p.version), p.estado,
+    SELECT e.id_expediente, 'propuesta', p.id_propuesta, p.numero, p.estado,
            LEFT(CONCAT_WS(' · ', p.tipo_servicio, p.referencia), 300)
     FROM propuesta_comercial p
     JOIN expediente_digital e ON e.id_requerimiento = p.id_requerimiento AND e.eliminado_en IS NULL
     WHERE p.eliminado_en IS NULL AND p.estado NOT IN ('rechazado', 'anulado')
-      AND p.version = (SELECT MAX(p2.version) FROM propuesta_comercial p2 WHERE p2.numero = p.numero AND p2.eliminado_en IS NULL)
+      AND p.version = (SELECT MAX(p2.version) FROM propuesta_comercial p2 WHERE p2.numero_base = p.numero_base AND p2.eliminado_en IS NULL)
       AND COALESCE(p.id_responsable, p.id_creador) = p_id_responsable;
 
     -- OC vigentes (el expediente de su primera propuesta vinculada)

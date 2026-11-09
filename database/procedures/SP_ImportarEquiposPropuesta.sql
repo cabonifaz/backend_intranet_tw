@@ -287,7 +287,12 @@ proc: BEGIN
            s.nombre                                  AS sede_nombre,
            ec.codigo_cliente,
            ec.ubicacion_especifica,
-           t.resultado
+           t.resultado,
+           ec.estado                                 AS estado_equipo,
+           CASE ec.estado WHEN 'activo' THEN 'Activo' WHEN 'inactivo' THEN 'Inactivo'
+                          WHEN 'borrador' THEN 'Borrador' ELSE NULL END AS estado_equipo_label,
+           (SELECT eo.String1 FROM tabla_maestra eo WHERE eo.IdMaestro = 83 AND eo.IdEmpresa = 1
+               AND eo.String2 = ec.estado_operativo LIMIT 1) AS estado_operativo_label
     FROM   tmp_importacion_equipos t
     JOIN   equipo_cliente ec ON ec.id_equipo = t.id_equipo
     LEFT   JOIN sede_cliente s  ON s.id_sede = ec.id_sede

@@ -36,6 +36,10 @@ public class PropuestasRepositorio(CadenaConexionBd conexion)
                 var idPrioridad = EnteroNulo(r, "id_prioridad");
                 var prioLabel   = Texto(r, "prioridad_label");
                 var descripcion = Texto(r, "descripcion") ?? "";
+                var esAcred     = Booleano(r, "es_acreditacion");
+                var cantAdj     = Entero(r, "cantidad_adjuntos");
+                var condCliente = Texto(r, "condicion_pago_cliente");
+                var condCodigo  = Texto(r, "condicion_pago_codigo");
 
                 PropuestaExistenteDto? existente = null;
                 await r.NextResultAsync(ct);
@@ -47,11 +51,11 @@ public class PropuestasRepositorio(CadenaConexionBd conexion)
                 return new RespuestaDto<DatosNuevaPropuestaDto>(2, mensaje, new DatosNuevaPropuestaDto(
                     idRq, numeroRq, estadoRq, idCliente, razonSocial, ruc, idSede, nombreSede,
                     idContacto, nombreCont, cargoCont, idArea, areaLabel, idPrioridad, prioLabel,
-                    descripcion, existente));
+                    descripcion, existente, esAcred, cantAdj, condCliente, condCodigo));
             }, ct);
 
     // ── Listado (bandeja HU-08) ───────────────────────────────────────────────
-    public Task<RespuestaDto<PropuestasPaginadoDto>> ObtenerPropuestasAsync(FiltrosPropuestasDto f, CancellationToken ct)
+    public Task<RespuestaDto<PropuestasPaginadoDto>> ObtenerPropuestasAsync(FiltrosPropuestasDto f, long idUsuario, CancellationToken ct)
         => EjecutarAsync("SP_ObtenerPropuestas",
             p =>
             {
@@ -64,6 +68,7 @@ public class PropuestasRepositorio(CadenaConexionBd conexion)
                 p.AddWithValue("p_anio",                Valor(f.Anio));
                 p.AddWithValue("p_id_comercial",        Valor(f.IdComercial));
                 p.AddWithValue("p_solo_ultima_version", Bit(f.SoloUltimaVersion));
+                p.AddWithValue("p_id_usuario",          idUsuario);
             },
             async (r, mensaje) =>
             {
@@ -90,12 +95,13 @@ public class PropuestasRepositorio(CadenaConexionBd conexion)
             }, ct);
 
     // ── KPIs (bandeja HU-08) ──────────────────────────────────────────────────
-    public Task<RespuestaDto<KpisPropuestasDto>> ObtenerKpisAsync(int? anio, long? idComercial, CancellationToken ct)
+    public Task<RespuestaDto<KpisPropuestasDto>> ObtenerKpisAsync(int? anio, long? idComercial, long idUsuario, CancellationToken ct)
         => EjecutarAsync("SP_ObtenerKpisPropuestas",
             p =>
             {
                 p.AddWithValue("p_anio",         Valor(anio));
                 p.AddWithValue("p_id_comercial", Valor(idComercial));
+                p.AddWithValue("p_id_usuario",   idUsuario);
             },
             async (r, mensaje) =>
             {
@@ -150,6 +156,9 @@ public class PropuestasRepositorio(CadenaConexionBd conexion)
                     TerceroRuc            = Texto(r, "tercero_ruc"),
                     TerceroRazonSocial    = Texto(r, "tercero_razon_social"),
                     TerceroDireccion      = Texto(r, "tercero_direccion"),
+                    IdClienteTercero      = EnteroLargoNulo(r, "id_cliente_tercero"),
+                    RqEsAcreditacion      = Booleano(r, "rq_es_acreditacion"),
+                    TipoPropuestaCodigo   = Texto(r, "tipo_propuesta_codigo"),
                     IdMoneda              = Entero(r, "id_moneda"),
                     Moneda                = Texto(r, "moneda"),
                     MonedaSimbolo         = Texto(r, "moneda_simbolo"),
@@ -183,7 +192,7 @@ public class PropuestasRepositorio(CadenaConexionBd conexion)
                     UltimaEdicionEn       = FechaHora(r, "ultima_edicion_en"),
                     UltimaEdicionPor      = Texto(r, "ultima_edicion_por"),
                 };
-                d.EsEditable = d.Estado == "borrador";
+                d.EsEditable = d.Estado is "borrador" or "aprobado";
 
                 // Ítems
                 await r.NextResultAsync(ct);
@@ -246,6 +255,16 @@ public class PropuestasRepositorio(CadenaConexionBd conexion)
                         CodigoCliente = Texto(r, "codigo_cliente"),
                         CodigoTw      = Texto(r, "codigo_tw"),
                         Orden         = Entero(r, "orden"),
+                        EstadoEquipo         = Texto(r, "estado_equipo"),
+                        EstadoEquipoLabel    = Texto(r, "estado_equipo_label"),
+                        EstadoOperativoLabel = Texto(r, "estado_operativo_label"),
+                        Estado               = Texto(r, "estado_equipo") switch
+                        {
+                            "activo"   => "Activo",
+                            "inactivo" => "Inactivo",
+                            "borrador" => "Borrador",
+                            _          => null,
+                        },
                     });
 
                 return new RespuestaDto<PropuestaDetalleDto>(2, mensaje, d);
@@ -336,6 +355,7 @@ public class PropuestasRepositorio(CadenaConexionBd conexion)
                 p.AddWithValue("p_pagos_json",              JsonSerializer.Serialize(pagos));
                 p.AddWithValue("p_equipos_json",            JsonSerializer.Serialize(equipos));
                 p.AddWithValue("p_id_usuario",              idUsuario);
+                p.AddWithValue("p_id_cliente_tercero",      dto.EsTercerizado && dto.IdClienteTercero is > 0 ? (object)dto.IdClienteTercero.Value : DBNull.Value);
             },
             async (r, mensaje) =>
             {

@@ -39,5 +39,9 @@ public record UsuarioDetalleDto(
     // Contacto interno (reunión 02-oct)
     string?   Anexo,
     string?   FechaNacimiento,
-    string?   Troncal
+    string?   Troncal,
+
+    // Acceso a la app móvil (App Mobile HU-01)
+    string?   NombreUsuario = null,
+    string?   CanalAcceso = null
 );

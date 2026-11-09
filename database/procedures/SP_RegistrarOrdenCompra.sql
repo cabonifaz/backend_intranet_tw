@@ -86,7 +86,7 @@ proc: BEGIN
         LEAVE proc;
     END IF;
 
-    SELECT id_cliente, COALESCE(id_responsable, id_creador), CONCAT(numero, ' v', version)
+    SELECT id_cliente, COALESCE(id_responsable, id_creador), numero
       INTO v_id_cliente, v_id_resp, v_numero_prop
     FROM propuesta_comercial WHERE id_propuesta = p_id_propuesta;
     IF v_id_cliente IS NULL THEN

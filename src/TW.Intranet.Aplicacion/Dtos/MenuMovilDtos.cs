@@ -6,7 +6,11 @@ namespace TW.Intranet.Aplicacion.Dtos;
 public record ResumenMenuMovilDto(
     int                      ServiciosAsignados,
     int                      ServiciosHoy,
-    ProximoServicioMovilDto? ProximoServicio);
+    ProximoServicioMovilDto? ProximoServicio,
+    decimal                  ViaticosSaldoPorRendir = 0,   // viáticos activos: asignado - rendido
+    int                      ViaticosActivos = 0,
+    decimal                  GastosEnRevision = 0,         // gastos rendidos esperando al Jefe de Operaciones
+    int                      GastosEnRevisionCantidad = 0);
 
 /// <summary>OS en curso o la siguiente por fecha y hora (banner "Próximo Hit").</summary>
 public record ProximoServicioMovilDto(

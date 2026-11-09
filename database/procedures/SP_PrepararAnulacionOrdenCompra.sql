@@ -77,7 +77,7 @@ proc: BEGIN
            FN_SaldoPropuestaOc(op.id_propuesta, p_id_oc)           AS saldo_despues,
            (p.estado = 'aceptado'
             AND NOT EXISTS (SELECT 1 FROM propuesta_comercial pn
-                            WHERE pn.numero = p.numero AND pn.version > p.version AND pn.eliminado_en IS NULL
+                            WHERE pn.numero_base = p.numero_base AND pn.version > p.version AND pn.eliminado_en IS NULL
                               AND pn.estado NOT IN ('anulado', 'revocada'))
             AND NOT EXISTS (SELECT 1 FROM oc_propuesta o2 JOIN orden_compra c2 ON c2.id_oc = o2.id_oc
                             WHERE o2.id_propuesta = op.id_propuesta AND o2.eliminado_en IS NULL AND o2.id_oc <> p_id_oc

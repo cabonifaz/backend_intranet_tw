@@ -132,6 +132,13 @@ public class SuministrosRepositorio(CadenaConexionBd conexion)
             },
             (_, mensaje) => Task.FromResult(new RespuestaDto<object>(2, mensaje)), ct);
 
+    private static bool TieneColumna(MySqlDataReader r, string col)
+    {
+        for (int i = 0; i < r.FieldCount; i++)
+            if (string.Equals(r.GetName(i), col, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
     private static SuministroListaItemDto LeerListaItem(MySqlDataReader r) => new(
         IdSuministro:       EnteroLargo(r, "id_suministro"),
         Codigo:             Texto(r, "codigo") ?? "",
@@ -149,5 +156,21 @@ public class SuministrosRepositorio(CadenaConexionBd conexion)
         ProcedenciaLabel:   Texto(r, "procedencia_label") ?? "",
         Estado:             Texto(r, "estado") ?? "",
         EsActivoEnCatalogo: Booleano(r, "es_activo_en_catalogo"),
-        UsarEnPropuestas:   Booleano(r, "usar_en_propuestas"));
+        UsarEnPropuestas:   Booleano(r, "usar_en_propuestas"),
+        IdPrimerProcedimiento:  TieneColumna(r, "primer_procedimiento") ? Texto(r, "id_primer_procedimiento")  : null,
+        PrimerProcedimiento:    TieneColumna(r, "primer_procedimiento") ? Texto(r, "primer_procedimiento")               : null,
+        IdSegundoProcedimiento: TieneColumna(r, "segundo_procedimiento") ? Texto(r, "id_segundo_procedimiento") : null,
+        SegundoProcedimiento:   TieneColumna(r, "segundo_procedimiento") ? Texto(r, "segundo_procedimiento")              : null,
+        PrimerProcedimientoDetalle:  ResumenProcedimiento(r, "id_primer_procedimiento",  "p1_"),
+        SegundoProcedimientoDetalle: ResumenProcedimiento(r, "id_segundo_procedimiento", "p2_"));
+
+    /// <summary>Resumen del procedimiento si el SP trae sus columnas (p1_/p2_) y el suministro tiene código.</summary>
+    private static ProcedimientoResumenDto? ResumenProcedimiento(MySqlDataReader r, string colCodigo, string prefijo)
+    {
+        if (!TieneColumna(r, prefijo + "norma")) return null;
+        var codigo = Texto(r, colCodigo);
+        if (string.IsNullOrWhiteSpace(codigo)) return null;
+        return new ProcedimientoResumenDto(codigo.Trim(), Texto(r, prefijo + "norma"), EnteroNulo(r, prefijo + "version"),
+            EnteroNulo(r, prefijo + "anio"), Texto(r, prefijo + "autor"), Texto(r, prefijo + "descripcion"));
+    }
 }

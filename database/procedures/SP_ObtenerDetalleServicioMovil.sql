@@ -3,15 +3,29 @@
 -- Detalle de una OS para el técnico que inició sesión. Solo lectura.
 -- Seguridad: si la OS no existe o el técnico no es principal ni integra el personal,
 -- responde el MISMO mensaje (no se revela si la OS existe: evita IDOR / enumeración).
--- Resultados:
+-- HU-03: un servicio BLOQUEADO no entrega su detalle hasta que se levante el motivo (misma regla que la agenda, en
+--   SP_ObtenerBloqueoServicioMovil). Responde IdTipoMensaje 1 con el motivo.
+-- Lo que registra la intranet en "Programación Operativa" (modal Detalle de la Programación, HU-36/37/38) se refleja aquí:
+--   horario (inicio–fin y duración), código y observaciones de la programación, equipo de trabajo con su SSOMA de hoy,
+--   equipos confirmados para la programación, conceptos del servicio, respuestas del cliente y la línea de tiempo.
+--   No se muestran los viáticos (montos de otros técnicos) ni las acciones de gestión (reprogramar, cancelar, registrar respuesta).
+--   El motivo SSOMA solo se muestra para el propio técnico; de sus compañeros solo se ve el estado.
+-- Resultados (el orden de los 7 primeros no cambia; los nuevos van al final):
 --   1. Encabezado (IdTipoMensaje, Mensaje)
---   2. Detalle: destino, contacto, documentos (RQ / OS / OM), estado y chips
+--   2. Detalle: destino, contacto, documentos (RQ / OS / OM), horario, estado y chips
 --   3. Alertas predictivas sin resolver
 --   4. Riesgos identificados (os_riesgo + catálogo RIESGO_OPERATIVO)
 --   5. Repuestos a llevar (item_presalida tipo REPUESTO)
---   6. Historial: cambios del equipo (equipo_historial) y del servicio (auditoria_evento),
+--   6. Historial: cambios del equipo (equipo_historial) y del servicio y su programación (auditoria_evento),
 --      cada uno con su valor anterior y actual
 --   7. Documentación (adjuntos de la OS y del expediente visibles para todos)
+--   8. Programación vigente de la OS (0 o 1 fila): código, estado y observaciones
+--   9. Equipo de trabajo (principal primero) con cargo, rol y SSOMA actual
+--  10. Equipos del servicio (los confirmados en la programación; si no hay programación, los de la OS)
+--  11. Conceptos del servicio
+--  12. Respuestas del cliente registradas (la más reciente primero)
+-- SSOMA actual: SP_EvaluarSsomaProgramacion (la misma regla del buscador y de Programar, con la fecha del servicio).
+-- Sin funciones almacenadas (exigen SUPER). Las tablas temporales se borran al terminar.
 -- ============================================================
 DROP PROCEDURE IF EXISTS SP_ObtenerDetalleServicioMovil;
 
@@ -26,14 +40,32 @@ proc: BEGIN
     DECLARE v_id_cliente    BIGINT;
     DECLARE v_id_sede       BIGINT;
     DECLARE v_id_contacto   BIGINT;
+    DECLARE v_id_prog       BIGINT       DEFAULT NULL;
+    DECLARE v_estado_os     VARCHAR(25)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_fecha         DATE;
+    DECLARE v_aplica        TINYINT      DEFAULT 0;
+    DECLARE v_n_eq_prog     INT          DEFAULT 0;
+    DECLARE v_bloqueo       VARCHAR(600) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        GET DIAGNOSTICS CONDITION 1
+            @err_msg  = MESSAGE_TEXT,
+            @err_code = MYSQL_ERRNO;   -- primero: la limpieza de abajo genera notas que reemplazan el diagnóstico
+        DROP TEMPORARY TABLE IF EXISTS tmp_mov_tec;
+        DROP TEMPORARY TABLE IF EXISTS tmp_ssoma_in;
+        CALL SP_LimpiarSsomaProgramacion();
+        SELECT 3 AS IdTipoMensaje,
+               CONCAT('[MySQL ', @err_code, '] ', @err_msg) AS Mensaje;
+    END;
 
     IF NOT EXISTS (SELECT 1 FROM usuario WHERE id_usuario = p_id_usuario AND eliminado_en IS NULL) THEN
         SELECT 1 AS IdTipoMensaje, 'Usuario no encontrado.' AS Mensaje;
         LEAVE proc;
     END IF;
 
-    SELECT os.id_expediente, os.id_cliente, os.id_sede
-    INTO   v_id_expediente, v_id_cliente, v_id_sede
+    SELECT os.id_expediente, os.id_cliente, os.id_sede, os.estado, os.fecha_ejecucion
+    INTO   v_id_expediente, v_id_cliente, v_id_sede, v_estado_os, v_fecha
     FROM   orden_servicio os
     WHERE  os.id_os = p_id_os
       AND  os.eliminado_en IS NULL
@@ -43,6 +75,14 @@ proc: BEGIN
 
     IF v_id_cliente IS NULL THEN
         SELECT 1 AS IdTipoMensaje, 'Servicio no encontrado o no asignado a tu usuario.' AS Mensaje;
+        LEAVE proc;
+    END IF;
+
+    -- HU-03: el detalle de un servicio bloqueado no se entrega hasta que se levante el motivo.
+    CALL SP_ObtenerBloqueoServicioMovil(p_id_os, p_id_usuario, v_bloqueo);
+    IF v_bloqueo IS NOT NULL THEN
+        SELECT 1 AS IdTipoMensaje,
+               CONCAT('Servicio bloqueado: ', v_bloqueo, '. El detalle se habilita cuando se levante el motivo.') AS Mensaje;
         LEAVE proc;
     END IF;
 
@@ -56,6 +96,42 @@ proc: BEGIN
              (c.es_contacto_principal = 1) DESC,
              c.id_contacto
     LIMIT 1;
+
+    -- Programación vigente de la OS (una sola activa a la vez; la regla la valida SP_CrearProgramacion).
+    SELECT pr.id_programacion INTO v_id_prog
+    FROM   programacion pr
+    WHERE  pr.id_os = p_id_os AND pr.estado <> 'cancelada' AND pr.eliminado_en IS NULL
+    ORDER BY pr.id_programacion DESC
+    LIMIT 1;
+
+    SELECT COUNT(*) INTO v_n_eq_prog
+    FROM   programacion_equipo pe
+    WHERE  pe.id_programacion = v_id_prog AND pe.eliminado_en IS NULL;
+
+    -- El SSOMA solo aplica mientras la orden sigue programada y su fecha es de hoy en adelante (como en la intranet).
+    SET v_aplica = IF(v_estado_os IN ('programada', 'reprogramada') AND v_fecha IS NOT NULL AND v_fecha >= CURDATE(), 1, 0);
+
+    -- ── Equipo de trabajo y su situación SSOMA de hoy ─────────────────────────
+    DROP TEMPORARY TABLE IF EXISTS tmp_mov_tec;
+    DROP TEMPORARY TABLE IF EXISTS tmp_ssoma_in;
+    CREATE TEMPORARY TABLE tmp_mov_tec (id_usuario BIGINT NOT NULL, rol VARCHAR(10) NOT NULL, PRIMARY KEY (id_usuario));
+    IF v_id_prog IS NOT NULL THEN
+        INSERT IGNORE INTO tmp_mov_tec (id_usuario, rol)
+        SELECT pt.id_usuario, pt.rol FROM programacion_tecnico pt
+        WHERE  pt.id_programacion = v_id_prog AND pt.eliminado_en IS NULL;
+    ELSE
+        -- OS anterior a la programación operativa: el equipo sale de la propia OS.
+        INSERT IGNORE INTO tmp_mov_tec (id_usuario, rol)
+        SELECT os.id_tecnico_principal, 'principal' FROM orden_servicio os
+        WHERE  os.id_os = p_id_os AND os.id_tecnico_principal IS NOT NULL;
+        INSERT IGNORE INTO tmp_mov_tec (id_usuario, rol)
+        SELECT op.id_usuario, 'apoyo' FROM os_personal op
+        WHERE  op.id_os = p_id_os AND op.eliminado_en IS NULL;
+    END IF;
+
+    CREATE TEMPORARY TABLE tmp_ssoma_in (id_usuario BIGINT NOT NULL, PRIMARY KEY (id_usuario));
+    INSERT INTO tmp_ssoma_in (id_usuario) SELECT id_usuario FROM tmp_mov_tec;
+    CALL SP_EvaluarSsomaProgramacion(p_id_os, v_fecha);
 
     SELECT 2 AS IdTipoMensaje, 'Éxito.' AS Mensaje;
 
@@ -73,13 +149,16 @@ proc: BEGIN
             ORDER BY t.IdMaestro DESC LIMIT 1)                              AS tipo_servicio,
            os.fecha_ejecucion,
            TIME_FORMAT(os.hora_inicio, '%H:%i')                             AS hora_inicio,
+           TIME_FORMAT(os.hora_fin_estimada, '%H:%i')                       AS hora_fin,
+           IF(os.hora_inicio IS NOT NULL AND os.hora_fin_estimada > os.hora_inicio,
+              ROUND(TIME_TO_SEC(TIMEDIFF(os.hora_fin_estimada, os.hora_inicio)) / 3600, 2), NULL) AS duracion_horas,
            os.estado                                                        AS estado_os,
            s.nombre                                                         AS sede,
            NULLIF(CONCAT_WS(', ', NULLIF(s.direccion_exacta, ''), NULLIF(s.distrito, ''), NULLIF(s.provincia, '')), '') AS direccion,
            ct.nombres                                                       AS contacto_nombre,
            ct.cargo                                                         AS contacto_cargo,
            COALESCE(NULLIF(ct.telefono_movil, ''), NULLIF(ct.telefono_anexo, '')) AS contacto_telefono,
-           TRIM(CONCAT(IFNULL(tp.nombre, ''), ' ', IFNULL(tp.apellido, '')))  AS responsable,
+           TRIM(CONCAT(IFNULL(tp.nombre, ''), ' ', IFNULL(tp.apellido, ''))) AS responsable,
            os.confirmacion_cliente                                          AS cliente_confirmado,
            COALESCE(
                (SELECT op.estado_ssoma FROM os_personal op
@@ -89,7 +168,13 @@ proc: BEGIN
                             WHEN COUNT(*) > 0 THEN 'habilitado' END
                 FROM   os_personal op WHERE op.id_os = os.id_os AND op.eliminado_en IS NULL),
                'pendiente')                                                 AS estado_ssoma,
-           (SELECT COUNT(*) FROM os_equipo oe WHERE oe.id_os = os.id_os AND oe.eliminado_en IS NULL) AS objetivos_total,
+           -- Objetivos = equipos de la OS que se confirmaron en la programación (si no hay selección, todos los de la OS)
+           (SELECT COUNT(*) FROM os_equipo oe
+            WHERE  oe.id_os = os.id_os AND oe.eliminado_en IS NULL
+              AND  (v_n_eq_prog = 0
+                    OR EXISTS (SELECT 1 FROM programacion_equipo pe
+                               WHERE pe.id_programacion = v_id_prog AND pe.id_equipo = oe.id_equipo
+                                 AND pe.eliminado_en IS NULL)))             AS objetivos_total,
            os.notas_operativas
     FROM   orden_servicio os
     LEFT JOIN cliente            cl ON cl.id_cliente       = os.id_cliente
@@ -136,7 +221,7 @@ proc: BEGIN
     WHERE  ip.id_os = p_id_os AND ip.id_tipo_item = 1 AND ip.eliminado_en IS NULL
     ORDER BY ip.confirmado, ip.id_item;
 
-    -- 6. Historial: modificación anterior y actual
+    -- 6. Historial: modificación anterior y actual (equipo, servicio y programación; mismos títulos que la intranet)
     SELECT h.fecha, h.origen, h.titulo, h.referencia, h.valor_anterior, h.valor_nuevo, h.detalle, h.usuario
     FROM (
         SELECT eh.registrado_en                                              AS fecha,
@@ -159,6 +244,8 @@ proc: BEGIN
                    WHEN 'solicitar_autorizacion_salida'  THEN 'Solicitud de autorización'
                    WHEN 'visto_bueno_salida'             THEN 'Visto bueno de salida del encargado del área'
                    WHEN 'iniciar_traslado'               THEN 'Inicio de traslado'
+                   WHEN 'programar_os'                   THEN 'Programación creada'
+                   WHEN 'anular_os'                      THEN 'Orden anulada: programación cancelada'
                    ELSE REPLACE(a.accion, '_', ' ')
                END,
                NULL,
@@ -169,6 +256,35 @@ proc: BEGIN
         FROM   auditoria_evento a
         LEFT JOIN usuario u ON u.id_usuario = a.id_usuario
         WHERE  a.entidad_tipo = 'orden_servicio' AND a.id_entidad = p_id_os
+          -- cancelar_programacion se registra también sobre la programación (rama de abajo): no se duplica.
+          -- derivar_ssoma trae los documentos SSOMA de todos los técnicos: no es para la app.
+          AND  a.accion NOT IN ('cancelar_programacion', 'derivar_ssoma')
+        UNION ALL
+        SELECT a.registrado_en,
+               'servicio',
+               CASE a.accion
+                   WHEN 'respuesta_cliente'                  THEN 'Respuesta del cliente'
+                   WHEN 'cancelar_programacion'              THEN 'Programación cancelada'
+                   WHEN 'solicitar_reprogramacion'           THEN 'Reprogramación solicitada'
+                   WHEN 'reprogramacion_directa'             THEN 'Reprogramación (edición directa del Jefe)'
+                   WHEN 'aprobar_reprogramacion'             THEN 'Reprogramación aprobada'
+                   WHEN 'rechazar_reprogramacion'            THEN 'Reprogramación rechazada'
+                   WHEN 'retirar_solicitud_reprogramacion'   THEN 'Solicitud de reprogramación retirada'
+                   ELSE REPLACE(a.accion, '_', ' ')
+               END,
+               NULL,
+               a.estado_anterior,
+               a.estado_nuevo,
+               a.descripcion,
+               TRIM(CONCAT(IFNULL(u.nombre, ''), ' ', IFNULL(u.apellido, '')))
+        FROM   auditoria_evento a
+        LEFT JOIN usuario u ON u.id_usuario = a.id_usuario
+        WHERE  a.entidad_tipo = 'programacion'
+          -- Solo los eventos de la línea de tiempo de la intranet; asignar_viaticos y cerrar_rendicion llevan montos de otros técnicos.
+          AND  a.accion IN ('respuesta_cliente', 'cancelar_programacion', 'solicitar_reprogramacion', 'reprogramacion_directa',
+                            'aprobar_reprogramacion', 'rechazar_reprogramacion', 'retirar_solicitud_reprogramacion')
+          AND  a.id_entidad IN (SELECT pg.id_programacion FROM programacion pg
+                                WHERE pg.id_os = p_id_os AND pg.eliminado_en IS NULL)
     ) h
     ORDER BY h.fecha DESC
     LIMIT 20;
@@ -186,6 +302,62 @@ proc: BEGIN
             OR (d.entidad_tipo = 'expediente' AND d.id_entidad = v_id_expediente AND d.id_visibilidad IN (1, 5)))
     ORDER BY d.fecha_carga DESC
     LIMIT 30;
+
+    -- 8. Programación vigente (0 filas si la OS es anterior a la programación operativa)
+    SELECT pr.codigo,
+           pr.estado,
+           CASE pr.estado WHEN 'pendiente_confirmacion' THEN 'Pendiente confirmación cliente'
+                          WHEN 'confirmada'             THEN 'Programado'
+                          WHEN 'cancelada'              THEN 'Cancelada' END AS estado_label,
+           pr.observaciones
+    FROM   programacion pr
+    WHERE  pr.id_programacion = v_id_prog;
+
+    -- 9. Equipo de trabajo (principal primero). El motivo SSOMA solo se muestra para el propio técnico.
+    SELECT TRIM(CONCAT(u.nombre, ' ', u.apellido))                                           AS nombre,
+           COALESCE(cg.String1, u.cargo, IF(u.area = 'metrologia', 'Metrología', 'Servicio Técnico')) AS cargo,
+           t.rol,
+           IF(t.id_usuario = p_id_usuario, 1, 0)                                             AS es_usuario,
+           r.estado                                                                          AS ssoma_actual,
+           IF(v_aplica = 1 AND t.id_usuario = p_id_usuario, NULLIF(r.motivo_bloqueo, ''), NULL) AS ssoma_motivo
+    FROM   tmp_mov_tec t
+    JOIN   usuario u            ON u.id_usuario = t.id_usuario
+    LEFT JOIN tabla_maestra cg  ON cg.IdMaestro = 80 AND cg.IdEmpresa = 1 AND cg.String2 = u.cargo
+    LEFT JOIN tmp_ssoma_res r   ON r.id_usuario = t.id_usuario
+    ORDER BY t.rol = 'apoyo', u.nombre, u.apellido;
+
+    -- 10. Equipos del servicio (confirmados en la programación; sin selección, todos los de la OS)
+    SELECT ec.id_equipo, ec.codigo_tw, ec.marca, ec.modelo, ec.num_serie
+    FROM   os_equipo oe
+    JOIN   equipo_cliente ec ON ec.id_equipo = oe.id_equipo
+    WHERE  oe.id_os = p_id_os AND oe.eliminado_en IS NULL
+      AND  (v_n_eq_prog = 0
+            OR EXISTS (SELECT 1 FROM programacion_equipo pe
+                       WHERE pe.id_programacion = v_id_prog AND pe.id_equipo = oe.id_equipo AND pe.eliminado_en IS NULL))
+    ORDER BY ec.codigo_tw, ec.id_equipo;
+
+    -- 11. Conceptos del servicio
+    SELECT oc.id AS id_concepto, oc.codigo, oc.descripcion, oc.alcance
+    FROM   os_concepto oc
+    WHERE  oc.id_os = p_id_os AND oc.eliminado_en IS NULL
+    ORDER BY IFNULL(oc.orden, oc.id);
+
+    -- 12. Respuestas del cliente registradas (la más reciente primero)
+    SELECT pc.id, pc.canal,
+           CASE pc.canal WHEN 'correo' THEN 'Correo' WHEN 'whatsapp' THEN 'WhatsApp'
+                         WHEN 'llamada' THEN 'Llamada' ELSE 'Presencial' END            AS canal_label,
+           pc.resultado,
+           CASE pc.resultado WHEN 'acepto' THEN 'Aceptó la programación'
+                             WHEN 'pidio_reprogramar' THEN 'Pidió reprogramar' ELSE 'Canceló' END AS resultado_label,
+           pc.comentario, pc.fecha_registro, TRIM(CONCAT(ur.nombre, ' ', ur.apellido)) AS registrado_por
+    FROM   programacion_confirmacion pc
+    LEFT JOIN usuario ur ON ur.id_usuario = pc.id_registrado_por
+    WHERE  pc.id_programacion = v_id_prog AND pc.eliminado_en IS NULL
+    ORDER BY pc.id DESC;
+
+    DROP TEMPORARY TABLE IF EXISTS tmp_mov_tec;
+    DROP TEMPORARY TABLE IF EXISTS tmp_ssoma_in;
+    CALL SP_LimpiarSsomaProgramacion();
 END$$
 
 DELIMITER ;

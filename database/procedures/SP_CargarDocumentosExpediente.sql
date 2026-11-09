@@ -81,7 +81,7 @@ BEGIN
 
     -- Propuestas (PDF generado en cada descarga), una por versión
     INSERT INTO tmp_exp_doc
-    SELECT CONCAT('prop-', p.id_propuesta), CONCAT(p.numero, '-v', p.version, '.pdf'), CONCAT(p.numero, '-v', p.version, '.pdf'),
+    SELECT CONCAT('prop-', p.id_propuesta), CONCAT(p.numero, '.pdf'), CONCAT(p.numero, '.pdf'),
            'Propuesta', 'comerciales', 'Propuesta',
            IF(p.estado IN ('aprobado', 'enviado', 'aceptado')
               OR EXISTS (SELECT 1 FROM visto_bueno v WHERE v.id_propuesta = p.id_propuesta AND v.tipo = 'aprobacion'
@@ -90,7 +90,7 @@ BEGIN
            CASE
                WHEN p.estado = 'anulado'                                                   THEN 'ANULADO'
                WHEN EXISTS (SELECT 1 FROM propuesta_comercial p2
-                            WHERE p2.numero = p.numero AND p2.version > p.version AND p2.eliminado_en IS NULL) THEN 'HISTÓRICO'
+                            WHERE p2.numero_base = p.numero_base AND p2.version > p.version AND p2.eliminado_en IS NULL) THEN 'HISTÓRICO'
                WHEN p.estado = 'aceptado'                                                   THEN 'ACEPTADO'
                WHEN p.estado IN ('aprobado', 'enviado')                                     THEN 'APROBADO'
                WHEN p.estado IN ('pendiente_vb', 'pendiente_revocacion')                    THEN 'EN REVISIÓN'

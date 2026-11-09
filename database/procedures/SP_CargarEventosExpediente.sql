@@ -80,7 +80,7 @@ BEGIN
            a.id_usuario, a.entidad_tipo,
            CASE a.entidad_tipo
                WHEN 'expediente'   THEN (SELECT e.numero FROM expediente_digital e WHERE e.id_expediente = a.id_entidad)
-               WHEN 'propuesta'    THEN (SELECT CONCAT(p.numero, ' v', p.version) FROM propuesta_comercial p WHERE p.id_propuesta = a.id_entidad)
+               WHEN 'propuesta'    THEN (SELECT p.numero FROM propuesta_comercial p WHERE p.id_propuesta = a.id_entidad)
                WHEN 'orden_compra' THEN (SELECT CONCAT('OC ', oc.numero_oc) FROM orden_compra oc WHERE oc.id_oc = a.id_entidad)
                WHEN 'orden_servicio' THEN (SELECT os.numero FROM orden_servicio os WHERE os.id_os = a.id_entidad)
            END,
@@ -125,7 +125,7 @@ BEGIN
                          ELSE CONCAT('Visto bueno ', REPLACE(v.estado, '_', ' ')) END,
            NULLIF(TRIM(IFNULL(v.comentario_respuesta, '')), ''),
            'visto_bueno', IFNULL(v.resuelto_por, v.id_aprobador), 'visto_bueno',
-           (SELECT CONCAT(p.numero, ' v', p.version) FROM propuesta_comercial p WHERE p.id_propuesta = v.id_propuesta),
+           (SELECT p.numero FROM propuesta_comercial p WHERE p.id_propuesta = v.id_propuesta),
            (v.estado IN ('rechazado', 'devuelto')), 'Visto Bueno'
     FROM visto_bueno v
     WHERE v.id_propuesta IN (SELECT id_propuesta FROM tmp_exp_props)
@@ -143,7 +143,7 @@ BEGIN
                           IF(s.estado = 'cerrado_rechazo', mr.String1, NULL),
                           NULLIF(TRIM(IFNULL(s.asunto, '')), ''), NULLIF(TRIM(IFNULL(s.notas, '')), '')), 2000),
            'seguimiento', s.creado_por, 'seguimiento',
-           (SELECT CONCAT(p.numero, ' v', p.version) FROM propuesta_comercial p WHERE p.id_propuesta = s.id_propuesta),
+           (SELECT p.numero FROM propuesta_comercial p WHERE p.id_propuesta = s.id_propuesta),
            (s.estado = 'cerrado_rechazo'), 'Seguimiento'
     FROM seguimiento_comercial s
     LEFT JOIN tabla_maestra c  ON c.IdMaestro = 26 AND c.IdEmpresa = 1 AND c.Num1 = s.id_canal
@@ -156,7 +156,7 @@ BEGIN
     INSERT INTO tmp_exp_evt
     SELECT IFNULL(sc.fecha_envio, sc.creado_en), 'seguimiento', 'seguimiento_correo', 'Correo de seguimiento enviado',
            LEFT(CONCAT('Asunto: ', IFNULL(sc.asunto, '(sin asunto)')), 2000), 'seguimiento', sc.id_usuario, 'seguimiento',
-           (SELECT CONCAT(p.numero, ' v', p.version) FROM propuesta_comercial p WHERE p.id_propuesta = sc.id_propuesta),
+           (SELECT p.numero FROM propuesta_comercial p WHERE p.id_propuesta = sc.id_propuesta),
            0, 'Seguimiento'
     FROM seguimiento_correo sc
     WHERE sc.id_propuesta IN (SELECT id_propuesta FROM tmp_exp_props) AND sc.eliminado_en IS NULL AND sc.estado = 'enviado';

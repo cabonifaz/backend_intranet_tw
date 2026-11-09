@@ -10,5 +10,5 @@ public class ObtenerSuministrosCasoDeUso(ISuministrosRepositorio repositorio)
         int pagina, int porPagina, CancellationToken ct = default)
         => repositorio.ObtenerSuministrosAsync(
             busqueda, clase, tipo, estado, soloEnPropuestas, excluirServicios,
-            Math.Max(pagina, 1), Math.Clamp(porPagina, 1, 100), ct);
+            Math.Max(pagina, 1), Math.Clamp(porPagina, 1, 1000), ct);
 }

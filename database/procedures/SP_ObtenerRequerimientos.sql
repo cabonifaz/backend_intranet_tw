@@ -1,8 +1,8 @@
 -- ============================================================
 -- SP_ObtenerRequerimientos
 -- Lista paginada de requerimientos con KPIs.
--- RBAC: comercial ve solo sus RQs (y los de quien es suplente).
---       administrador y supervisor ven todos (jefe_comercial/admin: tokens anteriores a la migración 34).
+-- Alcance (pedido 14, SP_ObtenerAlcanceCrm): usuario → sus RQs + suplencias vigentes;
+--       supervisor / administrador / visor → su área; gerencia / TI → todo. KPIs sobre el mismo subconjunto.
 -- ============================================================
 DROP PROCEDURE IF EXISTS SP_ObtenerRequerimientos;
 
@@ -19,8 +19,15 @@ CREATE PROCEDURE SP_ObtenerRequerimientos(
 BEGIN
     DECLARE v_offset INT;
     DECLARE v_limit  INT;
+    DECLARE v_ver_todo    TINYINT DEFAULT 0;
+    DECLARE v_solo_propio TINYINT DEFAULT 1;
+    DECLARE v_ids         TEXT;
+    DECLARE v_area        VARCHAR(40);
     SET v_offset = (p_pagina - 1) * p_por_pagina;
     SET v_limit  = p_por_pagina;
+
+    -- Pedido 14: alcance por usuario autenticado (p_rol queda solo por compatibilidad)
+    CALL SP_ObtenerAlcanceCrm(p_id_usuario, v_ver_todo, v_solo_propio, v_ids, v_area);
 
     -- 1. Header
     SELECT 2 AS IdTipoMensaje, 'Éxito.' AS Mensaje;
@@ -29,54 +36,22 @@ BEGIN
     SELECT
         (SELECT COUNT(*) FROM requerimiento
          WHERE estado NOT IN ('cerrado','anulado') AND SoftDelete = 0
-           AND (p_rol IN ('administrador','supervisor','jefe_comercial','admin')
-                OR id_responsable = p_id_usuario
-                OR EXISTS (
-                    SELECT 1 FROM usuario_suplente us
-                    WHERE us.id_titular  = id_responsable
-                      AND us.id_suplente = p_id_usuario
-                      AND us.activo = 1 AND us.SoftDelete = 0
-                      AND us.fecha_inicio <= CURDATE()
-                      AND (us.fecha_fin IS NULL OR us.fecha_fin >= CURDATE())
-                ))) AS rq_activos,
+           AND (v_ver_todo = 1 OR FIND_IN_SET(id_responsable, v_ids) > 0
+                OR (id_responsable IS NULL AND v_solo_propio = 0))) AS rq_activos,
         (SELECT COUNT(*) FROM requerimiento
          WHERE estado = 'nuevo' AND SoftDelete = 0
-           AND (p_rol IN ('administrador','supervisor','jefe_comercial','admin')
-                OR id_responsable = p_id_usuario
-                OR EXISTS (
-                    SELECT 1 FROM usuario_suplente us
-                    WHERE us.id_titular  = id_responsable
-                      AND us.id_suplente = p_id_usuario
-                      AND us.activo = 1 AND us.SoftDelete = 0
-                      AND us.fecha_inicio <= CURDATE()
-                      AND (us.fecha_fin IS NULL OR us.fecha_fin >= CURDATE())
-                ))) AS sin_propuesta,
+           AND (v_ver_todo = 1 OR FIND_IN_SET(id_responsable, v_ids) > 0
+                OR (id_responsable IS NULL AND v_solo_propio = 0))) AS sin_propuesta,
         (SELECT COUNT(*) FROM requerimiento
          WHERE estado NOT IN ('cerrado','anulado') AND SoftDelete = 0
            AND id_prioridad = 1 AND DATEDIFF(NOW(), fecha_creacion) >= 7
-           AND (p_rol IN ('administrador','supervisor','jefe_comercial','admin')
-                OR id_responsable = p_id_usuario
-                OR EXISTS (
-                    SELECT 1 FROM usuario_suplente us
-                    WHERE us.id_titular  = id_responsable
-                      AND us.id_suplente = p_id_usuario
-                      AND us.activo = 1 AND us.SoftDelete = 0
-                      AND us.fecha_inicio <= CURDATE()
-                      AND (us.fecha_fin IS NULL OR us.fecha_fin >= CURDATE())
-                ))) AS sla_urgentes,
+           AND (v_ver_todo = 1 OR FIND_IN_SET(id_responsable, v_ids) > 0
+                OR (id_responsable IS NULL AND v_solo_propio = 0))) AS sla_urgentes,
         (SELECT COUNT(*) FROM requerimiento
          WHERE estado IN ('nuevo','en_proceso','con_propuesta') AND SoftDelete = 0
            AND DATEDIFF(NOW(), fecha_creacion) > 15
-           AND (p_rol IN ('administrador','supervisor','jefe_comercial','admin')
-                OR id_responsable = p_id_usuario
-                OR EXISTS (
-                    SELECT 1 FROM usuario_suplente us
-                    WHERE us.id_titular  = id_responsable
-                      AND us.id_suplente = p_id_usuario
-                      AND us.activo = 1 AND us.SoftDelete = 0
-                      AND us.fecha_inicio <= CURDATE()
-                      AND (us.fecha_fin IS NULL OR us.fecha_fin >= CURDATE())
-                ))) AS bloqueados;
+           AND (v_ver_todo = 1 OR FIND_IN_SET(id_responsable, v_ids) > 0
+                OR (id_responsable IS NULL AND v_solo_propio = 0))) AS bloqueados;
 
     -- 3. Lista paginada
     SELECT
@@ -116,19 +91,8 @@ BEGIN
            OR r.numero        LIKE CONCAT('%', p_busqueda, '%')
            OR c.razon_social  LIKE CONCAT('%', p_busqueda, '%')
            OR c.ruc           LIKE CONCAT('%', p_busqueda, '%'))
-      AND (
-          p_rol IN ('administrador', 'supervisor', 'jefe_comercial', 'admin')
-          OR r.id_responsable = p_id_usuario
-          OR EXISTS (
-              SELECT 1 FROM usuario_suplente us
-              WHERE us.id_titular  = r.id_responsable
-                AND us.id_suplente = p_id_usuario
-                AND us.activo      = 1
-                AND us.SoftDelete  = 0
-                AND us.fecha_inicio <= CURDATE()
-                AND (us.fecha_fin IS NULL OR us.fecha_fin >= CURDATE())
-          )
-      )
+      AND (v_ver_todo = 1 OR FIND_IN_SET(r.id_responsable, v_ids) > 0
+           OR (r.id_responsable IS NULL AND v_solo_propio = 0))
     ORDER BY r.fecha_creacion DESC
     LIMIT v_limit OFFSET v_offset;
 
@@ -142,19 +106,8 @@ BEGIN
            OR r.numero        LIKE CONCAT('%', p_busqueda, '%')
            OR c.razon_social  LIKE CONCAT('%', p_busqueda, '%')
            OR c.ruc           LIKE CONCAT('%', p_busqueda, '%'))
-      AND (
-          p_rol IN ('administrador', 'supervisor', 'jefe_comercial', 'admin')
-          OR r.id_responsable = p_id_usuario
-          OR EXISTS (
-              SELECT 1 FROM usuario_suplente us
-              WHERE us.id_titular  = r.id_responsable
-                AND us.id_suplente = p_id_usuario
-                AND us.activo      = 1
-                AND us.SoftDelete  = 0
-                AND us.fecha_inicio <= CURDATE()
-                AND (us.fecha_fin IS NULL OR us.fecha_fin >= CURDATE())
-          )
-      );
+      AND (v_ver_todo = 1 OR FIND_IN_SET(r.id_responsable, v_ids) > 0
+           OR (r.id_responsable IS NULL AND v_solo_propio = 0));
 
 END //
 

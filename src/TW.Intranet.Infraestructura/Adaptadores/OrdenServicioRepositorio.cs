@@ -163,7 +163,13 @@ public class OrdenServicioRepositorio(CadenaConexionBd conexion) : RepositorioSp
         EnteroLargo(r, "id_suministro"), Texto(r, "codigo") ?? "", Texto(r, "descripcion") ?? "",
         TextoSi(r, "tipo"), TextoSi(r, "tipo_label"), TextoSi(r, "subtipo"), TextoSi(r, "subtipo_label"),
         Tiene(r, "aplica_servicio") && Booleano(r, "aplica_servicio"), Tiene(r, "aplica_metrologia") && Booleano(r, "aplica_metrologia"),
-        Tiene(r, "de_la_propuesta") && Booleano(r, "de_la_propuesta"));
+        Tiene(r, "de_la_propuesta") && Booleano(r, "de_la_propuesta"),
+        Tiene(r, "id_item") ? EnteroLargoNulo(r, "id_item") : null,
+        TextoSi(r, "alcance"),
+        Tiene(r, "cantidad") ? DecimalNulo(r, "cantidad") : null,
+        Tiene(r, "frecuencia") ? DecimalNulo(r, "frecuencia") : null,
+        Tiene(r, "precio_unitario") ? DecimalNulo(r, "precio_unitario") : null,
+        TextoSi(r, "seccion"));
 
     private static PropuestaOrigenOsDto LeerPropuesta(MySqlDataReader r, bool ficha) => new()
     {
@@ -320,6 +326,7 @@ public class OrdenServicioRepositorio(CadenaConexionBd conexion) : RepositorioSp
                     conceptos.Add(new ConceptoOrdenServicioDto
                     {
                         IdOsConcepto  = EnteroLargoNulo(r, "id_os_concepto"),
+                        IdItem        = Tiene(r, "id_item") ? EnteroLargoNulo(r, "id_item") : null,
                         IdSuministro  = EnteroLargoNulo(r, "id_suministro"),
                         Codigo        = Texto(r, "codigo"),
                         Descripcion   = Texto(r, "descripcion") ?? "",
@@ -363,7 +370,7 @@ public class OrdenServicioRepositorio(CadenaConexionBd conexion) : RepositorioSp
                     ["certContacto"]         = d.CertContacto,
                 }));
                 p.AddWithValue("p_conceptos", Json(d.ConceptosDetalle is { } detalle
-                    ? detalle.Select(c => (object)new { idSuministro = c.IdSuministro, alcance = c.Alcance, idOsConcepto = c.IdOsConcepto })
+                    ? detalle.Select(c => (object)new { idSuministro = c.IdSuministro, alcance = c.Alcance, idOsConcepto = c.IdOsConcepto, idItem = c.IdItem })
                     : d.Conceptos.Select(c => (object)new { idSuministro = c })));
                 p.AddWithValue("p_equipos", Json(d.Equipos.Select(e => e.ConceptosIdx is { } idx
                     ? (object)new { idEquipo = e.IdEquipo, conceptosIdx = idx }
@@ -594,6 +601,7 @@ public class OrdenServicioRepositorio(CadenaConexionBd conexion) : RepositorioSp
                 lista.Add(new ConceptoOrdenServicioDto
                 {
                     IdOsConcepto     = EnteroLargoNulo(r, "id_os_concepto"),
+                    IdItem           = Tiene(r, "id_item") ? EnteroLargoNulo(r, "id_item") : null,
                     IdSuministro     = EnteroLargoNulo(r, "id_suministro"),
                     Codigo           = Texto(r, "codigo"),
                     Descripcion      = Texto(r, "descripcion") ?? "",

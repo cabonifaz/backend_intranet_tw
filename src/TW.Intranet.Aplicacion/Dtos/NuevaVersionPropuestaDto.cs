@@ -42,4 +42,6 @@ public record NuevaVersionPropuestaResultadoDto(
     string Numero,
     int    Version,
     bool   VersionAnteriorAnulada
-);
+)
+{
+}

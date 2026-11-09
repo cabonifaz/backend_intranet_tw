@@ -6,4 +6,7 @@ namespace TW.Intranet.Aplicacion.Puertos;
 public interface IMenuMovilRepositorio
 {
     Task<RespuestaDto<ResumenMenuMovilDto>> ObtenerResumenAsync(long idUsuario, CancellationToken ct);
+
+    /// <summary>Menú de Jefatura (HU-28): resumen del día del área del Jefe de Servicio Técnico / Metrología.</summary>
+    Task<RespuestaDto<MenuJefaturaMovilDto>> ObtenerMenuJefaturaAsync(long idUsuario, CancellationToken ct);
 }

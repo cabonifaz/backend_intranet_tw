@@ -43,7 +43,8 @@ proc: BEGIN
     DECLARE v_id_cliente     BIGINT;
     DECLARE v_id_responsable BIGINT;
     DECLARE v_fecha_envio    DATETIME;
-    DECLARE v_numero         VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_numero         VARCHAR(30)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_numero_base VARCHAR(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_version        INT;
     DECLARE v_area           VARCHAR(60)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_comentario     TEXT         CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
@@ -87,6 +88,7 @@ proc: BEGIN
            IFNULL(SUM(estado_seguimiento IN ('en_seguimiento', 'sin_respuesta', 'requiere_ajuste')), 0)
       INTO v_existe, v_id_cliente, v_id_responsable, v_fecha_envio, v_numero, v_version, v_abierta
     FROM tmp_seg;
+    SELECT numero_base INTO v_numero_base FROM propuesta_comercial WHERE numero = v_numero LIMIT 1;
     DROP TEMPORARY TABLE IF EXISTS tmp_seg;
 
     IF v_existe = 0 THEN
@@ -216,14 +218,14 @@ proc: BEGIN
         INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion,
                                       id_usuario, registrado_en, metadata)
         SELECT 'propuesta', p.id_propuesta, 'revocacion_por_version', 'aceptado', 'revocada',
-               CONCAT(p.numero, ' v', p.version, ' revocada: el cliente aceptó la v', v_version, '.'),
+               CONCAT(p.numero, ' revocada: el cliente aceptó la ', v_numero, '.'),
                p_id_usuario, NOW(), JSON_OBJECT('id_propuesta_vigente', p_id_propuesta)
         FROM propuesta_comercial p
-        WHERE p.numero = v_numero AND p.id_propuesta <> p_id_propuesta AND p.estado = 'aceptado' AND p.eliminado_en IS NULL;
+        WHERE p.numero_base = v_numero_base AND p.id_propuesta <> p_id_propuesta AND p.estado = 'aceptado' AND p.eliminado_en IS NULL;
 
         UPDATE propuesta_comercial
         SET estado = 'revocada', modificado_en = NOW(), modificado_por = p_id_usuario
-        WHERE numero = v_numero AND id_propuesta <> p_id_propuesta AND estado = 'aceptado' AND eliminado_en IS NULL;
+        WHERE numero_base = v_numero_base AND id_propuesta <> p_id_propuesta AND estado = 'aceptado' AND eliminado_en IS NULL;
     END IF;
 
     -- Notificación a supervisores y administradores del área del comercial, y al responsable
@@ -234,8 +236,8 @@ proc: BEGIN
     INSERT INTO notificacion (id_usuario_destino, id_canal, titulo, cuerpo, entidad_tipo, id_entidad, fecha_creacion, creado_por)
     SELECT u.id_usuario, 5,
            CASE p_tipo
-               WHEN 'aceptacion' THEN CONCAT('Propuesta aceptada: ', v_numero, ' v', v_version)
-               ELSE                   CONCAT('Propuesta rechazada: ', v_numero, ' v', v_version)
+               WHEN 'aceptacion' THEN CONCAT('Propuesta aceptada: ', v_numero)
+               ELSE                   CONCAT('Propuesta rechazada: ', v_numero)
            END,
            CASE p_tipo
                WHEN 'aceptacion' THEN CONCAT(IFNULL(v_cliente, 'El cliente'), ' aceptó la propuesta ', v_numero,

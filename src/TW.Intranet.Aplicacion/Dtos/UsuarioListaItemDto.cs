@@ -17,5 +17,9 @@ public record UsuarioListaItemDto(
     /// <summary>Anexo completo: troncal + interno (ej. "5699750207").</summary>
     string?   Anexo = null,
     /// <summary>Troncal del anexo (5699750 / 5699751).</summary>
-    string?   Troncal = null
+    string?   Troncal = null,
+    /// <summary>Usuario con el que entra a la app móvil. Null = solo intranet.</summary>
+    string?   NombreUsuario = null,
+    /// <summary>intranet | movil | todos | extranet.</summary>
+    string?   CanalAcceso = null
 );

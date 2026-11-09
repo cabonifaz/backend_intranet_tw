@@ -630,7 +630,7 @@ public class ExpedienteRepositorio(CadenaConexionBd conexion)
             {
                 var pills = await LeerListaAsync(r, x => new OsPillDto(
                     EnteroLargo(x, "id_os"), Texto(x, "numero") ?? "", Texto(x, "estado") ?? "", Fh(x, "fecha_ejecucion"),
-                    Bool(x, "seleccionada")), ct);
+                    Bool(x, "seleccionada"), Texto(x, "tipo"), Fh(x, "fecha_programada_desde"), Fh(x, "fecha_programada_hasta")), ct);
                 var datos = await LeerUnoAsync(r, x => new DatosOsExpedienteDto
                 {
                     IdOs                   = EnteroLargo(x, "id_os"),
@@ -656,13 +656,43 @@ public class ExpedienteRepositorio(CadenaConexionBd conexion)
                     ContactoConfirma       = Texto(x, "contacto_confirma"),
                     NotasOperativas        = Texto(x, "notas_operativas"),
                     GeneradoPor            = Texto(x, "generado_por"),
+                    Tipo                   = Texto(x, "tipo"),
+                    EstadoLabel            = Texto(x, "estado_label"),
+                    FechaEmision           = Fh(x, "fecha_emision"),
+                    EmitidoPor             = Texto(x, "emitido_por"),
+                    FechaProgramadaDesde   = Fh(x, "fecha_programada_desde"),
+                    FechaProgramadaHasta   = Fh(x, "fecha_programada_hasta"),
+                    IdPropuesta            = EnteroLargoNulo(x, "id_propuesta"),
+                    NumeroPropuesta        = Texto(x, "numero_propuesta"),
+                    VersionPropuesta       = EnteroNulo(x, "version_propuesta"),
+                    IdRequerimiento        = EnteroLargoNulo(x, "id_requerimiento"),
+                    NumeroRq               = Texto(x, "numero_rq"),
+                    RazonSocial            = Texto(x, "razon_social"),
+                    Ruc                    = Texto(x, "ruc"),
+                    Contacto               = Texto(x, "contacto"),
+                    CargoContacto          = Texto(x, "cargo_contacto"),
+                    TelefonoContacto       = Texto(x, "telefono_contacto"),
+                    CorreoContacto         = Texto(x, "correo_contacto"),
+                    Observaciones          = Texto(x, "observaciones"),
+                    EsTercerizado          = Bool(x, "es_tercerizado"),
+                    CertRazonSocial        = Texto(x, "cert_razon_social"),
+                    CertRuc                = Texto(x, "cert_ruc"),
+                    CertDireccion          = Texto(x, "cert_direccion"),
+                    CertContacto           = Texto(x, "cert_contacto"),
+                    MotivoAnulacion        = Texto(x, "motivo_anulacion"),
+                    ComentarioAnulacion    = Texto(x, "comentario_anulacion"),
+                    AnuladoEn              = Fh(x, "anulado_en"),
+                    AnuladoPor             = Texto(x, "anulado_por"),
+                    NumeroEquipos          = Ent(x, "n_equipos"),
+                    NumeroConceptos        = Ent(x, "n_conceptos"),
                 }, ct);
                 var personal = await LeerListaAsync(r, x => new PersonalOsDto(
                     EnteroLargo(x, "id_usuario"), Texto(x, "nombre"), Texto(x, "cargo"), Texto(x, "rol_en_servicio"),
                     Texto(x, "estado_ssoma")), ct);
                 var equipos = await LeerListaAsync(r, x => new EquipoOsDto(
                     EnteroLargo(x, "id_equipo"), Texto(x, "codigo_tw"), Texto(x, "codigo_cliente"), Texto(x, "marca"), Texto(x, "modelo"),
-                    Texto(x, "numero_serie"), Texto(x, "ubicacion"), Texto(x, "tipo_intervencion"), Bool(x, "ingresado_en_campo")), ct);
+                    Texto(x, "numero_serie"), Texto(x, "ubicacion"), Texto(x, "tipo_intervencion"), Bool(x, "ingresado_en_campo"),
+                    Texto(x, "clasificacion"), Texto(x, "estado_ejecucion"), Fh(x, "fecha_ejecucion")), ct);
                 var gastos = await LeerListaAsync(r, x => new GastoOsDto(
                     EnteroLargo(x, "id_gasto"), Texto(x, "tipo"), Texto(x, "concepto"), DecimalNulo(x, "monto"), Texto(x, "simbolo_moneda"),
                     Texto(x, "descripcion"), Texto(x, "estado"), Fh(x, "fecha_solicitud"), Texto(x, "usuario")), ct);
@@ -670,8 +700,27 @@ public class ExpedienteRepositorio(CadenaConexionBd conexion)
                     EnteroLargo(x, "id_om"), Texto(x, "numero") ?? "", Texto(x, "estado"), Fh(x, "fecha_calibracion"),
                     Texto(x, "numero_certificado"), Fh(x, "fecha_emision_certificado"), Texto(x, "metrologo")), ct);
 
+                var conceptos = await LeerListaAsync(r, x => new ConceptoOsExpedienteDto(
+                    EnteroLargo(x, "id_os_concepto"), Ent(x, "orden"), Texto(x, "codigo"), Texto(x, "descripcion"),
+                    Texto(x, "alcance"), Texto(x, "equipos_aplicados"),
+                    EnteroLargoNulo(x, "id_item"), DecimalNulo(x, "cantidad"), DecimalNulo(x, "frecuencia"),
+                    DecimalNulo(x, "precio_unitario"), DecimalNulo(x, "subtotal"), Texto(x, "simbolo_moneda")), ct);
+
+                var visitas = await LeerListaAsync(r, x => (
+                    Id: EnteroLargo(x, "id_programacion"), Codigo: Texto(x, "codigo"), Fecha: Fh(x, "fecha_ejecucion"),
+                    HoraInicio: Texto(x, "hora_inicio"), HoraFin: Texto(x, "hora_fin"), Estado: Texto(x, "estado"),
+                    EstadoLabel: Texto(x, "estado_label"), IdTecnico: EnteroLargoNulo(x, "id_tecnico"),
+                    Tecnico: Texto(x, "tecnico"), Apoyo: Texto(x, "tecnicos_apoyo")), ct);
+                var equiposProg = await LeerListaAsync(r, x => (
+                    IdProgramacion: EnteroLargo(x, "id_programacion"),
+                    Equipo: new EquipoProgramadoOsDto(EnteroLargo(x, "id_equipo"), Texto(x, "codigo_tw"), Texto(x, "marca"),
+                                                      Texto(x, "modelo"), Texto(x, "numero_serie"))), ct);
+                var programacion = visitas.Select(v => new ProgramacionVisitaOsDto(
+                    v.Id, v.Codigo, v.Fecha, v.HoraInicio, v.HoraFin, v.Estado, v.EstadoLabel, v.IdTecnico, v.Tecnico, v.Apoyo,
+                    equiposProg.Where(e => e.IdProgramacion == v.Id).Select(e => e.Equipo).ToList())).ToList();
+
                 return new RespuestaDto<TabOrdenServicioExpedienteDto>(2, mensaje,
-                    new TabOrdenServicioExpedienteDto(pills, datos, personal, equipos, gastos, oms));
+                    new TabOrdenServicioExpedienteDto(pills, datos, personal, equipos, gastos, oms, conceptos, programacion));
             },
             ct);
 

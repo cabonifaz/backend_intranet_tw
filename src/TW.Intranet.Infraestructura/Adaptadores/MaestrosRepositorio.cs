@@ -135,7 +135,11 @@ public class MaestrosRepositorio(CadenaConexionBd conexion) : IMaestrosRepositor
                 IdCategoria:            reader.IsDBNull(reader.GetOrdinal("id_categoria"))     ? null : reader.GetInt32("id_categoria"),
                 NombreCategoria:        reader.IsDBNull(reader.GetOrdinal("nombre_categoria")) ? null : reader.GetString("nombre_categoria"),
                 Estado:                 reader.GetString("estado"),
-                Areas:                  nullable("areas") ? [] : reader.GetString("areas").Split(',', StringSplitOptions.RemoveEmptyEntries).ToList()
+                Areas:                  nullable("areas") ? [] : reader.GetString("areas").Split(',', StringSplitOptions.RemoveEmptyEntries).ToList(),
+                IdComercialCartera:     nullable("id_comercial_cartera") ? null : reader.GetInt64("id_comercial_cartera"),
+                ComercialCartera:       nullable("comercial_cartera")    ? null : reader.GetString("comercial_cartera"),
+                CarteraAsignadoEn:      nullable("cartera_asignado_en")  ? null : reader.GetDateTime("cartera_asignado_en"),
+                CarteraAsignadoPor:     nullable("cartera_asignado_por") ? null : reader.GetString("cartera_asignado_por")
             );
 
             return new RespuestaDto<ClienteDetalleDto>(2, mensaje, detalle);
@@ -147,7 +151,7 @@ public class MaestrosRepositorio(CadenaConexionBd conexion) : IMaestrosRepositor
     }
 
     public async Task<RespuestaDto<long>> GuardarClienteAsync(
-        GuardarClienteDto dto, string usuCre, CancellationToken ct)
+        GuardarClienteDto dto, string usuCre, long idUsuario, CancellationToken ct)
     {
         try
         {
@@ -181,6 +185,8 @@ public class MaestrosRepositorio(CadenaConexionBd conexion) : IMaestrosRepositor
             cmd.Parameters.AddWithValue("p_ssoma_notas",             dto.SsomaNotas       ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("p_id_categoria",            dto.IdCategoria      ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("p_usu_cre",                 usuCre);
+            cmd.Parameters.AddWithValue("p_id_usuario",              idUsuario);
+            cmd.Parameters.AddWithValue("p_id_comercial_cartera",    dto.IdComercialCartera is > 0 ? dto.IdComercialCartera.Value : 0L);
             // p_areas eliminado — las áreas del cliente se manejan por su propio CRUD
             // (SP_GuardarAreaCliente), fuera de SP_GuardarCliente (migración 37).
 

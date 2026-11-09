@@ -8,10 +8,10 @@ public interface IPropuestasRepositorio
         long idRequerimiento, CancellationToken ct);
 
     Task<RespuestaDto<PropuestasPaginadoDto>> ObtenerPropuestasAsync(
-        FiltrosPropuestasDto filtros, CancellationToken ct);
+        FiltrosPropuestasDto filtros, long idUsuario, CancellationToken ct);
 
     Task<RespuestaDto<KpisPropuestasDto>> ObtenerKpisAsync(
-        int? anio, long? idComercial, CancellationToken ct);
+        int? anio, long? idComercial, long idUsuario, CancellationToken ct);
 
     Task<RespuestaDto<PropuestaDetalleDto>> ObtenerPropuestaPorIdAsync(
         long idPropuesta, CancellationToken ct);

@@ -88,7 +88,7 @@ proc: BEGIN
     LEFT JOIN tabla_maestra m ON m.IdMaestro = 1 AND m.IdEmpresa = 1 AND m.Num1 = p.id_moneda
     LEFT JOIN usuario u       ON u.id_usuario = COALESCE(p.id_responsable, p.id_creador)
     WHERE p.id_requerimiento = v_id_rq AND p.eliminado_en IS NULL
-      AND p.version = (SELECT MAX(p2.version) FROM propuesta_comercial p2 WHERE p2.numero = p.numero AND p2.eliminado_en IS NULL)
+      AND p.version = (SELECT MAX(p2.version) FROM propuesta_comercial p2 WHERE p2.numero_base = p.numero_base AND p2.eliminado_en IS NULL)
     ORDER BY p.id_propuesta;
 END$$
 

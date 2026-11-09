@@ -14,8 +14,8 @@ proc: BEGIN
     DECLARE v_num_base    VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_num_destino VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 
-    SELECT numero INTO v_num_base    FROM propuesta_comercial WHERE id_propuesta = p_id_base    AND eliminado_en IS NULL;
-    SELECT numero INTO v_num_destino FROM propuesta_comercial WHERE id_propuesta = p_id_destino AND eliminado_en IS NULL;
+    SELECT numero_base INTO v_num_base    FROM propuesta_comercial WHERE id_propuesta = p_id_base    AND eliminado_en IS NULL;
+    SELECT numero_base INTO v_num_destino FROM propuesta_comercial WHERE id_propuesta = p_id_destino AND eliminado_en IS NULL;
 
     IF v_num_base IS NULL OR v_num_destino IS NULL THEN
         SELECT 1 AS IdTipoMensaje, 'Una de las versiones no existe.' AS Mensaje;
@@ -80,7 +80,7 @@ proc: BEGIN
     -- 7. Versiones disponibles (para los selectores)
     SELECT p.id_propuesta, p.version, p.estado, p.fecha_creacion
     FROM propuesta_comercial p
-    WHERE p.numero = v_num_base AND p.eliminado_en IS NULL
+    WHERE p.numero_base = v_num_base AND p.eliminado_en IS NULL
     ORDER BY p.version;
 END$$
 

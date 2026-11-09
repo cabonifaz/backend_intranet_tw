@@ -32,6 +32,7 @@ public record KpisSeguimientoDto(
 
 public record ItemBandejaSeguimientoDto
 {
+
     public long      IdPropuesta           { get; init; }
     public string    Numero                { get; init; } = "";
     public int       Version               { get; init; }
@@ -102,6 +103,7 @@ public record BandejaSeguimientoDto(
 /// <summary>Panel superior, datos de la oportunidad, próxima acción y permisos de los botones.</summary>
 public record CabeceraDetalleSeguimientoDto
 {
+
     public long      IdPropuesta           { get; init; }
     public string    Numero                { get; init; } = "";
     public int       Version               { get; init; }

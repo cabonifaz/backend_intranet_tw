@@ -35,7 +35,9 @@ CREATE PROCEDURE SP_CrearNuevaVersionPropuesta(
 )
 proc: BEGIN
     DECLARE v_id_nueva      BIGINT;
-    DECLARE v_numero        VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_numero        VARCHAR(30)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_numero_base VARCHAR(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_numero_nueva VARCHAR(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;  -- PC-… de la versión creada
     DECLARE v_version_orig  INT;
     DECLARE v_version       INT;
     DECLARE v_estado        VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
@@ -82,6 +84,7 @@ proc: BEGIN
     FROM propuesta_comercial p
     JOIN requerimiento r ON r.id_requerimiento = p.id_requerimiento
     WHERE p.id_propuesta = p_id_propuesta_origen AND p.eliminado_en IS NULL;
+    SELECT numero_base INTO v_numero_base FROM propuesta_comercial WHERE numero = v_numero LIMIT 1;
 
     IF v_numero IS NULL THEN
         SELECT 1 AS IdTipoMensaje, 'Propuesta no encontrada.' AS Mensaje;
@@ -99,14 +102,14 @@ proc: BEGIN
     END IF;
 
     IF EXISTS (SELECT 1 FROM propuesta_comercial
-               WHERE numero = v_numero AND version > v_version_orig AND eliminado_en IS NULL) THEN
+               WHERE numero_base = v_numero_base AND version > v_version_orig AND eliminado_en IS NULL) THEN
         SELECT 1 AS IdTipoMensaje,
                CONCAT('Solo se puede versionar la última versión de ', v_numero, '.') AS Mensaje;
         LEAVE proc;
     END IF;
 
     IF EXISTS (SELECT 1 FROM propuesta_comercial
-               WHERE numero = v_numero AND estado = 'borrador' AND eliminado_en IS NULL) THEN
+               WHERE numero_base = v_numero_base AND estado = 'borrador' AND eliminado_en IS NULL) THEN
         SELECT 1 AS IdTipoMensaje,
                CONCAT('Ya existe una versión en borrador de ', v_numero, '. Edítela en lugar de crear otra.') AS Mensaje;
         LEAVE proc;
@@ -142,12 +145,12 @@ proc: BEGIN
 
     -- ── Cabecera (totales en 0; se recalculan al final) ─────────────────
     INSERT INTO propuesta_comercial (
-        numero, version, id_requerimiento, id_cliente, id_sede, id_contacto, id_responsable,
+        numero_base, version, id_requerimiento, id_cliente, id_sede, id_contacto, id_responsable,
         id_moneda, subtotal, descuento_monto, descuento_pct, id_motivo_descuento,
         igv_pct, igv_monto, total, aplica_igv, precios_incluyen_igv,
         plazo_entrega_dias, plazo_entrega_unidad, plazo_entrega_condicion, vigencia_dias,
         introduccion, notas_generales, tipo_servicio, referencia, secciones_activas,
-        es_tercerizado, tercero_ruc, tercero_razon_social, tercero_direccion,
+        es_tercerizado, id_cliente_tercero, tercero_ruc, tercero_razon_social, tercero_direccion,
         tipo_cambio, garantia_meses, mostrar_garantia,
         subtotal_opcionales, descuento_opcionales, total_opcionales,
         estado, id_propuesta_padre, id_motivo_nueva_version, descripcion_cambios,
@@ -155,7 +158,7 @@ proc: BEGIN
         creado_en, creado_por
     )
     SELECT
-        o.numero, v_version, o.id_requerimiento, o.id_cliente,
+        o.numero_base, v_version, o.id_requerimiento, o.id_cliente,
         IF(p_copiar_configuracion = 1, o.id_sede,     NULL),
         IF(p_copiar_configuracion = 1, o.id_contacto, NULL),
         o.id_responsable, o.id_moneda,
@@ -173,9 +176,12 @@ proc: BEGIN
         IF(p_copiar_configuracion = 1, o.introduccion, NULL),
         IF(p_copiar_configuracion = 1, o.notas_generales, NULL),
         IF(p_copiar_configuracion = 1, o.tipo_servicio, NULL),
-        IF(p_copiar_configuracion = 1, o.referencia, NULL),
+        -- Observaciones 31/10: la referencia es siempre el detalle del RQ
+        (SELECT NULLIF(LEFT(TRIM(IFNULL(rq.descripcion, '')), 2000), '') FROM requerimiento rq
+          WHERE rq.id_requerimiento = o.id_requerimiento),
         IF(p_copiar_configuracion = 1, o.secciones_activas, NULL),
         IF(p_copiar_configuracion = 1, o.es_tercerizado, 0),
+        IF(p_copiar_configuracion = 1, o.id_cliente_tercero, NULL),
         IF(p_copiar_configuracion = 1, o.tercero_ruc, NULL),
         IF(p_copiar_configuracion = 1, o.tercero_razon_social, NULL),
         IF(p_copiar_configuracion = 1, o.tercero_direccion, NULL),
@@ -194,6 +200,7 @@ proc: BEGIN
     WHERE o.id_propuesta = p_id_propuesta_origen;
 
     SET v_id_nueva = LAST_INSERT_ID();
+    SELECT numero INTO v_numero_nueva FROM propuesta_comercial WHERE id_propuesta = v_id_nueva;
 
     -- ── Ítems ───────────────────────────────────────────────────────────
     IF p_copiar_items = 1 THEN
@@ -286,7 +293,7 @@ proc: BEGIN
 
         UPDATE visto_bueno
            SET estado = 'cancelado', fecha_respuesta = NOW(),
-               comentario = CONCAT('Cancelado: se generó ', v_numero, ' v', v_version, '.'),
+               comentario = CONCAT('Cancelado: se generó ', v_numero_nueva, '.'),
                modificado_en = NOW(), modificado_por = p_id_usuario
          WHERE id_propuesta = p_id_propuesta_origen AND estado = 'pendiente' AND eliminado_en IS NULL;
 
@@ -295,8 +302,8 @@ proc: BEGIN
         IF v_estado = 'pendiente_vb' THEN
             INSERT INTO notificacion (id_usuario_destino, id_canal, titulo, cuerpo, entidad_tipo, id_entidad, fecha_creacion, creado_por)
             SELECT u.id_usuario, 5,
-                   CONCAT('Visto bueno cancelado: ', v_numero, ' v', v_version_orig),
-                   CONCAT(v_usu_nombre, ' generó una nueva versión (v', v_version, ') y canceló la solicitud de visto bueno de ', v_numero, ' v', v_version_orig, '.'),
+                   CONCAT('Visto bueno cancelado: ', v_numero),
+                   CONCAT(v_usu_nombre, ' generó una nueva versión (', v_numero_nueva, ') y canceló la solicitud de visto bueno de ', v_numero, '.'),
                    'propuesta', p_id_propuesta_origen, NOW(), p_id_usuario
             FROM usuario u
             JOIN usuario a ON a.id_usuario = IFNULL((SELECT id_responsable FROM propuesta_comercial WHERE id_propuesta = p_id_propuesta_origen),
@@ -309,19 +316,19 @@ proc: BEGIN
 
         INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion, id_usuario, registrado_en, metadata)
         VALUES ('propuesta', p_id_propuesta_origen, 'anulacion_por_version', v_estado, 'anulado',
-                CONCAT('Propuesta ', v_numero, ' v', v_version_orig, ' anulada al generarse la v', v_version, '.'),
+                CONCAT('Propuesta ', v_numero, ' anulada al generarse la ', v_numero_nueva, '.'),
                 p_id_usuario, NOW(), JSON_OBJECT('id_propuesta_nueva', v_id_nueva));
     END IF;
 
     -- ── Historial del RQ y auditoría ────────────────────────────────────
     INSERT INTO historial_requerimiento (id_requerimiento, tipo, tipo_label, icono, descripcion, usuario, fecha, creado_en, creado_por)
     VALUES (v_id_rq, 'propuesta', 'Nueva versión de propuesta', 'description',
-            CONCAT('Propuesta ', v_numero, ' v', v_version, ' creada desde la v', v_version_orig, ' (', v_motivo_label, ').'),
+            CONCAT('Propuesta ', v_numero_nueva, ' creada desde la ', v_numero, ' (', v_motivo_label, ').'),
             v_usu_nombre, NOW(), NOW(), p_id_usuario);
 
     INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion, id_usuario, registrado_en, metadata)
     VALUES ('propuesta', v_id_nueva, 'nueva_version', NULL, 'borrador',
-            CONCAT('Propuesta ', v_numero, ' v', v_version, ' creada desde la v', v_version_orig, ': ', TRIM(p_descripcion_cambios)),
+            CONCAT('Propuesta ', v_numero_nueva, ' creada desde la ', v_numero, ': ', TRIM(p_descripcion_cambios)),
             p_id_usuario, NOW(),
             JSON_OBJECT('id_propuesta_origen', p_id_propuesta_origen,
                         'id_motivo',           p_id_motivo,
@@ -337,9 +344,9 @@ proc: BEGIN
     COMMIT;
 
     SELECT 2 AS IdTipoMensaje,
-           CONCAT('Versión v', v_version, ' de ', v_numero, ' creada en borrador.') AS Mensaje;
+           CONCAT('Propuesta ', v_numero_nueva, ' creada en borrador.') AS Mensaje;
 
-    SELECT v_id_nueva AS id_propuesta, v_numero AS numero, v_version AS version,
+    SELECT v_id_nueva AS id_propuesta, v_numero_nueva AS numero, v_version AS version,
            v_anula_origen AS version_anterior_anulada;
 END$$
 

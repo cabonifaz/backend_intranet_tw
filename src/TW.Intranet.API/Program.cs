@@ -16,6 +16,9 @@ QuestPDF.Settings.UseEnvironmentFonts = true;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Desarrollo seguro (HU-52, hallazgo de las pruebas de Ethical Hacking): no revelar la tecnología del servidor en la cabecera "Server".
+builder.WebHost.ConfigureKestrel(opciones => opciones.AddServerHeader = false);
+
 // Carga appsettings.Local.json si existe (para desarrollo local, no se sube a git)
 builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: false);
 
@@ -90,6 +93,7 @@ builder.Services.AddSingleton(configuracionAlmacenamiento);
 builder.Services.AddSingleton<IAlmacenArchivos, AlmacenArchivosLocal>();
 
 // ── AUTENTICACIÓN JWT ─────────────────────────────────────────────────────────
+const string MotivoSesionMovilItem = "motivo_sesion_movil";
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -142,8 +146,15 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                     }
                     var repositorioMovil = context.HttpContext.RequestServices
                         .GetRequiredService<IAutenticacionMovilRepositorio>();
-                    esValido = await repositorioMovil.VerificarSesionAsync(
+                    var verificacion = await repositorioMovil.VerificarSesionAsync(
                         idUsuario, tokenClaim.Value, context.HttpContext.RequestAborted);
+                    esValido = verificacion.IdTipoMensaje == 2;
+                    if (!esValido)
+                        // El 401 lleva el motivo (p. ej. "se inició sesión con tu usuario en otro equipo") para que la app lo muestre.
+                        // Si falló la BD (IdTipoMensaje 3) no se expone su detalle.
+                        context.HttpContext.Items[MotivoSesionMovilItem] = verificacion.IdTipoMensaje == 1 && !string.IsNullOrWhiteSpace(verificacion.Mensaje)
+                            ? verificacion.Mensaje
+                            : "Tu sesión terminó. Vuelve a iniciar sesión.";
                 }
                 else if (TW.Intranet.API.Seguridad.SeguridadAppMovil.EsRutaApp(rutaPedida))
                 {
@@ -161,6 +172,19 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
                 if (!esValido)
                     context.Fail("Sesión invalidada. Por favor inicia sesión nuevamente.");
+            },
+
+            // 401 de un token de la app con sesión cerrada: cuerpo con el sobre estándar y el motivo.
+            // Los demás 401 (intranet, firma inválida, JWT vencido) siguen igual que antes.
+            OnChallenge = async context =>
+            {
+                if (context.HttpContext.Items.TryGetValue(MotivoSesionMovilItem, out var motivo) && motivo is string mensaje)
+                {
+                    context.HandleResponse();
+                    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                    context.Response.Headers.WWWAuthenticate = "Bearer";
+                    await context.Response.WriteAsJsonAsync(new { idTipoMensaje = 1, mensaje });
+                }
             }
         };
     });
@@ -178,12 +202,12 @@ builder.Services.AddScoped<CambiarContrasenaCasoDeUso>();
 builder.Services.AddScoped<ObtenerMisDatosCasoDeUso>();
 
 // ── APP MÓVIL DE CAMPO — acceso con usuario y 1 equipo a la vez (App Mobile HU-01) ──
-// Variables (opcionales): AppMovil__HorasExpiracion (12), AppMovil__ReemplazarSesionAnterior (false).
+// Variables (opcionales): AppMovil__HorasExpiracion (12), AppMovil__ReemplazarSesionAnterior (true).
+//   true (por defecto) = sesión única: el nuevo equipo cierra la sesión del anterior; el primer equipo recibe 401 con el motivo.
 //   false = si el usuario ya tiene sesión en otro equipo, el nuevo ingreso se rechaza.
-//   true  = el nuevo equipo cierra la sesión del anterior.
 builder.Services.AddSingleton(new TW.Intranet.Aplicacion.Dtos.OpcionesSesionMovil(
     HorasExpiracion:          int.TryParse(cfg["AppMovil:HorasExpiracion"], out var horasSesionMovil) ? horasSesionMovil : 12,
-    ReemplazarSesionAnterior: bool.TryParse(cfg["AppMovil:ReemplazarSesionAnterior"], out var reemplazarSesionMovil) && reemplazarSesionMovil));
+    ReemplazarSesionAnterior: !bool.TryParse(cfg["AppMovil:ReemplazarSesionAnterior"], out var reemplazarSesionMovil) || reemplazarSesionMovil));
 // Desarrollo seguro (opcionales): AppMovil__MaxIntentosFallidos (5), AppMovil__MinutosBloqueo (15),
 // AppMovil__IngresosPorMinutoPorIp (10). Solo afectan al ingreso de la app, no al de la intranet.
 var opcionesSeguridadMovil = new TW.Intranet.Aplicacion.Dtos.OpcionesSeguridadMovil(
@@ -205,6 +229,34 @@ builder.Services.AddScoped<ObtenerResumenMenuMovilCasoDeUso>();
 // App Mobile HU-03 — agenda de servicios programados
 builder.Services.AddScoped<IServiciosMovilRepositorio, ServiciosMovilRepositorio>();
 builder.Services.AddScoped<ObtenerServiciosProgramadosMovilCasoDeUso>();
+// App Mobile HU-02 / HU-04 — notificaciones del usuario
+builder.Services.AddScoped<INotificacionesMovilRepositorio, NotificacionesMovilRepositorio>();
+builder.Services.AddScoped<ObtenerNotificacionesMovilCasoDeUso>();
+builder.Services.AddScoped<MarcarNotificacionMovilCasoDeUso>();
+// App Mobile HU-05 — registro de demoras en ruta
+builder.Services.AddScoped<IDemorasMovilRepositorio, DemorasMovilRepositorio>();
+builder.Services.AddScoped<ObtenerDemorasMovilCasoDeUso>();
+builder.Services.AddScoped<RegistrarDemoraMovilCasoDeUso>();
+// App Mobile HU-06 — registro de llegada y Hard Stop
+builder.Services.AddScoped<ILlegadaMovilRepositorio, LlegadaMovilRepositorio>();
+builder.Services.AddScoped<ObtenerLlegadaMovilCasoDeUso>();
+builder.Services.AddScoped<ValidarLlegadaMovilCasoDeUso>();
+builder.Services.AddScoped<RegistrarLlegadaMovilCasoDeUso>();
+// App Mobile HU-07 — lista de objetivos y selección de equipos
+builder.Services.AddScoped<IObjetivosMovilRepositorio, ObjetivosMovilRepositorio>();
+builder.Services.AddScoped<ObtenerObjetivosMovilCasoDeUso>();
+builder.Services.AddScoped<BuscarEquipoQrMovilCasoDeUso>();
+builder.Services.AddScoped<CambiarEstadoEquipoMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerOpcionesEquipoNuevoMovilCasoDeUso>();
+builder.Services.AddScoped<RegistrarEquipoNuevoMovilCasoDeUso>();
+// App Mobile HU-28 / HU-31 — menú de Jefatura y centro de aprobaciones
+builder.Services.AddScoped<ObtenerMenuJefaturaMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerAprobacionesMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerAprobacionSalidaMovilCasoDeUso>();
+builder.Services.AddScoped<ResolverAprobacionSalidaMovilCasoDeUso>();
+// App Mobile HU-25 / HU-26 — viáticos asignados al programar y gastos rendidos
+builder.Services.AddScoped<IViaticosMovilRepositorio, ViaticosMovilRepositorio>();
+builder.Services.AddScoped<ObtenerViaticosMovilCasoDeUso>();
 // App Mobile HU-04 — detalle del servicio y checklist de pre-salida
 builder.Services.AddScoped<IPresalidaMovilRepositorio, PresalidaMovilRepositorio>();
 builder.Services.AddScoped<ObtenerDetalleServicioMovilCasoDeUso>();
@@ -260,6 +312,13 @@ builder.Services.AddScoped<ObtenerCatalogosRequerimientoCasoDeUso>();
 builder.Services.AddScoped<ObtenerRequerimientoPorIdCasoDeUso>();
 builder.Services.AddScoped<GuardarRequerimientoCasoDeUso>();
 builder.Services.AddScoped<AnularRequerimientoCasoDeUso>();
+builder.Services.AddScoped<IAdjuntosRequerimientoRepositorio, AdjuntosRequerimientoRepositorio>();
+builder.Services.AddScoped<SubirAdjuntosRequerimientoCasoDeUso>();
+builder.Services.AddScoped<ObtenerAdjuntoRequerimientoCasoDeUso>();
+builder.Services.AddScoped<EliminarAdjuntoRequerimientoCasoDeUso>();
+builder.Services.AddScoped<ICarteraClientesRepositorio, CarteraClientesRepositorio>();
+builder.Services.AddScoped<ObtenerCarteraClientesCasoDeUso>();
+builder.Services.AddScoped<AsignarCarteraClientesCasoDeUso>();
 
 // ── INYECCIÓN DE DEPENDENCIAS — Usuarios y Suplencias (HU-82/83/84) ──────────
 builder.Services.AddScoped<IUsuariosRepositorio, UsuariosRepositorio>();
@@ -272,6 +331,7 @@ builder.Services.AddScoped<ObtenerJefesDisponiblesCasoDeUso>();
 builder.Services.AddScoped<ObtenerSedesOperativasCasoDeUso>();
 builder.Services.AddScoped<GuardarUsuarioCasoDeUso>();
 builder.Services.AddScoped<CambiarEstadoUsuarioCasoDeUso>();
+builder.Services.AddScoped<ValidarNombreUsuarioCasoDeUso>();
 
 // Casos de uso — Suplencias
 builder.Services.AddScoped<ObtenerSuplentesCasoDeUso>();
@@ -340,7 +400,10 @@ builder.Services.AddScoped<EnviarPropuestaClienteCasoDeUso>();
 builder.Services.AddScoped<SolicitarRevocacionVbCasoDeUso>();
 builder.Services.AddScoped<ResolverRevocacionVbCasoDeUso>();
 builder.Services.AddScoped<IPropuestaPdfGenerador, PropuestaPdfGeneradorQuestPdf>();
+builder.Services.AddScoped<IOrdenServicioPdfGenerador, OrdenServicioPdfGeneradorQuestPdf>();
+builder.Services.AddScoped<GenerarPdfOrdenServicioCasoDeUso>();
 builder.Services.AddScoped<GenerarPdfPropuestaCasoDeUso>();
+builder.Services.AddScoped<GenerarPdfPreviewPropuestaCasoDeUso>();
 
 // ── INYECCIÓN DE DEPENDENCIAS — Ubigeo, áreas del cliente y formatos (reunión 02-oct) ──
 builder.Services.AddScoped<IMaestrosComplementariosRepositorio, MaestrosComplementariosRepositorio>();
@@ -458,6 +521,87 @@ builder.Services.AddScoped<BuscarEquiposOrdenServicioCasoDeUso>();
 builder.Services.AddScoped<BuscarConceptosOrdenServicioCasoDeUso>();
 builder.Services.AddScoped<DescargarPlantillaImportacionOsCasoDeUso>();
 builder.Services.AddScoped<AnalizarImportacionOsCasoDeUso>();
+
+// ── INYECCIÓN DE DEPENDENCIAS — Programación Operativa (Sprint 5, HU-35) ──
+builder.Services.AddScoped<IProgramacionOperativaRepositorio, ProgramacionOperativaRepositorio>();
+builder.Services.AddScoped<ObtenerResumenProgramacionCasoDeUso>();
+builder.Services.AddScoped<ObtenerPendientesProgramacionCasoDeUso>();
+builder.Services.AddScoped<ObtenerProgramadosProgramacionCasoDeUso>();
+builder.Services.AddScoped<ExportarPendientesProgramacionCasoDeUso>();
+builder.Services.AddScoped<ExportarProgramadosProgramacionCasoDeUso>();
+
+// ── INYECCIÓN DE DEPENDENCIAS — Programar Servicio y Asignar Recurso (Sprint 5, HU-36) ──
+builder.Services.AddScoped<IProgramacionRepositorio, ProgramacionRepositorio>();
+builder.Services.AddScoped<PrepararProgramacionCasoDeUso>();
+builder.Services.AddScoped<BuscarTecnicosProgramacionCasoDeUso>();
+builder.Services.AddScoped<CrearProgramacionCasoDeUso>();
+builder.Services.AddScoped<DerivarSsomaProgramacionCasoDeUso>();
+
+// ── INYECCIÓN DE DEPENDENCIAS — Detalle de la Programación y confirmación con el cliente (Sprint 5, HU-37) ──
+builder.Services.AddScoped<IProgramacionDetalleRepositorio, ProgramacionDetalleRepositorio>();
+builder.Services.AddScoped<ObtenerDetalleProgramacionCasoDeUso>();
+builder.Services.AddScoped<IProgramacionReprogramacionRepositorio, ProgramacionReprogramacionRepositorio>();
+builder.Services.AddScoped<PrepararReprogramacionCasoDeUso>();
+builder.Services.AddScoped<ReprogramarProgramacionCasoDeUso>();
+builder.Services.AddScoped<ObtenerSolicitudReprogramacionCasoDeUso>();
+builder.Services.AddScoped<ResolverSolicitudReprogramacionCasoDeUso>();
+builder.Services.AddScoped<RetirarSolicitudReprogramacionCasoDeUso>();
+builder.Services.AddScoped<IProgramacionConflictosRepositorio, ProgramacionConflictosRepositorio>();
+builder.Services.AddScoped<ObtenerConflictosProgramacionCasoDeUso>();
+builder.Services.AddScoped<ObtenerConflictoProgramacionCasoDeUso>();
+builder.Services.AddScoped<ResolverConflictoProgramacionCasoDeUso>();
+builder.Services.AddScoped<IProgramacionViaticosRepositorio, ProgramacionViaticosRepositorio>();
+builder.Services.AddScoped<ObtenerViaticosProgramacionCasoDeUso>();
+builder.Services.AddScoped<GuardarViaticosProgramacionCasoDeUso>();
+builder.Services.AddScoped<RevisarGastoProgramacionCasoDeUso>();
+builder.Services.AddScoped<CerrarRendicionProgramacionCasoDeUso>();
+builder.Services.AddScoped<ObtenerComprobanteGastoCasoDeUso>();
+builder.Services.AddScoped<ObtenerProgramacionesTecnicoDiaCasoDeUso>();
+builder.Services.AddScoped<PrepararCancelacionProgramacionCasoDeUso>();
+builder.Services.AddScoped<CancelarProgramacionCasoDeUso>();
+builder.Services.AddScoped<ObtenerHistorialProgramacionesOsCasoDeUso>();
+builder.Services.AddScoped<RegistrarRespuestaClienteCasoDeUso>();
+
+// HU-51 Bandeja de Seguimiento Operativo (Sprint 5): solo lectura
+builder.Services.AddScoped<ISeguimientoOperativoRepositorio, SeguimientoOperativoRepositorio>();
+builder.Services.AddScoped<ObtenerResumenSeguimientoCasoDeUso>();
+builder.Services.AddScoped<ObtenerServiciosSeguimientoCasoDeUso>();
+builder.Services.AddScoped<ObtenerTecnicosSeguimientoCasoDeUso>();
+builder.Services.AddScoped<ObtenerIncidenciasSeguimientoCasoDeUso>();
+builder.Services.AddScoped<ObtenerFiltrosSeguimientoCasoDeUso>();
+builder.Services.AddScoped<RegistrarUbicacionMovilCasoDeUso>();
+
+// HU-52 Detalle del Servicio en Ruta (Sprint 5): solo lectura
+builder.Services.AddScoped<IDetalleServicioRutaRepositorio, DetalleServicioRutaRepositorio>();
+builder.Services.AddScoped<ObtenerDetalleServicioRutaCasoDeUso>();
+builder.Services.AddScoped<ObtenerAvanceServicioRutaCasoDeUso>();
+builder.Services.AddScoped<ObtenerSeccionEquipoServicioRutaCasoDeUso>();
+builder.Services.AddScoped<ObtenerMapaServicioRutaCasoDeUso>();
+builder.Services.AddScoped<ObtenerTimelineServicioRutaCasoDeUso>();
+builder.Services.AddScoped<ObtenerIncidenciasServicioRutaCasoDeUso>();
+builder.Services.AddScoped<ExportarIncidenciasServicioRutaCasoDeUso>();
+builder.Services.AddScoped<ObtenerCierreServicioRutaCasoDeUso>();
+builder.Services.AddScoped<ObtenerAuditoriaServicioRutaCasoDeUso>(); // HU-54 Auditoría post-servicio (sin este registro todo el detalle del servicio en ruta respondía 500)
+
+// HU-53 Registro operativo del Asistente de Seguimiento (Sprint 5): observación, demora/incidente y cambio manual de estado
+builder.Services.AddScoped<IRegistroAsistenteRepositorio, RegistroAsistenteRepositorio>();
+builder.Services.AddScoped<ObtenerFormularioRegistroAsistenteCasoDeUso>();
+builder.Services.AddScoped<RegistrarAsistenteServicioRutaCasoDeUso>();
+
+// Revisión Técnica (Sprint 5, HU-56 a HU-59) y Precotizaciones Técnicas del CRM (HU-60)
+builder.Services.AddScoped<IRevisionTecnicaRepositorio, RevisionTecnicaRepositorio>();
+builder.Services.AddScoped<ObtenerBandejaInformesCasoDeUso>();
+builder.Services.AddScoped<ExportarBandejaInformesCasoDeUso>();
+builder.Services.AddScoped<ObtenerDetalleInformeCasoDeUso>();
+builder.Services.AddScoped<GuardarInformeTecnicoCasoDeUso>();
+builder.Services.AddScoped<GuardarPrecotizacionInformeCasoDeUso>();
+builder.Services.AddScoped<PrepararRevisionInformeCasoDeUso>();
+builder.Services.AddScoped<RegistrarRevisionInformeCasoDeUso>();
+builder.Services.AddScoped<ObtenerHistorialInformeCasoDeUso>();
+builder.Services.AddScoped<ObtenerBandejaPrecotizacionesCasoDeUso>();
+builder.Services.AddScoped<ObtenerDetallePrecotizacionCasoDeUso>();
+builder.Services.AddScoped<ObtenerPrecargaPrecotizacionCasoDeUso>();
+builder.Services.AddScoped<ConvertirPrecotizacionCasoDeUso>();
 
 // ── INYECCIÓN DE DEPENDENCIAS — Expediente Digital (Sprint 4, HU-29 a HU-33) ───
 builder.Services.AddScoped<IExpedienteRepositorio, ExpedienteRepositorio>();

@@ -11,6 +11,11 @@
 --   rechazar → exige motivo (MOTIVO_RECHAZO, IdMaestro 10) y justificación.
 --   corregir → exige áreas (AREA_CORRECCION_PROPUESTA, JSON de códigos), observaciones
 --              y fecha límite futura. Crea propuesta_correccion (responsable = comercial).
+-- Observaciones del cliente 31/10:
+--   · Se quita la acción "rechazar": solo quedan aprobar y corregir.
+--   · Aprobar: sin validaciones obligatorias, solo con el mensaje (opcional). Si llegan validaciones marcadas
+--     se guardan como referencia.
+--   · Corregir: la fecha límite es opcional (si se indica, debe ser futura).
 DROP PROCEDURE IF EXISTS SP_ResolverVistoBueno;
 
 DELIMITER $$
@@ -28,7 +33,8 @@ CREATE PROCEDURE SP_ResolverVistoBueno(
 proc: BEGIN
     DECLARE v_id_vb        BIGINT;
     DECLARE v_estado_p     VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
-    DECLARE v_numero       VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_numero       VARCHAR(30)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_numero_base VARCHAR(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_version      INT;
     DECLARE v_id_rq        BIGINT;
     DECLARE v_autor        BIGINT;
@@ -58,8 +64,8 @@ proc: BEGIN
     SET p_accion     = LOWER(TRIM(IFNULL(p_accion, '')));
     SET p_comentario = NULLIF(TRIM(p_comentario), '');
 
-    IF p_accion NOT IN ('aprobar', 'corregir', 'rechazar') THEN
-        SELECT 1 AS IdTipoMensaje, 'Acción no válida. Use aprobar, corregir o rechazar.' AS Mensaje;
+    IF p_accion NOT IN ('aprobar', 'corregir') THEN
+        SELECT 1 AS IdTipoMensaje, 'Acción no válida. Use aprobar o solicitar corrección.' AS Mensaje;
         LEAVE proc;
     END IF;
 
@@ -79,31 +85,8 @@ proc: BEGIN
         LEAVE proc;
     END IF;
 
-    IF p_accion = 'aprobar' THEN
-        SELECT COUNT(*), GROUP_CONCAT(String1 ORDER BY Num1 SEPARATOR ' ')
-          INTO v_faltan, v_areas_label
-        FROM tabla_maestra
-        WHERE Descripcion = 'VALIDACION_APROBACION_VB' AND eliminado_en IS NULL AND IFNULL(Num2, 1) = 1
-          AND JSON_CONTAINS(p_validaciones, JSON_QUOTE(String2)) = 0;
-
-        IF v_faltan > 0 THEN
-            SELECT 1 AS IdTipoMensaje, CONCAT('Confirme las validaciones requeridas: ', v_areas_label) AS Mensaje;
-            LEAVE proc;
-        END IF;
-        SET v_areas_label = NULL;
-    END IF;
-
-    IF p_accion = 'rechazar' THEN
-        SELECT String1 INTO v_motivo_label
-        FROM tabla_maestra
-        WHERE IdMaestro = 10 AND IdEmpresa = 1 AND Num1 = p_id_motivo_rechazo AND eliminado_en IS NULL
-        LIMIT 1;
-
-        IF v_motivo_label IS NULL THEN
-            SELECT 1 AS IdTipoMensaje, 'Seleccione el motivo del rechazo.' AS Mensaje;
-            LEAVE proc;
-        END IF;
-    END IF;
+    -- Aprobar: sin validaciones obligatorias (observaciones 31/10). Rechazar ya no existe.
+    SET p_id_motivo_rechazo = NULL;
 
     IF p_accion = 'corregir' THEN
         SELECT COUNT(*), COUNT(tm.String2),
@@ -118,8 +101,8 @@ proc: BEGIN
             LEAVE proc;
         END IF;
 
-        IF p_fecha_limite IS NULL OR p_fecha_limite <= NOW() THEN
-            SELECT 1 AS IdTipoMensaje, 'Indique una fecha y hora límite de corrección posterior a la actual.' AS Mensaje;
+        IF p_fecha_limite IS NOT NULL AND p_fecha_limite <= NOW() THEN
+            SELECT 1 AS IdTipoMensaje, 'La fecha límite de corrección debe ser posterior a la actual.' AS Mensaje;
             LEAVE proc;
         END IF;
     END IF;
@@ -128,6 +111,7 @@ proc: BEGIN
       INTO v_estado_p, v_numero, v_version, v_id_rq, v_autor
     FROM propuesta_comercial p
     WHERE p.id_propuesta = p_id_propuesta AND p.eliminado_en IS NULL;
+    SELECT numero_base INTO v_numero_base FROM propuesta_comercial WHERE numero = v_numero LIMIT 1;
 
     IF v_estado_p IS NULL THEN
         SELECT 1 AS IdTipoMensaje, 'Propuesta no encontrada.' AS Mensaje;
@@ -144,7 +128,7 @@ proc: BEGIN
         -- comercial, se avisa en vez del genérico "no tiene VB pendiente".
         IF v_estado_p = 'anulado' AND EXISTS (
             SELECT 1 FROM propuesta_comercial
-            WHERE numero = v_numero AND version > v_version AND eliminado_en IS NULL
+            WHERE numero_base = v_numero_base AND version > v_version AND eliminado_en IS NULL
         ) THEN
             SELECT 1 AS IdTipoMensaje,
                    CONCAT('El comercial generó una nueva versión de ', v_numero,
@@ -217,20 +201,20 @@ proc: BEGIN
     -- Canal 5 = Notificación en la plataforma
     INSERT INTO notificacion (id_usuario_destino, id_canal, titulo, cuerpo, entidad_tipo, id_entidad, fecha_creacion, creado_por)
     VALUES (v_autor, 5,
-            CONCAT('Propuesta ', v_etiqueta, ': ', v_numero, ' v', v_version),
+            CONCAT('Propuesta ', v_etiqueta, ': ', v_numero),
             CONCAT(v_usu_nombre, ' ',
-                   CASE p_accion WHEN 'aprobar'  THEN 'aprobó la propuesta. Ya puede enviarla al cliente.'
+                   CASE p_accion WHEN 'aprobar'  THEN 'aprobó la propuesta. Ya puede enviarla al cliente. '
                                  WHEN 'corregir' THEN CONCAT('solicitó correcciones en ', v_areas_label,
-                                                             ' (límite ', DATE_FORMAT(p_fecha_limite, '%d/%m/%Y %H:%i'), '): ')
+                                                             IFNULL(CONCAT(' (límite ', DATE_FORMAT(p_fecha_limite, '%d/%m/%Y %H:%i'), ')'), ''), ': ')
                                  ELSE CONCAT('rechazó la propuesta (', v_motivo_label, '): ') END,
-                   IFNULL(IF(p_accion = 'aprobar', NULL, p_comentario), '')),
+                   IFNULL(p_comentario, '')),
             'propuesta', p_id_propuesta, NOW(), p_id_usuario);
 
     IF v_id_rq IS NOT NULL THEN
         INSERT INTO historial_requerimiento (id_requerimiento, tipo, tipo_label, icono, descripcion, usuario, fecha, creado_en, creado_por)
         VALUES (v_id_rq, 'propuesta', CONCAT('Visto bueno: ', v_etiqueta),
                 CASE p_accion WHEN 'aprobar' THEN 'verified' WHEN 'corregir' THEN 'undo' ELSE 'block' END,
-                CONCAT('Propuesta ', v_numero, ' v', v_version, ' ', v_etiqueta, '.'),
+                CONCAT('Propuesta ', v_numero, ' ', v_etiqueta, '.'),
                 v_usu_nombre, NOW(), NOW(), p_id_usuario);
     END IF;
 

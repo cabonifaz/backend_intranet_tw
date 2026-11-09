@@ -57,7 +57,8 @@ CREATE PROCEDURE SP_CompararOcPropuesta(
     OUT p_monto_cubierto  DECIMAL(14,2)
 )
 BEGIN
-    DECLARE v_numero        VARCHAR(20)   CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_numero        VARCHAR(30)   CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_numero_base   VARCHAR(30)   CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;  -- PROP-000012 (OCs antiguas)
     DECLARE v_version       INT;
     DECLARE v_razon         VARCHAR(300)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_ruc           VARCHAR(20)   CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
@@ -127,6 +128,7 @@ BEGIN
     FROM propuesta_comercial p
     JOIN cliente c ON c.id_cliente = p.id_cliente
     WHERE p.id_propuesta = p_id_propuesta;
+    SELECT numero_base INTO v_numero_base FROM propuesta_comercial WHERE id_propuesta = p_id_propuesta;
 
     SET v_saldo = IF(IFNULL(p_sin_autogenerada, 0) = 1, FN_SaldoPropuestaOcSinAutogenerada(p_id_propuesta, p_excluir_oc),
                      FN_SaldoPropuestaOc(p_id_propuesta, p_excluir_oc));
@@ -233,13 +235,15 @@ BEGIN
     -- 2. N° de propuesta referenciado en la OC (si la OC cubre varias propuestas, puede referenciar otra vinculada)
     SET v_ref_esta = (o_num_prop IS NOT NULL AND (
             LOCATE(REGEXP_REPLACE(UPPER(v_numero), '[^A-Z0-9]', ''), REGEXP_REPLACE(UPPER(o_num_prop), '[^A-Z0-9]', '')) > 0
-         OR LOCATE(REGEXP_REPLACE(UPPER(o_num_prop), '[^A-Z0-9]', ''), REGEXP_REPLACE(UPPER(v_numero), '[^A-Z0-9]', '')) > 0));
+         OR LOCATE(REGEXP_REPLACE(UPPER(o_num_prop), '[^A-Z0-9]', ''), REGEXP_REPLACE(UPPER(v_numero), '[^A-Z0-9]', '')) > 0
+         -- OC que cita el número anterior (PROP-000012)
+         OR LOCATE(REGEXP_REPLACE(UPPER(v_numero_base), '[^A-Z0-9]', ''), REGEXP_REPLACE(UPPER(o_num_prop), '[^A-Z0-9]', '')) > 0));
     SET v_ref_otra = (o_num_prop IS NOT NULL AND v_ref_esta = 0 AND JSON_LENGTH(JSON_EXTRACT(p_datos, '$._propuestasVinculadas')) > 0
          AND EXISTS (SELECT 1 FROM JSON_TABLE(JSON_EXTRACT(p_datos, '$._propuestasVinculadas'), '$[*]'
                                               COLUMNS (numero VARCHAR(40) PATH '$')) jv
                      WHERE LOCATE(REGEXP_REPLACE(UPPER(jv.numero), '[^A-Z0-9]', ''), REGEXP_REPLACE(UPPER(o_num_prop), '[^A-Z0-9]', '')) > 0));
     INSERT INTO tmp_oc_cmp VALUES (2, 'numero_propuesta', 'N° Propuesta referenciada',
-        o_num_prop, CONCAT(v_numero, ' v', v_version),
+        o_num_prop, v_numero,
         CASE WHEN o_num_prop IS NULL THEN 'sin_dato' WHEN v_ref_esta = 1 OR v_ref_otra = 1 THEN 'ok' ELSE 'advertencia' END,
         CASE WHEN o_num_prop IS NULL THEN 'La OC no menciona el número de la propuesta.'
              WHEN v_ref_esta = 1     THEN 'La OC referencia esta propuesta.'

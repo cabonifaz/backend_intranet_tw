@@ -23,6 +23,11 @@ BEGIN
         r.id_contacto,
         r.id_sede,
         co.nombres                        AS nombre_contacto,
+        r.id_contacto_secundario,
+        co2.nombres                       AS nombre_contacto_secundario,
+        IFNULL(r.es_inacal, 0)            AS es_acreditacion,
+        (SELECT COUNT(*) FROM documento_adjunto d WHERE d.entidad_tipo = 'requerimiento'
+           AND d.id_entidad = r.id_requerimiento AND d.eliminado_en IS NULL) AS cantidad_adjuntos,
         sc.nombre                         AS nombre_sede,
         r.fecha_creacion,
         CONCAT(u.nombre, ' ', u.apellido) AS responsable,
@@ -49,6 +54,7 @@ BEGIN
     FROM requerimiento r
     JOIN cliente c ON c.id_cliente = r.id_cliente
     LEFT JOIN contacto_cliente co ON co.id_contacto = r.id_contacto
+    LEFT JOIN contacto_cliente co2 ON co2.id_contacto = r.id_contacto_secundario
     LEFT JOIN sede_cliente sc     ON sc.id_sede = r.id_sede AND sc.SoftDelete = 0
     LEFT JOIN usuario u           ON u.id_usuario = r.id_usuario_creador
     LEFT JOIN tabla_maestra tm_orig ON tm_orig.IdMaestro = 63 AND tm_orig.Num1 = r.id_origen     AND tm_orig.IdEmpresa = 1
@@ -70,6 +76,16 @@ BEGIN
     WHERE h.id_requerimiento = p_id_requerimiento
       AND h.SoftDelete = 0
     ORDER BY h.fecha DESC;
+
+    -- 4. Adjuntos del requerimiento
+    SELECT d.id_documento, d.nombre_archivo,
+           JSON_UNQUOTE(JSON_EXTRACT(d.metadatos, '$.tipo_contenido'))                     AS tipo_contenido,
+           CAST(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(d.metadatos, '$.tamano_bytes')), 'null') AS SIGNED) AS tamano_bytes,
+           d.fecha_carga, CONCAT(u.nombre, ' ', u.apellido) AS subido_por
+    FROM documento_adjunto d
+    LEFT JOIN usuario u ON u.id_usuario = d.subido_por
+    WHERE d.entidad_tipo = 'requerimiento' AND d.id_entidad = p_id_requerimiento AND d.eliminado_en IS NULL
+    ORDER BY d.fecha_carga, d.id_documento;
 END //
 
 DELIMITER ;

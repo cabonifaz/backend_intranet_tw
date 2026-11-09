@@ -41,7 +41,7 @@ proc: BEGIN
     DROP TEMPORARY TABLE IF EXISTS tmp_exp_oc;
     CREATE TEMPORARY TABLE tmp_exp_oc AS
     SELECT oc.id_oc, oc.numero_oc, oc.estado, oc.es_autogenerada, oc.reemplazada_por, oc.fecha_registro,
-           MIN(p.id_propuesta) AS id_propuesta, MIN(CONCAT(p.numero, ' v', p.version)) AS propuesta,
+           MIN(p.id_propuesta) AS id_propuesta, MIN(p.numero) AS propuesta,
            SUM(op.monto_asignado) AS monto_asignado_exp,
            (oc.estado <> 'anulada' AND oc.reemplazada_por IS NULL) AS vigente
     FROM orden_compra oc
@@ -108,7 +108,7 @@ proc: BEGIN
     DROP TEMPORARY TABLE IF EXISTS tmp_exp_oc;
 
     -- 4. Validación por propuesta vinculada (todas las de la OC; de_este_expediente marca las del RQ)
-    SELECT op.id_propuesta, CONCAT(p.numero, ' v', p.version) AS propuesta, p.estado AS estado_propuesta,
+    SELECT op.id_propuesta, p.numero AS propuesta, p.estado AS estado_propuesta,
            (p.id_requerimiento = v_id_rq) AS de_este_expediente,
            op.monto_asignado, ROUND(op.monto_asignado * 100 / NULLIF(oc.monto_total, 0), 1) AS porcentaje_oc,
            op.estado_validacion, op.tipo_observacion, op.resultado_ia, op.fecha_decision,

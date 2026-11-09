@@ -96,13 +96,14 @@ public class OrdenesCompraController(
 
     /// <summary>
     /// Propuestas aceptadas con saldo por cubrir. Sin idCliente: selector de "+ Nueva OC". Con idCliente (e idOc al editar):
-    /// "Agregar propuesta vinculada". incluirConAutogenerada=true en la ficha de registro de la OC real: también trae
-    /// las propuestas cubiertas por su OC-AUTO (que se da de baja sola al registrar).
+    /// "Agregar propuesta vinculada". Por defecto (observación 33 del cliente) también trae las propuestas cubiertas
+    /// solo por su OC-AUTO, con idOcAutogenerada/numeroOcAutogenerada (la OC-AUTO se da de baja sola al registrar la OC
+    /// real). incluirConAutogenerada=false las excluye. Al editar una OC (idOc) el flag no aplica.
     /// </summary>
     [HttpGet("api/crm/ordenes-compra/propuestas-disponibles")]
     public async Task<IActionResult> PropuestasDisponibles([FromQuery] long? idCliente, [FromQuery] long? idOc,
                                                            [FromQuery] string? busqueda,
-                                                           [FromQuery] bool incluirConAutogenerada = false,
+                                                           [FromQuery] bool incluirConAutogenerada = true,
                                                            CancellationToken ct = default)
         => Responder(await obtenerDisponibles.EjecutarAsync(idCliente, idOc, busqueda, incluirConAutogenerada, IdUsuarioActual, ct));
 

@@ -3,7 +3,7 @@ namespace TW.Intranet.Aplicacion.Dtos;
 /// <summary>
 /// Body de POST /api/crm/propuestas — guarda la propuesta COMPLETA.
 /// IdPropuesta = 0 → crear (si IdPropuestaBase > 0, crea una NUEVA VERSIÓN de esa propuesta).
-/// IdPropuesta > 0 → actualizar (solo en estado "borrador").
+/// IdPropuesta > 0 → actualizar (en "borrador", o en "aprobado": vuelve a borrador y debe pasar otra vez por VB).
 /// </summary>
 public class GuardarPropuestaDto
 {
@@ -18,6 +18,7 @@ public class GuardarPropuestaDto
     public long?         IdContacto       { get; set; }
     /// <summary>Si es null se usa el usuario logueado.</summary>
     public long?         IdResponsable    { get; set; }
+    /// <summary>Tipo de propuesta: código o nombre del catálogo TIPO_PROPUESTA (venta_directa, equipos_evaluados, servicio_metrologico, adicional_ejecucion).</summary>
     public string?       TipoServicio     { get; set; }
     public List<string>? SeccionesActivas { get; set; }
 
@@ -26,8 +27,14 @@ public class GuardarPropuestaDto
     public string? TerceroRuc         { get; set; }
     public string? TerceroRazonSocial { get; set; }
     public string? TerceroDireccion   { get; set; }
+    /// <summary>
+    /// Cliente intermediario elegido de la BD (observaciones 31/10). Si viene, el RUC, la razón social y la
+    /// dirección se toman del cliente y se ignoran TerceroRuc / TerceroRazonSocial / TerceroDireccion.
+    /// </summary>
+    public long?   IdClienteTercero   { get; set; }
 
     // 2. Datos de la propuesta (carátula)
+    /// <summary>Se ignora: el back usa siempre el detalle del requerimiento (no editable).</summary>
     public string? Referencia     { get; set; }
     /// <summary>HTML del editor enriquecido.</summary>
     public string? Introduccion   { get; set; }

@@ -70,7 +70,8 @@ public class UsuariosRepositorio(CadenaConexionBd conexion) : IUsuariosRepositor
                     sedeOperativa, idSupervisor,
                     habilitadoInacal, registroInacal, fechaExpiracion, induccionSctr,
                     forzarCambio, enviarCorreo, dosFactores,
-                    lista.Anexo, fechaNacimiento, lista.Troncal);
+                    lista.Anexo, fechaNacimiento, lista.Troncal,
+                    lista.NombreUsuario, lista.CanalAcceso);
 
                 return new RespuestaDto<UsuarioDetalleDto>(2, mensaje, detalle);
             }, ct);
@@ -125,6 +126,7 @@ public class UsuariosRepositorio(CadenaConexionBd conexion) : IUsuariosRepositor
                                                                        : DateTime.Parse(dto.FechaNacimiento, System.Globalization.CultureInfo.InvariantCulture).Date);
                 p.AddWithValue("p_cargo",                          Valor(dto.Cargo));
                 p.AddWithValue("p_area",                           Valor(dto.Area));
+                p.AddWithValue("p_nombre_usuario",                 Valor(dto.NombreUsuario));
                 p.AddWithValue("p_rol_sistema",                    dto.RolSistema!);
                 p.AddWithValue("p_sede_operativa",                 Valor(dto.SedeOperativa));
                 p.AddWithValue("p_id_supervisor",                  (object?)dto.IdSupervisorDirecto ?? DBNull.Value);
@@ -156,6 +158,23 @@ public class UsuariosRepositorio(CadenaConexionBd conexion) : IUsuariosRepositor
                 p.AddWithValue("p_id_usuario_ejecutor", idEjecutor);
             },
             (_, mensaje) => Task.FromResult(new RespuestaDto<object>(2, mensaje)), ct);
+
+    public Task<RespuestaDto<List<string>>> ObtenerNombresUsuarioConPrefijoAsync(
+        string prefijo, long? excluirIdUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_ValidarNombreUsuario",
+            p =>
+            {
+                p.AddWithValue("p_prefijo",            prefijo);
+                p.AddWithValue("p_excluir_id_usuario", (object?)excluirIdUsuario ?? DBNull.Value);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                var nombres = new List<string>();
+                while (await r.ReadAsync(ct))
+                    nombres.Add(Texto(r, "nombre_usuario") ?? "");
+                return new RespuestaDto<List<string>>(2, mensaje, nombres);
+            }, ct);
 
     // ══════════════════════════════════════════════════════════════════════════
     //  SUPLENTES
@@ -305,7 +324,9 @@ public class UsuariosRepositorio(CadenaConexionBd conexion) : IUsuariosRepositor
         UltimoAcceso:    FechaHora(r, "ultimo_acceso"),
         FechaCreacion:   FechaHora(r, "fecha_creacion"),
         Anexo:           AnexoCompleto(Texto(r, "troncal"), Texto(r, "anexo")),
-        Troncal:         Texto(r, "troncal"));
+        Troncal:         Texto(r, "troncal"),
+        NombreUsuario:   TextoOpcional(r, "nombre_usuario"),
+        CanalAcceso:     TextoOpcional(r, "canal_acceso"));
 
     private static SuplenteListaItemDto LeerSuplente(MySqlDataReader r) => new(
         IdAsignacion:     EnteroLargo(r, "id_asignacion"),
@@ -330,6 +351,15 @@ public class UsuariosRepositorio(CadenaConexionBd conexion) : IUsuariosRepositor
 
     private static string? Texto(MySqlDataReader r, string col) =>
         EsNulo(r, col) ? null : Convert.ToString(r[col]);
+
+    /// <summary>Como <see cref="Texto"/>, pero null si el SP no devuelve la columna (ej. SP_ObtenerJefesDisponibles).</summary>
+    private static string? TextoOpcional(MySqlDataReader r, string col)
+    {
+        for (var i = 0; i < r.FieldCount; i++)
+            if (r.GetName(i) == col)
+                return r.IsDBNull(i) ? null : Convert.ToString(r.GetValue(i));
+        return null;
+    }
 
     private static int Entero(MySqlDataReader r, string col) =>
         EsNulo(r, col) ? 0 : Convert.ToInt32(r[col]);

@@ -76,7 +76,7 @@ BEGIN
     FROM propuesta_comercial p
     WHERE p.eliminado_en IS NULL
       AND (p.id_requerimiento = v_id_rq OR (v_id_rq IS NULL AND p.id_propuesta = v_id_prop_exp))
-      AND p.version = (SELECT MAX(p2.version) FROM propuesta_comercial p2 WHERE p2.numero = p.numero AND p2.eliminado_en IS NULL);
+      AND p.version = (SELECT MAX(p2.version) FROM propuesta_comercial p2 WHERE p2.numero_base = p.numero_base AND p2.eliminado_en IS NULL);
 
     -- Propuesta activa del expediente: la más avanzada (aceptada > enviada/aprobada > en VB > en elaboración)
     SELECT id_entidad INTO v_id_activa FROM tmp_exp_ent

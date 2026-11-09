@@ -40,7 +40,7 @@ proc: BEGIN
     DROP TEMPORARY TABLE IF EXISTS tmp_exp_pv;
     CREATE TEMPORARY TABLE tmp_exp_pv AS
     SELECT p.id_propuesta, p.numero, p.version, p.estado, p.total, p.id_moneda, p.fecha_creacion,
-           (p.version = (SELECT MAX(p2.version) FROM propuesta_comercial p2 WHERE p2.numero = p.numero AND p2.eliminado_en IS NULL)) AS es_ultima
+           (p.version = (SELECT MAX(p2.version) FROM propuesta_comercial p2 WHERE p2.numero_base = p.numero_base AND p2.eliminado_en IS NULL)) AS es_ultima
     FROM propuesta_comercial p
     WHERE p.eliminado_en IS NULL AND p.id_requerimiento = v_id_rq;
 
@@ -67,7 +67,8 @@ proc: BEGIN
 
     -- 2. Versiones (pills)
     SELECT v.id_propuesta, v.numero, v.version, v.estado, v.total, m.String2 AS simbolo_moneda, v.fecha_creacion,
-           v.es_ultima, (v.numero = (SELECT p.numero FROM propuesta_comercial p WHERE p.id_propuesta = v_activa)) AS es_activa,
+           v.es_ultima, ((SELECT pb.numero_base FROM propuesta_comercial pb WHERE pb.id_propuesta = v.id_propuesta)
+            = (SELECT p.numero_base FROM propuesta_comercial p WHERE p.id_propuesta = v_activa)) AS es_activa,
            (v.id_propuesta = v_id_prop) AS seleccionada
     FROM tmp_exp_pv v
     LEFT JOIN tabla_maestra m ON m.IdMaestro = 1 AND m.IdEmpresa = 1 AND m.Num1 = v.id_moneda
@@ -91,7 +92,7 @@ proc: BEGIN
            p.descripcion_cambios, mv.String1 AS motivo_nueva_version,
            -- Completas (obligatorias + opcionales activas), en el orden del wizard
            CAST(FN_SeccionesActivasPropuesta(p.secciones_activas) AS CHAR) AS secciones_activas,
-           CONCAT('prop-', p.id_propuesta) AS clave_pdf, CONCAT(p.numero, '-v', p.version, '.pdf') AS nombre_pdf,
+           CONCAT('prop-', p.id_propuesta) AS clave_pdf, CONCAT(p.numero, '.pdf') AS nombre_pdf,
            r.numero AS numero_rq,
            p.id_contacto, ct.nombres AS contacto, ct.cargo AS cargo_contacto, ct.correo AS correo_contacto,
            ct.telefono_movil AS telefono_contacto, ct.area AS area_contacto, p.id_sede, sc.nombre AS sede,
@@ -206,7 +207,7 @@ proc: BEGIN
     LEFT JOIN usuario uc ON uc.id_usuario = os.id_responsable_comercial
     WHERE os.eliminado_en IS NULL
       AND e.id_expediente = FN_ExpedienteDePropuesta(v_id_prop)
-      AND (pe.id_propuesta IS NULL OR pe.numero = (SELECT p3.numero FROM propuesta_comercial p3 WHERE p3.id_propuesta = v_id_prop))
+      AND (pe.id_propuesta IS NULL OR pe.numero_base = (SELECT p3.numero_base FROM propuesta_comercial p3 WHERE p3.id_propuesta = v_id_prop))
     ORDER BY os.fecha_ejecucion DESC, os.id_os DESC;
 END$$
 

@@ -15,11 +15,16 @@ public class MenuMovilRepositorio(CadenaConexionBd conexion)
             {
                 // 2do resultado: indicadores
                 await r.NextResultAsync(ct);
-                int asignados = 0, hoy = 0;
+                int asignados = 0, hoy = 0, viaticosActivos = 0, gastosRevisionN = 0;
+                decimal viaticosSaldo = 0, gastosRevision = 0;
                 if (await r.ReadAsync(ct))
                 {
-                    asignados = Entero(r, "servicios_asignados");
-                    hoy       = Entero(r, "servicios_hoy");
+                    asignados       = Entero(r, "servicios_asignados");
+                    hoy             = Entero(r, "servicios_hoy");
+                    viaticosSaldo   = DecimalNulo(r, "viaticos_saldo") ?? 0m;
+                    viaticosActivos = Entero(r, "viaticos_activos");
+                    gastosRevision  = DecimalNulo(r, "gastos_revision_monto") ?? 0m;
+                    gastosRevisionN = Entero(r, "gastos_revision_n");
                 }
 
                 // 3er resultado: próximo servicio (puede no haber)
@@ -38,6 +43,26 @@ public class MenuMovilRepositorio(CadenaConexionBd conexion)
                         Texto(r, "estado") ?? string.Empty);
                 }
 
-                return new RespuestaDto<ResumenMenuMovilDto>(2, mensaje, new ResumenMenuMovilDto(asignados, hoy, proximo));
+                return new RespuestaDto<ResumenMenuMovilDto>(2, mensaje, new ResumenMenuMovilDto(asignados, hoy, proximo, viaticosSaldo, viaticosActivos, gastosRevision, gastosRevisionN));
+            }, ct);
+
+    public Task<RespuestaDto<MenuJefaturaMovilDto>> ObtenerMenuJefaturaAsync(long idUsuario, CancellationToken ct) =>
+        EjecutarAsync<MenuJefaturaMovilDto>("SP_ObtenerMenuJefaturaMovil",
+            p => p.AddWithValue("p_id_usuario", idUsuario),
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<MenuJefaturaMovilDto>(1, "Tu cargo no tiene el menú de Jefatura.");
+
+                return new RespuestaDto<MenuJefaturaMovilDto>(2, mensaje, new MenuJefaturaMovilDto(
+                    Texto(r, "area_codigo") ?? string.Empty,
+                    Texto(r, "area_nombre"),
+                    Texto(r, "sede"),
+                    Entero(r, "programados"),
+                    Entero(r, "en_ruta"),
+                    Entero(r, "en_ejecucion"),
+                    Entero(r, "con_demora"),
+                    Entero(r, "aprobaciones_pendientes")));
             }, ct);
 }

@@ -19,5 +19,7 @@ public record GuardarRequerimientoComandoDto(
     string    Descripcion,
     bool      NotificarCorreo,
     bool      RequiereVisita,
-    bool      ClienteDeuda
+    bool      ClienteDeuda,
+    long?     IdContactoSecundario = null,
+    bool      EsAcreditacion       = false
 );

@@ -3,7 +3,8 @@
 -- El técnico inicia el traslado hacia el cliente: la OS pasa a 'en_ruta', se registra el
 -- evento de campo "Salida desde base" y queda en auditoria_evento.
 -- El back valida antes el checklist (ReglasChecklistSalida). Aquí se vuelve a validar lo
--- que podría cambiar en el medio: estado de la OS y, si se usa, el visto bueno vigente.
+-- que podría cambiar en el medio: estado de la OS, que sea el día programado (SP_ObtenerSalidaHabilitadaMovil)
+-- y, si se usa, el visto bueno vigente.
 --   p_con_visto_bueno = 1 → sale con pendientes gracias al visto bueno del jefe.
 -- ============================================================
 DROP PROCEDURE IF EXISTS SP_IniciarTrasladoMovil;
@@ -19,6 +20,8 @@ proc: BEGIN
     DECLARE v_estado     VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_aut_estado VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_tipo       INT;
+    DECLARE v_salida_ok  TINYINT DEFAULT 1;
+    DECLARE v_salida_msg VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -46,6 +49,14 @@ proc: BEGIN
     IF v_estado NOT IN ('programada', 'reprogramada') THEN
         ROLLBACK;
         SELECT 1 AS IdTipoMensaje, CONCAT('No se puede iniciar el traslado: el servicio está ', REPLACE(v_estado, '_', ' '), '.') AS Mensaje;
+        LEAVE proc;
+    END IF;
+
+    -- El traslado solo se inicia desde el día programado
+    CALL SP_ObtenerSalidaHabilitadaMovil(p_id_os, v_salida_ok, v_salida_msg);
+    IF v_salida_ok = 0 THEN
+        ROLLBACK;
+        SELECT 1 AS IdTipoMensaje, v_salida_msg AS Mensaje;
         LEAVE proc;
     END IF;
 

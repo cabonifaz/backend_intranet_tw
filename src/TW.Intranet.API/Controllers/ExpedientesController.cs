@@ -108,13 +108,13 @@ public class ExpedientesController(
                                                        [FromQuery(Name = "destino")] long idDestino, CancellationToken ct = default)
         => Responder(await compararVersiones.EjecutarAsync(idExpediente, idBase, idDestino, IdUsuarioActual, ct));
 
-    /// <summary>HU-30 — Tab ✓ Visto Bueno: estado, historial de decisiones, reasignaciones del aprobador y métricas. ?numero=PROP-000001</summary>
+    /// <summary>HU-30 — Tab ✓ Visto Bueno: estado, historial de decisiones, reasignaciones del aprobador y métricas. ?numero=PC-0001-1-2026</summary>
     [RequierePermiso("expediente_bandeja")]
     [HttpGet("{idExpediente:long}/visto-bueno")]
     public async Task<IActionResult> TabVistoBueno(long idExpediente, [FromQuery] string? numero, CancellationToken ct = default)
         => Responder(await tabVistoBueno.EjecutarAsync(idExpediente, numero, IdUsuarioActual, ct));
 
-    /// <summary>HU-30 — Tab 📞 Seguimiento: estado, timeline de interacciones, resultado y evidencias. ?numero=PROP-000001</summary>
+    /// <summary>HU-30 — Tab 📞 Seguimiento: estado, timeline de interacciones, resultado y evidencias. ?numero=PC-0001-1-2026</summary>
     [RequierePermiso("expediente_bandeja")]
     [HttpGet("{idExpediente:long}/seguimiento")]
     public async Task<IActionResult> TabSeguimiento(long idExpediente, [FromQuery] string? numero, CancellationToken ct = default)

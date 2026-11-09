@@ -1,5 +1,7 @@
 -- HU-07 — Datos heredados del requerimiento para iniciar una propuesta
 --   + propuesta existente (última versión) para el aviso "Crear nueva versión"
+--   Observaciones 31/10: + es_acreditacion y cantidad_adjuntos del RQ (tipo "Servicio metrológico" y adjunto
+--   obligatorio) y la condición de pago habitual del cliente (precarga de la forma de pago).
 DROP PROCEDURE IF EXISTS SP_ObtenerDatosNuevaPropuesta;
 
 DELIMITER $$
@@ -33,7 +35,16 @@ BEGIN
             tm_area.String1             AS area_label,
             r.id_prioridad,
             tm_prio.String1             AS prioridad_label,
-            r.descripcion
+            r.descripcion,
+            IFNULL(r.es_inacal, 0)      AS es_acreditacion,
+            (SELECT COUNT(*) FROM documento_adjunto d
+              WHERE d.entidad_tipo = 'requerimiento' AND d.id_entidad = r.id_requerimiento
+                AND d.eliminado_en IS NULL) AS cantidad_adjuntos,
+            NULLIF(TRIM(c.condicion_pago), '') AS condicion_pago_cliente,
+            (SELECT cp.String2 FROM tabla_maestra cp
+              WHERE cp.IdMaestro = 39 AND cp.IdEmpresa = 1 AND cp.eliminado_en IS NULL
+                AND (cp.String1 = c.condicion_pago OR cp.String2 = c.condicion_pago)
+              ORDER BY cp.IdTablaMaestra LIMIT 1) AS condicion_pago_codigo
         FROM requerimiento r
         JOIN cliente c                ON c.id_cliente   = r.id_cliente
         LEFT JOIN sede_cliente sc     ON sc.id_sede     = r.id_sede

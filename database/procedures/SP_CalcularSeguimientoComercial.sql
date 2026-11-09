@@ -39,6 +39,10 @@ CREATE PROCEDURE SP_CalcularSeguimientoComercial(
 BEGIN
     DECLARE v_todas           TINYINT DEFAULT 0;
     DECLARE v_area            VARCHAR(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_ver_todo    TINYINT DEFAULT 0;
+    DECLARE v_solo_propio TINYINT DEFAULT 1;
+    DECLARE v_ids         TEXT;
+    DECLARE v_area_alc    VARCHAR(40);
     DECLARE v_dias_sin_resp   INT DEFAULT 7;
     DECLARE v_meta            INT DEFAULT 8;
     DECLARE v_sla_horas       INT DEFAULT 48;
@@ -57,6 +61,8 @@ BEGIN
     FROM tabla_maestra
     WHERE IdMaestro = 49 AND IdEmpresa = 1 AND String1 = 'propuesta' AND String2 = 'seguimiento';
 
+    CALL SP_ObtenerAlcanceCrm(p_id_usuario, v_ver_todo, v_solo_propio, v_ids, v_area_alc);
+
     SELECT area INTO v_area
     FROM usuario WHERE id_usuario = p_id_usuario AND eliminado_en IS NULL AND estado = 'activo' LIMIT 1;
 
@@ -64,7 +70,10 @@ BEGIN
     DROP TEMPORARY TABLE IF EXISTS tmp_seg_base;
     CREATE TEMPORARY TABLE tmp_seg_base AS
     SELECT
-        p.id_propuesta, p.numero, p.version, p.id_requerimiento, p.id_cliente, p.id_contacto,
+        p.id_propuesta, p.numero, p.version, p.id_requerimiento, p.id_cliente,
+        -- Observaciones 31/10: el contacto es el de la propuesta y, si no tiene, el del RQ
+        COALESCE(p.id_contacto, (SELECT rq.id_contacto FROM requerimiento rq
+                                  WHERE rq.id_requerimiento = p.id_requerimiento)) AS id_contacto,
         p.total, p.id_moneda, p.estado AS estado_propuesta,
         p.primera_accion_fecha, p.id_tipo_primera_accion, p.id_prioridad_primera_accion,
         p.id_responsable_primera_accion, p.minutos_primera_accion,
@@ -74,8 +83,11 @@ BEGIN
         (SELECT s.id_seguimiento FROM seguimiento_comercial s
          WHERE s.id_propuesta = p.id_propuesta AND s.eliminado_en IS NULL
          ORDER BY s.fecha_interaccion DESC, s.id_seguimiento DESC LIMIT 1)          AS id_ult_seg,
+        -- Observaciones 31/10: las interacciones de TODAS las versiones de la propuesta (como el timeline
+        -- del detalle), sin contar el registro de cierre (aceptación / rechazo del cliente).
         (SELECT COUNT(*) FROM seguimiento_comercial s
-         WHERE s.id_propuesta = p.id_propuesta AND s.eliminado_en IS NULL)          AS interacciones,
+         JOIN propuesta_comercial pv ON pv.id_propuesta = s.id_propuesta AND pv.eliminado_en IS NULL
+         WHERE pv.numero_base = p.numero_base AND s.eliminado_en IS NULL AND s.estado = 'activo') AS interacciones,
         (SELECT MAX(s.fecha_interaccion) FROM seguimiento_comercial s
          JOIN tabla_maestra rs ON rs.IdMaestro = 27 AND rs.IdEmpresa = 1 AND rs.Num1 = s.id_resultado
          WHERE s.id_propuesta = p.id_propuesta AND s.eliminado_en IS NULL
@@ -100,8 +112,10 @@ BEGIN
     WHERE p.eliminado_en IS NULL
       AND p.estado IN ('enviado', 'aceptado', 'aprobado', 'rechazado')
       AND p.version = (SELECT MAX(p2.version) FROM propuesta_comercial p2
-                       WHERE p2.numero = p.numero AND p2.eliminado_en IS NULL)
-      AND (v_todas = 1 OR u.area = v_area)
+                       WHERE p2.numero_base = p.numero_base AND p2.eliminado_en IS NULL)
+      AND (v_todas = 1 OR v_ver_todo = 1 OR u.area = v_area)
+      -- Pedido 14: rol 'usuario' → solo lo suyo como responsable actual + suplencias vigentes
+      AND (v_ver_todo = 1 OR FIND_IN_SET(COALESCE(p.id_responsable, p.id_creador), v_ids) > 0)
       AND (IFNULL(p_id_propuesta, 0) = 0 OR p.id_propuesta = p_id_propuesta);
 
     -- ── Paso 2: estado visual, próxima acción y SLA ───────────────────────

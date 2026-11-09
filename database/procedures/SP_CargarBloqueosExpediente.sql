@@ -80,13 +80,13 @@ BEGIN
            p.id_propuesta, p.numero, p.version, COALESCE(p.id_responsable, p.id_creador) AS id_responsable,
            (SELECT MIN(v2.fecha_solicitud) FROM visto_bueno v2
             JOIN propuesta_comercial p2 ON p2.id_propuesta = v2.id_propuesta
-            WHERE p2.numero = p.numero AND v2.tipo = 'aprobacion' AND v2.eliminado_en IS NULL
+            WHERE p2.numero_base = p.numero_base AND v2.tipo = 'aprobacion' AND v2.eliminado_en IS NULL
               AND v2.fecha_solicitud > v.fecha_respuesta) AS fecha_nuevo_vb,
            (SELECT IFNULL(p3.fecha_anulacion, p3.modificado_en) FROM propuesta_comercial p3
-            WHERE p3.numero = p.numero AND p3.eliminado_en IS NULL
+            WHERE p3.numero_base = p.numero_base AND p3.eliminado_en IS NULL
             ORDER BY p3.version DESC, p3.id_propuesta DESC LIMIT 1)                                        AS fecha_ultima_mod,
            (SELECT p3.estado FROM propuesta_comercial p3
-            WHERE p3.numero = p.numero AND p3.eliminado_en IS NULL
+            WHERE p3.numero_base = p.numero_base AND p3.eliminado_en IS NULL
             ORDER BY p3.version DESC, p3.id_propuesta DESC LIMIT 1)                                        AS estado_ultima
     FROM visto_bueno v
     JOIN tmp_blq_props t ON t.id_propuesta = v.id_propuesta
@@ -98,7 +98,7 @@ BEGIN
     SELECT x.id_expediente, CONCAT('vb-', x.id_vb), IF(x.estado = 'rechazado', 'bloqueo', 'excepcion'),
            IF(x.estado = 'rechazado', 'vb_rechazado', 'vb_devuelto'),
            IF(x.estado = 'rechazado', 'VB rechazado', 'VB devuelto para ajuste'),
-           'visto_bueno', 'propuesta', x.id_propuesta, CONCAT(x.numero, ' v', x.version),
+           'visto_bueno', 'propuesta', x.id_propuesta, x.numero,
            LEFT(CONCAT_WS('. ', mr.String1, NULLIF(TRIM(IFNULL(x.comentario_respuesta, '')), '')), 1000),
            IF(x.estado = 'rechazado', 'La propuesta no puede enviarse al cliente: requiere una nueva versión y un nuevo VB.',
                                       'La propuesta debe corregirse y volver a visto bueno.'),

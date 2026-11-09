@@ -31,7 +31,7 @@ public class GuardarPropuestaCasoDeUso(IPropuestasRepositorio repositorio)
         if (dto.IdRequerimiento <= 0)
             return "Indique el requerimiento de origen.";
 
-        if (dto.EsTercerizado)
+        if (dto.EsTercerizado && dto.IdClienteTercero is not > 0)
         {
             if (string.IsNullOrWhiteSpace(dto.TerceroRuc) || !Regex.IsMatch(dto.TerceroRuc.Trim(), @"^\d{11}$"))
                 return "El RUC del tercero debe tener 11 dígitos.";

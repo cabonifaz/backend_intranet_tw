@@ -32,7 +32,8 @@ public class OrdenesServicioController(
     DescargarPlantillaImportacionOsCasoDeUso     plantilla,
     AnalizarImportacionOsCasoDeUso               analizarImportacion,
     ObtenerPropuestasDisponiblesOsCasoDeUso      propuestasDisponibles,
-    ObtenerMotivosOrdenServicioCasoDeUso         motivos) : ControllerBase
+    ObtenerMotivosOrdenServicioCasoDeUso         motivos,
+    GenerarPdfOrdenServicioCasoDeUso             generarPdf) : ControllerBase
 {
     private const long TamanoMaximoPeticion = 6 * 1024 * 1024;
 
@@ -191,6 +192,18 @@ public class OrdenesServicioController(
     public async Task<IActionResult> TabProgramacion(long idOs, CancellationToken ct = default)
         => Responder(await tabs.ProgramacionAsync(idOs, IdUsuarioActual, ct));
 
+    /// <summary>#4436 — PDF oficial de la OS / OM (cualquier estado). Responde application/pdf.</summary>
+    [RequierePermiso("os_bandeja", "os_bandeja_operaciones")]
+    [HttpGet("{idOs:long}/pdf")]
+    public async Task<IActionResult> Pdf(long idOs, CancellationToken ct = default)
+    {
+        var r = await generarPdf.EjecutarAsync(idOs, IdUsuarioActual, ct);
+        if (r.IdTipoMensaje != 2 || r.Datos is null)
+            return r.IdTipoMensaje == 1 ? BadRequest(new RespuestaDto<object>(1, r.Mensaje))
+                                        : StatusCode(500, new RespuestaDto<object>(3, r.Mensaje));
+        return File(r.Datos.Contenido, r.Datos.TipoContenido, r.Datos.NombreArchivo);
+    }
+
     /// <summary>Solo OM.</summary>
     [RequierePermiso("os_bandeja", "os_bandeja_operaciones")]
     [HttpGet("{idOs:long}/certificado")]
@@ -218,6 +231,7 @@ public class OrdenesServicioController(
     [RequierePermiso("os_guardar")]
     [HttpGet("conceptos")]
     [HttpGet("catalogo-conceptos")]
+    [HttpGet("conceptos-catalogo")]
     public async Task<IActionResult> BuscarConceptos([FromQuery] FiltrosBuscarConceptosOsDto filtros, CancellationToken ct = default)
         => Responder(await buscarConceptos.EjecutarAsync(filtros, IdUsuarioActual, ct));
 

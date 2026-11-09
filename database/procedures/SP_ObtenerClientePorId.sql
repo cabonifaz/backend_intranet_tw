@@ -1,6 +1,7 @@
 -- ============================================================
 -- SP_ObtenerClientePorId
 -- Detalle completo de un cliente para la ficha de edición.
+-- Observaciones 31/10: + comercial de la cartera (id, nombre), fecha y quién asignó.
 -- ============================================================
 DROP PROCEDURE IF EXISTS SP_ObtenerClientePorId;
 
@@ -45,8 +46,14 @@ BEGIN
             c.estado,
             (SELECT GROUP_CONCAT(a.nombre ORDER BY a.nombre SEPARATOR ',')
              FROM area_cliente a
-             WHERE a.id_cliente = c.id_cliente AND a.SoftDelete = 0 AND a.estado = 'activo') AS areas
+             WHERE a.id_cliente = c.id_cliente AND a.SoftDelete = 0 AND a.estado = 'activo') AS areas,
+            c.id_comercial_cartera,
+            NULLIF(TRIM(CONCAT(IFNULL(uc.nombre, ''), ' ', IFNULL(uc.apellido, ''))), '') AS comercial_cartera,
+            c.cartera_asignado_en,
+            NULLIF(TRIM(CONCAT(IFNULL(ua.nombre, ''), ' ', IFNULL(ua.apellido, ''))), '') AS cartera_asignado_por
         FROM cliente c
+        LEFT JOIN usuario uc ON uc.id_usuario = c.id_comercial_cartera
+        LEFT JOIN usuario ua ON ua.id_usuario = c.cartera_asignado_por
         LEFT JOIN categoria_cliente cc
             ON cc.id_categoria = c.id_categoria AND cc.SoftDelete = 0
         WHERE c.id_cliente = p_id_cliente AND c.SoftDelete = 0;

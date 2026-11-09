@@ -20,4 +20,14 @@ public class PropuestaEquipoDto
     public string? CodigoCliente { get; set; }
     public string? CodigoTw      { get; set; }
     public int     Orden         { get; set; }
+
+    // Solo lectura (observaciones 31/10): estado real del equipo en el maestro. Se ignoran al guardar.
+    /// <summary>activo | inactivo | borrador (equipo_cliente.estado).</summary>
+    public string? EstadoEquipo         { get; set; }
+    /// <summary>Activo | Inactivo | Borrador.</summary>
+    public string? EstadoEquipoLabel    { get; set; }
+    /// <summary>En oficina | En evaluación | En ejecución (si tiene).</summary>
+    public string? EstadoOperativoLabel { get; set; }
+    /// <summary>Activo | Inactivo | Borrador (estado del equipo en el maestro). Null si el equipo no está en el maestro.</summary>
+    public string? Estado               { get; set; }
 }

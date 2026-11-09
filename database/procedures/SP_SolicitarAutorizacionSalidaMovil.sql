@@ -9,6 +9,8 @@
 --   - Respaldo si el área no tiene encargado activo: supervisores/administradores del área;
 --     si tampoco, Jefe/Coordinador de Operaciones; si tampoco, administradores.
 --   - Una sola solicitud pendiente por OS (evita duplicados y spam de notificaciones).
+--   - Solo desde el día programado de la OS (SP_ObtenerSalidaHabilitadaMovil).
+--   - Deja también una notificación al propio técnico ("Solicitud de autorización enviada") para que la vea en la app.
 --   - Deja registro en autorizacion_salida_os (con area_destino) y auditoria_evento.
 -- ============================================================
 DROP PROCEDURE IF EXISTS SP_SolicitarAutorizacionSalidaMovil;
@@ -32,6 +34,8 @@ proc: BEGIN
     DECLARE v_area        VARCHAR(30)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_area_nombre VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_notificados VARCHAR(600) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_salida_ok   TINYINT DEFAULT 1;
+    DECLARE v_salida_msg  VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -64,6 +68,14 @@ proc: BEGIN
     IF v_estado NOT IN ('programada', 'reprogramada') THEN
         ROLLBACK;
         SELECT 1 AS IdTipoMensaje, 'El servicio ya no está programado: no hace falta autorización de salida.' AS Mensaje;
+        LEAVE proc;
+    END IF;
+
+    -- La salida (y su autorización) solo se gestiona desde el día programado
+    CALL SP_ObtenerSalidaHabilitadaMovil(p_id_os, v_salida_ok, v_salida_msg);
+    IF v_salida_ok = 0 THEN
+        ROLLBACK;
+        SELECT 1 AS IdTipoMensaje, v_salida_msg AS Mensaje;
         LEAVE proc;
     END IF;
 
@@ -156,6 +168,12 @@ proc: BEGIN
     INTO   v_notificados
     FROM   tmp_aut_destino d;
     DROP TEMPORARY TABLE IF EXISTS tmp_aut_destino;
+
+    -- Confirmación para el propio técnico (HU-04: "Solicitud de autorización enviada · avisado al Jefe …")
+    INSERT INTO notificacion (id_usuario_destino, id_canal, titulo, cuerpo, entidad_tipo, id_entidad, fecha_creacion, creado_por)
+    VALUES (p_id_usuario, 5, 'Solicitud de autorización enviada',
+            LEFT(CONCAT(v_numero, ' · ', IF(v_notificados IS NULL, 'sin un encargado activo para avisar', CONCAT('avisado a ', v_notificados))), 3000),
+            'orden_servicio', p_id_os, NOW(), p_id_usuario);
 
     INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion, id_usuario, registrado_en, metadata)
     VALUES ('orden_servicio', p_id_os, 'solicitar_autorizacion_salida', IFNULL(v_aut_estado, 'sin_solicitud'), 'pendiente',

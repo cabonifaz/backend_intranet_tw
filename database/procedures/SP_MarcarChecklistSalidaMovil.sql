@@ -2,7 +2,8 @@
 -- SP_MarcarChecklistSalidaMovil  (App Mobile HU-04)
 -- El técnico confirma (o desmarca) un ítem manual del checklist de pre-salida.
 --   p_codigo: expediente | epp | materiales | herramientas | pesas_patron  (lista blanca)
--- Solo mientras la OS siga programada/reprogramada. Deja registro en auditoria_evento.
+-- Solo mientras la OS siga programada/reprogramada y desde el día programado (SP_ObtenerSalidaHabilitadaMovil).
+-- Deja registro en auditoria_evento.
 -- ============================================================
 DROP PROCEDURE IF EXISTS SP_MarcarChecklistSalidaMovil;
 
@@ -19,6 +20,8 @@ proc: BEGIN
     DECLARE v_id       BIGINT;
     DECLARE v_anterior TINYINT DEFAULT 0;
     DECLARE v_nombre   VARCHAR(60) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_salida_ok  TINYINT DEFAULT 1;
+    DECLARE v_salida_msg VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -59,6 +62,14 @@ proc: BEGIN
     IF v_estado NOT IN ('programada', 'reprogramada') THEN
         ROLLBACK;
         SELECT 1 AS IdTipoMensaje, 'El traslado ya se inició: el checklist ya no se puede cambiar.' AS Mensaje;
+        LEAVE proc;
+    END IF;
+
+    -- La salida se valida solo desde el día programado
+    CALL SP_ObtenerSalidaHabilitadaMovil(p_id_os, v_salida_ok, v_salida_msg);
+    IF v_salida_ok = 0 THEN
+        ROLLBACK;
+        SELECT 1 AS IdTipoMensaje, v_salida_msg AS Mensaje;
         LEAVE proc;
     END IF;
 

@@ -52,7 +52,7 @@ BEGIN
       AND p.estado NOT IN ('anulado', 'revocada')
       -- Solo la última versión vigente de cada propuesta (la anterior queda reemplazada por la nueva)
       AND NOT EXISTS (SELECT 1 FROM propuesta_comercial pn
-                      WHERE pn.numero = p.numero AND pn.version > p.version AND pn.eliminado_en IS NULL
+                      WHERE pn.numero_base = p.numero_base AND pn.version > p.version AND pn.eliminado_en IS NULL
                         AND pn.estado NOT IN ('anulado', 'revocada'))
       AND (IFNULL(p_id_cliente, 0) = 0 OR t.id_cliente = p_id_cliente);
 
