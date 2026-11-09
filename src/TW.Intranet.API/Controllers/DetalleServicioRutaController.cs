@@ -26,6 +26,7 @@ public class DetalleServicioRutaController(
     ExportarIncidenciasServicioRutaCasoDeUso   exportar,
     ObtenerCierreServicioRutaCasoDeUso         cierre,
     ObtenerAuditoriaServicioRutaCasoDeUso      auditoria,
+    ObtenerEvidenciaIncidenciaCasoDeUso        evidencia,
     ILogger<DetalleServicioRutaController> logger) : ControllerBase
 {
     private long IdUsuarioActual =>
@@ -83,6 +84,23 @@ public class DetalleServicioRutaController(
     [HttpGet("incidencias/{clave}")]
     public async Task<IActionResult> Incidencia(long idOs, string clave, CancellationToken ct = default)
         => Responder(await incidencias.EjecutarAsync(IdUsuarioActual, idOs, string.IsNullOrWhiteSpace(clave) ? "?" : clave, ct));
+
+    /// <summary>
+    /// Foto de evidencia de una demora/incidencia/registro del Asistente (la cargada por el técnico desde la app o por el Asistente en HU-53).
+    /// Devuelve la imagen (image/jpeg, image/png o image/webp). El front la pide con el token y la muestra como blob.
+    /// </summary>
+    [RequierePermiso("seg_bandeja")]
+    [HttpGet("incidencias/{clave}/evidencia")]
+    public async Task<IActionResult> EvidenciaIncidencia(long idOs, string clave, CancellationToken ct = default)
+    {
+        var r = await evidencia.EjecutarAsync(IdUsuarioActual, idOs, clave, ct);
+        if (r.IdTipoMensaje != 2 || r.Datos is null)
+            return Responder(r);
+        Response.Headers.CacheControl = "private, no-store";
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
+        Response.Headers["Content-Security-Policy"] = "default-src 'none'";
+        return File(r.Datos.Contenido, r.Datos.TipoContenido);
+    }
 
     /// <summary>Exporta las demoras/incidencias de la OS a CSV (celdas neutralizadas contra inyección de fórmulas).</summary>
     [RequierePermiso("seg_bandeja")]

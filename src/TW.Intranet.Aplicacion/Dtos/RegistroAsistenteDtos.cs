@@ -30,3 +30,6 @@ public record FormularioRegistroAsistenteDto(
     IReadOnlyList<EstadoRegistroAsistenteDto> Estados,
     IReadOnlyList<EventoVinculableDto> EventosVinculables,
     IReadOnlyList<MiRegistroAsistenteDto> MisRegistros);
+
+/// <summary>HU-53 Foto de evidencia subida: Url es la ruta que se envía como evidenciaUrl en POST /registros (Modo 2 Demora/Incidente).</summary>
+public record EvidenciaSubidaDto(string Url, string Nombre, long TamanoBytes, string ContentType);
