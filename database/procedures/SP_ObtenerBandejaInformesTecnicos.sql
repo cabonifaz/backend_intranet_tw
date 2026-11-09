@@ -92,7 +92,9 @@ proc: BEGIN
            IFNULL(SUM(grupo_estado = 'revisado_sin_precot'), 0)     AS revisados_sin_precot,
            IFNULL(SUM(grupo_estado = 'revisado_con_precot'), 0)     AS revisados_con_precot,
            IFNULL(SUM(sla_vencido = 1), 0)                          AS sla_vencidos,
-           MAX(sla_horas)                                           AS sla_horas
+           -- Sin informes en la consulta la tabla está vacía: se devuelve el SLA configurado (antes salía NULL y el back respondía 500)
+           IFNULL(MAX(sla_horas), (SELECT CAST(IFNULL(MAX(m.Num2), 48) AS SIGNED) FROM tabla_maestra m
+                                   WHERE m.Descripcion = 'PARAMETRO_PROGRAMACION' AND m.String2 = 'RT_SLA_REVISION_HORAS')) AS sla_horas
     FROM tmp_rt_base;
 
     DELETE FROM tmp_rt_base
