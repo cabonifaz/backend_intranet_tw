@@ -249,6 +249,10 @@ builder.Services.AddScoped<BuscarEquipoQrMovilCasoDeUso>();
 builder.Services.AddScoped<CambiarEstadoEquipoMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerOpcionesEquipoNuevoMovilCasoDeUso>();
 builder.Services.AddScoped<RegistrarEquipoNuevoMovilCasoDeUso>();
+// App Mobile HU-08 / HU-09 — trabajo en el equipo y variables ambientales
+builder.Services.AddScoped<ITrabajoEquipoMovilRepositorio, TrabajoEquipoMovilRepositorio>();
+builder.Services.AddScoped<ObtenerTrabajoEquipoMovilCasoDeUso>();
+builder.Services.AddScoped<GuardarVariablesAmbientalesMovilCasoDeUso>();
 // App Mobile HU-28 / HU-31 — menú de Jefatura y centro de aprobaciones
 builder.Services.AddScoped<ObtenerMenuJefaturaMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerAprobacionesMovilCasoDeUso>();
