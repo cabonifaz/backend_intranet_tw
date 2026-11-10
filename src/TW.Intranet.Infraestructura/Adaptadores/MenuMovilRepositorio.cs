@@ -63,6 +63,14 @@ public class MenuMovilRepositorio(CadenaConexionBd conexion)
                     Entero(r, "en_ruta"),
                     Entero(r, "en_ejecucion"),
                     Entero(r, "con_demora"),
-                    Entero(r, "aprobaciones_pendientes")));
+                    Entero(r, "aprobaciones_pendientes"),
+                    EnteroNulo(r, "alertas_criticas"),
+                    EnteroNulo(r, "informes_por_revisar"),
+                    EnteroNulo(r, "certificados_pendientes"),
+                    EnteroNulo(r, "tickets_correlativo"),
+                    EnteroNulo(r, "mi_equipo_total"),
+                    EnteroNulo(r, "mi_equipo_en_labores"),
+                    EnteroNulo(r, "agenda_conflictos"),
+                    EnteroNulo(r, "viaticos_por_revisar")));
             }, ct);
 }

@@ -5,6 +5,8 @@ namespace TW.Intranet.Aplicacion.Dtos;
 /// <summary>
 /// Resumen del día del menú de Jefatura (supervisores y administradores de cualquier área menos Servicio Técnico).
 /// AreaCodigo: el área del usuario. Metrología se filtra por el área según la RQ; las demás áreas ven todos los servicios.
+/// Los contadores de las tarjetas (desde AlertasCriticas) son NULL cuando no hay dato para este usuario (sin el permiso, el área no aplica
+/// o no existe la fuente): la app no pinta contador. Ver SP_ObtenerMenuJefaturaMovil.
 /// </summary>
 public record MenuJefaturaMovilDto(
     string  AreaCodigo,
@@ -14,7 +16,15 @@ public record MenuJefaturaMovilDto(
     int     EnRuta,
     int     EnEjecucion,
     int     ConDemora,
-    int     AprobacionesPendientes);
+    int     AprobacionesPendientes,
+    int?    AlertasCriticas        = null,
+    int?    InformesPorRevisar     = null,
+    int?    CertificadosPendientes = null,
+    int?    TicketsCorrelativo     = null,
+    int?    MiEquipoTotal          = null,
+    int?    MiEquipoEnLabores      = null,
+    int?    AgendaConflictos       = null,
+    int?    ViaticosPorRevisar     = null);
 
 /// <summary>Bandeja única de lo que espera la decisión del jefe, con las urgentes primero.</summary>
 public record AprobacionesMovilDto(
