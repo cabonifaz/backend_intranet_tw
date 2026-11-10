@@ -4,7 +4,9 @@
 --   · cargo "Jefe de …" (CARGO_USUARIO jefe_*: Servicio Técnico, Metrología, Operaciones…), o
 --   · rol SUPERVISOR / ADMINISTRADOR con un área definida (cualquier área, incluida Servicio Técnico).
 -- Los técnicos, metrólogos y usuarios comunes reciben un mensaje y la app les muestra el menú de campo.
--- El área del jefe sale de su ficha (usuario.area) o, si no la tiene, del catálogo del cargo (CARGO_USUARIO.String3).
+-- El área del jefe sale de su ficha (usuario.area) o, si no la tiene, del catálogo del cargo (CARGO_USUARIO.String3): SP_ResolverJefaturaMovil.
+-- El alcance de los servicios (área de la RQ) lo arma SP_ArmarAlcanceJefaturaMovil; el Panel de Campo y el Seguimiento del servicio (HU-29 / HU-30)
+-- usan los mismos dos procedimientos de apoyo.
 --   - Servicio Técnico y Metrología: se filtra por el área de la RQ de cada servicio (orden_servicio → expediente_digital →
 --     requerimiento.id_area → area_servicio_rq.area_usuario = área del jefe).
 --   - Otras áreas (Operaciones, TI, Gerencia, Comercial…): no tienen área en la RQ, así que ven el resumen de TODOS los servicios.
@@ -62,21 +64,13 @@ proc: BEGIN
     DECLARE v_eq_labores   INT DEFAULT NULL;
     DECLARE v_conflictos   INT DEFAULT NULL;
     DECLARE v_gastos       INT DEFAULT NULL;
+    DECLARE v_prog         INT DEFAULT 0;
+    DECLARE v_ruta         INT DEFAULT 0;
+    DECLARE v_ejec         INT DEFAULT 0;
+    DECLARE v_dem          INT DEFAULT 0;
 
-    SELECT IF(u.cargo LIKE 'jefe\_%',
-              COALESCE(NULLIF(u.area, ''), NULLIF(c.String3, ''), SUBSTRING(u.cargo, 6)),
-              IF(u.rol_sistema IN ('supervisor', 'administrador') AND IFNULL(u.area, '') <> '', u.area, NULL)),
-           s.String1,
-           COALESCE(IF(c.String2 LIKE 'jefe\_%' AND c.String3 IN ('servicio_tecnico', 'metrologia'), c.String3, NULL),
-                    IF(u.rol_sistema = 'supervisor' AND u.area = 'metrologia', 'metrologia', NULL)),
-           (u.cargo IN ('jefe_operaciones', 'coordinador_operaciones') OR u.rol_sistema IN ('administrador', 'admin')
-            OR (u.rol_sistema = 'supervisor' AND u.area = 'operaciones'))
-    INTO   v_area, v_sede, v_aut_area, v_aut_general
-    FROM   usuario u
-    LEFT JOIN tabla_maestra c ON c.IdMaestro = 80 AND c.IdEmpresa = 1 AND c.String2 = u.cargo
-    LEFT JOIN tabla_maestra s ON s.IdMaestro = 69 AND s.IdEmpresa = 1 AND s.String2 = u.sede_operativa
-    WHERE  u.id_usuario = p_id_usuario AND u.eliminado_en IS NULL AND u.estado = 'activo'
-    LIMIT 1;
+    -- Quién es el jefe y de qué área: la regla vive en SP_ResolverJefaturaMovil (la comparten el Panel de Campo y el Seguimiento del servicio)
+    CALL SP_ResolverJefaturaMovil(p_id_usuario, v_area, v_sede, v_aut_area, v_aut_general);
 
     IF v_area IS NULL THEN
         SELECT 1 AS IdTipoMensaje, 'Tu cargo no tiene el menú de Jefatura.' AS Mensaje;
@@ -171,32 +165,33 @@ proc: BEGIN
         END IF;
     END;
 
+    -- Resumen del día: los servicios del alcance del jefe (SP_ArmarAlcanceJefaturaMovil: área de la RQ para ST/Metrología; las demás áreas ven todo)
+    CALL SP_ArmarAlcanceJefaturaMovil(v_area, NULL);
+    SELECT COUNT(*),
+           IFNULL(SUM(os.estado = 'en_ruta'), 0),
+           IFNULL(SUM(os.estado IN ('en_ejecucion', 'pausada')), 0)
+    INTO   v_prog, v_ruta, v_ejec
+    FROM   orden_servicio os
+    JOIN   tmp_jf_alc a ON a.id_os = os.id_os
+    WHERE  os.estado IN ('programada', 'reprogramada', 'en_ruta', 'en_ejecucion', 'pausada', 'bloqueada');
+    SELECT COUNT(DISTINCT d.id_os) INTO v_dem
+    FROM   demora_registro d
+    JOIN   tmp_jf_alc a ON a.id_os = d.id_os
+    JOIN   orden_servicio os ON os.id_os = d.id_os
+    WHERE  d.eliminado_en IS NULL AND DATE(d.fecha_registro) = v_hoy
+      AND  os.estado IN ('programada', 'reprogramada', 'en_ruta', 'en_ejecucion', 'pausada', 'bloqueada');
+    DROP TEMPORARY TABLE IF EXISTS tmp_jf_alc;
+
     SELECT 2 AS IdTipoMensaje, 'Éxito.' AS Mensaje;
 
-    WITH os_area AS (
-        SELECT os.id_os, os.estado
-        FROM   orden_servicio os
-        WHERE  os.eliminado_en IS NULL
-          AND  os.estado IN ('programada', 'reprogramada', 'en_ruta', 'en_ejecucion', 'pausada', 'bloqueada')
-          AND  os.fecha_ejecucion = v_hoy
-          AND  (v_area NOT IN ('metrologia', 'servicio_tecnico')
-                OR EXISTS (SELECT 1
-                           FROM   expediente_digital ed
-                           JOIN   requerimiento      rq  ON rq.id_requerimiento = ed.id_requerimiento
-                           JOIN   area_servicio_rq   asr ON asr.id_area_rq      = rq.id_area
-                           WHERE  ed.id_expediente = os.id_expediente AND asr.area_usuario = v_area))
-    )
     SELECT v_area                                                           AS area_codigo,
            (SELECT t.String1 FROM tabla_maestra t
             WHERE  t.IdMaestro = 79 AND t.IdEmpresa = 1 AND t.String2 = v_area LIMIT 1) AS area_nombre,
            v_sede                                                           AS sede,
-           COUNT(*)                                                         AS programados,
-           IFNULL(SUM(estado = 'en_ruta'), 0)                               AS en_ruta,
-           IFNULL(SUM(estado IN ('en_ejecucion', 'pausada')), 0)            AS en_ejecucion,
-           (SELECT COUNT(DISTINCT d.id_os)
-            FROM   demora_registro d
-            WHERE  d.eliminado_en IS NULL AND DATE(d.fecha_registro) = v_hoy
-              AND  d.id_os IN (SELECT o.id_os FROM os_area o))              AS con_demora,
+           v_prog                                                           AS programados,
+           v_ruta                                                           AS en_ruta,
+           v_ejec                                                           AS en_ejecucion,
+           v_dem                                                            AS con_demora,
            (SELECT COUNT(*)
             FROM   autorizacion_salida_os a
             WHERE  a.eliminado_en IS NULL AND a.estado = 'pendiente'
@@ -209,8 +204,7 @@ proc: BEGIN
            v_eq_total                                                       AS mi_equipo_total,
            v_eq_labores                                                     AS mi_equipo_en_labores,
            v_conflictos                                                     AS agenda_conflictos,
-           v_gastos                                                         AS viaticos_por_revisar
-    FROM   os_area;
+           v_gastos                                                         AS viaticos_por_revisar;
 END$$
 
 DELIMITER ;

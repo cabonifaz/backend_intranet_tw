@@ -310,6 +310,13 @@ builder.Services.AddScoped<ObtenerGuardadoAsistenteMovilCasoDeUso>();
 builder.Services.AddScoped<EliminarGuardadoAsistenteMovilCasoDeUso>();
 // App Mobile HU-28 / HU-31 — menú de Jefatura y centro de aprobaciones
 builder.Services.AddScoped<ObtenerMenuJefaturaMovilCasoDeUso>();
+// HU-29 / HU-30 — Panel de campo y seguimiento del servicio del Jefe de Área
+builder.Services.AddScoped<IPanelCampoMovilRepositorio, PanelCampoMovilRepositorio>();
+builder.Services.AddScoped<ObtenerPanelCampoMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerServiciosJefaturaMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerServicioJefaturaMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerRutaServicioJefaturaMovilCasoDeUso>();
+builder.Services.AddScoped<RegistrarSeguimientoJefaturaMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerAprobacionesMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerAprobacionSalidaMovilCasoDeUso>();
 builder.Services.AddScoped<ResolverAprobacionSalidaMovilCasoDeUso>();
