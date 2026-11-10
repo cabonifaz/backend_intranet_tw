@@ -293,6 +293,17 @@ builder.Services.AddScoped<ObtenerResumenDashboardCasoDeUso>();
 builder.Services.AddScoped<ObtenerAlertasOperativasCasoDeUso>();
 builder.Services.AddScoped<ObtenerNotificacionesCasoDeUso>();
 
+// Casos de uso — HU-90 Centro de Notificaciones (campana + bandeja /notificaciones)
+builder.Services.AddScoped<ObtenerResumenNotificacionesCasoDeUso>();
+builder.Services.AddScoped<ObtenerBandejaNotificacionesCasoDeUso>();
+builder.Services.AddScoped<ObtenerDetalleNotificacionCasoDeUso>();
+builder.Services.AddScoped<MarcarNotificacionesLeidasCasoDeUso>();
+builder.Services.AddScoped<ArchivarNotificacionCasoDeUso>();
+builder.Services.AddScoped<ObtenerFiltrosNotificacionesCasoDeUso>();
+builder.Services.AddScoped<GenerarAlertasOperativasCasoDeUso>();
+// HU-90: alertas operativas del Módulo 11 → notificaciones (AlertasOperativas:Habilitado / IntervaloSegundos)
+builder.Services.AddHostedService<TW.Intranet.API.Configuracion.AlertasOperativasWorker>();
+
 // ── INYECCIÓN DE DEPENDENCIAS — Maestros ──────────────────────────────────────
 builder.Services.AddScoped<IMaestrosRepositorio, MaestrosRepositorio>();
 
