@@ -295,6 +295,19 @@ builder.Services.AddScoped<ObtenerEvidenciasMovilCasoDeUso>();
 builder.Services.AddScoped<RegistrarEvidenciaMovilCasoDeUso>();
 builder.Services.AddScoped<ForzarEvidenciaMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerArchivoEvidenciaMovilCasoDeUso>();
+// App Mobile HU-19 — Asistente IA y Procedimientos (la IA y la lectura de los PDF oficiales se registran más abajo, junto a Gemini)
+builder.Services.AddScoped<IAsistenteMovilRepositorio, AsistenteMovilRepositorio>();
+builder.Services.AddScoped<ObtenerInicioAsistenteMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerEquiposAsistenteMovilCasoDeUso>();
+builder.Services.AddScoped<ConsultarAsistenteMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerConsultaAsistenteMovilCasoDeUso>();
+builder.Services.AddScoped<ValorarConsultaAsistenteMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerFuenteAsistenteMovilCasoDeUso>();
+builder.Services.AddScoped<TranscribirVozAsistenteMovilCasoDeUso>();
+builder.Services.AddScoped<ListarGuardadosAsistenteMovilCasoDeUso>();
+builder.Services.AddScoped<GuardarAsistenteMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerGuardadoAsistenteMovilCasoDeUso>();
+builder.Services.AddScoped<EliminarGuardadoAsistenteMovilCasoDeUso>();
 // App Mobile HU-28 / HU-31 — menú de Jefatura y centro de aprobaciones
 builder.Services.AddScoped<ObtenerMenuJefaturaMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerAprobacionesMovilCasoDeUso>();
@@ -537,7 +550,7 @@ builder.Services.AddScoped<PrepararAnulacionOrdenCompraCasoDeUso>();
 builder.Services.AddScoped<AnularOrdenCompraCasoDeUso>();
 
 // IA de órdenes de compra y de la importación de equipos de propuestas (Google Gemini, nivel gratuito de AI Studio).
-// Variables: Gemini__ApiKey, Gemini__Modelo (gemini-3.5-flash-lite), Gemini__UrlBase, Gemini__TimeoutSegundos (60).
+// Variables: Gemini__ApiKey, Gemini__Modelo (gemini-3.5-flash-lite), Gemini__UrlBase, Gemini__TimeoutSegundos (60), Gemini__ModeloAsistente (opcional, HU-19).
 // Sin ApiKey el módulo funciona igual: la ficha se llena a mano y la validación usa solo las reglas.
 var seccionGemini = cfg.GetSection("Gemini");
 var configuracionGemini = new ConfiguracionGemini(
@@ -567,13 +580,34 @@ if (configuracionGemini.Configurado)
         c.Timeout     = TimeSpan.FromSeconds(configuracionGemini.TimeoutSegundos);
         c.DefaultRequestHeaders.Accept.ParseAdd("application/json");
     });
+    // App Mobile HU-19: Asistente IA y Procedimientos. Lee PDF y puede tardar más: mínimo 90 s. Modelo propio opcional: Gemini__ModeloAsistente.
+    builder.Services.AddSingleton(new ConfiguracionAsistenteGemini(seccionGemini["ModeloAsistente"]));
+    builder.Services.AddHttpClient<IAsistenteManuales, GeminiAsistenteManuales>(c =>
+    {
+        c.BaseAddress = new Uri(configuracionGemini.UrlBase);
+        c.Timeout     = TimeSpan.FromSeconds(Math.Max(90, configuracionGemini.TimeoutSegundos));
+        c.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+    });
 }
 else
 {
     builder.Services.AddSingleton<IAsistenteIaOrdenCompra, AsistenteIaOrdenCompraNoConfigurado>();
     builder.Services.AddSingleton<IAsistenteIaEquipos, AsistenteIaEquiposNoConfigurado>();
     builder.Services.AddSingleton<IValidadorEvidenciaIa, ValidadorEvidenciaIaNoConfigurado>();
+    builder.Services.AddSingleton<IAsistenteManuales, AsistenteManualesNoConfigurado>();
 }
+
+// App Mobile HU-19: lectura de los PDF oficiales (procedimientos del almacenamiento y manuales por https). El cliente de los manuales NO sigue redirecciones por su cuenta,
+// no usa proxy y solo conecta a direcciones públicas ya validadas (GuardaUrlManual: anti-SSRF); la descarga se limita a 25 s y 15 MB.
+builder.Services.AddHttpClient<IDocumentosAsistente, DocumentosAsistente>(c => c.Timeout = TimeSpan.FromSeconds(25))
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+    {
+        AllowAutoRedirect        = false,
+        UseProxy                 = false,
+        ConnectTimeout           = TimeSpan.FromSeconds(10),
+        PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+        ConnectCallback          = GuardaUrlManual.ConectarAsync,
+    });
 
 // ── INYECCIÓN DE DEPENDENCIAS — Propuestas: importación de equipos desde Excel con IA (Sprint 4) ──
 builder.Services.AddScoped<IImportacionEquiposRepositorio, ImportacionEquiposRepositorio>();
