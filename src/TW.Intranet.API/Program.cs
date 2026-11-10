@@ -317,6 +317,10 @@ builder.Services.AddScoped<ObtenerServiciosJefaturaMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerServicioJefaturaMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerRutaServicioJefaturaMovilCasoDeUso>();
 builder.Services.AddScoped<RegistrarSeguimientoJefaturaMovilCasoDeUso>();
+// HU-14 / HU-34 — Correlativos de Metrología (técnico y Jefe de Metrología)
+builder.Services.AddScoped<ICorrelativosMovilRepositorio, CorrelativosMovilRepositorio>();
+builder.Services.AddScoped<CorrelativosTecnicoMovilCasoDeUso>();
+builder.Services.AddScoped<CorrelativosJefaturaMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerAprobacionesMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerAprobacionSalidaMovilCasoDeUso>();
 builder.Services.AddScoped<ResolverAprobacionSalidaMovilCasoDeUso>();

@@ -48,6 +48,9 @@ proc: BEGIN
     DECLARE v_ev_oblig    INT DEFAULT 0;
     DECLARE v_ens_final   DATETIME DEFAULT NULL;
     DECLARE v_ens_motivo  VARCHAR(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
+    DECLARE v_cert        VARCHAR(50)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
+    DECLARE v_tk_estado   VARCHAR(12)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
+    DECLARE v_tk_num      VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -116,13 +119,19 @@ proc: BEGIN
     DROP TEMPORARY TABLE IF EXISTS tmp_cat_evid;
     SET v_n_fotos = v_ev_compl;
 
-    SELECT it.id_informe, it.ensayos_finalizado_en, it.error_critico_motivo INTO v_informe, v_ens_final, v_ens_motivo
+    SELECT it.id_informe, it.ensayos_finalizado_en, it.error_critico_motivo, it.numero_certificado INTO v_informe, v_ens_final, v_ens_motivo, v_cert
     FROM   informe_tecnico it
     WHERE  it.id_os = p_id_os AND it.id_equipo = v_id_equipo AND it.eliminado_en IS NULL
     ORDER BY it.id_informe DESC LIMIT 1;
     IF v_informe IS NOT NULL THEN
         SELECT COUNT(*) INTO v_n_ensayos FROM informe_ensayo ie WHERE ie.id_informe = v_informe AND ie.eliminado_en IS NULL;
     END IF;
+
+    -- Correlativo y certificado (HU-14): el ticket abierto de este equipo en Metrología (solicitado o asignado)
+    SELECT t.estado, t.numero INTO v_tk_estado, v_tk_num
+    FROM   ticket_metrologia t
+    WHERE  t.id_os = p_id_os AND t.id_equipo = v_id_equipo AND t.estado IN ('solicitado', 'asignado') AND t.eliminado_en IS NULL
+    ORDER BY t.id_ticket_met DESC LIMIT 1;
 
     DROP TEMPORARY TABLE IF EXISTS tmp_etapas_mov;
     CREATE TEMPORARY TABLE tmp_etapas_mov (
@@ -142,7 +151,12 @@ proc: BEGIN
                IF(v_ens_final IS NOT NULL, IF(v_ens_motivo IS NULL, 'Pesaje y excentricidad conformes', 'Finalizado con error crítico: se avisó al encargado'),
                   IF(v_n_ensayos > 0, CONCAT(v_n_ensayos, ' lecturas guardadas · falta finalizar'), 'Verificación de pesaje tras el ajuste'))), 1),
         (4, 'cabecera', 'Cabecera del informe', IF(v_informe IS NOT NULL, 'en_curso', 'pendiente'), 'Datos · Detalle Serv. · Observación y pruebas', 0),
-        (5, 'correlativo', 'Correlativo y certificado', 'pendiente', 'Correlativo de Metrología → N° de certificado', 0);
+        (5, 'correlativo', 'Correlativo y certificado',
+            IF(v_cert IS NOT NULL, 'conforme', IF(v_ens_final IS NULL, 'bloqueado', IF(v_tk_estado IS NOT NULL, 'en_curso', 'pendiente'))),
+            IF(v_cert IS NOT NULL, CONCAT('Certificado ', v_cert),
+               IF(v_ens_final IS NULL, 'Se habilita al finalizar los ensayos',
+                  IF(v_tk_estado = 'asignado', CONCAT(v_tk_num, ' asignado · listo para usar'),
+                     IF(v_tk_estado = 'solicitado', CONCAT(v_tk_num, ' · esperando a Metrología'), 'Correlativo de Metrología → N° de certificado')))), 1);
 
     SELECT COUNT(*) INTO v_conformes FROM tmp_etapas_mov WHERE estado = 'conforme';
 
