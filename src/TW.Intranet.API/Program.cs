@@ -258,6 +258,12 @@ builder.Services.AddScoped<IEnsayosMovilRepositorio, EnsayosMovilRepositorio>();
 builder.Services.AddScoped<ObtenerEnsayosMovilCasoDeUso>();
 builder.Services.AddScoped<GuardarEnsayosMovilCasoDeUso>();
 builder.Services.AddScoped<RegistrarLlamadaEnsayoMovilCasoDeUso>();
+// App Mobile HU-11 / HU-12 / HU-13 — registro fotográfico con validación IA, evidencia forzada y microvideo de encendido
+builder.Services.AddScoped<IEvidenciasMovilRepositorio, EvidenciasMovilRepositorio>();
+builder.Services.AddScoped<ObtenerEvidenciasMovilCasoDeUso>();
+builder.Services.AddScoped<RegistrarEvidenciaMovilCasoDeUso>();
+builder.Services.AddScoped<ForzarEvidenciaMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerArchivoEvidenciaMovilCasoDeUso>();
 // App Mobile HU-28 / HU-31 — menú de Jefatura y centro de aprobaciones
 builder.Services.AddScoped<ObtenerMenuJefaturaMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerAprobacionesMovilCasoDeUso>();
@@ -496,11 +502,19 @@ if (configuracionGemini.Configurado)
         c.Timeout     = TimeSpan.FromSeconds(configuracionGemini.TimeoutSegundos);
         c.DefaultRequestHeaders.Accept.ParseAdd("application/json");
     });
+    // App Mobile HU-11 / HU-13: validación de las fotos del registro fotográfico
+    builder.Services.AddHttpClient<IValidadorEvidenciaIa, GeminiValidadorEvidencia>(c =>
+    {
+        c.BaseAddress = new Uri(configuracionGemini.UrlBase);
+        c.Timeout     = TimeSpan.FromSeconds(configuracionGemini.TimeoutSegundos);
+        c.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+    });
 }
 else
 {
     builder.Services.AddSingleton<IAsistenteIaOrdenCompra, AsistenteIaOrdenCompraNoConfigurado>();
     builder.Services.AddSingleton<IAsistenteIaEquipos, AsistenteIaEquiposNoConfigurado>();
+    builder.Services.AddSingleton<IValidadorEvidenciaIa, ValidadorEvidenciaIaNoConfigurado>();
 }
 
 // ── INYECCIÓN DE DEPENDENCIAS — Propuestas: importación de equipos desde Excel con IA (Sprint 4) ──

@@ -41,6 +41,11 @@ proc: BEGIN
     DECLARE v_sigla       VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
     DECLARE v_tipo_int    VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
     DECLARE v_conformes   INT DEFAULT 0;
+    DECLARE v_ev_total    INT DEFAULT 9;
+    DECLARE v_ev_compl    INT DEFAULT 0;
+    DECLARE v_ev_forz     INT DEFAULT 0;
+    DECLARE v_ev_rech     INT DEFAULT 0;
+    DECLARE v_ev_oblig    INT DEFAULT 0;
     DECLARE v_ens_final   DATETIME DEFAULT NULL;
     DECLARE v_ens_motivo  VARCHAR(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
 
@@ -49,6 +54,7 @@ proc: BEGIN
         GET DIAGNOSTICS CONDITION 1 @err_msg = MESSAGE_TEXT, @err_code = MYSQL_ERRNO;
         DROP TEMPORARY TABLE IF EXISTS tmp_obj_mov;
         DROP TEMPORARY TABLE IF EXISTS tmp_etapas_mov;
+        DROP TEMPORARY TABLE IF EXISTS tmp_cat_evid;
         SELECT 3 AS IdTipoMensaje, CONCAT('[MySQL ', @err_code, '] ', @err_msg) AS Mensaje;
     END;
 
@@ -105,8 +111,10 @@ proc: BEGIN
         ORDER BY va.id_variable DESC LIMIT 1;
     END IF;
 
-    SELECT COUNT(*) INTO v_n_fotos
-    FROM   evidencia_fotografica f WHERE f.id_os = p_id_os AND f.id_equipo = v_id_equipo AND f.eliminado_en IS NULL;
+    -- Registro fotográfico (HU-11): el avance lo calcula SP_ResumenEvidenciasMovil, una sola vez
+    CALL SP_ResumenEvidenciasMovil(p_id_os, v_id_equipo, v_ev_total, v_ev_compl, v_ev_forz, v_ev_rech, v_ev_oblig);
+    DROP TEMPORARY TABLE IF EXISTS tmp_cat_evid;
+    SET v_n_fotos = v_ev_compl;
 
     SELECT it.id_informe, it.ensayos_finalizado_en, it.error_critico_motivo INTO v_informe, v_ens_final, v_ens_motivo
     FROM   informe_tecnico it
@@ -125,8 +133,9 @@ proc: BEGIN
     INSERT INTO tmp_etapas_mov (orden, codigo, nombre, estado, detalle, disponible) VALUES
         (1, 'variables', 'Variables ambientales', IF(v_vars > 0, 'conforme', 'pendiente'),
             IF(v_vars > 0, v_det_vars, 'Temperatura, humedad y procedencia'), 1),
-        (2, 'fotos', 'Registro fotográfico', IF(v_n_fotos > 0, 'en_curso', 'pendiente'),
-            IF(v_n_fotos > 0, CONCAT(v_n_fotos, IF(v_n_fotos = 1, ' foto registrada', ' fotos registradas')), 'Fotos del equipo y del informe a mano'), 0),
+        (2, 'fotos', 'Registro fotográfico', IF(v_ev_compl >= v_ev_total, 'conforme', IF(v_ev_compl > 0 OR v_ev_rech > 0, 'en_curso', 'pendiente')),
+            CONCAT(v_ev_compl, ' de ', v_ev_total, ' · incluye foto del informe a mano',
+                   IF(v_ev_forz > 0, CONCAT(' · ', v_ev_forz, IF(v_ev_forz = 1, ' forzada', ' forzadas')), '')), 1),
         (3, 'ensayos', 'Ensayos y Calibración',
             IF(v_vars = 0, 'bloqueado', IF(v_ens_final IS NOT NULL, 'conforme', IF(v_n_ensayos > 0, 'en_curso', 'pendiente'))),
             IF(v_vars = 0, 'Se habilita al guardar las variables ambientales',
