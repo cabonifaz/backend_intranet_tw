@@ -23,9 +23,24 @@ builder.WebHost.ConfigureKestrel(opciones => opciones.AddServerHeader = false);
 builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: false);
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
-var origenesPermitidos = builder.Configuration["Cors:AllowedOrigins"]?
+// Orígenes EXPLÍCITOS (Cors__AllowedOrigins, separados por coma) con AllowCredentials: lo exige el cliente de SignalR.
+// Cada origen debe ser http(s)://dominio[:puerto], sin ruta; se ignora la "/" final. Los inválidos se descartan (advertencia en el log).
+// Si no hay ninguno válido, la API arranca igual pero NO permite orígenes cruzados (advertencia en el log). Nunca AllowAnyOrigin.
+var origenesInvalidos = new List<string>();
+var origenesPermitidos = (builder.Configuration["Cors:AllowedOrigins"] ?? "")
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-    ?? [];
+    .Select(o =>
+    {
+        if (Uri.TryCreate(o.TrimEnd('/'), UriKind.Absolute, out var uri)
+            && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
+            && uri.AbsolutePath == "/" && string.IsNullOrEmpty(uri.Query))
+            return uri.GetLeftPart(UriPartial.Authority);
+        origenesInvalidos.Add(o);
+        return null;
+    })
+    .OfType<string>()
+    .Distinct(StringComparer.OrdinalIgnoreCase)
+    .ToArray();
 
 builder.Services.AddCors(options =>
 {
@@ -34,9 +49,10 @@ builder.Services.AddCors(options =>
         if (origenesPermitidos.Length > 0)
             policy.WithOrigins(origenesPermitidos)
                   .AllowAnyHeader()
-                  .AllowAnyMethod();
+                  .AllowAnyMethod()
+                  .AllowCredentials();
         else
-            policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
+            policy.SetIsOriginAllowed(_ => false);
     });
 });
 
@@ -112,6 +128,21 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
         options.Events = new Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerEvents
         {
+            // HU-90 parte 2: por WebSocket el navegador no puede mandar la cabecera Authorization, así que el cliente de SignalR
+            // envía el JWT en la query (access_token). Se acepta SOLO en la ruta del hub; en cualquier otra ruta se ignora.
+            // La query no se escribe en ningún log (ver Logging en appsettings.json).
+            OnMessageReceived = context =>
+            {
+                if (string.IsNullOrEmpty(context.Token)
+                    && context.HttpContext.Request.Path.StartsWithSegments(TW.Intranet.API.TiempoReal.NotificacionesHub.Ruta, StringComparison.OrdinalIgnoreCase))
+                {
+                    var tokenQuery = context.Request.Query["access_token"].ToString();
+                    if (!string.IsNullOrEmpty(tokenQuery))
+                        context.Token = tokenQuery;
+                }
+                return Task.CompletedTask;
+            },
+
             OnTokenValidated = async context =>
             {
                 var claims      = context.Principal?.Claims;
@@ -303,6 +334,22 @@ builder.Services.AddScoped<ObtenerFiltrosNotificacionesCasoDeUso>();
 builder.Services.AddScoped<GenerarAlertasOperativasCasoDeUso>();
 // HU-90: alertas operativas del Módulo 11 → notificaciones (AlertasOperativas:Habilitado / IntervaloSegundos)
 builder.Services.AddHostedService<TW.Intranet.API.Configuracion.AlertasOperativasWorker>();
+
+// ── HU-90 parte 2 — Tiempo real (SignalR, hub /hubs/notificaciones) ───────────
+// Una sola instancia en Railway: grupos en memoria, sin backplane. Si algún día hay varias réplicas, agregar el paquete
+// Microsoft.AspNetCore.SignalR.StackExchangeRedis y la variable Redis__Conexion (.AddStackExchangeRedis(...)).
+builder.Services.AddSignalR(o =>
+    {
+        o.EnableDetailedErrors      = false;
+        o.KeepAliveInterval         = TimeSpan.FromSeconds(15);
+        o.ClientTimeoutInterval     = TimeSpan.FromSeconds(30);
+        o.MaximumReceiveMessageSize = 16 * 1024;   // el cliente solo envía suscripciones
+    })
+    .AddJsonProtocol(o => o.PayloadSerializerOptions.Converters.Add(new TW.Intranet.API.Configuracion.FechaHoraLimaJsonConverter()));
+builder.Services.AddSingleton<INotificadorTiempoReal, TW.Intranet.API.TiempoReal.NotificadorSignalR>();
+builder.Services.AddScoped<ObtenerNotificacionesNuevasCasoDeUso>();
+// notificacion.creada sin tocar los SPs que insertan (TiempoReal:Habilitado / IntervaloSegundos)
+builder.Services.AddHostedService<TW.Intranet.API.TiempoReal.NotificacionesTiempoRealWorker>();
 
 // ── INYECCIÓN DE DEPENDENCIAS — Maestros ──────────────────────────────────────
 builder.Services.AddScoped<IMaestrosRepositorio, MaestrosRepositorio>();
@@ -786,6 +833,15 @@ if (string.IsNullOrWhiteSpace(rutaAlmacenamientoConfigurada) && !app.Environment
 else
     app.Logger.LogInformation("Almacenamiento de archivos en {Ruta}", configuracionAlmacenamiento.RutaBase);
 
+foreach (var origenInvalido in origenesInvalidos)
+    app.Logger.LogWarning("Cors:AllowedOrigins: se ignora el origen no válido \"{Origen}\" (use http(s)://dominio[:puerto] sin ruta).", origenInvalido);
+if (origenesPermitidos.Length == 0)
+    app.Logger.LogWarning(
+        "Cors:AllowedOrigins no está configurado: NO se permite ningún origen cruzado (el front no podrá llamar a la API ni conectarse " +
+        "al hub de notificaciones). Configure la variable Cors__AllowedOrigins.");
+else
+    app.Logger.LogInformation("CORS permitido para: {Origenes}", string.Join(", ", origenesPermitidos));
+
 if (!app.Environment.IsProduction())
 {
     app.MapOpenApi();
@@ -805,5 +861,11 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+// HU-90 parte 2: solo WebSockets (el cliente usa skipNegotiation); la conexión se cierra cuando vence el JWT.
+app.MapHub<TW.Intranet.API.TiempoReal.NotificacionesHub>(TW.Intranet.API.TiempoReal.NotificacionesHub.Ruta, o =>
+{
+    o.Transports                       = Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets;
+    o.CloseOnAuthenticationExpiration  = true;
+});
 
 app.Run();

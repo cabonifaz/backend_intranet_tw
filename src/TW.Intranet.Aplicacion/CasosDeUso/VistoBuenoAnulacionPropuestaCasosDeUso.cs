@@ -17,7 +17,7 @@ public class PrepararVistoBuenoPropuestaCasoDeUso(IPropuestasRepositorio reposit
             : repositorio.EnviarVistoBuenoAsync(idPropuesta, null, soloPreparar: true, idUsuario, ct);
 }
 
-public class EnviarVistoBuenoPropuestaCasoDeUso(IPropuestasRepositorio repositorio)
+public class EnviarVistoBuenoPropuestaCasoDeUso(IPropuestasRepositorio repositorio, INotificadorTiempoReal notificador)
 {
     private const int MaxComentario = 2000;
 
@@ -31,7 +31,10 @@ public class EnviarVistoBuenoPropuestaCasoDeUso(IPropuestasRepositorio repositor
         if (comentario is { Length: > MaxComentario })
             return new RespuestaDto<VistoBuenoPropuestaDto>(1, $"El comentario no puede superar los {MaxComentario} caracteres.");
 
-        return await repositorio.EnviarVistoBuenoAsync(idPropuesta, comentario, soloPreparar: false, idUsuario, ct);
+        var r = await repositorio.EnviarVistoBuenoAsync(idPropuesta, comentario, soloPreparar: false, idUsuario, ct);
+        if (r.IdTipoMensaje == 2 && r.Datos is { } d)
+            await notificador.VbAsignadoAsync(d);
+        return r;
     }
 }
 

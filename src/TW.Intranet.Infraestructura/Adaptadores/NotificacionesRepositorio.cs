@@ -200,6 +200,26 @@ public class NotificacionesRepositorio(CadenaConexionBd conexion) : RepositorioS
                     : new RespuestaDto<ResultadoAlertasOperativasDto>(2, mensaje, new ResultadoAlertasOperativasDto(0, 0));
             }, ct);
 
+    public Task<RespuestaDto<NotificacionesNuevasDto>> ObtenerNuevasAsync(long desdeId, int limite, CancellationToken ct)
+        => EjecutarAsync("SP_ObtenerNotificacionesNuevas",
+            p =>
+            {
+                p.AddWithValue("p_desde_id", desdeId);
+                p.AddWithValue("p_limite",   limite);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                var ultimoId = await r.ReadAsync(ct) ? EnteroLargo(r, "ultimo_id") : 0;
+
+                await r.NextResultAsync(ct);
+                var nuevas = new List<NotificacionNuevaDto>();
+                while (await r.ReadAsync(ct))
+                    nuevas.Add(new NotificacionNuevaDto(EnteroLargo(r, "id_usuario_destino"), LeerFila(r), Entero(r, "no_leidas")));
+
+                return new RespuestaDto<NotificacionesNuevasDto>(2, mensaje, new NotificacionesNuevasDto(ultimoId, nuevas));
+            }, ct);
+
     /// <summary>Fila común (campana, bandeja y detalle).</summary>
     private static FilaNotificacionDto LeerFila(MySqlDataReader r)
     {

@@ -33,24 +33,24 @@ public class ObtenerBandejaVistoBuenoCasoDeUso(IVistoBuenoRepositorio repositori
     }
 }
 
-public class ResolverVistoBuenoCasoDeUso(IVistoBuenoRepositorio repositorio)
+public class ResolverVistoBuenoCasoDeUso(IVistoBuenoRepositorio repositorio, INotificadorTiempoReal notificador)
 {
     // Observaciones 31/10: se quita "rechazar"; aprobar va sin validaciones obligatorias y
     // la fecha límite de corrección es opcional.
     private static readonly string[] Acciones = ["aprobar", "corregir"];
 
-    public Task<RespuestaDto<ResultadoResolverVistoBuenoDto>> EjecutarAsync(
+    public async Task<RespuestaDto<ResultadoResolverVistoBuenoDto>> EjecutarAsync(
         long idPropuesta, ResolverVistoBuenoDto dto, long idUsuario, CancellationToken ct = default)
     {
         var accion = dto.Accion?.Trim().ToLowerInvariant() ?? "";
         if (!Acciones.Contains(accion))
-            return Task.FromResult(new RespuestaDto<ResultadoResolverVistoBuenoDto>(1, "Acción no válida. Use aprobar o solicitar corrección."));
+            return new RespuestaDto<ResultadoResolverVistoBuenoDto>(1, "Acción no válida. Use aprobar o solicitar corrección.");
         if (accion == "corregir" && (dto.Comentario?.Trim().Length ?? 0) < 10)
-            return Task.FromResult(new RespuestaDto<ResultadoResolverVistoBuenoDto>(1,
-                "Indique qué debe corregir el comercial (mínimo 10 caracteres)."));
+            return new RespuestaDto<ResultadoResolverVistoBuenoDto>(1,
+                "Indique qué debe corregir el comercial (mínimo 10 caracteres).");
 
         if (accion == "corregir" && (dto.Areas is null || dto.Areas.Count(a => !string.IsNullOrWhiteSpace(a)) == 0))
-            return Task.FromResult(new RespuestaDto<ResultadoResolverVistoBuenoDto>(1, "Seleccione al menos un área a corregir."));
+            return new RespuestaDto<ResultadoResolverVistoBuenoDto>(1, "Seleccione al menos un área a corregir.");
 
         var normalizado = dto with
         {
@@ -59,7 +59,10 @@ public class ResolverVistoBuenoCasoDeUso(IVistoBuenoRepositorio repositorio)
             ValidacionesConfirmadas = Limpiar(dto.ValidacionesConfirmadas),
             Areas                   = Limpiar(dto.Areas),
         };
-        return repositorio.ResolverAsync(idPropuesta, normalizado, idUsuario, ct);
+        var r = await repositorio.ResolverAsync(idPropuesta, normalizado, idUsuario, ct);
+        if (r.IdTipoMensaje == 2 && r.Datos is { } d)
+            await notificador.VbResueltoAsync(d, accion);
+        return r;
     }
 
     private static List<string> Limpiar(List<string>? valores)

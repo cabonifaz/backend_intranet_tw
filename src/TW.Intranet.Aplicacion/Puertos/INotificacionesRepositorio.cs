@@ -19,4 +19,7 @@ public interface INotificacionesRepositorio
 
     /// <summary>Worker: guarda como notificación las alertas operativas activas del Módulo 11.</summary>
     Task<RespuestaDto<ResultadoAlertasOperativasDto>> GenerarAlertasOperativasAsync(CancellationToken ct);
+
+    /// <summary>HU-90 parte 2 — Worker de tiempo real: notificaciones con id &gt; desdeId (desdeId &lt; 0 = solo el último id).</summary>
+    Task<RespuestaDto<NotificacionesNuevasDto>> ObtenerNuevasAsync(long desdeId, int limite, CancellationToken ct);
 }

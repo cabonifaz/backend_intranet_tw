@@ -72,44 +72,54 @@ public class ObtenerBandejaNotificacionesCasoDeUso(INotificacionesRepositorio re
 }
 
 /// <summary>Panel de detalle: devuelve la notificación y la marca como leída (HU: "al abrirla se marca automáticamente").</summary>
-public class ObtenerDetalleNotificacionCasoDeUso(INotificacionesRepositorio repositorio)
+public class ObtenerDetalleNotificacionCasoDeUso(INotificacionesRepositorio repositorio, INotificadorTiempoReal notificador)
 {
-    public Task<RespuestaDto<DetalleNotificacionDto>> EjecutarAsync(long idNotificacion, long idUsuario, CancellationToken ct = default)
-        => idNotificacion <= 0
-            ? Task.FromResult(new RespuestaDto<DetalleNotificacionDto>(1, "Notificación no encontrada."))
-            : repositorio.ObtenerDetalleAsync(idNotificacion, idUsuario, ct);
+    public async Task<RespuestaDto<DetalleNotificacionDto>> EjecutarAsync(long idNotificacion, long idUsuario, CancellationToken ct = default)
+    {
+        if (idNotificacion <= 0) return new RespuestaDto<DetalleNotificacionDto>(1, "Notificación no encontrada.");
+
+        var r = await repositorio.ObtenerDetalleAsync(idNotificacion, idUsuario, ct);
+        if (r.IdTipoMensaje == 2 && r.Datos is { } d)
+            await notificador.NotificacionActualizadaAsync(idUsuario, [idNotificacion], false, "leida", d.NoLeidas);
+        return r;
+    }
 }
 
 /// <summary>"Marcar las 5 como leídas" (ids del popover) o "Marcar todas como leídas" (todas = true).</summary>
-public class MarcarNotificacionesLeidasCasoDeUso(INotificacionesRepositorio repositorio)
+public class MarcarNotificacionesLeidasCasoDeUso(INotificacionesRepositorio repositorio, INotificadorTiempoReal notificador)
 {
     public const int MaximoIds = 100;
 
-    public Task<RespuestaDto<ResultadoMarcadoNotificacionesDto>> EjecutarAsync(MarcarNotificacionesLeidasDto? datos, long idUsuario, CancellationToken ct = default)
+    public async Task<RespuestaDto<ResultadoMarcadoNotificacionesDto>> EjecutarAsync(MarcarNotificacionesLeidasDto? datos, long idUsuario, CancellationToken ct = default)
     {
         if (datos is null)
-            return Task.FromResult(new RespuestaDto<ResultadoMarcadoNotificacionesDto>(1, "Indica las notificaciones a marcar o marca todas."));
+            return new RespuestaDto<ResultadoMarcadoNotificacionesDto>(1, "Indica las notificaciones a marcar o marca todas.");
 
-        if (datos.Todas)
-            return repositorio.MarcarLeidasAsync([], true, idUsuario, ct);
-
-        var ids = (datos.Ids ?? []).Where(id => id > 0).Distinct().ToList();
-        if (ids.Count == 0)
-            return Task.FromResult(new RespuestaDto<ResultadoMarcadoNotificacionesDto>(1, "Indica las notificaciones a marcar o marca todas."));
+        List<long> ids = datos.Todas ? [] : (datos.Ids ?? []).Where(id => id > 0).Distinct().ToList();
+        if (!datos.Todas && ids.Count == 0)
+            return new RespuestaDto<ResultadoMarcadoNotificacionesDto>(1, "Indica las notificaciones a marcar o marca todas.");
         if (ids.Count > MaximoIds)
-            return Task.FromResult(new RespuestaDto<ResultadoMarcadoNotificacionesDto>(1, $"Puedes marcar como máximo {MaximoIds} notificaciones a la vez."));
+            return new RespuestaDto<ResultadoMarcadoNotificacionesDto>(1, $"Puedes marcar como máximo {MaximoIds} notificaciones a la vez.");
 
-        return repositorio.MarcarLeidasAsync(ids, false, idUsuario, ct);
+        var r = await repositorio.MarcarLeidasAsync(ids, datos.Todas, idUsuario, ct);
+        if (r.IdTipoMensaje == 2 && r.Datos is { Marcadas: > 0 } d)
+            await notificador.NotificacionActualizadaAsync(idUsuario, ids, datos.Todas, "leida", d.NoLeidas);
+        return r;
     }
 }
 
 /// <summary>"Archivar": solo notificaciones leídas. Quedan accesibles en el filtro "archivadas".</summary>
-public class ArchivarNotificacionCasoDeUso(INotificacionesRepositorio repositorio)
+public class ArchivarNotificacionCasoDeUso(INotificacionesRepositorio repositorio, INotificadorTiempoReal notificador)
 {
-    public Task<RespuestaDto<ResultadoArchivadoNotificacionDto>> EjecutarAsync(long idNotificacion, long idUsuario, CancellationToken ct = default)
-        => idNotificacion <= 0
-            ? Task.FromResult(new RespuestaDto<ResultadoArchivadoNotificacionDto>(1, "Notificación no encontrada."))
-            : repositorio.ArchivarAsync(idNotificacion, idUsuario, ct);
+    public async Task<RespuestaDto<ResultadoArchivadoNotificacionDto>> EjecutarAsync(long idNotificacion, long idUsuario, CancellationToken ct = default)
+    {
+        if (idNotificacion <= 0) return new RespuestaDto<ResultadoArchivadoNotificacionDto>(1, "Notificación no encontrada.");
+
+        var r = await repositorio.ArchivarAsync(idNotificacion, idUsuario, ct);
+        if (r.IdTipoMensaje == 2 && r.Datos is { } d)
+            await notificador.NotificacionActualizadaAsync(idUsuario, [idNotificacion], false, "archivada", d.NoLeidas);
+        return r;
+    }
 }
 
 /// <summary>Opciones de los filtros de la bandeja: catálogo completo con los conteos del usuario y sus remitentes.</summary>
@@ -143,6 +153,14 @@ public class GenerarAlertasOperativasCasoDeUso(INotificacionesRepositorio reposi
 {
     public Task<RespuestaDto<ResultadoAlertasOperativasDto>> EjecutarAsync(CancellationToken ct = default)
         => repositorio.GenerarAlertasOperativasAsync(ct);
+}
+
+/// <summary>HU-90 parte 2 — Worker de tiempo real: notificaciones insertadas por cualquier SP con id &gt; desdeId (máx. limite).
+/// desdeId &lt; 0 = solo inicializar (devuelve el último id, sin filas).</summary>
+public class ObtenerNotificacionesNuevasCasoDeUso(INotificacionesRepositorio repositorio)
+{
+    public Task<RespuestaDto<NotificacionesNuevasDto>> EjecutarAsync(long desdeId, int limite, CancellationToken ct = default)
+        => repositorio.ObtenerNuevasAsync(desdeId, Math.Clamp(limite, 1, 5000), ct);
 }
 
 internal static class ValidacionNotificaciones
