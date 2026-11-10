@@ -490,3 +490,5 @@ $RECYCLE.BIN/
 .env.example
 
 CLAUDE.local.md
+
+.claude/
