@@ -28,7 +28,7 @@ proc: BEGIN
     SELECT f.url_archivo, f.ruta_cuadro, f.es_video INTO v_ruta, v_cuadro, v_video
     FROM   evidencia_fotografica f
     JOIN   tmp_rt_base b ON b.id_informe = p_id_informe
-    WHERE  f.id_evidencia = p_id_evidencia AND f.eliminado_en IS NULL AND f.url_archivo NOT LIKE 'qr://%'
+    WHERE  f.id_evidencia = p_id_evidencia AND f.eliminado_en IS NULL AND f.url_archivo NOT LIKE 'qr://%' AND IFNULL(f.vigente, 1) = 1
       AND  (f.id_informe = p_id_informe
             OR (f.id_informe IS NULL AND f.id_os = b.id_os AND (f.id_equipo = b.id_equipo OR f.id_equipo IS NULL)))
     LIMIT 1;

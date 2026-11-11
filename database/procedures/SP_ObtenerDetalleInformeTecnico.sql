@@ -138,6 +138,7 @@ proc: BEGIN
     LEFT JOIN informe_observacion ov ON ov.id_observacion = f.id_observacion AND ov.eliminado_en IS NULL
     LEFT JOIN informe_observacion o  ON o.id_evidencia = f.id_evidencia AND o.id_informe = p_id_informe AND o.eliminado_en IS NULL
     WHERE f.eliminado_en IS NULL AND f.id_tipo_evidencia NOT IN (6, 7)
+      AND f.url_archivo NOT LIKE 'qr://%' AND IFNULL(f.vigente, 1) = 1   -- sin las lecturas del QR (no tienen archivo) ni los intentos descartados por retoma
       AND (f.id_informe = p_id_informe
            OR (f.id_informe IS NULL AND f.id_os = b.id_os AND (f.id_equipo = b.id_equipo OR f.id_equipo IS NULL)))
     ORDER BY f.timestamp_captura, f.id_evidencia;

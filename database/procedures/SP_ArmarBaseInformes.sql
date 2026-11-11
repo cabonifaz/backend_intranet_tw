@@ -80,11 +80,11 @@ BEGIN
            (SELECT COUNT(*) FROM informe_observacion o WHERE o.id_informe = it.id_informe AND o.eliminado_en IS NULL)    AS n_observaciones,
            (SELECT COUNT(*) FROM informe_recomendacion r WHERE r.id_informe = it.id_informe AND r.eliminado_en IS NULL)  AS n_recomendaciones,
            (SELECT COUNT(*) FROM evidencia_fotografica f
-            WHERE f.eliminado_en IS NULL AND f.id_tipo_evidencia NOT IN (6, 7)
+            WHERE f.eliminado_en IS NULL AND f.id_tipo_evidencia NOT IN (6, 7) AND f.url_archivo NOT LIKE 'qr://%' AND IFNULL(f.vigente, 1) = 1
               AND (f.id_informe = it.id_informe
                    OR (f.id_informe IS NULL AND f.id_os = it.id_os AND (f.id_equipo = it.id_equipo OR f.id_equipo IS NULL)))) AS n_fotos,
            (SELECT COUNT(*) FROM evidencia_fotografica f
-            WHERE f.eliminado_en IS NULL AND f.id_tipo_evidencia NOT IN (6, 7) AND f.validacion_ia <> 'rechazada'
+            WHERE f.eliminado_en IS NULL AND f.id_tipo_evidencia NOT IN (6, 7) AND f.url_archivo NOT LIKE 'qr://%' AND IFNULL(f.vigente, 1) = 1 AND f.validacion_ia <> 'rechazada'
               AND (f.id_informe = it.id_informe
                    OR (f.id_informe IS NULL AND f.id_os = it.id_os AND (f.id_equipo = it.id_equipo OR f.id_equipo IS NULL)))) AS n_fotos_validas,
            (SELECT COUNT(*) FROM informe_ensayo en WHERE en.id_informe = it.id_informe AND en.eliminado_en IS NULL)      AS n_ensayos,
