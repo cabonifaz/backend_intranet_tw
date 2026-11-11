@@ -124,12 +124,11 @@ proc: BEGIN
     -- Lugar: la sede de cliente más cercana (300 m o menos)
     SELECT x.lugar INTO v_lugar
     FROM (SELECT LEFT(CONCAT(c.razon_social, IF(NULLIF(sc.nombre, '') IS NULL, '', CONCAT(' – ', sc.nombre))), 200) AS lugar,
-                 6371000 * 2 * ASIN(SQRT(POW(SIN(RADIANS(s.latitud - p_latitud) / 2), 2)
-                              + COS(RADIANS(p_latitud)) * COS(RADIANS(s.latitud)) * POW(SIN(RADIANS(s.longitud - p_longitud) / 2), 2))) AS d
-          FROM sede s
-          JOIN cliente c ON c.id_cliente = s.id_cliente
-          LEFT JOIN sede_cliente sc ON sc.id_sede = s.id_sede
-          WHERE s.eliminado_en IS NULL AND s.latitud IS NOT NULL AND s.longitud IS NOT NULL) x
+                 6371000 * 2 * ASIN(SQRT(POW(SIN(RADIANS(sc.latitud - p_latitud) / 2), 2)
+                              + COS(RADIANS(p_latitud)) * COS(RADIANS(sc.latitud)) * POW(SIN(RADIANS(sc.longitud - p_longitud) / 2), 2))) AS d
+          FROM sede_cliente sc
+          JOIN cliente c ON c.id_cliente = sc.id_cliente
+          WHERE sc.SoftDelete = 0 AND sc.latitud IS NOT NULL AND sc.longitud IS NOT NULL) x
     WHERE x.d <= 300
     ORDER BY x.d
     LIMIT 1;
