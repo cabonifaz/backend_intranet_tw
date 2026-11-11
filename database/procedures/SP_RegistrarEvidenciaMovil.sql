@@ -4,7 +4,9 @@
 --   - Acceso: SP_ContextoEquipoMovil (OS del técnico, Hard Stop) y el equipo EN EJECUCIÓN.
 --   - p_codigo: una de las 9 evidencias (SP_CatalogoEvidenciasMovil). p_pagina: solo el informe a mano admite varias hojas (1 a 10).
 --   - Encendido (HU-13): el microvideo dura de 3 a 5 s (se tolera 0,5 s). p_ruta_cuadro = cuadro de la imagen que analizó la IA.
---   - QR: p_qr_texto es lo que leyó la cámara; debe corresponder a ESTE equipo (N/S, código del cliente o COD TW, igual que la búsqueda por QR de la HU-07).
+--   - QR: p_qr_texto es lo que leyó la cámara; debe corresponder a ESTE equipo (N/S, código del cliente o COD TW, igual que la búsqueda por QR de la HU-07) o ser una
+--     etiqueta QR de TW (enlace q.me-qr.com/… o tw.com.pe/e/…, SP_NormalizarQrMovil) vinculada a este equipo en equipo_qr: la primera lectura de una etiqueta que no
+--     pertenece a nadie la vincula a este equipo; una etiqueta de OTRO equipo se rechaza.
 --   - p_ia_estado = aprobada | rechazada | omitida (la IA no estuvo disponible: no bloquea) con p_ia_motivo y p_ia_json (lo que leyó).
 --     Placa: si la IA leyó la serie y no coincide con la del equipo, la toma se RECHAZA aquí (la regla vive solo en este SP).
 --   - Cada captura es un intento nuevo (intento = 1, 2, 3…); la última queda vigente y reemplaza a la anterior. Una toma rechazada se puede
@@ -60,6 +62,12 @@ proc: BEGIN
     DECLARE v_id_evid  BIGINT;
     DECLARE v_ahora    DATETIME;
     DECLARE v_capt     DATETIME;
+    DECLARE v_clave    VARCHAR(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
+    DECLARE v_vinc_eq  BIGINT DEFAULT NULL;
+    DECLARE v_vinc_cod VARCHAR(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
+    DECLARE v_filas    INT DEFAULT 0;
+    DECLARE v_vinculado TINYINT DEFAULT 0;
+    DECLARE v_motivo_qr VARCHAR(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -137,9 +145,29 @@ proc: BEGIN
         SET v_coincide = IF(UPPER(IFNULL(v_serie, '')) = v_qr OR UPPER(IFNULL(v_cod_cli, '')) = v_qr OR UPPER(IFNULL(v_cod_tw, '')) = v_qr
                             OR (CHAR_LENGTH(IFNULL(v_cod_tw, '')) >= 5 AND LOCATE(UPPER(v_cod_tw), v_qr) > 0)
                             OR (CHAR_LENGTH(IFNULL(v_cod_cli, '')) >= 5 AND LOCATE(UPPER(v_cod_cli), v_qr) > 0), 1, 0);
+        -- Etiqueta QR de TW (enlace corto q.me-qr.com/… o tw.com.pe/e/…): no trae el código del equipo, así que se reconoce por su clave (SP_NormalizarQrMovil).
+        -- Si ya está vinculada a ESTE equipo, coincide; si no pertenece a nadie, queda vinculada a este equipo (primera lectura); si es de otro, se rechaza.
+        IF v_coincide = 0 THEN
+            CALL SP_NormalizarQrMovil(p_qr_texto, v_clave);
+            IF v_clave IS NOT NULL THEN
+                SELECT q.id_equipo INTO v_vinc_eq FROM equipo_qr q WHERE q.clave = v_clave AND q.eliminado_en IS NULL LIMIT 1;
+                IF v_vinc_eq IS NULL THEN
+                    INSERT IGNORE INTO equipo_qr (id_equipo, clave, texto, creado_por) VALUES (v_id_eq, v_clave, LEFT(TRIM(p_qr_texto), 300), p_id_usuario);
+                    SET v_filas = ROW_COUNT();
+                    SELECT q.id_equipo INTO v_vinc_eq FROM equipo_qr q WHERE q.clave = v_clave AND q.eliminado_en IS NULL LIMIT 1;
+                    SET v_vinculado = IF(v_filas = 1, 1, 0);
+                END IF;
+                IF v_vinc_eq = v_id_eq THEN
+                    SET v_coincide = 1;
+                ELSE
+                    SELECT COALESCE(NULLIF(ec.codigo_cliente, ''), NULLIF(ec.codigo_tw, ''), ec.num_serie) INTO v_vinc_cod FROM equipo_cliente ec WHERE ec.id_equipo = v_vinc_eq;
+                    SET v_motivo_qr = LEFT(CONCAT('Este QR ya pertenece a otro equipo (', IFNULL(v_vinc_cod, 'sin código'), '). Escanea la etiqueta del equipo que estás trabajando.'), 300);
+                END IF;
+            END IF;
+        END IF;
         SET v_estado = IF(v_coincide = 1, 'aprobada', 'rechazada');
-        SET v_motivo = IF(v_coincide = 1, NULL, 'El QR leído no corresponde a este equipo. Escanea la etiqueta del equipo que estás trabajando.');
-        SET v_json = JSON_OBJECT('qr', LEFT(TRIM(p_qr_texto), 300));
+        SET v_motivo = IF(v_coincide = 1, NULL, COALESCE(v_motivo_qr, 'El QR leído no corresponde a este equipo. Escanea la etiqueta del equipo que estás trabajando.'));
+        SET v_json = JSON_OBJECT('qr', LEFT(TRIM(p_qr_texto), 300), 'vinculado', v_vinculado = 1);
         SET p_ruta_archivo = 'qr://leido';
     ELSEIF p_codigo = 'placa' AND v_estado = 'aprobada' AND v_json IS NOT NULL THEN
         SET v_serie_ia = NULLIF(UPPER(REGEXP_REPLACE(IFNULL(JSON_UNQUOTE(JSON_EXTRACT(v_json, '$.serie')), ''), '[^A-Za-z0-9]', '')), '');
@@ -179,9 +207,11 @@ proc: BEGIN
     COMMIT;
 
     SELECT 2 AS IdTipoMensaje,
-           CASE v_estado WHEN 'aprobada' THEN 'Evidencia guardada y validada por la IA.'
+           CASE WHEN v_medio = 'qr' AND v_estado = 'aprobada' THEN IF(v_vinculado = 1, 'QR leído y vinculado a este equipo.', 'QR del equipo leído.')
+                WHEN v_medio = 'qr' THEN 'El QR no corresponde a este equipo.'
+                ELSE CASE v_estado WHEN 'aprobada' THEN 'Evidencia guardada y validada por la IA.'
                          WHEN 'omitida'  THEN 'Evidencia guardada (la IA no estuvo disponible para validarla).'
-                         ELSE 'La IA rechazó la toma.' END AS Mensaje;
+                         ELSE 'La IA rechazó la toma.' END END AS Mensaje;
     SELECT v_id_evid AS id_evidencia, v_estado AS estado, v_motivo AS motivo_rechazo, v_intento AS intento, v_coincide AS coincide, v_rq AS numero_rq;
 END$$
 

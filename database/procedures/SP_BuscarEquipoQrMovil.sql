@@ -3,6 +3,8 @@
 -- Busca, entre los objetivos de la OS del técnico, el equipo cuyo N/S, código del cliente o COD TW coincide con lo escaneado.
 --   - Coincidencia exacta (sin distinguir mayúsculas) con N/S, código del cliente o COD TW; o, si el QR trae un texto más largo (una URL
 --     con el código al final), que contenga el COD TW o el código del cliente (de 5 o más caracteres).
+--   - Etiqueta QR de TW (enlace q.me-qr.com/… o tw.com.pe/e/…): se reconoce si ya está vinculada a un equipo de la OS (equipo_qr: la primera lectura en el
+--     registro fotográfico la vincula).
 --   - Hard Stop (HU-06): sin llegada registrada no se entregan equipos.
 --   - Si no está en la lista de la OS responde la regla de negocio (la app ofrece buscarlo o registrarlo como equipo nuevo).
 -- Resultados: 1 mensaje · 2 el equipo (mismas columnas que el resultado 4 de SP_ObtenerObjetivosMovil).
@@ -26,6 +28,7 @@ proc: BEGIN
     DECLARE v_motivo     VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_codigo     VARCHAR(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_id         BIGINT DEFAULT NULL;
+    DECLARE v_clave      VARCHAR(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -58,11 +61,15 @@ proc: BEGIN
         LEAVE proc;
     END IF;
 
+    -- Etiqueta QR de TW (enlace q.me-qr.com/… o tw.com.pe/e/…): no trae el código del equipo; se reconoce si ya está vinculada a un equipo (equipo_qr, SP_NormalizarQrMovil)
+    CALL SP_NormalizarQrMovil(p_codigo, v_clave);
+
     SELECT t.id_os_equipo INTO v_id
     FROM   tmp_obj_mov t
     WHERE  UPPER(t.num_serie) = v_codigo OR UPPER(t.codigo_cliente) = v_codigo OR UPPER(t.codigo_tw) = v_codigo
        OR  (CHAR_LENGTH(t.codigo_tw) >= 5 AND LOCATE(UPPER(t.codigo_tw), v_codigo) > 0)
        OR  (CHAR_LENGTH(IFNULL(t.codigo_cliente, '')) >= 5 AND LOCATE(UPPER(t.codigo_cliente), v_codigo) > 0)
+       OR  (v_clave IS NOT NULL AND t.id_equipo IN (SELECT q.id_equipo FROM equipo_qr q WHERE q.clave = v_clave AND q.eliminado_en IS NULL))
     ORDER BY (UPPER(t.num_serie) = v_codigo OR UPPER(t.codigo_cliente) = v_codigo OR UPPER(t.codigo_tw) = v_codigo) DESC, t.numero
     LIMIT 1;
 
