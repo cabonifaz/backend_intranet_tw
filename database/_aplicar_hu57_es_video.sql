@@ -1,4 +1,4 @@
--- HU-57: es_video en las fotos del detalle del informe técnico. Ejecutar y reiniciar la API.
+-- HU-57: video de encendido y evidencias forzadas en las fotos del informe. Ejecutar y reiniciar la API.
 -- HU-57 (Sprint 5) Revisión Técnica: modal "Detalle del Servicio Técnico" y pantalla de edición (HU-58).
 -- Acceso: rt_bandeja (y el informe debe estar en el alcance del usuario, ver SP_ArmarBaseInformes).
 -- Resultados:
@@ -126,19 +126,25 @@ proc: BEGIN
     -- 7. Fotos (subidas desde la app; solo lectura)
     SELECT f.id_evidencia, f.url_archivo, f.descripcion,
            tf.String2                                         AS momento,
-           tf.String1                                         AS momento_label,
+           IF(f.es_video = 1, 'Video de encendido', tf.String1) AS momento_label,
            f.timestamp_captura                                AS fecha_captura,
            f.latitud, f.longitud, (f.latitud IS NOT NULL AND f.longitud IS NOT NULL) AS georreferenciada,
            f.validacion_ia,
            f.es_video,
+           IF(f.override_aprobado = 1, 1, 0)                  AS forzada,           -- HU-12: la IA la rechazó y el técnico la aceptó con un motivo
+           f.motivo_forzado, f.motivo_rechazo_ia,
+           NULLIF(TRIM(CONCAT(IFNULL(uf.nombre, ''), ' ', IFNULL(uf.apellido, ''))), '') AS forzada_por,
+           IF(f.forzada_en IS NULL, NULL, CONVERT_TZ(f.forzada_en, '+00:00', '-05:00')) AS forzada_en,
            COALESCE(f.id_observacion, o.id_observacion)       AS id_observacion,
            COALESCE(ov.codigo, o.codigo)                      AS codigo_observacion
     FROM evidencia_fotografica f
     JOIN tmp_rt_base b ON b.id_informe = p_id_informe
     LEFT JOIN tabla_maestra tf ON tf.IdMaestro = 30 AND tf.IdEmpresa = 1 AND tf.Num1 = f.id_tipo_evidencia
+    LEFT JOIN usuario uf ON uf.id_usuario = f.id_usuario_override
     LEFT JOIN informe_observacion ov ON ov.id_observacion = f.id_observacion AND ov.eliminado_en IS NULL
     LEFT JOIN informe_observacion o  ON o.id_evidencia = f.id_evidencia AND o.id_informe = p_id_informe AND o.eliminado_en IS NULL
     WHERE f.eliminado_en IS NULL AND f.id_tipo_evidencia NOT IN (6, 7)
+      AND f.url_archivo NOT LIKE 'qr://%' AND IFNULL(f.vigente, 1) = 1   -- sin las lecturas del QR (no tienen archivo) ni los intentos descartados por retoma
       AND (f.id_informe = p_id_informe
            OR (f.id_informe IS NULL AND f.id_os = b.id_os AND (f.id_equipo = b.id_equipo OR f.id_equipo IS NULL)))
     ORDER BY f.timestamp_captura, f.id_evidencia;

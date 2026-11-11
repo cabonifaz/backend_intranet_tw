@@ -125,16 +125,21 @@ proc: BEGIN
     -- 7. Fotos (subidas desde la app; solo lectura)
     SELECT f.id_evidencia, f.url_archivo, f.descripcion,
            tf.String2                                         AS momento,
-           tf.String1                                         AS momento_label,
+           IF(f.es_video = 1, 'Video de encendido', tf.String1) AS momento_label,
            f.timestamp_captura                                AS fecha_captura,
            f.latitud, f.longitud, (f.latitud IS NOT NULL AND f.longitud IS NOT NULL) AS georreferenciada,
            f.validacion_ia,
            f.es_video,
+           IF(f.override_aprobado = 1, 1, 0)                  AS forzada,           -- HU-12: la IA la rechazó y el técnico la aceptó con un motivo
+           f.motivo_forzado, f.motivo_rechazo_ia,
+           NULLIF(TRIM(CONCAT(IFNULL(uf.nombre, ''), ' ', IFNULL(uf.apellido, ''))), '') AS forzada_por,
+           IF(f.forzada_en IS NULL, NULL, CONVERT_TZ(f.forzada_en, '+00:00', '-05:00')) AS forzada_en,
            COALESCE(f.id_observacion, o.id_observacion)       AS id_observacion,
            COALESCE(ov.codigo, o.codigo)                      AS codigo_observacion
     FROM evidencia_fotografica f
     JOIN tmp_rt_base b ON b.id_informe = p_id_informe
     LEFT JOIN tabla_maestra tf ON tf.IdMaestro = 30 AND tf.IdEmpresa = 1 AND tf.Num1 = f.id_tipo_evidencia
+    LEFT JOIN usuario uf ON uf.id_usuario = f.id_usuario_override
     LEFT JOIN informe_observacion ov ON ov.id_observacion = f.id_observacion AND ov.eliminado_en IS NULL
     LEFT JOIN informe_observacion o  ON o.id_evidencia = f.id_evidencia AND o.id_informe = p_id_informe AND o.eliminado_en IS NULL
     WHERE f.eliminado_en IS NULL AND f.id_tipo_evidencia NOT IN (6, 7)

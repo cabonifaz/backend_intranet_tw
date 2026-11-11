@@ -282,6 +282,12 @@ public class FotoInformeDto
     public string?   ValidacionIa      { get; init; }
     /// <summary>true = la evidencia es un video MP4 (el momento de encendido): la miniatura se pide con ?cuadro=true y el visor reproduce el archivo sin cuadro.</summary>
     public bool      EsVideo           { get; init; }
+    /// <summary>true = evidencia FORZADA (HU-12): la IA la rechazó y el técnico la aceptó con un motivo. Se muestra con su insignia y el detalle.</summary>
+    public bool      Forzada           { get; init; }
+    public string?   MotivoForzado     { get; init; }
+    public string?   MotivoRechazoIa   { get; init; }
+    public string?   ForzadaPor        { get; init; }
+    public DateTime? ForzadaEn         { get; init; }
     public long?     IdObservacion     { get; init; }
     public string?   CodigoObservacion { get; init; }
 }
