@@ -6,6 +6,7 @@
 --   Resumen: lat/lon = última posición; minutos_ubicacion = antigüedad de esa posición; destino_* = planta del cliente (sede); origen_* = coordenada del evento de
 --     salida (si la app la envió). distancia_m = distancia EN LÍNEA RECTA de la última posición a la planta (no es la distancia por calle).
 --     velocidad_kmh = entre las dos últimas posiciones de hoy (solo si distan entre 20 s y 10 min; NULL si no hay datos suficientes).
+--     eta_estimada / eta_minutos = estimación en ruta desde la posición actual (línea recta × 1,3 a la velocidad promedio configurada; referencial). destino_direccion = dirección de la planta.
 --     eta (HH:MM) = solo en ruta: la hora de llegada recalculada por la última demora de la app (demora_registro.eta_recalculada) o, si no hay, la hora esperada de
 --     la bandeja de seguimiento (hora programada + demoras en ruta). eta_programada = hora programada del servicio.
 --     demora_* = la última demora/incidencia de hoy (texto armado para la tarjeta amarilla). contacto_* = contacto en planta del cliente (para avisarle).
@@ -144,6 +145,7 @@ proc: BEGIN
            IF(o.fase = 'en_ruta', DATE_FORMAT(COALESCE((SELECT MAX(d.eta_recalculada) FROM demora_registro d
                                                           WHERE d.id_os = o.id_os AND d.tipo = 'llegada' AND d.eliminado_en IS NULL AND d.fecha_registro >= c.hoy), h.esperado), '%H:%i'), NULL) AS eta,
            TIME_FORMAT(o.hora_inicio, '%H:%i') AS eta_programada,
+           o.eta_min AS eta_minutos, DATE_FORMAT(o.eta_est, '%H:%i') AS eta_estimada, NULLIF(o.sede_direccion, '') AS destino_direccion,
            v_dem_txt AS demora_texto, v_dem_org AS demora_origen,
            cc.nombres AS contacto_nombre, NULLIF(TRIM(cc.telefono_movil), '') AS contacto_telefono,
            DATE_FORMAT(c.ahora, '%H:%i') AS actualizado

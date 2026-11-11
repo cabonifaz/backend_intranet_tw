@@ -58,7 +58,8 @@ proc: BEGIN
                 WHEN p.parado_desde IS NOT NULL AND TIMESTAMPDIFF(MINUTE, p.parado_desde, p.ts_utc) >= v_parado THEN 'gps_parado'
                 ELSE 'gps_activo' END AS Conexion,
            IF(p.parado_desde IS NULL, 0, GREATEST(0, TIMESTAMPDIFF(MINUTE, p.parado_desde, v_ahora_utc))) AS MinutosEnPunto,
-           u.precision_m AS PrecisionM, u.velocidad_kmh AS VelocidadKmh, u.altitud_m AS AltitudM, u.satelites AS Satelites, u.latencia_ms AS LatenciaMs
+           u.precision_m AS PrecisionM, u.velocidad_kmh AS VelocidadKmh, u.altitud_m AS AltitudM, u.satelites AS Satelites, u.latencia_ms AS LatenciaMs,
+           o.eta_min AS EtaMinutos, DATE_FORMAT(o.eta_est, '%H:%i') AS EtaHora
     FROM tmp_sg_os o
     LEFT JOIN tmp_sg_pos p ON p.id_usuario = o.id_tecnico
     LEFT JOIN ubicacion_tecnico u ON u.id_ubicacion = v_id_ub

@@ -51,7 +51,9 @@ public record RutaResumenDto(long IdOs, string Numero, string? Cliente, string E
                              decimal? Latitud, decimal? Longitud, int? MinutosUbicacion, decimal? VelocidadKmh, int? DistanciaM,
                              decimal? DestinoLatitud, decimal? DestinoLongitud, string? DestinoNombre, decimal? OrigenLatitud, decimal? OrigenLongitud,
                              string? Eta, string? EtaProgramada, string? DemoraTexto, string? DemoraOrigen, string? ContactoNombre, string? ContactoTelefono,
-                             string? Actualizado);
+                             string? Actualizado,
+                             /// <summary>HU-20: llegada estimada desde la posición actual (en ruta; referencial) y dirección de la planta.</summary>
+                             int? EtaMinutos = null, string? EtaEstimada = null, string? DestinoDireccion = null);
 
 public record PuntoGpsServicioDto(decimal Latitud, decimal Longitud, string? Hora);
 

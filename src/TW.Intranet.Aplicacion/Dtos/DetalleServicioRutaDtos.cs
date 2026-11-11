@@ -38,7 +38,9 @@ public record SeccionEquipoRutaDto(string Seccion, IReadOnlyList<ElementoEquipoR
 public record PanelGpsRutaDto(
     long IdOs, string Estado, string? Tecnico, string? Cliente, string? Sede, string? DireccionSede, decimal? LatSede, decimal? LonSede, int RadioProximidadM, bool MostrarRadio,
     decimal? Latitud, decimal? Longitud, string? UltimaUbicacion, int? DistanciaM, string? UltimaActualizacion, int? SegundosDesdeUltima, string Conexion,
-    int MinutosEnPunto, int? PrecisionM, decimal? VelocidadKmh, decimal? AltitudM, int? Satelites, int? LatenciaMs);
+    int MinutosEnPunto, int? PrecisionM, decimal? VelocidadKmh, decimal? AltitudM, int? Satelites, int? LatenciaMs,
+    /// <summary>HU-20: estimación de llegada EN RUTA (minutos y hora de Lima); línea recta × 1,3 a la velocidad promedio configurada. Null si no está en ruta o no hay coordenadas de la planta.</summary>
+    int? EtaMinutos = null, string? EtaHora = null);
 public record PuntoRutaDto(decimal Latitud, decimal Longitud, string Hora);
 public record HitoGpsDto(string Hito, string? Hora);
 /// <summary>Demora registrada desde la app con el GPS del técnico en ese momento. Fase: llegada (en ruta) | ingreso (ingreso a planta).</summary>

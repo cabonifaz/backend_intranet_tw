@@ -37,7 +37,8 @@ FROM (SELECT 120 AS n, 465 AS valor, 'Inicio programado de la jornada (minutos d
       SELECT 121,      1020,          'Fin programado de la jornada (minutos desde las 00:00; 1020 = 17:00)',                                'JORNADA_FIN_MIN'                  UNION ALL
       SELECT 122,      5,             'Minutos de tolerancia sobre el inicio programado para marcar el ingreso "a tiempo"',                  'JORNADA_TOLERANCIA_MIN'           UNION ALL
       SELECT 123,      60,            'Minutos de refrigerio permitidos',                                                                    'JORNADA_REFRIGERIO_MIN'           UNION ALL
-      SELECT 124,      10,            'Minutos sin movimiento del técnico (con la jornada en curso) para alertar a Jefatura',                'SEG_SIN_MOVIMIENTO_MIN') x
+      SELECT 124,      10,            'Minutos sin movimiento del técnico (con la jornada en curso) para alertar a Jefatura',                'SEG_SIN_MOVIMIENTO_MIN'           UNION ALL
+      SELECT 125,      30,            'Velocidad promedio (km/h) para estimar la hora de llegada del técnico en ruta',                       'SEG_VELOCIDAD_PROMEDIO_KMH') x
 WHERE NOT EXISTS (SELECT 1 FROM tabla_maestra t WHERE t.Descripcion = 'PARAMETRO_PROGRAMACION' AND t.IdEmpresa = 1 AND t.String2 = x.codigo);
 
 -- ── Verificación (debe ser 6) ─────────────────────────────────────────────────
