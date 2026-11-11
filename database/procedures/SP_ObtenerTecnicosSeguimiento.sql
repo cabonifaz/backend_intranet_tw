@@ -64,7 +64,8 @@ proc: BEGIN
            IF(t.salida_utc IS NULL, NULL,
               TIMESTAMPDIFF(MINUTE, TIMESTAMP(c.hoy, t.salida_prog), CONVERT_TZ(t.salida_utc, '+00:00', '-05:00'))) AS DiferenciaSalidaMin,
            COALESCE(NULLIF(p.direccion, ''), IF(p.lat IS NULL, NULL, CONCAT(FORMAT(p.lat, 5), ', ', FORMAT(p.lon, 5)))) AS UltimaUbicacion,
-           IF(p.ts_utc IS NULL, NULL, TIMESTAMPDIFF(MINUTE, p.ts_utc, c.ahora_utc)) AS MinutosUbicacion
+           IF(p.ts_utc IS NULL, NULL, TIMESTAMPDIFF(MINUTE, p.ts_utc, c.ahora_utc)) AS MinutosUbicacion,
+           t.jornada AS Jornada, t.actividad AS Actividad
     FROM tmp_sg_tec t
     JOIN tmp_sg_tf tf ON tf.id_usuario = t.id_usuario
     LEFT JOIN tmp_sg_pos p ON p.id_usuario = t.id_usuario

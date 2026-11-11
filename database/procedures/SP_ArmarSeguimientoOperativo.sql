@@ -12,14 +12,16 @@
 --   sin_salir       programada o reprogramada: el técnico aún no marcó "Salida"
 -- Estado del técnico = el del servicio más urgente de su día (el finalizado solo si todos lo están).
 -- Alertas automáticas (se calculan al consultar; umbrales en PARAMETRO_PROGRAMACION, migración 90):
---   perdida_contacto (crítica) · gps_parado (advertencia) · sin_ingreso_post_llegada (advertencia) · sin_iniciar_servicio (advertencia)
+--   perdida_contacto (crítica) · gps_parado (advertencia) · sin_movimiento (advertencia, HU-20) · sin_ingreso_post_llegada (advertencia) · sin_iniciar_servicio (advertencia)
 --   · proximidad (info) · incidente (crítica)
 -- Tablas temporales (MySQL no permite abrir dos veces la misma temporal en una consulta):
 --   tmp_sg_cfg (1 fila: hoy, ahora y umbrales) · tmp_sg_os (un servicio por fila) · tmp_sg_ev (eventos de campo del día por OS)
 --   tmp_sg_ut (técnico x servicio) · tmp_sg_tec (un técnico por fila) · tmp_sg_pos (última posición GPS por técnico)
 --   tmp_sg_alerta · tmp_sg_hito · tmp_sg_inc (demoras e incidencias unificadas; `fase` = momento de la demora de la app: llegada = en ruta, ingreso = ingreso a planta)
 -- Demoras de la app (demora_registro, HU-05): las de llegada corren la hora esperada de llegada (hito) y las de ingreso, la hora esperada de inicio.
--- Requiere las migraciones 85 a 90.
+-- Jornada (HU-20): cada técnico trae su estado del Reloj marcador (jornada: en_labores | en_refrigerio | salio_planta | finalizada; NULL si no inició) y una frase de lo que
+-- está haciendo (actividad). «Sin movimiento»: jornada en curso (no en refrigerio ni finalizada), con señal, GPS en el mismo punto SEG_SIN_MOVIMIENTO_MIN o más.
+-- Requiere las migraciones 85 a 90 y 109.
 DROP PROCEDURE IF EXISTS SP_ArmarSeguimientoOperativo;
 
 DELIMITER $$
@@ -40,6 +42,7 @@ BEGIN
     DECLARE v_nueva     DECIMAL(18,6);
     DECLARE v_ventana   DECIMAL(18,6);
     DECLARE v_retorno   DECIMAL(18,6);
+    DECLARE v_sin_mov   DECIMAL(18,6);
 
     CALL SP_LimpiarSeguimientoOperativo();
 
@@ -58,6 +61,7 @@ BEGIN
     CALL SP_LeerParametroProgramacion('SEG_ALERTA_NUEVA_MIN',       15,  v_nueva);
     CALL SP_LeerParametroProgramacion('SEG_HITOS_VENTANA_MIN',      60,  v_ventana);
     CALL SP_LeerParametroProgramacion('SEG_RETORNO_MIN',            30,  v_retorno);
+    CALL SP_LeerParametroProgramacion('SEG_SIN_MOVIMIENTO_MIN',     10,  v_sin_mov);
 
     CREATE TEMPORARY TABLE tmp_sg_cfg (
         hoy DATE, ahora DATETIME, ahora_utc DATETIME, ini_utc DATETIME,
@@ -182,6 +186,7 @@ BEGIN
         prio INT, estado_seg VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci, id_os_actual BIGINT,
         n_servicios INT, n_completados INT, n_en_curso INT,
         salida_utc DATETIME, salida_prog TIME, dist_m INT,
+        jornada VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci, jornada_desde DATETIME, actividad VARCHAR(150) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
         PRIMARY KEY (id_usuario)
     );
     INSERT INTO tmp_sg_tec (id_usuario, nombre, nombre_pila, iniciales, cargo, zona, prio, n_servicios, n_completados, n_en_curso, salida_utc, salida_prog)
@@ -236,6 +241,25 @@ BEGIN
                                                             WHERE b.id_usuario = p.id_usuario AND b.timestamp_utc >= v_ini_utc AND b.timestamp_utc <= p.ts_utc
                                                               AND (ABS(b.latitud - p.lat) > 0.0003 OR ABS(b.longitud - p.lon) > 0.0003)), '1000-01-01'));
 
+    -- Jornada del técnico (HU-20): estado del Reloj marcador de hoy (la misma tabla de estados de SP_EstadoJornadaMovil) y lo que está haciendo
+    UPDATE tmp_sg_tec t
+    SET t.jornada = (SELECT CASE COUNT(*) WHEN 0 THEN NULL WHEN 1 THEN 'en_labores' WHEN 2 THEN 'en_refrigerio' WHEN 3 THEN 'en_labores'
+                                          WHEN 4 THEN 'salio_planta' ELSE 'finalizada' END
+                     FROM jornada_marcacion j WHERE j.id_usuario = t.id_usuario AND j.fecha = v_hoy),
+        t.jornada_desde = (SELECT MAX(j.marcado_utc) FROM jornada_marcacion j WHERE j.id_usuario = t.id_usuario AND j.fecha = v_hoy);
+    UPDATE tmp_sg_tec t
+    LEFT JOIN tmp_sg_os o ON o.id_os = t.id_os_actual
+    SET t.actividad = LEFT(CASE t.jornada
+            WHEN 'en_refrigerio' THEN CONCAT('En refrigerio · hace ', TIMESTAMPDIFF(MINUTE, t.jornada_desde, v_ahora_utc), ' min')
+            WHEN 'salio_planta'  THEN CONCAT('Salió de planta · hace ', TIMESTAMPDIFF(MINUTE, t.jornada_desde, v_ahora_utc), ' min')
+            WHEN 'finalizada'    THEN CONCAT('Jornada finalizada · ', TIME_FORMAT(CONVERT_TZ(t.jornada_desde, '+00:00', '-05:00'), '%H:%i'))
+            ELSE CASE o.fase WHEN 'en_ruta'      THEN CONCAT('En labores · en ruta a ', o.razon_social)
+                             WHEN 'en_planta'    THEN CONCAT('En labores · en planta de ', o.razon_social)
+                             WHEN 'en_ejecucion' THEN CONCAT('En labores · ejecutando servicio en ', o.razon_social)
+                             WHEN 'finalizado'   THEN 'En labores · servicio finalizado'
+                             ELSE 'En labores' END END, 150)
+    WHERE t.jornada IS NOT NULL;
+
     -- Distancia (m) al cliente: técnico principal de cada servicio y técnico (servicio actual)
     UPDATE tmp_sg_os o
     JOIN tmp_sg_pos p ON p.id_usuario = o.id_tecnico
@@ -279,6 +303,18 @@ BEGIN
     WHERE o.fase = 'en_ruta' AND p.parado_desde IS NOT NULL
       AND TIMESTAMPDIFF(MINUTE, p.ts_utc, v_ahora_utc) <= v_perdida
       AND TIMESTAMPDIFF(MINUTE, p.parado_desde, p.ts_utc) >= v_parado;
+
+    -- Sin movimiento (HU-20): jornada en curso (no en refrigerio ni finalizada), con señal reciente y el GPS en el mismo punto por el umbral o más.
+    -- En ruta lo cubre «GPS parado»; con el servicio ya finalizado no se alerta. Se asocia al servicio del día del técnico (la notificación lo exige).
+    INSERT INTO tmp_sg_alerta
+    SELECT CONCAT('sin_movimiento:', t.id_usuario, ':', o.id_os), 'sin_movimiento', 'advertencia', 'Sin movimiento',
+           CONCAT(t.nombre, ' · ', o.numero), TIMESTAMPDIFF(MINUTE, p.parado_desde, v_ahora_utc), t.id_usuario, t.nombre, o.id_os, o.numero
+    FROM tmp_sg_tec t
+    JOIN tmp_sg_os o ON o.id_os = t.id_os_actual
+    JOIN tmp_sg_pos p ON p.id_usuario = t.id_usuario
+    WHERE t.jornada IN ('en_labores', 'salio_planta') AND o.fase NOT IN ('en_ruta', 'finalizado') AND p.parado_desde IS NOT NULL
+      AND TIMESTAMPDIFF(MINUTE, p.ts_utc, v_ahora_utc) <= v_perdida
+      AND TIMESTAMPDIFF(MINUTE, p.parado_desde, p.ts_utc) >= v_sin_mov;
 
     -- Sin ingreso post-llegada: llegó a planta y no inicia el trabajo
     INSERT INTO tmp_sg_alerta

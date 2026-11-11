@@ -60,12 +60,12 @@ proc: BEGIN
            DATE_FORMAT(c.ahora, '%H:%i') AS Actualizado, c.refresco AS RefrescoSegundos
     FROM tmp_sg_cfg c;
 
-    -- 3 Pines del mapa: un pin por técnico con servicios en el filtro; el color lo da el estado
+    -- 3 Pines del mapa: un pin por técnico con servicios en el filtro; el color lo da el estado. Jornada y Actividad (HU-20): lo que hace el técnico (refrigerio, salida de planta…)
     CREATE TEMPORARY TABLE tmp_sg_tf (id_usuario BIGINT NOT NULL, PRIMARY KEY (id_usuario));
     INSERT INTO tmp_sg_tf SELECT DISTINCT ut.id_usuario FROM tmp_sg_ut ut JOIN tmp_sg_f f ON f.id_os = ut.id_os;
     SELECT t.id_usuario AS IdUsuario, t.nombre AS Tecnico, t.iniciales AS Iniciales, t.estado_seg AS Estado, p.lat AS Latitud, p.lon AS Longitud,
            COALESCE(p.direccion, '') AS Direccion, IF(p.ts_utc IS NULL, NULL, TIMESTAMPDIFF(MINUTE, p.ts_utc, c.ahora_utc)) AS MinutosUbicacion,
-           t.id_os_actual AS IdOs, o.numero AS NumeroOs, o.razon_social AS Cliente
+           t.id_os_actual AS IdOs, o.numero AS NumeroOs, o.razon_social AS Cliente, t.jornada AS Jornada, t.actividad AS Actividad
     FROM tmp_sg_tec t
     JOIN tmp_sg_tf tf ON tf.id_usuario = t.id_usuario
     LEFT JOIN tmp_sg_pos p ON p.id_usuario = t.id_usuario

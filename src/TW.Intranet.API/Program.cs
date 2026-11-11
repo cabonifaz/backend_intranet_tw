@@ -713,6 +713,11 @@ builder.Services.AddScoped<ObtenerTecnicosSeguimientoCasoDeUso>();
 builder.Services.AddScoped<ObtenerIncidenciasSeguimientoCasoDeUso>();
 builder.Services.AddScoped<ObtenerFiltrosSeguimientoCasoDeUso>();
 builder.Services.AddScoped<RegistrarUbicacionMovilCasoDeUso>();
+// App Mobile HU-20: Reloj marcador de jornada
+builder.Services.AddScoped<IJornadaMovilRepositorio, JornadaMovilRepositorio>();
+builder.Services.AddScoped<ObtenerJornadaMovilCasoDeUso>();
+builder.Services.AddScoped<MarcarJornadaMovilCasoDeUso>();
+builder.Services.AddScoped<RegistrarUbicacionJornadaMovilCasoDeUso>();
 
 // HU-52 Detalle del Servicio en Ruta (Sprint 5): solo lectura
 builder.Services.AddScoped<IDetalleServicioRutaRepositorio, DetalleServicioRutaRepositorio>();
