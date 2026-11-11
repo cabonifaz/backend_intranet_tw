@@ -67,7 +67,7 @@ BEGIN
            rq.id_requerimiento,
            rq.numero                                                   AS numero_rq,
            rq.id_responsable                                           AS id_responsable_rq,
-           co.nombres                                                  AS contacto,
+           COALESCE(NULLIF(TRIM(it.responsable_nombre), ''), co.nombres) AS contacto,
            it.fecha_envio_revision,
            it.fecha_inicio_revision,
            it.fecha_revision,

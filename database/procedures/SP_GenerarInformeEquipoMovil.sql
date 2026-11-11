@@ -4,7 +4,8 @@
 --   · el equipo pasa a COMPLETADO (os_equipo.estado_ejecucion = 'ejecutado'; se cierra su tramo de tiempo),
 --   · el informe recibe su N° definitivo NNNN-AAAA de la secuencia propia (informe_secuencia, atómica; se copia también a informe_tecnico.numero, que era el borrador
 --     BRR-########) y queda con generado_en / generado_por. Un informe generado es el que lista y firma la HU-17 (Firma de informes).
---   El informe NO cambia de estado (sigue 'borrador'): el envío a Revisión Técnica de la intranet corresponde al cierre del servicio (constancia, HU-17).
+--   Al generarse, el informe pasa a 'pendiente_revision' con fecha_envio_revision: aparece en la bandeja «Revisión de Informes Técnicos» de la intranet (HU-56/57) para que
+--   el Supervisor / Jefe de Servicio Técnico lo revise. (Antes se quedaba en 'borrador' y la intranet no lo mostraba.)
 --   Reglas (una sola vez): el contexto lo valida SP_ContextoEquipoMovil (OS del técnico del token, Hard Stop de llegada, equipo iniciado); las 5 etapas
 --   SP_ArmarEtapasEquipoMovil (la misma regla de SP_ValidarCierreEquipoMovil). Equipo EN EJECUCIÓN (no pausado). Idempotente: si el informe ya estaba generado
 --   responde éxito con el mismo número (repetida = 1) sin tocar nada. Orden de bloqueos fijo: os_equipo → informe técnico → secuencia del año.
@@ -114,7 +115,8 @@ proc: BEGIN
 
     SET v_ahora_utc = UTC_TIMESTAMP();
     UPDATE informe_tecnico
-    SET    numero_informe = v_cod, numero = v_cod, generado_en = UTC_TIMESTAMP(), generado_por = p_id_usuario, modificado_por = p_id_usuario
+    SET    numero_informe = v_cod, numero = v_cod, generado_en = UTC_TIMESTAMP(), generado_por = p_id_usuario, modificado_por = p_id_usuario,
+           estado = IF(estado = 'borrador', 'pendiente_revision', estado), fecha_envio_revision = IFNULL(fecha_envio_revision, NOW())
     WHERE  id_informe = v_informe;
 
     -- «Quién atiende en planta»: si el técnico no lo escribió en la cabecera, el informe queda con el contacto de la OS (el mismo que muestra la pestaña Datos)
@@ -139,8 +141,8 @@ proc: BEGIN
             LEFT(CONCAT('Trabajo finalizado en ', IFNULL(v_nombre, 'el equipo'), ' (', v_num_os, '). Informe técnico ', v_cod, '.'), 300),
             p_id_usuario, NOW(), JSON_OBJECT('id_os', p_id_os, 'numero_informe', v_cod));
     INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion, id_usuario, registrado_en, metadata)
-    VALUES ('informe_tecnico', v_informe, 'generar_informe', 'borrador', v_cod,
-            LEFT(CONCAT('Informe técnico ', v_cod, ' generado desde la app (HU-16) con las 5 etapas conformes.'), 300),
+    VALUES ('informe_tecnico', v_informe, 'generar_informe', 'borrador', 'pendiente_revision',
+            LEFT(CONCAT('Informe técnico ', v_cod, ' generado desde la app (HU-16) con las 5 etapas conformes; enviado a Revisión Técnica.'), 300),
             p_id_usuario, NOW(), JSON_OBJECT('id_os', p_id_os, 'id_os_equipo', p_id_os_equipo, 'numero_informe', v_cod));
 
     COMMIT;
