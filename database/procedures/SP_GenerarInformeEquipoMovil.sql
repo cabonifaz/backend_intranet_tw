@@ -117,6 +117,16 @@ proc: BEGIN
     SET    numero_informe = v_cod, numero = v_cod, generado_en = UTC_TIMESTAMP(), generado_por = p_id_usuario, modificado_por = p_id_usuario
     WHERE  id_informe = v_informe;
 
+    -- «Quién atiende en planta»: si el técnico no lo escribió en la cabecera, el informe queda con el contacto de la OS (el mismo que muestra la pestaña Datos)
+    -- para que se pueda firmar (HU-17). Lo ya escrito no se toca.
+    UPDATE informe_tecnico it
+    JOIN   orden_servicio osr ON osr.id_os = it.id_os
+    JOIN   contacto_cliente cc ON cc.id_contacto = osr.id_contacto AND cc.SoftDelete = 0
+    SET    it.responsable_nombre   = cc.nombres,
+           it.responsable_cargo    = LEFT(NULLIF(TRIM(cc.cargo), ''), 100),
+           it.responsable_telefono = LEFT(NULLIF(TRIM(cc.telefono_movil), ''), 30)
+    WHERE  it.id_informe = v_informe AND NULLIF(TRIM(it.responsable_nombre), '') IS NULL AND NULLIF(TRIM(cc.nombres), '') IS NOT NULL;
+
     -- El equipo queda COMPLETADO y se cierra su tramo de tiempo
     UPDATE os_equipo
     SET    estado_ejecucion = 'ejecutado', fecha_ejecucion = NOW(),
