@@ -1,6 +1,7 @@
 -- HU-52 (Sprint 5) Pestaña "Mapa GPS": posición actual del técnico, ruta recorrida hoy, pin del cliente con radio de proximidad y panel GPS. SOLO LECTURA.
 -- Conexión: sin_senal (sin posición o más del umbral SEG_PERDIDA_CONTACTO_MIN) | gps_parado (mismo punto por SEG_GPS_PARADO_MIN o más) | gps_activo.
 -- Velocidad, altitud, satélites y latencia salen de ubicacion_tecnico (migración 91; los envía la app; NULL si no los envía).
+-- OrigenLat/OrigenLon (HU-20) = punto de salida del recorrido. La ruta (resultado 3) va de la posición más reciente a la más antigua.
 -- Resultados: 1 mensaje · 2 panel (1 fila) · 3 ruta (puntos del día, máx. 300) · 4 cronograma GPS (salida, pre-llegada, llegada)
 --   · 5 demoras de la app con su GPS (Fase: llegada = en ruta, ingreso = ingreso a planta).
 DROP PROCEDURE IF EXISTS SP_ObtenerMapaServicioRuta;
@@ -23,6 +24,8 @@ proc: BEGIN
     DECLARE v_lon_s    DECIMAL(10,7);
     DECLARE v_id_ub    BIGINT;
     DECLARE v_pre_utc  DATETIME;
+    DECLARE v_olat     DECIMAL(10,7) DEFAULT NULL;
+    DECLARE v_olon     DECIMAL(10,7) DEFAULT NULL;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -46,6 +49,17 @@ proc: BEGIN
     WHERE v_lat_s IS NOT NULL AND v_lon_s IS NOT NULL AND x.id_usuario = v_tec AND x.timestamp_utc >= v_ini_utc AND x.timestamp_utc <= v_ahora_utc
       AND 6371000 * 2 * ASIN(SQRT(POW(SIN(RADIANS(v_lat_s - x.latitud) / 2), 2) + COS(RADIANS(x.latitud)) * COS(RADIANS(v_lat_s)) * POW(SIN(RADIANS(v_lon_s - x.longitud) / 2), 2))) <= v_prox;
 
+    -- Punto de salida (HU-20): la coordenada del evento «Salida» de la app o, si no la envió, la primera posición GPS del técnico hoy
+    SELECT e.latitud, e.longitud INTO v_olat, v_olon
+    FROM evento_campo e JOIN tabla_maestra m ON m.Descripcion = 'TIPO_EVENTO_CAMPO' AND m.IdEmpresa = 1 AND m.Num1 = e.id_tipo_evento AND m.String2 = 'SALIDA_BASE'
+    WHERE e.id_os = p_id_os AND e.eliminado_en IS NULL AND e.latitud IS NOT NULL AND e.longitud IS NOT NULL AND e.timestamp_utc >= v_ini_utc
+    ORDER BY e.id_evento LIMIT 1;
+    IF v_olat IS NULL THEN
+        SELECT x.latitud, x.longitud INTO v_olat, v_olon
+        FROM ubicacion_tecnico x WHERE x.id_usuario = v_tec AND x.timestamp_utc >= v_ini_utc AND x.timestamp_utc <= v_ahora_utc
+        ORDER BY x.timestamp_utc, x.id_ubicacion LIMIT 1;
+    END IF;
+
     SELECT 2 AS IdTipoMensaje, 'OK' AS Mensaje;
 
     SELECT o.id_os AS IdOs, o.estado_seg AS Estado, o.tecnico AS Tecnico, o.razon_social AS Cliente, o.sede_nombre AS Sede, o.sede_direccion AS DireccionSede,
@@ -59,7 +73,7 @@ proc: BEGIN
                 ELSE 'gps_activo' END AS Conexion,
            IF(p.parado_desde IS NULL, 0, GREATEST(0, TIMESTAMPDIFF(MINUTE, p.parado_desde, v_ahora_utc))) AS MinutosEnPunto,
            u.precision_m AS PrecisionM, u.velocidad_kmh AS VelocidadKmh, u.altitud_m AS AltitudM, u.satelites AS Satelites, u.latencia_ms AS LatenciaMs,
-           o.eta_min AS EtaMinutos, DATE_FORMAT(o.eta_est, '%H:%i') AS EtaHora
+           o.eta_min AS EtaMinutos, DATE_FORMAT(o.eta_est, '%H:%i') AS EtaHora, v_olat AS OrigenLat, v_olon AS OrigenLon
     FROM tmp_sg_os o
     LEFT JOIN tmp_sg_pos p ON p.id_usuario = o.id_tecnico
     LEFT JOIN ubicacion_tecnico u ON u.id_ubicacion = v_id_ub

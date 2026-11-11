@@ -101,7 +101,7 @@ public class DetalleServicioRutaRepositorio(CadenaConexionBd conexion) : Reposit
                     DecimalNulo(r, "Latitud"), DecimalNulo(r, "Longitud"), Texto(r, "UltimaUbicacion"), EnteroNulo(r, "DistanciaM"), Texto(r, "UltimaActualizacion"),
                     EnteroNulo(r, "SegundosDesdeUltima"), Texto(r, "Conexion") ?? "sin_senal", Entero(r, "MinutosEnPunto"), EnteroNulo(r, "PrecisionM"),
                     DecimalNulo(r, "VelocidadKmh"), DecimalNulo(r, "AltitudM"), EnteroNulo(r, "Satelites"), EnteroNulo(r, "LatenciaMs"),
-                    EnteroNulo(r, "EtaMinutos"), Texto(r, "EtaHora"));
+                    EnteroNulo(r, "EtaMinutos"), Texto(r, "EtaHora"), DecimalNulo(r, "OrigenLat"), DecimalNulo(r, "OrigenLon"));
 
                 await r.NextResultAsync(ct);
                 var ruta = new List<PuntoRutaDto>();
