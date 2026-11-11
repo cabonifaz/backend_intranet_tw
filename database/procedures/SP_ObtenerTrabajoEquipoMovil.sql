@@ -4,9 +4,10 @@
 --   - Hard Stop (HU-06): sin llegada registrada no se entrega nada. El equipo debe haberse iniciado (en ejecución, pausado o completado).
 --   - Tipo de orden según la RQ: el área de la RQ (area_servicio_rq) define OS (servicio técnico) u OM (metrología).
 --   - Servicio: sigla y nombre del tipo de intervención del equipo; si no tiene, el tipo de servicio de la OS.
---   - Etapas (siempre las 5, una sola vez aquí): variables (HU-09), fotos, ensayos, cabecera y correlativo.
---       estado: conforme | en_curso | pendiente | bloqueado.  "Ensayos y Calibración" queda BLOQUEADO hasta guardar las variables ambientales (HU-09).
---       disponible = 0 → la etapa aún no tiene pantalla en la app (la app avisa que se habilita más adelante).
+--   - Etapas (siempre las 5): variables (HU-09), fotos (HU-11), ensayos (HU-10), cabecera (HU-15) y correlativo (HU-14). Las calcula SP_ArmarEtapasEquipoMovil, UNA sola vez
+--     (la misma regla del Hard Stop de cierre, HU-16: SP_ValidarCierreEquipoMovil / SP_GenerarInformeEquipoMovil).
+--       estado: conforme | en_curso | pendiente | bloqueado | no_conforme (ensayos finalizados con error crítico).
+--       disponible = 0 → la etapa aún no tiene pantalla en la app (hoy las 5 la tienen).
 --   - Avance = etapas conformes de 5. "Finalizar trabajo" se habilita cuando las 5 están conformes (puede_finalizar).
 --   - puede_registrar = el equipo está EN EJECUCIÓN y el servicio en curso: solo así se guardan datos de las etapas.
 -- Resultados: 1 mensaje · 2 cabecera (1 fila) · 3 variables ambientales (0 o 1 fila) · 4 etapas (5 filas).
@@ -30,33 +31,18 @@ proc: BEGIN
     DECLARE v_id_equipo   BIGINT DEFAULT NULL;
     DECLARE v_estado      VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
     DECLARE v_tipo_orden  VARCHAR(2)   CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT 'OS';
-    DECLARE v_area        VARCHAR(30)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
     DECLARE v_numero_rq   VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
     DECLARE v_servicio    VARCHAR(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
-    DECLARE v_n_fotos     INT DEFAULT 0;
-    DECLARE v_n_ensayos   INT DEFAULT 0;
-    DECLARE v_informe     BIGINT DEFAULT NULL;
-    DECLARE v_vars        TINYINT DEFAULT 0;
-    DECLARE v_det_vars    VARCHAR(150) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
     DECLARE v_sigla       VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
     DECLARE v_tipo_int    VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
     DECLARE v_conformes   INT DEFAULT 0;
-    DECLARE v_ev_total    INT DEFAULT 9;
-    DECLARE v_ev_compl    INT DEFAULT 0;
-    DECLARE v_ev_forz     INT DEFAULT 0;
-    DECLARE v_ev_rech     INT DEFAULT 0;
-    DECLARE v_ev_oblig    INT DEFAULT 0;
-    DECLARE v_ens_final   DATETIME DEFAULT NULL;
-    DECLARE v_ens_motivo  VARCHAR(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
-    DECLARE v_cert        VARCHAR(50)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
-    DECLARE v_tk_estado   VARCHAR(12)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
-    DECLARE v_tk_num      VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
         GET DIAGNOSTICS CONDITION 1 @err_msg = MESSAGE_TEXT, @err_code = MYSQL_ERRNO;
         DROP TEMPORARY TABLE IF EXISTS tmp_obj_mov;
         DROP TEMPORARY TABLE IF EXISTS tmp_etapas_mov;
+        DROP TEMPORARY TABLE IF EXISTS tmp_pend_eq;
         DROP TEMPORARY TABLE IF EXISTS tmp_cat_evid;
         SELECT 3 AS IdTipoMensaje, CONCAT('[MySQL ', @err_code, '] ', @err_msg) AS Mensaje;
     END;
@@ -92,73 +78,11 @@ proc: BEGIN
         LEAVE proc;
     END IF;
 
-    -- Tipo de orden según la RQ: servicio técnico → OS, metrología → OM
-    SELECT asr.area_usuario, rq.numero INTO v_area, v_numero_rq
-    FROM   orden_servicio os
-    JOIN   expediente_digital ed  ON ed.id_expediente = os.id_expediente
-    JOIN   requerimiento      rq  ON rq.id_requerimiento = ed.id_requerimiento
-    LEFT JOIN area_servicio_rq asr ON asr.id_area_rq = rq.id_area
-    WHERE  os.id_os = p_id_os
-    LIMIT 1;
-    SET v_tipo_orden = IF(v_area = 'metrologia', 'OM', 'OS');
+    -- Tipo de orden según la RQ (servicio técnico → OS, metrología → OM): una sola vez, en SP_TipoOrdenMovil
+    CALL SP_TipoOrdenMovil(p_id_os, v_tipo_orden, v_numero_rq);
 
-    -- Variables ambientales (HU-09)
-    SELECT COUNT(*) INTO v_vars
-    FROM   variable_ambiental va WHERE va.id_os = p_id_os AND va.id_equipo = v_id_equipo AND va.eliminado_en IS NULL;
-    IF v_vars > 0 THEN
-        SELECT CONCAT('T° ', TRIM(TRAILING '.' FROM TRIM(TRAILING '0' FROM CAST(va.temperatura_c AS CHAR))), ' °C · h ',
-                      TRIM(TRAILING '.' FROM TRIM(TRAILING '0' FROM CAST(va.humedad_pct AS CHAR))), ' % · Procedencia ', IFNULL(va.procedencia, 'N.I'))
-        INTO   v_det_vars
-        FROM   variable_ambiental va
-        WHERE  va.id_os = p_id_os AND va.id_equipo = v_id_equipo AND va.eliminado_en IS NULL
-        ORDER BY va.id_variable DESC LIMIT 1;
-    END IF;
-
-    -- Registro fotográfico (HU-11): el avance lo calcula SP_ResumenEvidenciasMovil, una sola vez
-    CALL SP_ResumenEvidenciasMovil(p_id_os, v_id_equipo, v_ev_total, v_ev_compl, v_ev_forz, v_ev_rech, v_ev_oblig);
-    DROP TEMPORARY TABLE IF EXISTS tmp_cat_evid;
-    SET v_n_fotos = v_ev_compl;
-
-    SELECT it.id_informe, it.ensayos_finalizado_en, it.error_critico_motivo, it.numero_certificado INTO v_informe, v_ens_final, v_ens_motivo, v_cert
-    FROM   informe_tecnico it
-    WHERE  it.id_os = p_id_os AND it.id_equipo = v_id_equipo AND it.eliminado_en IS NULL
-    ORDER BY it.id_informe DESC LIMIT 1;
-    IF v_informe IS NOT NULL THEN
-        SELECT COUNT(*) INTO v_n_ensayos FROM informe_ensayo ie WHERE ie.id_informe = v_informe AND ie.eliminado_en IS NULL;
-    END IF;
-
-    -- Correlativo y certificado (HU-14): el ticket abierto de este equipo en Metrología (solicitado o asignado)
-    SELECT t.estado, t.numero INTO v_tk_estado, v_tk_num
-    FROM   ticket_metrologia t
-    WHERE  t.id_os = p_id_os AND t.id_equipo = v_id_equipo AND t.estado IN ('solicitado', 'asignado') AND t.eliminado_en IS NULL
-    ORDER BY t.id_ticket_met DESC LIMIT 1;
-
-    DROP TEMPORARY TABLE IF EXISTS tmp_etapas_mov;
-    CREATE TEMPORARY TABLE tmp_etapas_mov (
-        orden INT NOT NULL, codigo VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci, nombre VARCHAR(60) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
-        estado VARCHAR(12) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci, detalle VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
-        disponible TINYINT DEFAULT 0, PRIMARY KEY (orden));
-
-    INSERT INTO tmp_etapas_mov (orden, codigo, nombre, estado, detalle, disponible) VALUES
-        (1, 'variables', 'Variables ambientales', IF(v_vars > 0, 'conforme', 'pendiente'),
-            IF(v_vars > 0, v_det_vars, 'Temperatura, humedad y procedencia'), 1),
-        (2, 'fotos', 'Registro fotográfico', IF(v_ev_compl >= v_ev_total, 'conforme', IF(v_ev_compl > 0 OR v_ev_rech > 0, 'en_curso', 'pendiente')),
-            CONCAT(v_ev_compl, ' de ', v_ev_total, ' · incluye foto del informe a mano',
-                   IF(v_ev_forz > 0, CONCAT(' · ', v_ev_forz, IF(v_ev_forz = 1, ' forzada', ' forzadas')), '')), 1),
-        (3, 'ensayos', 'Ensayos y Calibración',
-            IF(v_vars = 0, 'bloqueado', IF(v_ens_final IS NOT NULL, 'conforme', IF(v_n_ensayos > 0, 'en_curso', 'pendiente'))),
-            IF(v_vars = 0, 'Se habilita al guardar las variables ambientales',
-               IF(v_ens_final IS NOT NULL, IF(v_ens_motivo IS NULL, 'Pesaje y excentricidad conformes', 'Finalizado con error crítico: se avisó al encargado'),
-                  IF(v_n_ensayos > 0, CONCAT(v_n_ensayos, ' lecturas guardadas · falta finalizar'), 'Verificación de pesaje tras el ajuste'))), 1),
-        (4, 'cabecera', 'Cabecera del informe', IF(v_informe IS NOT NULL, 'en_curso', 'pendiente'), 'Datos · Detalle Serv. · Observación y pruebas', 0),
-        (5, 'correlativo', 'Correlativo y certificado',
-            IF(v_cert IS NOT NULL, 'conforme', IF(v_ens_final IS NULL, 'bloqueado', IF(v_tk_estado IS NOT NULL, 'en_curso', 'pendiente'))),
-            IF(v_cert IS NOT NULL, CONCAT('Certificado ', v_cert),
-               IF(v_ens_final IS NULL, 'Se habilita al finalizar los ensayos',
-                  IF(v_tk_estado = 'asignado', CONCAT(v_tk_num, ' asignado · listo para usar'),
-                     IF(v_tk_estado = 'solicitado', CONCAT(v_tk_num, ' · esperando a Metrología'), 'Correlativo de Metrología → N° de certificado')))), 1);
-
-    SELECT COUNT(*) INTO v_conformes FROM tmp_etapas_mov WHERE estado = 'conforme';
+    -- Las 5 etapas (estado, detalle y pendientes): una sola vez, en SP_ArmarEtapasEquipoMovil (la comparten el Hard Stop de cierre y la generación del informe)
+    CALL SP_ArmarEtapasEquipoMovil(p_id_os, v_id_equipo, v_conformes);
 
     SELECT 2 AS IdTipoMensaje, 'Éxito.' AS Mensaje;
 
@@ -190,7 +114,8 @@ proc: BEGIN
     SELECT s.orden, s.codigo, s.nombre, s.estado, s.detalle, s.disponible FROM tmp_etapas_mov s ORDER BY s.orden;
 
     DROP TEMPORARY TABLE IF EXISTS tmp_etapas_mov;
+    DROP TEMPORARY TABLE IF EXISTS tmp_pend_eq;
     DROP TEMPORARY TABLE IF EXISTS tmp_obj_mov;
-END$$
+END$
 
 DELIMITER ;

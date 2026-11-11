@@ -295,6 +295,13 @@ builder.Services.AddScoped<ObtenerEvidenciasMovilCasoDeUso>();
 builder.Services.AddScoped<RegistrarEvidenciaMovilCasoDeUso>();
 builder.Services.AddScoped<ForzarEvidenciaMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerArchivoEvidenciaMovilCasoDeUso>();
+// App Mobile HU-15 / HU-16 — cabecera del informe (Datos · Detalle Serv. · Observación y pruebas) y Hard Stop de cierre del trabajo en el equipo
+builder.Services.AddScoped<IInformeEquipoMovilRepositorio, InformeEquipoMovilRepositorio>();
+builder.Services.AddScoped<ObtenerCabeceraInformeMovilCasoDeUso>();
+builder.Services.AddScoped<GuardarCabeceraInformeMovilCasoDeUso>();
+builder.Services.AddScoped<SubirFotoFallaMovilCasoDeUso>();
+builder.Services.AddScoped<ValidarCierreEquipoMovilCasoDeUso>();
+builder.Services.AddScoped<GenerarInformeEquipoMovilCasoDeUso>();
 // App Mobile HU-19 — Asistente IA y Procedimientos (la IA y la lectura de los PDF oficiales se registran más abajo, junto a Gemini)
 builder.Services.AddScoped<IAsistenteMovilRepositorio, AsistenteMovilRepositorio>();
 builder.Services.AddScoped<ObtenerInicioAsistenteMovilCasoDeUso>();
@@ -321,6 +328,16 @@ builder.Services.AddScoped<RegistrarSeguimientoJefaturaMovilCasoDeUso>();
 builder.Services.AddScoped<ICorrelativosMovilRepositorio, CorrelativosMovilRepositorio>();
 builder.Services.AddScoped<CorrelativosTecnicoMovilCasoDeUso>();
 builder.Services.AddScoped<CorrelativosJefaturaMovilCasoDeUso>();
+// HU-17 — Firma de informes y constancia de servicio (app móvil)
+builder.Services.AddScoped<IFirmaConstanciaMovilRepositorio, FirmaConstanciaMovilRepositorio>();
+builder.Services.AddSingleton<IGeneradorConstanciaPdf, GeneradorConstanciaPdf>();
+builder.Services.AddScoped<ObtenerFirmasMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerResumenFirmasMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerConstanciaMovilCasoDeUso>();
+builder.Services.AddScoped<CierreServicioMovilCasoDeUso>();
+builder.Services.AddScoped<FirmarResponsableMovilCasoDeUso>();
+builder.Services.AddScoped<FirmarConstanciaMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerArchivoConstanciaMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerAprobacionesMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerAprobacionSalidaMovilCasoDeUso>();
 builder.Services.AddScoped<ResolverAprobacionSalidaMovilCasoDeUso>();

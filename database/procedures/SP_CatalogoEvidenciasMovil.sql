@@ -15,7 +15,9 @@ BEGIN
     CREATE TEMPORARY TABLE tmp_cat_evid (
         orden INT NOT NULL, codigo VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci, nombre VARCHAR(60) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
         descripcion VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci, obligatoria TINYINT DEFAULT 0, medio VARCHAR(6) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
-        id_tipo INT NOT NULL, PRIMARY KEY (orden));
+        id_tipo INT NOT NULL,
+        -- Los llena SP_ResumenEvidenciasMovil (una sola vez): la última toma vigente está aprobada/forzada/omitida · fue forzada · quedó rechazada
+        completa TINYINT NOT NULL DEFAULT 0, forzada TINYINT NOT NULL DEFAULT 0, rechazada TINYINT NOT NULL DEFAULT 0, PRIMARY KEY (orden));
     INSERT INTO tmp_cat_evid (orden, codigo, nombre, descripcion, obligatoria, medio, id_tipo) VALUES
         (1, 'placa',      'Placa de identificación', 'Especificaciones del equipo', 1, 'foto',  1),
         (2, 'inicial',    'Inicial',                 'Estado inicial del equipo',   1, 'foto',  1),
