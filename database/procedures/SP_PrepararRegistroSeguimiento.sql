@@ -6,7 +6,7 @@
 --   2 cabecera: propuesta, cliente, contacto por defecto, usuario actual, fecha del servidor,
 --     próxima acción actual y sugerencias (canal y plantilla) para el botón "Ejecutar ahora"
 --   3 tipos de seguimiento (CANAL_COMUNICACION con Num2 = 1)
---   4 resultados (RESULTADO_SEGUIMIENTO)
+--   4 resultados (RESULTADO_SEGUIMIENTO, con requiere_duracion = Num2)
 --   5 contactos del cliente
 --   6 tipos de tarea de la próxima acción (TIPO_ACCION_SEGUIMIENTO)
 --   7 prioridades (PRIORIDAD)
@@ -95,8 +95,9 @@ BEGIN
             WHERE IdMaestro = 26 AND IdEmpresa = 1 AND Num2 = 1
             ORDER BY FIELD(String2, 'LLAMADA', 'CORREO', 'WHATSAPP', 'REUNION', 'VISITA'), Num1;
 
-            -- 4. Resultados
-            SELECT Num1 AS id, String1 AS nombre, String2 AS codigo
+            -- 4. Resultados (requiere_duracion = Num2: la llamada exige duración y notas)
+            SELECT Num1 AS id, String1 AS nombre, String2 AS codigo,
+                   (IFNULL(Num2, 0) = 1) AS requiere_duracion
             FROM tabla_maestra
             WHERE IdMaestro = 27 AND IdEmpresa = 1
             ORDER BY Num1;

@@ -6,7 +6,8 @@
 --   Propuesta en seguimiento ABIERTO y del área del usuario, acción propuesta_seguimiento_registrar.
 --   Fecha de la interacción (NULL = ahora) no futura y no anterior al envío de la propuesta.
 --   Notas obligatorias (mínimo 5 caracteres) salvo en correos, que llevan asunto.
---   Llamada: duración obligatoria entre 0 y 600 minutos.
+--   Llamada: duración obligatoria entre 0 y 600 minutos, solo si el resultado tiene Num2 = 1
+--   (conversación efectiva, migración 106). Si no (No contesta, Buzón...), duración y notas opcionales.
 --   Próxima acción (p_programar = 1): tipo, fecha futura, responsable activo del área y prioridad.
 --   Sin próxima acción (p_programar = 0) se mantiene la acción pendiente del seguimiento anterior,
 --   salvo que p_ejecuta_accion = 1 (se registró desde "Ejecutar ahora": la acción queda realizada).
@@ -62,6 +63,7 @@ proc: BEGIN
     DECLARE v_canal          INT;
     DECLARE v_canal_cod      VARCHAR(40)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_resultado      INT;
+    DECLARE v_requiere_dur   TINYINT DEFAULT 1;
     DECLARE v_notas          TEXT         CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_asunto         VARCHAR(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_programar      TINYINT DEFAULT 0;
@@ -129,7 +131,7 @@ proc: BEGIN
     END IF;
 
     -- Resultado
-    SELECT MAX(Num1) INTO v_resultado
+    SELECT MAX(Num1), IFNULL(MAX(Num2 = 1), 0) INTO v_resultado, v_requiere_dur
     FROM tabla_maestra
     WHERE IdMaestro = 27 AND IdEmpresa = 1
       AND ((p_id_resultado IS NOT NULL AND Num1 = p_id_resultado)
@@ -160,7 +162,18 @@ proc: BEGIN
     END IF;
 
     -- Notas, llamada y correo
-    IF v_canal_cod = 'CORREO' THEN
+    -- Llamada sin conversación efectiva (resultado con Num2 <> 1: No contesta, Buzón...):
+    -- duración y notas opcionales; si vienen, se validan y se guardan igual.
+    IF v_canal_cod = 'LLAMADA' AND v_requiere_dur = 0 THEN
+        IF v_notas IS NOT NULL AND CHAR_LENGTH(v_notas) < 5 THEN
+            SELECT 1 AS IdTipoMensaje, 'Si agrega notas, escriba al menos 5 caracteres.' AS Mensaje;
+            LEAVE proc;
+        END IF;
+        IF p_duracion_minutos < 0 OR p_duracion_minutos > 600 THEN
+            SELECT 1 AS IdTipoMensaje, 'La duración de la llamada debe estar entre 0 y 600 minutos.' AS Mensaje;
+            LEAVE proc;
+        END IF;
+    ELSEIF v_canal_cod = 'CORREO' THEN
         IF v_asunto IS NULL AND v_notas IS NULL THEN
             SELECT 1 AS IdTipoMensaje, 'Indique el asunto o el detalle del correo.' AS Mensaje;
             LEAVE proc;
@@ -172,7 +185,8 @@ proc: BEGIN
         LEAVE proc;
     END IF;
 
-    IF v_canal_cod = 'LLAMADA' AND (p_duracion_minutos IS NULL OR p_duracion_minutos < 0 OR p_duracion_minutos > 600) THEN
+    IF v_canal_cod = 'LLAMADA' AND v_requiere_dur = 1
+       AND (p_duracion_minutos IS NULL OR p_duracion_minutos < 0 OR p_duracion_minutos > 600) THEN
         SELECT 1 AS IdTipoMensaje, 'Indique la duración de la llamada en minutos (0 a 600).' AS Mensaje;
         LEAVE proc;
     END IF;
