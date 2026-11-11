@@ -280,6 +280,8 @@ public class FotoInformeDto
     public decimal?  Longitud          { get; init; }
     public bool      Georreferenciada  { get; init; }
     public string?   ValidacionIa      { get; init; }
+    /// <summary>true = la evidencia es un video MP4 (el momento de encendido): la miniatura se pide con ?cuadro=true y el visor reproduce el archivo sin cuadro.</summary>
+    public bool      EsVideo           { get; init; }
     public long?     IdObservacion     { get; init; }
     public string?   CodigoObservacion { get; init; }
 }

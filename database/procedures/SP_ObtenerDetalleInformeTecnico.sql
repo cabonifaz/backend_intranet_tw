@@ -129,6 +129,7 @@ proc: BEGIN
            f.timestamp_captura                                AS fecha_captura,
            f.latitud, f.longitud, (f.latitud IS NOT NULL AND f.longitud IS NOT NULL) AS georreferenciada,
            f.validacion_ia,
+           f.es_video,
            COALESCE(f.id_observacion, o.id_observacion)       AS id_observacion,
            COALESCE(ov.codigo, o.codigo)                      AS codigo_observacion
     FROM evidencia_fotografica f
