@@ -47,7 +47,12 @@ proc: BEGIN
     CREATE TEMPORARY TABLE tmp_sg_tf (id_usuario BIGINT NOT NULL, PRIMARY KEY (id_usuario));
     INSERT INTO tmp_sg_tf
     SELECT DISTINCT ut.id_usuario FROM tmp_sg_ut ut JOIN tmp_sg_f f ON f.id_os = ut.id_os
-    WHERE p_id_tecnico IS NULL OR ut.id_usuario = p_id_tecnico;
+    WHERE p_id_tecnico IS NULL OR ut.id_usuario = p_id_tecnico
+    UNION
+    -- HU-20: técnicos con la jornada iniciada y sin servicio programado hoy (solo cuando no hay filtros que los excluyan)
+    SELECT t.id_usuario FROM tmp_sg_tec t
+    WHERE t.n_servicios = 0 AND p_id_cliente IS NULL AND (p_id_tecnico IS NULL OR t.id_usuario = p_id_tecnico)
+      AND NULLIF(p_zona, '') IS NULL AND NULLIF(TRIM(p_busqueda), '') IS NULL;
     IF NULLIF(p_estado, '') IS NOT NULL THEN
         DELETE tf FROM tmp_sg_tf tf JOIN tmp_sg_tec t ON t.id_usuario = tf.id_usuario WHERE t.estado_seg <> p_estado;
     END IF;
