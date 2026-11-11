@@ -743,6 +743,7 @@ builder.Services.AddScoped<GuardarPrecotizacionInformeCasoDeUso>();
 builder.Services.AddScoped<PrepararRevisionInformeCasoDeUso>();
 builder.Services.AddScoped<RegistrarRevisionInformeCasoDeUso>();
 builder.Services.AddScoped<ObtenerHistorialInformeCasoDeUso>();
+builder.Services.AddScoped<ObtenerArchivoFotoInformeCasoDeUso>();
 builder.Services.AddScoped<ObtenerBandejaPrecotizacionesCasoDeUso>();
 builder.Services.AddScoped<ObtenerDetallePrecotizacionCasoDeUso>();
 builder.Services.AddScoped<ObtenerPrecargaPrecotizacionCasoDeUso>();

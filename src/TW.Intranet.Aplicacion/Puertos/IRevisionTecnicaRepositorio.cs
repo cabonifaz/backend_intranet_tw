@@ -13,6 +13,7 @@ public interface IRevisionTecnicaRepositorio
     Task<RespuestaDto<PreparacionRevisionInformeDto>> PrepararRevisionAsync(long idInforme, long idUsuario, CancellationToken ct);
     Task<RespuestaDto<InformeRevisadoDto>> RegistrarRevisionAsync(long idInforme, string? nota, long idUsuario, CancellationToken ct);
     Task<RespuestaDto<HistorialInformeDto>> ObtenerHistorialAsync(long idInforme, string? categoria, long idUsuario, CancellationToken ct);
+    Task<RespuestaDto<ArchivoEvidenciaMovilDto>> ObtenerArchivoFotoAsync(long idInforme, long idEvidencia, long idUsuario, CancellationToken ct);
 
     // CRM › Precotizaciones Técnicas
     Task<RespuestaDto<BandejaPrecotizacionesDto>> ObtenerBandejaPrecotizacionesAsync(FiltrosPrecotizacionesDto filtros, long idUsuario, CancellationToken ct);

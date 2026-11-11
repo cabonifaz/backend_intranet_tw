@@ -260,6 +260,21 @@ public class ObtenerHistorialInformeCasoDeUso(IRevisionTecnicaRepositorio reposi
     }
 }
 
+/// <summary>HU-57 Pestaña "Fotos": el archivo (foto, video o, con cuadro, su miniatura) de una evidencia del informe, para la vista previa. Solo informes del alcance del usuario.</summary>
+public class ObtenerArchivoFotoInformeCasoDeUso(IRevisionTecnicaRepositorio repositorio, IAlmacenArchivos almacen)
+{
+    public async Task<(Stream? Contenido, string? TipoContenido, string? Mensaje)> EjecutarAsync(long idInforme, long idEvidencia, bool cuadro, long idUsuario, CancellationToken ct = default)
+    {
+        if (idInforme <= 0 || idEvidencia <= 0) return (null, null, "Foto no encontrada.");
+        var r = await repositorio.ObtenerArchivoFotoAsync(idInforme, idEvidencia, idUsuario, ct);
+        if (r.IdTipoMensaje != 2 || r.Datos is null) return (null, null, r.Mensaje);
+        var ruta = cuadro && r.Datos.RutaCuadro is not null ? r.Datos.RutaCuadro : r.Datos.Ruta;
+        var s = await almacen.AbrirLecturaAsync(ruta, ct);
+        if (s is null) return (null, null, "El archivo ya no está disponible.");
+        return (s, ruta.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase) ? "video/mp4" : "image/jpeg", null);
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
 // HU-60 Precotizaciones Técnicas (CRM)
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
