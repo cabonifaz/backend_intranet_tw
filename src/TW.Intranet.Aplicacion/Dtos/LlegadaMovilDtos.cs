@@ -21,7 +21,9 @@ public record LlegadaMovilDto(
     ReferenciaGpsMovilDto? Referencia, DateTime? SalidaEn, LlegadaRegistradaMovilDto? Llegada, bool PuedeRegistrar,
     int PrecisionMaximaMetros, string? MotivoNoRegistra,
     /// <summary>HU-20: punto de salida del viaje (coordenada del evento «Salida»), para dibujar la ruta prevista hasta la planta. Null si la app no la envió.</summary>
-    PuntoGpsLlegadaDto? Origen = null);
+    PuntoGpsLlegadaDto? Origen = null,
+    /// <summary>HU-06: la solicitud de llegada forzada de esta OS (pendiente | aprobada | rechazada). Null = no hay una vigente.</summary>
+    LlegadaForzadaEstadoDto? Forzada = null);
 
 /// <summary>
 /// Lo que la app envía para validar o registrar la llegada. CapturadoEn = hora (ISO 8601, UTC) en que el técnico confirmó en el teléfono:
@@ -36,7 +38,7 @@ public class PeticionLlegadaMovilDto
 }
 
 /// <summary>
-/// Comparación de la ubicación con la planta (no registra). Resultado: valida | fuera_rango | sin_referencia | precision_baja.
+/// Comparación de la ubicación con la planta (no registra). Resultado: valida | fuera_rango | sin_referencia | precision_baja | autorizada (fuera del rango pero Jefatura aprobó la llegada forzada).
 /// Registrable = se puede confirmar la llegada con esa ubicación.
 /// </summary>
 public record ValidacionLlegadaMovilDto(

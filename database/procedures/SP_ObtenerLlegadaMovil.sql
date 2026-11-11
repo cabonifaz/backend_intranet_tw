@@ -33,6 +33,11 @@ proc: BEGIN
     DECLARE v_ll_prec    DECIMAL(8,1);
     DECLARE v_ll_dist    INT;
     DECLARE v_puede      TINYINT DEFAULT 0;
+    DECLARE v_f_estado   VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
+    DECLARE v_f_coment   VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
+    DECLARE v_f_jefe     VARCHAR(210) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
+    DECLARE v_f_resuelta DATETIME DEFAULT NULL;
+    DECLARE v_f_usada    DATETIME DEFAULT NULL;
 
     SELECT os.estado INTO v_estado
     FROM   orden_servicio os
@@ -77,6 +82,15 @@ proc: BEGIN
 
     SET v_puede = IF(v_estado = 'en_ruta' AND v_ll_utc IS NULL, 1, 0);
 
+    -- Llegada forzada (HU-06): la última solicitud de esta OS y lo que respondió Jefatura
+    SELECT s.estado, s.comentario, NULLIF(TRIM(CONCAT(IFNULL(j.nombre, ''), ' ', IFNULL(j.apellido, ''))), ''), s.resuelto_en, s.usada_en
+    INTO   v_f_estado, v_f_coment, v_f_jefe, v_f_resuelta, v_f_usada
+    FROM   llegada_forzada_os s
+    LEFT JOIN usuario j ON j.id_usuario = s.id_jefe
+    WHERE  s.id_os = p_id_os AND s.eliminado_en IS NULL
+    ORDER BY s.id_solicitud DESC LIMIT 1;
+    IF v_f_usada IS NOT NULL THEN SET v_f_estado = NULL; END IF;   -- ya se usó: la llegada quedó registrada
+
     SELECT 2 AS IdTipoMensaje, 'Éxito.' AS Mensaje;
 
     SELECT os.id_os,
@@ -100,6 +114,10 @@ proc: BEGIN
            v_ll_dist                                                         AS llegada_distancia,
            IF(v_ll_utc IS NULL, NULL, IF(v_ll_dist IS NULL, 'sin_referencia', 'valida')) AS llegada_resultado,
            v_puede                                                           AS puede_registrar,
+           v_f_estado                                                        AS forzada_estado,
+           v_f_coment                                                        AS forzada_comentario,
+           v_f_jefe                                                          AS forzada_jefe,
+           v_f_resuelta                                                      AS forzada_resuelta_en,
            CASE WHEN v_puede = 1 THEN NULL
                 WHEN v_ll_utc IS NOT NULL THEN 'Ya registraste tu llegada.'
                 WHEN v_estado IN ('programada', 'reprogramada') THEN 'Primero inicia el traslado desde la validación antes de salir.'

@@ -14,6 +14,7 @@ public class LlegadaMovilController(
     ObtenerLlegadaMovilCasoDeUso    obtener,
     ValidarLlegadaMovilCasoDeUso    validar,
     RegistrarLlegadaMovilCasoDeUso  registrar,
+    SolicitarLlegadaForzadaMovilCasoDeUso forzada,
     ILogger<LlegadaMovilController> logger) : ControladorAppMovil(logger)
 {
     /// <summary>Contexto de la pantalla: planta esperada, radio permitido, hora programada y la llegada ya registrada. La OS debe ser del técnico del token.</summary>
@@ -35,4 +36,13 @@ public class LlegadaMovilController(
     [RequestSizeLimit(2 * 1024)]
     public async Task<IActionResult> Registrar(long idOs, [FromBody] PeticionLlegadaMovilDto? d, CancellationToken ct)
         => Responder(await registrar.EjecutarAsync(IdUsuarioActual, idOs, d, ct));
+
+    /// <summary>
+    /// Llegada forzada: el técnico, fuera del radio tras volver a capturar su ubicación (5 veces), pide a Jefatura que le autorice registrar la llegada.
+    /// Le llega al encargado del área (Aprobaciones); solo cuando la aprueba el técnico puede registrarla.
+    /// </summary>
+    [HttpPost("forzada")]
+    [RequestSizeLimit(4 * 1024)]
+    public async Task<IActionResult> SolicitarForzada(long idOs, [FromBody] PeticionLlegadaForzadaDto? d, CancellationToken ct)
+        => Responder(await forzada.EjecutarAsync(IdUsuarioActual, idOs, d, ct));
 }

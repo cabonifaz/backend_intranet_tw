@@ -8,6 +8,7 @@
 --   - Escribe lo mismo que el cambio manual "llegada" del Asistente, para que la bandeja de Seguimiento Operativo lo lea igual:
 --     evento_campo LLEGADA (GPS, precisión, distancia), orden_servicio.hora_llegada_real y latitud/longitud_llegada. La OS sigue "en ruta"
 --     (la bandeja la muestra "en planta"); pasa a "en ejecución" al iniciar el trabajo.
+--   - Fuera del radio SOLO se registra si Jefatura aprobó la llegada forzada (SP_SolicitarLlegadaForzadaMovil / SP_ResolverLlegadaForzada): la nota del evento lo dice y la aprobación se usa una vez.
 --   - Una sola llegada por viaje (evento posterior a la última SALIDA_BASE): repetir el envío responde éxito con la ya registrada
 --     (la app reintenta si la respuesta no le llegó).
 --   - Sin conexión: la app guarda la llegada en el teléfono y la envía al recuperar la señal con la hora en que se confirmó
@@ -151,9 +152,10 @@ proc: BEGIN
         END IF;
 
         SET v_notas = LEFT(CONCAT(
-            IF(v_resultado = 'valida',
-               CONCAT('Llegada validada por GPS a ', v_distancia, ' m de la planta (± ', ROUND(p_precision), ' m).'),
-               'Llegada sin referencia GPS de la planta: no se validó la distancia.'),
+            CASE v_resultado
+                WHEN 'valida'     THEN CONCAT('Llegada validada por GPS a ', v_distancia, ' m de la planta (± ', ROUND(p_precision), ' m).')
+                WHEN 'autorizada' THEN CONCAT('Llegada FORZADA: a ', v_distancia, ' m de la planta (fuera del radio de ', v_radio, ' m), autorizada por Jefatura.')
+                ELSE 'Llegada sin referencia GPS de la planta: no se validó la distancia.' END,
             IF(v_diferida = 1, ' Registrada sin conexión y enviada después.', '')), 1000);
 
         INSERT INTO evento_campo (id_os, id_usuario, id_tipo_evento, latitud, longitud, precision_metros, distancia_metros, timestamp_utc, sincronizado, notas, creado_por)
@@ -166,6 +168,12 @@ proc: BEGIN
         SET    hora_llegada_real = TIME(v_reg_lima), latitud_llegada = p_latitud, longitud_llegada = p_longitud,
                modificado_por = p_id_usuario, modificado_en = NOW()
         WHERE  id_os = p_id_os;
+
+        -- La aprobación de la llegada forzada se usa una sola vez
+        IF v_resultado = 'autorizada' THEN
+            UPDATE llegada_forzada_os SET usada_en = NOW(), modificado_por = p_id_usuario
+            WHERE  id_os = p_id_os AND estado = 'aprobada' AND usada_en IS NULL AND eliminado_en IS NULL;
+        END IF;
 
         INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion, id_usuario, registrado_en, metadata)
         VALUES ('orden_servicio', p_id_os, 'registrar_llegada', v_estado, v_estado,

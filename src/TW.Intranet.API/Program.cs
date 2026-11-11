@@ -270,6 +270,10 @@ builder.Services.AddScoped<ObtenerDemorasMovilCasoDeUso>();
 builder.Services.AddScoped<RegistrarDemoraMovilCasoDeUso>();
 // App Mobile HU-06 — registro de llegada y Hard Stop
 builder.Services.AddScoped<ILlegadaMovilRepositorio, LlegadaMovilRepositorio>();
+builder.Services.AddScoped<ILlegadaForzadaRepositorio, LlegadaForzadaRepositorio>();
+builder.Services.AddScoped<SolicitarLlegadaForzadaMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerAprobacionLlegadaMovilCasoDeUso>();
+builder.Services.AddScoped<ResolverAprobacionLlegadaMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerLlegadaMovilCasoDeUso>();
 builder.Services.AddScoped<ValidarLlegadaMovilCasoDeUso>();
 builder.Services.AddScoped<RegistrarLlegadaMovilCasoDeUso>();

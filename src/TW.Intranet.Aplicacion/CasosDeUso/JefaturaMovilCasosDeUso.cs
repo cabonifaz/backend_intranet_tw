@@ -33,7 +33,7 @@ internal static class HoraLima
 /// técnicos (HU-04); las evidencias forzadas, los ensayos con error y los gastos se suman cuando existan sus módulos.
 /// Reutiliza el SP de la intranet, que ya filtra por el área del jefe según la RQ. Urgentes primero (el servicio es de hoy).
 /// </summary>
-public class ObtenerAprobacionesMovilCasoDeUso(IAutorizacionSalidaRepositorio autorizaciones)
+public class ObtenerAprobacionesMovilCasoDeUso(IAutorizacionSalidaRepositorio autorizaciones, ILlegadaForzadaRepositorio llegadas)
 {
     public async Task<RespuestaDto<AprobacionesMovilDto>> EjecutarAsync(long idUsuario, CancellationToken ct = default)
     {
@@ -50,13 +50,20 @@ public class ObtenerAprobacionesMovilCasoDeUso(IAutorizacionSalidaRepositorio au
         if (r.IdTipoMensaje != 2 || r.Datos is null)
             return new(r.IdTipoMensaje, r.Mensaje);
 
-        return new(2, r.Mensaje, Armar(r.Datos, HoraLima.Hoy()));
+        // Llegadas forzadas pendientes (HU-06): mismas áreas que las salidas; si no se pueden leer, la bandeja sigue con las salidas
+        var lf = await llegadas.ObtenerAsync(idUsuario, 0, ct);
+        var forzadas = lf is { IdTipoMensaje: 2, Datos: not null } ? lf.Datos : [];
+
+        return new(2, r.Mensaje, Armar(r.Datos, forzadas, HoraLima.Hoy()));
     }
 
     /// <summary>Convierte las solicitudes pendientes en la bandeja (pública para poder probarla sin base de datos).</summary>
-    public static AprobacionesMovilDto Armar(IEnumerable<AutorizacionSalidaBandejaDto> pendientes, string hoy)
+    public static AprobacionesMovilDto Armar(IEnumerable<AutorizacionSalidaBandejaDto> pendientes, string hoy) => Armar(pendientes, [], hoy);
+
+    /// <summary>Salidas y llegadas forzadas pendientes. La llegada forzada es siempre urgente: el técnico está esperando en la planta.</summary>
+    public static AprobacionesMovilDto Armar(IEnumerable<AutorizacionSalidaBandejaDto> pendientes, IEnumerable<SolicitudLlegadaForzadaDto> llegadasForzadas, string hoy)
     {
-        var items = pendientes
+        var salidas = pendientes
             .Where(a => a.Estado == "pendiente")
             .Select(a => new AprobacionMovilDto(
                 "salida", a.IdOs, "Autorización de salida", a.NumeroOs, a.Tecnico, a.Cliente,
@@ -64,11 +71,24 @@ public class ObtenerAprobacionesMovilCasoDeUso(IAutorizacionSalidaRepositorio au
                 a.FechaEjecucion, a.HoraInicio,
                 Urgente: a.FechaEjecucion is { Length: >= 10 } f && f[..10] == hoy,
                 a.SolicitadaEn))
+            .ToList();
+
+        var forzadas = llegadasForzadas
+            .Where(l => l.Estado == "pendiente")
+            .Select(l => new AprobacionMovilDto(
+                "llegada", l.IdOs, "Llegada forzada", l.NumeroOs, l.Tecnico, l.Cliente,
+                l.DistanciaMetros is { } m ? $"a {m:N0} m de la planta (permitido {l.RadioMetros} m)" : "fuera del radio permitido",
+                l.FechaEjecucion, l.HoraInicio, Urgente: true, l.SolicitadaEn))
+            .ToList();
+
+        var items = forzadas.Concat(salidas)
             .OrderByDescending(i => i.Urgente)
             .ThenByDescending(i => i.SolicitadaEn)
             .ToList();
 
-        var tipos = new List<TipoAprobacionMovilDto> { new("salida", items.Count) };
+        var tipos = new List<TipoAprobacionMovilDto>();
+        if (salidas.Count > 0 || forzadas.Count == 0) tipos.Add(new("salida", salidas.Count));
+        if (forzadas.Count > 0) tipos.Add(new("llegada", forzadas.Count));
         return new AprobacionesMovilDto(items.Count, items.Count(i => i.Urgente), tipos, items);
     }
 }

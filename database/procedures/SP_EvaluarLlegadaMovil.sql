@@ -9,6 +9,7 @@
 --     sin_referencia  la planta no tiene coordenada: se puede registrar, queda sin validar distancia
 --     valida          dentro del radio permitido
 --     fuera_rango     fuera del radio: no se puede registrar
+--     autorizada      fuera del radio, pero Jefatura aprobó la llegada forzada (llegada_forzada_os, aprobada y sin usar): se puede registrar UNA vez
 --   p_registrable: 1 = se puede confirmar la llegada. p_mensaje: texto para el técnico. Distancia por Haversine (m).
 -- ============================================================
 DROP PROCEDURE IF EXISTS SP_EvaluarLlegadaMovil;
@@ -69,6 +70,12 @@ BEGIN
             SET p_resultado   = 'fuera_rango';
             SET p_registrable = 0;
             SET p_mensaje     = CONCAT('Estás a ', FORMAT(p_distancia, 0), ' m de la planta (máximo ', p_radio, ' m). Acércate para registrar tu llegada.');
+            -- Llegada forzada aprobada por Jefatura (HU-06): se puede registrar aunque esté fuera del radio, una sola vez
+            IF EXISTS (SELECT 1 FROM llegada_forzada_os f WHERE f.id_os = p_id_os AND f.estado = 'aprobada' AND f.usada_en IS NULL AND f.eliminado_en IS NULL) THEN
+                SET p_resultado   = 'autorizada';
+                SET p_registrable = 1;
+                SET p_mensaje     = CONCAT('Jefatura autorizó tu llegada (estás a ', FORMAT(p_distancia, 0), ' m de la planta). Ya puedes confirmarla.');
+            END IF;
         END IF;
     END IF;
 END$$
