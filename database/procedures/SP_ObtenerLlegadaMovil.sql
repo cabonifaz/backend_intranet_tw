@@ -25,6 +25,8 @@ proc: BEGIN
     DECLARE v_pmax       DECIMAL(18,6);
     DECLARE v_lat_ref    DECIMAL(10,7);
     DECLARE v_lon_ref    DECIMAL(10,7);
+    DECLARE v_o_lat      DECIMAL(10,7) DEFAULT NULL;
+    DECLARE v_o_lon      DECIMAL(10,7) DEFAULT NULL;
     DECLARE v_ll_utc     DATETIME;
     DECLARE v_ll_lat     DECIMAL(10,7);
     DECLARE v_ll_lon     DECIMAL(10,7);
@@ -52,10 +54,20 @@ proc: BEGIN
     JOIN   tabla_maestra m ON m.IdMaestro = 29 AND m.IdEmpresa = 1 AND m.Num1 = e.id_tipo_evento AND m.String2 = 'SALIDA_BASE'
     WHERE  e.id_os = p_id_os AND e.eliminado_en IS NULL;
 
-    SELECT COALESCE(s.latitud, os.latitud_llegada), COALESCE(s.longitud, os.longitud_llegada) INTO v_lat_ref, v_lon_ref
+    SELECT COALESCE(sc.latitud, s.latitud, sc2.latitud, os.latitud_llegada), COALESCE(sc.longitud, s.longitud, sc2.longitud, os.longitud_llegada) INTO v_lat_ref, v_lon_ref
     FROM   orden_servicio os
-    LEFT JOIN sede s ON s.id_sede = os.id_sede AND s.id_cliente = os.id_cliente AND s.eliminado_en IS NULL
+    LEFT JOIN sede_cliente sc  ON sc.id_sede = os.id_sede AND sc.SoftDelete = 0
+    LEFT JOIN sede s           ON s.id_sede = os.id_sede AND s.id_cliente = os.id_cliente AND s.eliminado_en IS NULL
+    LEFT JOIN requerimiento rq ON rq.id_requerimiento = os.id_requerimiento
+    LEFT JOIN sede_cliente sc2 ON sc2.id_sede = rq.id_sede AND sc2.SoftDelete = 0
     WHERE  os.id_os = p_id_os;
+
+    -- Punto de salida (HU-20): la coordenada del evento «Salida» de este viaje
+    SELECT e.latitud, e.longitud INTO v_o_lat, v_o_lon
+    FROM   evento_campo e
+    JOIN   tabla_maestra m ON m.IdMaestro = 29 AND m.IdEmpresa = 1 AND m.Num1 = e.id_tipo_evento AND m.String2 = 'SALIDA_BASE'
+    WHERE  e.id_os = p_id_os AND e.eliminado_en IS NULL AND e.latitud IS NOT NULL AND e.longitud IS NOT NULL
+    ORDER BY e.timestamp_utc DESC, e.id_evento DESC LIMIT 1;
 
     SELECT e.timestamp_utc, e.latitud, e.longitud, e.precision_metros, e.distancia_metros INTO v_ll_utc, v_ll_lat, v_ll_lon, v_ll_prec, v_ll_dist
     FROM   evento_campo e
@@ -76,6 +88,8 @@ proc: BEGIN
            TIME_FORMAT(os.hora_inicio, '%H:%i')                              AS hora_programada,
            v_lat_ref                                                         AS lat_ref,
            v_lon_ref                                                         AS lon_ref,
+           v_o_lat                                                           AS origen_lat,
+           v_o_lon                                                           AS origen_lon,
            ROUND(v_radio)                                                    AS radio_m,
            ROUND(v_pmax)                                                     AS precision_max_m,
            IF(v_salida_utc IS NULL, NULL, CONVERT_TZ(v_salida_utc, '+00:00', '-05:00')) AS salida_en,

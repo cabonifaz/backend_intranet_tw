@@ -41,7 +41,8 @@ public class LlegadaMovilRepositorio(CadenaConexionBd conexion)
                         EnteroNulo(r, "llegada_distancia"), Texto(r, "llegada_resultado")),
                     Booleano(r, "puede_registrar"),
                     Entero(r, "precision_max_m"),
-                    Texto(r, "motivo_no_registra")));
+                    Texto(r, "motivo_no_registra"),
+                    DecimalNulo(r, "origen_lat") is { } olat && DecimalNulo(r, "origen_lon") is { } olon ? new PuntoGpsLlegadaDto(olat, olon) : null));
             }, ct);
 
     public Task<RespuestaDto<ValidacionLlegadaMovilDto>> ValidarAsync(
