@@ -25,7 +25,9 @@ public class NotificacionesMovilRepositorio(CadenaConexionBd conexion)
                         EnteroLargoNulo(r, "id_entidad"),
                         Booleano(r, "leida"),
                         FechaHora(r, "fecha_creacion"),
-                        Texto(r, "pendientes_aprobados")));
+                        Texto(r, "pendientes_aprobados"),
+                        Texto(r, "prioridad"),
+                        Booleano(r, "critica")));
                 return new RespuestaDto<List<NotificacionMovilDto>>(2, mensaje, lista);
             }, ct);
 

@@ -109,7 +109,11 @@ public class RegistrarSeguimientoCasoDeUso(ISeguimientoComercialRepositorio repo
     }
 }
 
-/// <summary>Registro específico de llamada: fecha y hora, duración, resultado y notas obligatorias.</summary>
+/// <summary>
+/// Registro específico de llamada: fecha y hora, resultado y, si el resultado implica conversación
+/// efectiva (flag requiere_duracion del catálogo), duración y notas obligatorias. Esa regla la aplica
+/// SP_RegistrarSeguimiento porque depende del catálogo.
+/// </summary>
 public class RegistrarLlamadaSeguimientoCasoDeUso(ISeguimientoComercialRepositorio repositorio)
 {
     public async Task<RespuestaDto<ResultadoRegistroSeguimientoDto>> EjecutarAsync(
@@ -117,10 +121,9 @@ public class RegistrarLlamadaSeguimientoCasoDeUso(ISeguimientoComercialRepositor
     {
         if (idPropuesta <= 0)                  return new(1, "Propuesta no válida.");
         if (dto.FechaInteraccion is null)      return new(1, "Indique la fecha y hora de la llamada.");
-        if (dto.DuracionMinutos is null or < 0 or > 600)
-                                               return new(1, "Indique la duración de la llamada en minutos (0 a 600).");
         if (dto.IdResultado is null or <= 0)   return new(1, "Seleccione el resultado de la llamada.");
-        if ((dto.Notas?.Trim().Length ?? 0) < 5) return new(1, "Describa los puntos clave de la llamada (mínimo 5 caracteres).");
+        if (dto.DuracionMinutos is < 0 or > 600)
+                                               return new(1, "La duración de la llamada debe estar entre 0 y 600 minutos.");
         if (ValidacionSeguimiento.Notas(dto.Notas) is { } e1) return new(1, e1);
         if (ValidacionSeguimiento.ProximaAccion(dto.ProgramarProximaAccion, dto.ProximaAccion) is { } e2) return new(1, e2);
 

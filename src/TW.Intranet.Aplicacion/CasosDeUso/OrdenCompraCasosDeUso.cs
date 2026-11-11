@@ -534,7 +534,8 @@ public class CompararOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio, I
 /// Si la decisión es "nueva versión", genera la versión nueva de cada propuesta y la vincula a la OC.
 /// </summary>
 public class RegistrarOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio, IAsistenteIaOrdenCompra ia,
-                                           IPropuestasRepositorio propuestas, IAlmacenArchivos almacen)
+                                           IPropuestasRepositorio propuestas, IAlmacenArchivos almacen,
+                                           INotificadorTiempoReal notificador)
 {
     public const long TamanoMaximoBytes = PdfOrdenCompra.TamanoMaximoBytes;
 
@@ -592,6 +593,12 @@ public class RegistrarOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio, 
 
         // 5. "Generar nueva versión de propuesta"
         var nuevas = await EvaluacionIaOrdenCompra.GenerarNuevasVersionesAsync(repositorio, propuestas, registro.Datos, idUsuario, ct);
+
+        // 6. HU-90 tiempo real: refrescar bandejas de OC y fichas abiertas
+        var oc = registro.Datos.Oc;
+        await notificador.OcRegistradaAsync(oc.IdOc, oc.NumeroOc, oc.Estado,
+                                            registro.Datos.Vinculaciones.Select(v => v.IdPropuesta).Append(idPropuesta), autogenerada: false);
+
         return registro with { Datos = registro.Datos with { NuevasVersiones = nuevas, AvisoIa = avisoIa } };
     }
 }
@@ -749,12 +756,17 @@ public class RevalidarOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio, 
 // ══════════════════════ OC autogenerada y anulación ══════════════════════
 
 /// <summary>"Generar OC automáticamente" cuando el cliente no emite OC: OC-AUTO con el 100% de la propuesta, sin PDF.</summary>
-public class AutogenerarOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio)
+public class AutogenerarOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio, INotificadorTiempoReal notificador)
 {
-    public Task<RespuestaDto<OcAutogeneradaDto>> EjecutarAsync(long idPropuesta, long idUsuario, CancellationToken ct = default) =>
-        idPropuesta <= 0
-            ? Task.FromResult(new RespuestaDto<OcAutogeneradaDto>(1, "Propuesta no válida."))
-            : repositorio.AutogenerarAsync(idPropuesta, idUsuario, ct);
+    public async Task<RespuestaDto<OcAutogeneradaDto>> EjecutarAsync(long idPropuesta, long idUsuario, CancellationToken ct = default)
+    {
+        if (idPropuesta <= 0) return new RespuestaDto<OcAutogeneradaDto>(1, "Propuesta no válida.");
+
+        var r = await repositorio.AutogenerarAsync(idPropuesta, idUsuario, ct);
+        if (r.IdTipoMensaje == 2 && r.Datos is { } oc)
+            await notificador.OcRegistradaAsync(oc.IdOc, oc.NumeroOc, oc.Estado, [idPropuesta], autogenerada: true);
+        return r;
+    }
 }
 
 /// <summary>Modal de anulación: impacto (propuestas, saldos y OS en ejecución) y motivos.</summary>
@@ -767,19 +779,22 @@ public class PrepararAnulacionOrdenCompraCasoDeUso(IOrdenCompraRepositorio repos
 }
 
 /// <summary>Anula la OC: motivo, justificación (mínimo 20 caracteres) y confirmación del impacto si hay OS en ejecución.</summary>
-public class AnularOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio)
+public class AnularOrdenCompraCasoDeUso(IOrdenCompraRepositorio repositorio, INotificadorTiempoReal notificador)
 {
-    public Task<RespuestaDto<AnulacionOrdenCompraDto>> EjecutarAsync(long idOc, AnularOrdenCompraSolicitudDto s, long idUsuario,
-                                                                     CancellationToken ct = default)
+    public async Task<RespuestaDto<AnulacionOrdenCompraDto>> EjecutarAsync(long idOc, AnularOrdenCompraSolicitudDto s, long idUsuario,
+                                                                           CancellationToken ct = default)
     {
         if (idOc <= 0)
-            return Task.FromResult(new RespuestaDto<AnulacionOrdenCompraDto>(1, "Orden de compra no válida."));
+            return new RespuestaDto<AnulacionOrdenCompraDto>(1, "Orden de compra no válida.");
         var solicitud = new AnularOrdenCompraSolicitudDto
         {
             IdMotivo        = s.IdMotivo is > 0 ? s.IdMotivo : null,
             Justificacion   = s.Justificacion?.Trim(),
             ConfirmaImpacto = s.ConfirmaImpacto,
         };
-        return repositorio.AnularAsync(idOc, solicitud, idUsuario, ct);
+        var r = await repositorio.AnularAsync(idOc, solicitud, idUsuario, ct);
+        if (r.IdTipoMensaje == 2 && r.Datos is { } d)
+            await notificador.OcAnuladaAsync(d);
+        return r;
     }
 }

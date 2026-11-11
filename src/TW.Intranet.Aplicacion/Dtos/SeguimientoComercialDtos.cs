@@ -365,7 +365,8 @@ public record CabeceraRegistroSeguimientoDto
     public string?   PlantillaSugeridaCodigo  { get; init; }
 }
 
-public record OpcionSeguimientoDto(int Id, string Nombre, string? Codigo);
+/// <param name="RequiereDuracion">Solo en resultados de seguimiento: la llamada exige duración y notas.</param>
+public record OpcionSeguimientoDto(int Id, string Nombre, string? Codigo, bool RequiereDuracion = false);
 
 public record ContactoRegistroSeguimientoDto(
     long    IdContacto,

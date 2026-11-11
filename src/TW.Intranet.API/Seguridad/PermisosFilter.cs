@@ -43,12 +43,7 @@ public class PermisosFilter(
             .Select(a => a == "@catalogo" ? AccionDeCatalogo(contexto.RouteData.Values["descripcion"]?.ToString()) : a)
             .ToArray();
 
-        var permitidas = await cache.GetOrCreateAsync($"acciones:{idUsuario}", async entrada =>
-        {
-            entrada.AbsoluteExpirationRelativeToNow = DuracionCache;
-            var r = await obtenerAcciones.EjecutarAsync(idUsuario, contexto.HttpContext.RequestAborted);
-            return r.IdTipoMensaje == 2 && r.Datos is not null ? r.Datos : new List<AccionPermitidaDto>();
-        }) ?? [];
+        var permitidas = await ObtenerAccionesAsync(obtenerAcciones, cache, idUsuario, contexto.HttpContext.RequestAborted);
 
         if (permitidas.Any(p => p.Permitido && acciones.Contains(p.Accion)))
             return;
@@ -59,6 +54,16 @@ public class PermisosFilter(
             ? $"La acción \"{acciones[0]}\" no está configurada en el sistema."
             : $"No tiene permiso para: {accion.AccionLabel}.");
     }
+
+    /// <summary>Acciones del usuario (SP_ObtenerAccionesUsuario) con la misma caché de 30 s. También la usa el hub de notificaciones.</summary>
+    public static async Task<List<AccionPermitidaDto>> ObtenerAccionesAsync(
+        ObtenerMisAccionesCasoDeUso obtenerAcciones, IMemoryCache cache, long idUsuario, CancellationToken ct)
+        => await cache.GetOrCreateAsync($"acciones:{idUsuario}", async entrada =>
+        {
+            entrada.AbsoluteExpirationRelativeToNow = DuracionCache;
+            var r = await obtenerAcciones.EjecutarAsync(idUsuario, ct);
+            return r.IdTipoMensaje == 2 && r.Datos is not null ? r.Datos : new List<AccionPermitidaDto>();
+        }) ?? [];
 
     /// <summary>Invalida la caché de un usuario (por ejemplo, al cambiarle el rol o el área).</summary>
     public static void Invalidar(IMemoryCache cache, long idUsuario) => cache.Remove($"acciones:{idUsuario}");

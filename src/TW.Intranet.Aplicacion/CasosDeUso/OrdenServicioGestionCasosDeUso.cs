@@ -45,9 +45,17 @@ public class PrepararOrdenServicioCasoDeUso(IOrdenServicioRepositorio repositori
 }
 
 /// <summary>Guardar borrador, Emitir, o Guardar cambios y re-emitir (con edición aprobada). idOs = 0: nueva.</summary>
-public class GuardarOrdenServicioCasoDeUso(IOrdenServicioRepositorio repositorio)
+public class GuardarOrdenServicioCasoDeUso(IOrdenServicioRepositorio repositorio, INotificadorTiempoReal notificador)
 {
-    public Task<RespuestaDto<OrdenServicioGuardadaDto>> EjecutarAsync(long idOs, GuardarOrdenServicioDto? d, long idUsuario, CancellationToken ct = default)
+    public async Task<RespuestaDto<OrdenServicioGuardadaDto>> EjecutarAsync(long idOs, GuardarOrdenServicioDto? d, long idUsuario, CancellationToken ct = default)
+    {
+        var r = await ValidarYGuardarAsync(idOs, d, idUsuario, ct);
+        if (r.IdTipoMensaje == 2 && r.Datos is { } os)
+            await notificador.OsEmitidaAsync(os, reemitida: idOs > 0);
+        return r;
+    }
+
+    private Task<RespuestaDto<OrdenServicioGuardadaDto>> ValidarYGuardarAsync(long idOs, GuardarOrdenServicioDto? d, long idUsuario, CancellationToken ct)
     {
         static Task<RespuestaDto<OrdenServicioGuardadaDto>> Error(string m) => Task.FromResult(new RespuestaDto<OrdenServicioGuardadaDto>(1, m));
 
@@ -155,17 +163,21 @@ public class PrepararAnulacionOsCasoDeUso(IOrdenServicioRepositorio repositorio)
 }
 
 /// <summary>Anular: motivo tipificado + justificación (20 a 500 caracteres).</summary>
-public class AnularOrdenServicioCasoDeUso(IOrdenServicioRepositorio repositorio)
+public class AnularOrdenServicioCasoDeUso(IOrdenServicioRepositorio repositorio, INotificadorTiempoReal notificador)
 {
-    public Task<RespuestaDto<AnulacionOrdenServicioDto>> EjecutarAsync(long idOs, AnularOrdenServicioDto? d, long idUsuario, CancellationToken ct = default)
+    public async Task<RespuestaDto<AnulacionOrdenServicioDto>> EjecutarAsync(long idOs, AnularOrdenServicioDto? d, long idUsuario, CancellationToken ct = default)
     {
-        static Task<RespuestaDto<AnulacionOrdenServicioDto>> Error(string m) => Task.FromResult(new RespuestaDto<AnulacionOrdenServicioDto>(1, m));
+        static RespuestaDto<AnulacionOrdenServicioDto> Error(string m) => new(1, m);
         if (idOs <= 0) return Error("Orden no válida.");
         if (d is null || d.IdMotivo <= 0) return Error("Seleccione el motivo de anulación.");
         var comentario = d.Comentario?.Trim() ?? "";
         if (comentario.Length < 20) return Error("La justificación es obligatoria (mínimo 20 caracteres).");
         if (comentario.Length > 500) return Error("La justificación admite hasta 500 caracteres.");
-        return repositorio.AnularAsync(idOs, d.IdMotivo, comentario, idUsuario, ct);
+
+        var r = await repositorio.AnularAsync(idOs, d.IdMotivo, comentario, idUsuario, ct);
+        if (r.IdTipoMensaje == 2 && r.Datos is { } a)
+            await notificador.OsEstadoCambiadoAsync(a.IdOs, a.Numero, null, a.Estado);
+        return r;
     }
 }
 

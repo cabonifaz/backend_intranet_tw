@@ -23,9 +23,24 @@ builder.WebHost.ConfigureKestrel(opciones => opciones.AddServerHeader = false);
 builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: false);
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
-var origenesPermitidos = builder.Configuration["Cors:AllowedOrigins"]?
+// Orígenes EXPLÍCITOS (Cors__AllowedOrigins, separados por coma) con AllowCredentials: lo exige el cliente de SignalR.
+// Cada origen debe ser http(s)://dominio[:puerto], sin ruta; se ignora la "/" final. Los inválidos se descartan (advertencia en el log).
+// Si no hay ninguno válido, la API arranca igual pero NO permite orígenes cruzados (advertencia en el log). Nunca AllowAnyOrigin.
+var origenesInvalidos = new List<string>();
+var origenesPermitidos = (builder.Configuration["Cors:AllowedOrigins"] ?? "")
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-    ?? [];
+    .Select(o =>
+    {
+        if (Uri.TryCreate(o.TrimEnd('/'), UriKind.Absolute, out var uri)
+            && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
+            && uri.AbsolutePath == "/" && string.IsNullOrEmpty(uri.Query))
+            return uri.GetLeftPart(UriPartial.Authority);
+        origenesInvalidos.Add(o);
+        return null;
+    })
+    .OfType<string>()
+    .Distinct(StringComparer.OrdinalIgnoreCase)
+    .ToArray();
 
 builder.Services.AddCors(options =>
 {
@@ -34,9 +49,10 @@ builder.Services.AddCors(options =>
         if (origenesPermitidos.Length > 0)
             policy.WithOrigins(origenesPermitidos)
                   .AllowAnyHeader()
-                  .AllowAnyMethod();
+                  .AllowAnyMethod()
+                  .AllowCredentials();
         else
-            policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
+            policy.SetIsOriginAllowed(_ => false);
     });
 });
 
@@ -112,6 +128,21 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
         options.Events = new Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerEvents
         {
+            // HU-90 parte 2: por WebSocket el navegador no puede mandar la cabecera Authorization, así que el cliente de SignalR
+            // envía el JWT en la query (access_token). Se acepta SOLO en la ruta del hub; en cualquier otra ruta se ignora.
+            // La query no se escribe en ningún log (ver Logging en appsettings.json).
+            OnMessageReceived = context =>
+            {
+                if (string.IsNullOrEmpty(context.Token)
+                    && context.HttpContext.Request.Path.StartsWithSegments(TW.Intranet.API.TiempoReal.NotificacionesHub.Ruta, StringComparison.OrdinalIgnoreCase))
+                {
+                    var tokenQuery = context.Request.Query["access_token"].ToString();
+                    if (!string.IsNullOrEmpty(tokenQuery))
+                        context.Token = tokenQuery;
+                }
+                return Task.CompletedTask;
+            },
+
             OnTokenValidated = async context =>
             {
                 var claims      = context.Principal?.Claims;
@@ -253,8 +284,60 @@ builder.Services.AddScoped<RegistrarEquipoNuevoMovilCasoDeUso>();
 builder.Services.AddScoped<ITrabajoEquipoMovilRepositorio, TrabajoEquipoMovilRepositorio>();
 builder.Services.AddScoped<ObtenerTrabajoEquipoMovilCasoDeUso>();
 builder.Services.AddScoped<GuardarVariablesAmbientalesMovilCasoDeUso>();
+// App Mobile HU-10 — ensayos y calibración (pesaje y excentricidad)
+builder.Services.AddScoped<IEnsayosMovilRepositorio, EnsayosMovilRepositorio>();
+builder.Services.AddScoped<ObtenerEnsayosMovilCasoDeUso>();
+builder.Services.AddScoped<GuardarEnsayosMovilCasoDeUso>();
+builder.Services.AddScoped<RegistrarLlamadaEnsayoMovilCasoDeUso>();
+// App Mobile HU-11 / HU-12 / HU-13 — registro fotográfico con validación IA, evidencia forzada y microvideo de encendido
+builder.Services.AddScoped<IEvidenciasMovilRepositorio, EvidenciasMovilRepositorio>();
+builder.Services.AddScoped<ObtenerEvidenciasMovilCasoDeUso>();
+builder.Services.AddScoped<RegistrarEvidenciaMovilCasoDeUso>();
+builder.Services.AddScoped<ForzarEvidenciaMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerArchivoEvidenciaMovilCasoDeUso>();
+// App Mobile HU-15 / HU-16 — cabecera del informe (Datos · Detalle Serv. · Observación y pruebas) y Hard Stop de cierre del trabajo en el equipo
+builder.Services.AddScoped<IInformeEquipoMovilRepositorio, InformeEquipoMovilRepositorio>();
+builder.Services.AddScoped<ObtenerCabeceraInformeMovilCasoDeUso>();
+builder.Services.AddScoped<GuardarCabeceraInformeMovilCasoDeUso>();
+builder.Services.AddScoped<SubirFotoFallaMovilCasoDeUso>();
+builder.Services.AddScoped<ValidarCierreEquipoMovilCasoDeUso>();
+builder.Services.AddScoped<GenerarInformeEquipoMovilCasoDeUso>();
+// App Mobile HU-19 — Asistente IA y Procedimientos (la IA y la lectura de los PDF oficiales se registran más abajo, junto a Gemini)
+builder.Services.AddScoped<IAsistenteMovilRepositorio, AsistenteMovilRepositorio>();
+builder.Services.AddScoped<ObtenerInicioAsistenteMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerEquiposAsistenteMovilCasoDeUso>();
+builder.Services.AddScoped<ConsultarAsistenteMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerConsultaAsistenteMovilCasoDeUso>();
+builder.Services.AddScoped<ValorarConsultaAsistenteMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerFuenteAsistenteMovilCasoDeUso>();
+builder.Services.AddScoped<TranscribirVozAsistenteMovilCasoDeUso>();
+builder.Services.AddScoped<ListarGuardadosAsistenteMovilCasoDeUso>();
+builder.Services.AddScoped<GuardarAsistenteMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerGuardadoAsistenteMovilCasoDeUso>();
+builder.Services.AddScoped<EliminarGuardadoAsistenteMovilCasoDeUso>();
 // App Mobile HU-28 / HU-31 — menú de Jefatura y centro de aprobaciones
 builder.Services.AddScoped<ObtenerMenuJefaturaMovilCasoDeUso>();
+// HU-29 / HU-30 — Panel de campo y seguimiento del servicio del Jefe de Área
+builder.Services.AddScoped<IPanelCampoMovilRepositorio, PanelCampoMovilRepositorio>();
+builder.Services.AddScoped<ObtenerPanelCampoMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerServiciosJefaturaMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerServicioJefaturaMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerRutaServicioJefaturaMovilCasoDeUso>();
+builder.Services.AddScoped<RegistrarSeguimientoJefaturaMovilCasoDeUso>();
+// HU-14 / HU-34 — Correlativos de Metrología (técnico y Jefe de Metrología)
+builder.Services.AddScoped<ICorrelativosMovilRepositorio, CorrelativosMovilRepositorio>();
+builder.Services.AddScoped<CorrelativosTecnicoMovilCasoDeUso>();
+builder.Services.AddScoped<CorrelativosJefaturaMovilCasoDeUso>();
+// HU-17 — Firma de informes y constancia de servicio (app móvil)
+builder.Services.AddScoped<IFirmaConstanciaMovilRepositorio, FirmaConstanciaMovilRepositorio>();
+builder.Services.AddSingleton<IGeneradorConstanciaPdf, GeneradorConstanciaPdf>();
+builder.Services.AddScoped<ObtenerFirmasMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerResumenFirmasMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerConstanciaMovilCasoDeUso>();
+builder.Services.AddScoped<CierreServicioMovilCasoDeUso>();
+builder.Services.AddScoped<FirmarResponsableMovilCasoDeUso>();
+builder.Services.AddScoped<FirmarConstanciaMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerArchivoConstanciaMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerAprobacionesMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerAprobacionSalidaMovilCasoDeUso>();
 builder.Services.AddScoped<ResolverAprobacionSalidaMovilCasoDeUso>();
@@ -281,6 +364,33 @@ builder.Services.AddScoped<INotificacionesRepositorio,  NotificacionesRepositori
 builder.Services.AddScoped<ObtenerResumenDashboardCasoDeUso>();
 builder.Services.AddScoped<ObtenerAlertasOperativasCasoDeUso>();
 builder.Services.AddScoped<ObtenerNotificacionesCasoDeUso>();
+
+// Casos de uso — HU-90 Centro de Notificaciones (campana + bandeja /notificaciones)
+builder.Services.AddScoped<ObtenerResumenNotificacionesCasoDeUso>();
+builder.Services.AddScoped<ObtenerBandejaNotificacionesCasoDeUso>();
+builder.Services.AddScoped<ObtenerDetalleNotificacionCasoDeUso>();
+builder.Services.AddScoped<MarcarNotificacionesLeidasCasoDeUso>();
+builder.Services.AddScoped<ArchivarNotificacionCasoDeUso>();
+builder.Services.AddScoped<ObtenerFiltrosNotificacionesCasoDeUso>();
+builder.Services.AddScoped<GenerarAlertasOperativasCasoDeUso>();
+// HU-90: alertas operativas del Módulo 11 → notificaciones (AlertasOperativas:Habilitado / IntervaloSegundos)
+builder.Services.AddHostedService<TW.Intranet.API.Configuracion.AlertasOperativasWorker>();
+
+// ── HU-90 parte 2 — Tiempo real (SignalR, hub /hubs/notificaciones) ───────────
+// Una sola instancia en Railway: grupos en memoria, sin backplane. Si algún día hay varias réplicas, agregar el paquete
+// Microsoft.AspNetCore.SignalR.StackExchangeRedis y la variable Redis__Conexion (.AddStackExchangeRedis(...)).
+builder.Services.AddSignalR(o =>
+    {
+        o.EnableDetailedErrors      = false;
+        o.KeepAliveInterval         = TimeSpan.FromSeconds(15);
+        o.ClientTimeoutInterval     = TimeSpan.FromSeconds(30);
+        o.MaximumReceiveMessageSize = 16 * 1024;   // el cliente solo envía suscripciones
+    })
+    .AddJsonProtocol(o => o.PayloadSerializerOptions.Converters.Add(new TW.Intranet.API.Configuracion.FechaHoraLimaJsonConverter()));
+builder.Services.AddSingleton<INotificadorTiempoReal, TW.Intranet.API.TiempoReal.NotificadorSignalR>();
+builder.Services.AddScoped<ObtenerNotificacionesNuevasCasoDeUso>();
+// notificacion.creada sin tocar los SPs que insertan (TiempoReal:Habilitado / IntervaloSegundos)
+builder.Services.AddHostedService<TW.Intranet.API.TiempoReal.NotificacionesTiempoRealWorker>();
 
 // ── INYECCIÓN DE DEPENDENCIAS — Maestros ──────────────────────────────────────
 builder.Services.AddScoped<IMaestrosRepositorio, MaestrosRepositorio>();
@@ -468,7 +578,7 @@ builder.Services.AddScoped<PrepararAnulacionOrdenCompraCasoDeUso>();
 builder.Services.AddScoped<AnularOrdenCompraCasoDeUso>();
 
 // IA de órdenes de compra y de la importación de equipos de propuestas (Google Gemini, nivel gratuito de AI Studio).
-// Variables: Gemini__ApiKey, Gemini__Modelo (gemini-3.5-flash-lite), Gemini__UrlBase, Gemini__TimeoutSegundos (60).
+// Variables: Gemini__ApiKey, Gemini__Modelo (gemini-3.5-flash-lite), Gemini__UrlBase, Gemini__TimeoutSegundos (60), Gemini__ModeloAsistente (opcional, HU-19).
 // Sin ApiKey el módulo funciona igual: la ficha se llena a mano y la validación usa solo las reglas.
 var seccionGemini = cfg.GetSection("Gemini");
 var configuracionGemini = new ConfiguracionGemini(
@@ -491,12 +601,41 @@ if (configuracionGemini.Configurado)
         c.Timeout     = TimeSpan.FromSeconds(configuracionGemini.TimeoutSegundos);
         c.DefaultRequestHeaders.Accept.ParseAdd("application/json");
     });
+    // App Mobile HU-11 / HU-13: validación de las fotos del registro fotográfico
+    builder.Services.AddHttpClient<IValidadorEvidenciaIa, GeminiValidadorEvidencia>(c =>
+    {
+        c.BaseAddress = new Uri(configuracionGemini.UrlBase);
+        c.Timeout     = TimeSpan.FromSeconds(configuracionGemini.TimeoutSegundos);
+        c.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+    });
+    // App Mobile HU-19: Asistente IA y Procedimientos. Lee PDF y puede tardar más: mínimo 90 s. Modelo propio opcional: Gemini__ModeloAsistente.
+    builder.Services.AddSingleton(new ConfiguracionAsistenteGemini(seccionGemini["ModeloAsistente"]));
+    builder.Services.AddHttpClient<IAsistenteManuales, GeminiAsistenteManuales>(c =>
+    {
+        c.BaseAddress = new Uri(configuracionGemini.UrlBase);
+        c.Timeout     = TimeSpan.FromSeconds(Math.Max(90, configuracionGemini.TimeoutSegundos));
+        c.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+    });
 }
 else
 {
     builder.Services.AddSingleton<IAsistenteIaOrdenCompra, AsistenteIaOrdenCompraNoConfigurado>();
     builder.Services.AddSingleton<IAsistenteIaEquipos, AsistenteIaEquiposNoConfigurado>();
+    builder.Services.AddSingleton<IValidadorEvidenciaIa, ValidadorEvidenciaIaNoConfigurado>();
+    builder.Services.AddSingleton<IAsistenteManuales, AsistenteManualesNoConfigurado>();
 }
+
+// App Mobile HU-19: lectura de los PDF oficiales (procedimientos del almacenamiento y manuales por https). El cliente de los manuales NO sigue redirecciones por su cuenta,
+// no usa proxy y solo conecta a direcciones públicas ya validadas (GuardaUrlManual: anti-SSRF); la descarga se limita a 25 s y 15 MB.
+builder.Services.AddHttpClient<IDocumentosAsistente, DocumentosAsistente>(c => c.Timeout = TimeSpan.FromSeconds(25))
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+    {
+        AllowAutoRedirect        = false,
+        UseProxy                 = false,
+        ConnectTimeout           = TimeSpan.FromSeconds(10),
+        PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+        ConnectCallback          = GuardaUrlManual.ConectarAsync,
+    });
 
 // ── INYECCIÓN DE DEPENDENCIAS — Propuestas: importación de equipos desde Excel con IA (Sprint 4) ──
 builder.Services.AddScoped<IImportacionEquiposRepositorio, ImportacionEquiposRepositorio>();
@@ -756,6 +895,15 @@ if (string.IsNullOrWhiteSpace(rutaAlmacenamientoConfigurada) && !app.Environment
 else
     app.Logger.LogInformation("Almacenamiento de archivos en {Ruta}", configuracionAlmacenamiento.RutaBase);
 
+foreach (var origenInvalido in origenesInvalidos)
+    app.Logger.LogWarning("Cors:AllowedOrigins: se ignora el origen no válido \"{Origen}\" (use http(s)://dominio[:puerto] sin ruta).", origenInvalido);
+if (origenesPermitidos.Length == 0)
+    app.Logger.LogWarning(
+        "Cors:AllowedOrigins no está configurado: NO se permite ningún origen cruzado (el front no podrá llamar a la API ni conectarse " +
+        "al hub de notificaciones). Configure la variable Cors__AllowedOrigins.");
+else
+    app.Logger.LogInformation("CORS permitido para: {Origenes}", string.Join(", ", origenesPermitidos));
+
 if (!app.Environment.IsProduction())
 {
     app.MapOpenApi();
@@ -775,5 +923,11 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+// HU-90 parte 2: solo WebSockets (el cliente usa skipNegotiation); la conexión se cierra cuando vence el JWT.
+app.MapHub<TW.Intranet.API.TiempoReal.NotificacionesHub>(TW.Intranet.API.TiempoReal.NotificacionesHub.Ruta, o =>
+{
+    o.Transports                       = Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets;
+    o.CloseOnAuthenticationExpiration  = true;
+});
 
 app.Run();

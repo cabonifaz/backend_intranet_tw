@@ -9,6 +9,7 @@
 --   3. Toma un lote de recordatorios vencidos (fecha_notificar <= NOW()), crea la notificación en la
 --      plataforma (canal 5) para el responsable de la acción y los marca como enviados.
 -- p_limite: máximo de recordatorios por ejecución (NULL o menor a 1 = 200, tope 1000).
+-- HU-90 parte 2: GET_LOCK evita que dos instancias de la API procesen el mismo lote a la vez (la otra sale con 0 / 0 / 0).
 -- Resultados: 1 mensaje, 2 enviados, omitidos y cancelados.
 DROP PROCEDURE IF EXISTS SP_ProcesarRecordatoriosSeguimiento;
 
@@ -29,6 +30,7 @@ proc: BEGIN
     DECLARE v_id_prop     BIGINT;
     DECLARE v_titulo      VARCHAR(150) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_cuerpo      TEXT         CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_lock        INT DEFAULT 0;
 
     DECLARE c_lote CURSOR FOR
         SELECT r.id_recordatorio, r.id_usuario_destino, r.id_propuesta,
@@ -52,13 +54,22 @@ proc: BEGIN
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
-        ROLLBACK;
+        -- Primero el diagnóstico: ROLLBACK lo borra
         GET DIAGNOSTICS CONDITION 1
             @err_msg  = MESSAGE_TEXT,
             @err_code = MYSQL_ERRNO;
+        ROLLBACK;
+        DO RELEASE_LOCK('tw_recordatorios_seguimiento');
         SELECT 3 AS IdTipoMensaje,
                CONCAT('[MySQL ', @err_code, '] ', @err_msg) AS Mensaje;
     END;
+
+    SET v_lock = GET_LOCK('tw_recordatorios_seguimiento', 0);
+    IF IFNULL(v_lock, 0) <> 1 THEN
+        SELECT 2 AS IdTipoMensaje, 'Otra instancia está procesando los recordatorios.' AS Mensaje;
+        SELECT 0 AS enviados, 0 AS omitidos, 0 AS cancelados;
+        LEAVE proc;
+    END IF;
 
     SET v_limite = IF(IFNULL(p_limite, 0) < 1, 200, LEAST(p_limite, 1000));
     SET v_lote   = UUID();
@@ -118,6 +129,7 @@ proc: BEGIN
     CLOSE c_lote;
 
     COMMIT;
+    DO RELEASE_LOCK('tw_recordatorios_seguimiento');
 
     SELECT 2 AS IdTipoMensaje, 'Recordatorios procesados.' AS Mensaje;
     SELECT v_enviados AS enviados, v_omitidos AS omitidos, v_cancelados AS cancelados;

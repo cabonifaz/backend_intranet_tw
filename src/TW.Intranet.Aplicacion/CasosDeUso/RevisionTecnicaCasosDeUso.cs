@@ -190,11 +190,19 @@ public class GuardarInformeTecnicoCasoDeUso(IRevisionTecnicaRepositorio reposito
 }
 
 /// <summary>HU-58 Paso 4: registrar o actualizar la precotización (se envía a Comercial al guardarla).</summary>
-public class GuardarPrecotizacionInformeCasoDeUso(IRevisionTecnicaRepositorio repositorio)
+public class GuardarPrecotizacionInformeCasoDeUso(IRevisionTecnicaRepositorio repositorio, INotificadorTiempoReal notificador)
 {
     private static readonly string[] Prioridades = ["alta", "media", "opcional"];
 
-    public Task<RespuestaDto<PrecotizacionGuardadaDto>> EjecutarAsync(long idInforme, GuardarPrecotizacionInformeDto? d, long idUsuario, CancellationToken ct = default)
+    public async Task<RespuestaDto<PrecotizacionGuardadaDto>> EjecutarAsync(long idInforme, GuardarPrecotizacionInformeDto? d, long idUsuario, CancellationToken ct = default)
+    {
+        var r = await ValidarYGuardarAsync(idInforme, d, idUsuario, ct);
+        if (r.IdTipoMensaje == 2 && r.Datos is { } pc)
+            await notificador.PrecotizacionRecibidaAsync(pc, idInforme);
+        return r;
+    }
+
+    private Task<RespuestaDto<PrecotizacionGuardadaDto>> ValidarYGuardarAsync(long idInforme, GuardarPrecotizacionInformeDto? d, long idUsuario, CancellationToken ct)
     {
         if (idInforme <= 0 || d is null) return Error("Datos no válidos.");
         if (d.Items is null || d.Items.Count == 0) return Error("Agrega al menos un concepto a la precotización.");

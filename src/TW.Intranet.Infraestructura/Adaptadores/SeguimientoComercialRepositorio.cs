@@ -278,12 +278,14 @@ public class SeguimientoComercialRepositorio(CadenaConexionBd conexion)
         catch (JsonException) { return []; }
     }
 
-    private static async Task<List<OpcionSeguimientoDto>> LeerOpcionesAsync(MySqlDataReader r, CancellationToken ct)
+    private static async Task<List<OpcionSeguimientoDto>> LeerOpcionesAsync(MySqlDataReader r, CancellationToken ct,
+                                                                            bool conRequiereDuracion = false)
     {
         await r.NextResultAsync(ct);
         var lista = new List<OpcionSeguimientoDto>();
         while (await r.ReadAsync(ct))
-            lista.Add(new OpcionSeguimientoDto(Ent(r, "id"), Texto(r, "nombre") ?? "", Texto(r, "codigo")));
+            lista.Add(new OpcionSeguimientoDto(Ent(r, "id"), Texto(r, "nombre") ?? "", Texto(r, "codigo"),
+                                               conRequiereDuracion && Ent(r, "requiere_duracion") == 1));
         return lista;
     }
 
@@ -327,7 +329,7 @@ public class SeguimientoComercialRepositorio(CadenaConexionBd conexion)
 
                 // 3-4. Tipos de seguimiento y resultados
                 var tipos      = await LeerOpcionesAsync(r, ct);
-                var resultados = await LeerOpcionesAsync(r, ct);
+                var resultados = await LeerOpcionesAsync(r, ct, conRequiereDuracion: true);
 
                 // 5. Contactos
                 await r.NextResultAsync(ct);
