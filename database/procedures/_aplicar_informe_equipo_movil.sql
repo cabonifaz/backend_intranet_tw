@@ -754,7 +754,7 @@ proc: BEGIN
     DROP TEMPORARY TABLE IF EXISTS tmp_etapas_mov;
     DROP TEMPORARY TABLE IF EXISTS tmp_pend_eq;
     DROP TEMPORARY TABLE IF EXISTS tmp_obj_mov;
-END$
+END$$
 
 DELIMITER ;
 
