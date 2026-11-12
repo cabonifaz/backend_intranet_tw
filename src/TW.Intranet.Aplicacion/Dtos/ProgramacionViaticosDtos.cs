@@ -5,7 +5,8 @@ namespace TW.Intranet.Aplicacion.Dtos;
 public record ViaticosCabeceraDto(
     long IdProgramacion, string Codigo, string Estado, string EstadoLabel, long IdOs, string NumeroOs, string Tipo, string? RazonSocial,
     string? FechaEjecucion, string? HoraInicio, string? HoraFin, long? IdTecnicoPrincipal, string? TecnicoPrincipal, string? CargoPrincipal,
-    bool PuedeGestionar, string? MotivoNoGestionar, bool RendicionCerrada, string Version, string Moneda);
+    bool PuedeGestionar, string? MotivoNoGestionar, bool RendicionCerrada, string Version, string Moneda,
+    bool PuedeEditarAsignacion = false, string? MotivoNoEditarAsignacion = null);
 
 public record ViaticosTecnicoDto(
     long IdUsuario, string Nombre, string? Cargo, string Rol, bool Vigente, decimal SubtotalAsignado, decimal RendidoAprobado);

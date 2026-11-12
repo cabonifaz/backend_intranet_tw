@@ -33,19 +33,24 @@ internal static class HoraLima
 /// técnicos (HU-04); las evidencias forzadas, los ensayos con error y los gastos se suman cuando existan sus módulos.
 /// Reutiliza el SP de la intranet, que ya filtra por el área del jefe según la RQ. Urgentes primero (el servicio es de hoy).
 /// </summary>
-public class ObtenerAprobacionesMovilCasoDeUso(IAutorizacionSalidaRepositorio autorizaciones, ILlegadaForzadaRepositorio llegadas)
+public class ObtenerAprobacionesMovilCasoDeUso(
+    IAutorizacionSalidaRepositorio autorizaciones, ILlegadaForzadaRepositorio llegadas, IGastosAprobacionesMovilRepositorio extras)
 {
     public async Task<RespuestaDto<AprobacionesMovilDto>> EjecutarAsync(long idUsuario, CancellationToken ct = default)
     {
         if (idUsuario <= 0)
             return new(1, "No se pudo identificar al usuario.");
 
+        // Evidencias forzadas, ensayos con error y gastos pendientes (HU-31): si no se pueden leer, la bandeja sigue con lo demás
+        var ex = await extras.ObtenerAprobacionesExtraAsync(idUsuario, ct);
+        var otros = ex is { IdTipoMensaje: 2, Datos: not null } ? ex.Datos : [];
+
         var r = await autorizaciones.ObtenerAsync(idUsuario, "pendiente", ct);
 
         // Con Jefatura pueden entrar usuarios de varias áreas, pero solo algunos resuelven salidas (encargado de su área o supervisión
-        // general). Quien no puede (el SP responde con un mensaje de negocio) ve la bandeja vacía en vez de un error.
+        // general). Quien no puede (el SP responde con un mensaje de negocio) ve solo lo demás que le corresponda (por ejemplo, gastos).
         if (r.IdTipoMensaje == 1)
-            return new(2, "Sin autorizaciones asignadas a tu usuario.", Armar([], HoraLima.Hoy()));
+            return new(2, otros.Count == 0 ? "Sin autorizaciones asignadas a tu usuario." : "Éxito.", Armar([], [], otros, HoraLima.Hoy()));
 
         if (r.IdTipoMensaje != 2 || r.Datos is null)
             return new(r.IdTipoMensaje, r.Mensaje);
@@ -54,7 +59,25 @@ public class ObtenerAprobacionesMovilCasoDeUso(IAutorizacionSalidaRepositorio au
         var lf = await llegadas.ObtenerAsync(idUsuario, 0, ct);
         var forzadas = lf is { IdTipoMensaje: 2, Datos: not null } ? lf.Datos : [];
 
-        return new(2, r.Mensaje, Armar(r.Datos, forzadas, HoraLima.Hoy()));
+        return new(2, r.Mensaje, Armar(r.Datos, forzadas, otros, HoraLima.Hoy()));
+    }
+
+    /// <summary>Salidas, llegadas forzadas y además evidencias forzadas, ensayos con error y gastos (ya en el formato de la bandeja).</summary>
+    public static AprobacionesMovilDto Armar(IEnumerable<AutorizacionSalidaBandejaDto> pendientes, IEnumerable<SolicitudLlegadaForzadaDto> llegadasForzadas,
+                                             IReadOnlyList<AprobacionMovilDto> otros, string hoy)
+    {
+        var baseBandeja = Armar(pendientes, llegadasForzadas, hoy);
+        if (otros.Count == 0) return baseBandeja;
+
+        var items = baseBandeja.Items.Concat(otros)
+            .OrderByDescending(i => i.Urgente)
+            .ThenByDescending(i => i.SolicitadaEn)
+            .ToList();
+        var tipos = baseBandeja.Tipos.Where(t => t.Cantidad > 0).ToList();
+        foreach (var g in otros.GroupBy(o => o.Tipo))
+            tipos.Add(new TipoAprobacionMovilDto(g.Key, g.Count()));
+        if (tipos.Count == 0) tipos.Add(new("salida", 0));
+        return new AprobacionesMovilDto(items.Count, items.Count(i => i.Urgente), tipos, items);
     }
 
     /// <summary>Convierte las solicitudes pendientes en la bandeja (pública para poder probarla sin base de datos).</summary>

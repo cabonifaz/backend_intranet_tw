@@ -27,6 +27,11 @@ public class DetalleServicioRutaController(
     ObtenerCierreServicioRutaCasoDeUso         cierre,
     ObtenerAuditoriaServicioRutaCasoDeUso      auditoria,
     ObtenerEvidenciaIncidenciaCasoDeUso        evidencia,
+    ObtenerAprobacionesServicioRutaCasoDeUso   aprobaciones,
+    ResolverAprobacionServicioRutaCasoDeUso    resolverAprobacion,
+    ObtenerViaticosServicioRutaCasoDeUso       viaticos,
+    RevisarGastoServicioRutaCasoDeUso          revisarGasto,
+    ObtenerComprobanteGastoServicioRutaCasoDeUso comprobanteGasto,
     ILogger<DetalleServicioRutaController> logger) : ControllerBase
 {
     private long IdUsuarioActual =>
@@ -134,6 +139,61 @@ public class DetalleServicioRutaController(
     {
         NoCache();
         return Responder(await auditoria.EjecutarAsync(IdUsuarioActual, idOs, ct));
+    }
+
+    /// <summary>
+    /// Pestaña Aprobaciones: salida, llegada forzada, evidencias forzadas y ensayos con error de la OS, con quién resolvió y si el usuario puede resolver.
+    /// Segundo bloque: totales (total, pendientes, aprobadas, rechazadas).
+    /// </summary>
+    [RequierePermiso("seg_bandeja")]
+    [HttpGet("aprobaciones")]
+    public async Task<IActionResult> Aprobaciones(long idOs, CancellationToken ct = default)
+    {
+        NoCache();
+        return Responder(await aprobaciones.EjecutarAsync(IdUsuarioActual, idOs, ct));
+    }
+
+    /// <summary>
+    /// Aprobar o rechazar. tipo: salida | llegada | evidencia | ensayo. Body: { aprobar, comentario } (comentario obligatorio, 1 a 500 caracteres).
+    /// Lo resuelve el encargado del área de la RQ, el Jefe o Coordinador de Operaciones, el supervisor de Operaciones o un administrador (lo valida el SP).
+    /// </summary>
+    [RequierePermiso("seg_bandeja")]
+    [RequestSizeLimit(4 * 1024)]
+    [HttpPut("aprobaciones/{tipo}/{id:long}")]
+    public async Task<IActionResult> ResolverAprobacion(long idOs, string tipo, long id, [FromBody] ResolverAprobacionServicioDto? dto, CancellationToken ct = default)
+        => Responder(await resolverAprobacion.EjecutarAsync(IdUsuarioActual, idOs, tipo, id, dto, ct));
+
+    /// <summary>Pestaña Viáticos: resumen, asignación por técnico y concepto, y gastos rendidos en vivo. Revisar: solo el Jefe de Operaciones.</summary>
+    [RequierePermiso("seg_bandeja")]
+    [HttpGet("viaticos")]
+    public async Task<IActionResult> Viaticos(long idOs, CancellationToken ct = default)
+    {
+        NoCache();
+        return Responder(await viaticos.EjecutarAsync(IdUsuarioActual, idOs, ct));
+    }
+
+    /// <summary>
+    /// Aprobar, observar o rechazar un gasto rendido de ESTA OS (el SP lo comprueba). Solo el Jefe de Operaciones: el Asistente recibe 403.
+    /// El SP vuelve a exigir seg_bandeja.
+    /// </summary>
+    [RequierePermiso("prog_aprobar_reprogramacion")]
+    [RequestSizeLimit(4 * 1024)]
+    [HttpPost("viaticos/gastos/{idGasto:long}/revision")]
+    public async Task<IActionResult> RevisarGasto(long idOs, long idGasto, [FromBody] RevisarGastoDto? dto, CancellationToken ct = default)
+        => Responder(await revisarGasto.EjecutarAsync(IdUsuarioActual, idOs, idGasto, dto, ct));
+
+    /// <summary>Comprobante n (1 a 5) de un gasto de ESTA OS: imagen o PDF. El front lo pide con el token y lo muestra como blob.</summary>
+    [RequierePermiso("seg_bandeja")]
+    [HttpGet("viaticos/gastos/{idGasto:long}/comprobante/{n:int}")]
+    public async Task<IActionResult> ComprobanteGasto(long idOs, long idGasto, int n, CancellationToken ct = default)
+    {
+        var r = await comprobanteGasto.EjecutarAsync(IdUsuarioActual, idOs, idGasto, n, ct);
+        if (r.IdTipoMensaje != 2 || r.Datos is null)
+            return Responder(r);
+        Response.Headers.CacheControl = "private, no-store";
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
+        Response.Headers["Content-Security-Policy"] = "default-src 'none'";
+        return File(r.Datos.Contenido, r.Datos.TipoContenido);
     }
 
     private void NoCache()

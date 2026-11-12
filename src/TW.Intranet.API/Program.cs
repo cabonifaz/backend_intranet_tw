@@ -348,6 +348,14 @@ builder.Services.AddScoped<ResolverAprobacionSalidaMovilCasoDeUso>();
 // App Mobile HU-25 / HU-26 — viáticos asignados al programar y gastos rendidos
 builder.Services.AddScoped<IViaticosMovilRepositorio, ViaticosMovilRepositorio>();
 builder.Services.AddScoped<ObtenerViaticosMovilCasoDeUso>();
+// App Mobile HU-27 (rendir gastos) y HU-31 (bandeja del jefe: evidencias forzadas, ensayos con error y gastos)
+builder.Services.AddScoped<IGastosAprobacionesMovilRepositorio, GastosAprobacionesMovilRepositorio>();
+builder.Services.AddScoped<RendirGastoMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerFotoGastoMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerDetalleAprobacionMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerArchivoAprobacionMovilCasoDeUso>();
+builder.Services.AddScoped<ResolverAprobacionJefeMovilCasoDeUso>();
+builder.Services.AddScoped<RevisarGastoJefeMovilCasoDeUso>();
 // App Mobile HU-04 — detalle del servicio y checklist de pre-salida
 builder.Services.AddScoped<IPresalidaMovilRepositorio, PresalidaMovilRepositorio>();
 builder.Services.AddScoped<ObtenerDetalleServicioMovilCasoDeUso>();
@@ -612,6 +620,13 @@ if (configuracionGemini.Configurado)
         c.Timeout     = TimeSpan.FromSeconds(configuracionGemini.TimeoutSegundos);
         c.DefaultRequestHeaders.Accept.ParseAdd("application/json");
     });
+    // App Mobile HU-27: lectura del total de la boleta al rendir un gasto
+    builder.Services.AddHttpClient<ILectorComprobanteIa, GeminiLectorComprobante>(c =>
+    {
+        c.BaseAddress = new Uri(configuracionGemini.UrlBase);
+        c.Timeout     = TimeSpan.FromSeconds(configuracionGemini.TimeoutSegundos);
+        c.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+    });
     // App Mobile HU-19: Asistente IA y Procedimientos. Lee PDF y puede tardar más: mínimo 90 s. Modelo propio opcional: Gemini__ModeloAsistente.
     builder.Services.AddSingleton(new ConfiguracionAsistenteGemini(seccionGemini["ModeloAsistente"]));
     builder.Services.AddHttpClient<IAsistenteManuales, GeminiAsistenteManuales>(c =>
@@ -626,6 +641,7 @@ else
     builder.Services.AddSingleton<IAsistenteIaOrdenCompra, AsistenteIaOrdenCompraNoConfigurado>();
     builder.Services.AddSingleton<IAsistenteIaEquipos, AsistenteIaEquiposNoConfigurado>();
     builder.Services.AddSingleton<IValidadorEvidenciaIa, ValidadorEvidenciaIaNoConfigurado>();
+    builder.Services.AddSingleton<ILectorComprobanteIa, LectorComprobanteIaNoConfigurado>();
     builder.Services.AddSingleton<IAsistenteManuales, AsistenteManualesNoConfigurado>();
 }
 
@@ -736,6 +752,15 @@ builder.Services.AddScoped<ObtenerCierreServicioRutaCasoDeUso>();
 builder.Services.AddScoped<ObtenerAuditoriaServicioRutaCasoDeUso>(); // HU-54 Auditoría post-servicio (sin este registro todo el detalle del servicio en ruta respondía 500)
 builder.Services.AddScoped<ObtenerEvidenciaIncidenciaCasoDeUso>();   // HU-52 foto de evidencia de una demora/incidencia
 builder.Services.AddScoped<SubirEvidenciaSeguimientoCasoDeUso>();    // HU-53 subida de la foto de evidencia del Asistente
+
+// HU-52 / HU-57 Aprobaciones y viáticos de la OS (pestañas del Detalle del Servicio en Ruta y viáticos del informe técnico)
+builder.Services.AddScoped<IAprobacionesViaticosServicioRepositorio, AprobacionesViaticosServicioRepositorio>();
+builder.Services.AddScoped<ObtenerAprobacionesServicioRutaCasoDeUso>();
+builder.Services.AddScoped<ResolverAprobacionServicioRutaCasoDeUso>();
+builder.Services.AddScoped<ObtenerViaticosServicioRutaCasoDeUso>();
+builder.Services.AddScoped<RevisarGastoServicioRutaCasoDeUso>();
+builder.Services.AddScoped<ObtenerComprobanteGastoServicioRutaCasoDeUso>();
+builder.Services.AddScoped<ObtenerViaticosInformeCasoDeUso>();
 
 // HU-53 Registro operativo del Asistente de Seguimiento (Sprint 5): observación, demora/incidente y cambio manual de estado
 builder.Services.AddScoped<IRegistroAsistenteRepositorio, RegistroAsistenteRepositorio>();

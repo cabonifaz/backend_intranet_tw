@@ -155,6 +155,14 @@ public class CabeceraInformeDto
     public string?   EstadoEnsayos             { get; init; }
     /// <summary>no_aplica · requiere_precotizacion · precotizacion_enviada · convertida.</summary>
     public string?   OportunidadComercial      { get; init; }
+    /// <summary>Rendición de viáticos de la OS: abierta · cerrada · sin_programacion.</summary>
+    public string?   RendicionEstado           { get; init; }
+    /// <summary>Saldo de la rendición (cerrada: el del cierre; abierta: el del momento). Positivo = reembolso al técnico, negativo = devolución.</summary>
+    public decimal?  RendicionSaldo            { get; init; }
+    /// <summary>reembolso · devolucion · cuadrado.</summary>
+    public string?   RendicionTipo             { get; init; }
+    /// <summary>Gastos rendidos de la OS pendientes u observados.</summary>
+    public int       GastosPorRevisar          { get; init; }
 
     // Resultado global de los ensayos
     public string?   Normativa                 { get; init; }

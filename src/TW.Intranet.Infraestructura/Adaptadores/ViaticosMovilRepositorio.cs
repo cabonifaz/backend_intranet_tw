@@ -65,7 +65,8 @@ public class ViaticosMovilRepositorio(CadenaConexionBd conexion)
                         Fecha(r, "fecha_deposito"),
                         DecimalNulo(r, "rendido") ?? 0m,
                         DecimalNulo(r, "por_rendir") ?? 0m,
-                        Texto(r, "estado_deposito") ?? "pendiente"));
+                        Texto(r, "estado_deposito") ?? "pendiente",
+                        EnteroLargo(r, "id_viatico_linea")));
 
                 // 5. Gastos rendidos
                 var gastos = new List<GastoMovilDto>();
@@ -89,8 +90,27 @@ public class ViaticosMovilRepositorio(CadenaConexionBd conexion)
                         EnteroLargo(r, "id_os"),
                         Texto(r, "numero_os") ?? string.Empty,
                         EnteroLargoNulo(r, "id_programacion"),
-                        Texto(r, "codigo_programacion")));
+                        Texto(r, "codigo_programacion"),
+                        Texto(r, "origen"),
+                        Texto(r, "concepto_texto"),
+                        Texto(r, "motivo_sin_foto"),
+                        DecimalNulo(r, "monto_ia"),
+                        DecimalNulo(r, "coincide_ia") is { } c ? c != 0 : null,
+                        Entero(r, "n_fotos")));
 
-                return new RespuestaDto<ViaticosMovilDto>(2, mensaje, new ViaticosMovilDto(resumen, viaticos, lineas, gastos));
+                // 6. Reparto de sus gastos
+                var repartos = new List<RepartoGastoMovilDto>();
+                await r.NextResultAsync(ct);
+                while (await r.ReadAsync(ct))
+                    repartos.Add(new RepartoGastoMovilDto(EnteroLargo(r, "id_gasto"), EnteroLargo(r, "id_viatico_linea"),
+                        Texto(r, "concepto") ?? string.Empty, DecimalNulo(r, "monto") ?? 0m));
+
+                // 7. Fotos de sus gastos
+                var fotos = new List<FotoGastoMovilDto>();
+                await r.NextResultAsync(ct);
+                while (await r.ReadAsync(ct))
+                    fotos.Add(new FotoGastoMovilDto(EnteroLargo(r, "id_gasto"), Entero(r, "orden")));
+
+                return new RespuestaDto<ViaticosMovilDto>(2, mensaje, new ViaticosMovilDto(resumen, viaticos, lineas, gastos, repartos, fotos));
             }, ct);
 }

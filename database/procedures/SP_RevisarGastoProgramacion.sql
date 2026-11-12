@@ -2,7 +2,7 @@
 --   p_accion: 'aprobar' | 'observar' | 'rechazar'.
 --   · Observar: comentario OBLIGATORIO; el técnico recibe la notificación para ajustar o adjuntar el comprobante.
 --   · Rechazar: motivo OBLIGATORIO; el gasto no se reembolsa.
---   · Aprobar: solo con comprobante adjunto.
+--   · Aprobar: solo con comprobante adjunto (url_comprobante o fotos de gasto_viatico_foto) o, sin foto, con el motivo que dio el técnico (migración 114).
 --   Solo el Jefe (prog_aprobar_reprogramacion), con la programación confirmada y la rendición abierta. Un gasto aprobado o rechazado es definitivo.
 -- Resultados: 1 mensaje, 2 gasto resultante (estado, tarjetas).
 DROP PROCEDURE IF EXISTS SP_RevisarGastoProgramacion;
@@ -25,6 +25,7 @@ proc: BEGIN
     DECLARE v_g_tec     BIGINT DEFAULT NULL;
     DECLARE v_g_monto   DECIMAL(12,2);
     DECLARE v_g_url     VARCHAR(500);
+    DECLARE v_sin_foto  VARCHAR(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_concepto  VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_nuevo     VARCHAR(15)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_com       VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
@@ -96,8 +97,9 @@ proc: BEGIN
     END IF;
 
     IF v_error IS NULL THEN
-        SELECT g.estado, g.id_usuario, g.monto, g.url_comprobante, IFNULL(c.String1, 'Gasto')
-          INTO v_g_estado, v_g_tec, v_g_monto, v_g_url, v_concepto
+        SELECT g.estado, g.id_usuario, g.monto, g.url_comprobante,
+               IF(c.String3 = 'OTRO' AND g.concepto_texto IS NOT NULL, g.concepto_texto, IFNULL(c.String1, 'Gasto')), g.motivo_sin_foto
+          INTO v_g_estado, v_g_tec, v_g_monto, v_g_url, v_concepto, v_sin_foto
         FROM gasto_viatico g
         LEFT JOIN tabla_maestra c ON c.IdMaestro = 25 AND c.IdEmpresa = 1 AND c.Num1 = g.id_concepto
         WHERE g.id_gasto = p_id_gasto AND g.tipo = 'gasto_solicitado' AND g.eliminado_en IS NULL
@@ -109,8 +111,10 @@ proc: BEGIN
             SET v_error = CONCAT('El gasto ya fue ', IF(v_g_estado = 'rechazado', 'rechazado', 'aprobado'), ': la decisión es definitiva.');
         ELSEIF v_g_estado = 'observado' AND p_accion = 'observar' THEN
             SET v_error = 'El gasto ya está observado: espera a que el técnico lo ajuste.';
-        ELSEIF p_accion = 'aprobar' AND NULLIF(TRIM(IFNULL(v_g_url, '')), '') IS NULL THEN
-            SET v_error = 'No se puede aprobar un gasto sin comprobante: obsérvalo para que el técnico lo adjunte.';
+        ELSEIF p_accion = 'aprobar' AND NULLIF(TRIM(IFNULL(v_g_url, '')), '') IS NULL
+               AND NOT EXISTS (SELECT 1 FROM gasto_viatico_foto f WHERE f.id_gasto = p_id_gasto AND f.eliminado_en IS NULL)
+               AND NULLIF(TRIM(IFNULL(v_sin_foto, '')), '') IS NULL THEN
+            SET v_error = 'No se puede aprobar un gasto sin comprobante ni motivo: obsérvalo para que el técnico lo adjunte.';
         END IF;
     END IF;
     IF v_error IS NOT NULL THEN

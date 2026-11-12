@@ -10,6 +10,7 @@
 --   Saldo final: solo con rendición cerrada = aprobado - asignado → reembolso (>0), devolución (<0) o cuadrado.
 --   En revisión: gastos en estado 'pendiente'; observados: estado 'observado'.
 -- Un gasto sin id_programacion (anterior a la migración 89) se atribuye a la programación vigente de su OS.
+-- Migración 114: tmp_gasto_mov también trae origen, concepto_texto ("Otro"), motivo_sin_foto, monto_ia, coincide_ia y n_fotos.
 -- Deja DOS tablas temporales de la conexión que el SP que llama lee y debe borrar al terminar (y en su EXIT HANDLER):
 --   tmp_gasto_mov : una fila por gasto/viático del técnico (con id_prog resuelto).
 --   tmp_viat_mov  : una fila por programación con viático asignado (totales ya calculados).
@@ -38,7 +39,15 @@ BEGIN
            g.estado,
            g.monto,
            g.id_concepto,
-           IFNULL(cg.String1, 'Concepto')                                          AS concepto,
+           IF(cg.String3 = 'OTRO' AND g.concepto_texto IS NOT NULL, CONCAT('Otro: ', g.concepto_texto),
+              IFNULL(cg.String1, 'Concepto'))                                      AS concepto,
+           g.origen,
+           g.concepto_texto,
+           g.motivo_sin_foto,
+           g.monto_ia,
+           g.coincide_ia,
+           GREATEST((SELECT COUNT(*) FROM gasto_viatico_foto f WHERE f.id_gasto = g.id_gasto AND f.eliminado_en IS NULL),
+                    IF(g.url_comprobante IS NULL OR g.url_comprobante = '', 0, 1)) AS n_fotos,
            IFNULL(mo.String2, 'S/')                                                AS moneda,
            COALESCE(g.fecha_gasto, g.fecha_solicitud)                              AS fecha,
            g.descripcion,

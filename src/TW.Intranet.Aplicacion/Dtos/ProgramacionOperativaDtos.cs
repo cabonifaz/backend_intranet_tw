@@ -167,6 +167,8 @@ public class ItemProgramacionDto
     public long?     IdReprogramacionPendiente { get; init; }
     public int       DiasEnEspera            { get; init; }
     public decimal   ViaticoMonto            { get; init; }
+    /// <summary>Monto asignado que aún no deposita Contabilidad (pendiente u observado).</summary>
+    public decimal   ViaticoPendiente        { get; init; }
     /// <summary>Símbolo de la moneda de los viáticos (S/ por defecto).</summary>
     public string    ViaticoMoneda           { get; init; } = "S/";
     /// <summary>sin_asignar, pendiente_deposito o depositado.</summary>

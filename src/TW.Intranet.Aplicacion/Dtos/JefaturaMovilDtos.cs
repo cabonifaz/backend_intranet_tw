@@ -33,12 +33,12 @@ public record AprobacionesMovilDto(
     List<TipoAprobacionMovilDto> Tipos,
     List<AprobacionMovilDto>   Items);
 
-/// <summary>Cantidad por tipo (salida | evidencia | ensayo | gasto). Hoy solo hay solicitudes de salida.</summary>
+/// <summary>Cantidad por tipo (salida | llegada | evidencia | ensayo | gasto).</summary>
 public record TipoAprobacionMovilDto(string Tipo, int Cantidad);
 
 /// <summary>
-/// Una solicitud en la bandeja. Tipo: salida. Id = id de la OS (la salida se resuelve por OS).
-/// Urgente = el servicio es de hoy: el técnico está por salir.
+/// Una solicitud en la bandeja. Tipo: salida | llegada (Id = id de la OS: se resuelven por OS) | evidencia (Id = id_evidencia) |
+/// ensayo (Id = id_informe) | gasto (Id = id_gasto). Urgente = el servicio es de hoy (el ensayo con error, siempre).
 /// </summary>
 public record AprobacionMovilDto(
     string    Tipo,
@@ -52,6 +52,34 @@ public record AprobacionMovilDto(
     string?   HoraInicio,
     bool      Urgente,
     DateTime? SolicitadaEn);
+
+/// <summary>
+/// Detalle de una evidencia forzada, un ensayo con error o un gasto para el jefe (HU-31). Las columnas que no aplican al tipo van en null.
+/// Estado: evidencia/ensayo pendiente | aprobada | rechazada · gasto pendiente | observado | aprobado | rechazado.
+/// </summary>
+public record CabeceraAprobacionMovilDto(
+    string Tipo, long Id, string Titulo, string Estado, long IdOs, string NumeroOs, string? Cliente, string? Sede, string? Tecnico,
+    string? FechaEjecucion, string? HoraInicio, DateTime? SolicitadaEn, string? Motivo, string? Detalle, string? Comentario,
+    string? ResueltoPor, DateTime? ResueltoEn, bool PuedeResolver,
+    // evidencia
+    string? CodigoEvidencia, string? MotivoRechazoIa, bool? EsVideo,
+    // ensayo
+    string? Equipo, int? NCriticas,
+    // gasto
+    string? Codigo, string? Origen, string? Concepto, decimal? Monto, string? FechaGasto, string? Descripcion, string? MotivoSinFoto,
+    decimal? MontoIa, bool? CoincideIa, string? CodigoProgramacion);
+
+/// <summary>Lectura de un ensayo que quedó fuera del EMP.</summary>
+public record LecturaEnsayoMovilDto(string? Tipo, string? Punto, decimal? Carga, decimal? Lectura, decimal? Error, decimal? Tolerancia);
+
+/// <summary>Foto de la aprobación. Evidencia: GET …/evidencias/{id}/archivo[?cuadro=true] · gasto: GET …/gastos/{id}/fotos/{orden}.</summary>
+public record FotoAprobacionMovilDto(int Orden, bool EsVideo, bool TieneCuadro);
+
+public record DetalleAprobacionMovilDto(
+    CabeceraAprobacionMovilDto Cabecera, List<RepartoGastoMovilDto> Reparto, List<LecturaEnsayoMovilDto> Lecturas, List<FotoAprobacionMovilDto> Fotos);
+
+/// <summary>Archivo de una aprobación (ruta del almacenamiento). EsVideo: el archivo principal es MP4.</summary>
+public record ArchivoAprobacionMovilDto(string Ruta, string? RutaCuadro, bool EsVideo);
 
 /// <summary>Solicitud de salida con el checklist del técnico (sus pendientes y el motivo que dio).</summary>
 public record AprobacionSalidaMovilDto(

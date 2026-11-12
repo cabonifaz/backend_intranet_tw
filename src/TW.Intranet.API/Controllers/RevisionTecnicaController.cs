@@ -26,6 +26,7 @@ public class RevisionTecnicaController(
     RegistrarRevisionInformeCasoDeUso     registrarRevision,
     ObtenerHistorialInformeCasoDeUso      historial,
     ObtenerArchivoFotoInformeCasoDeUso    archivoFoto,
+    ObtenerViaticosInformeCasoDeUso       viaticos,
     ILogger<RevisionTecnicaController>    logger) : ControllerBase
 {
     private long IdUsuarioActual =>
@@ -99,6 +100,12 @@ public class RevisionTecnicaController(
         var (contenido, tipo, mensaje) = await archivoFoto.EjecutarAsync(idInforme, idEvidencia, cuadro, IdUsuarioActual, ct);
         return contenido is null ? NotFound(new RespuestaDto<object>(1, mensaje ?? "Foto no encontrada.")) : File(contenido, tipo!, enableRangeProcessing: true);
     }
+
+    /// <summary>HU-57 Viáticos de la OS del informe: asignado, rendido, gastos y cierre de la rendición. Siempre solo lectura.</summary>
+    [RequierePermiso("rt_bandeja")]
+    [HttpGet("{idInforme:long}/viaticos")]
+    public async Task<IActionResult> Viaticos(long idInforme, CancellationToken ct = default)
+        => Responder(await viaticos.EjecutarAsync(IdUsuarioActual, idInforme, ct));
 
     /// <summary>HU-59 Pestaña Historial. Query: categoria (todos · edicion · precotizacion · revision · sistema).</summary>
     [RequierePermiso("rt_bandeja", "precot_ver")]

@@ -201,7 +201,26 @@ proc: BEGIN
               FROM   llegada_forzada_os lf
               WHERE  lf.eliminado_en IS NULL AND lf.estado = 'pendiente'
                 AND  (v_aut_general = 1
-                      OR (v_aut_area IS NOT NULL AND (lf.area_destino IS NULL OR lf.area_destino = v_aut_area)))) AS aprobaciones_pendientes,
+                      OR (v_aut_area IS NOT NULL AND (lf.area_destino IS NULL OR lf.area_destino = v_aut_area))))
+           -- Evidencias forzadas y ensayos con error sin revisar (migración 113), por el área de la RQ
+           + (SELECT COUNT(*)
+              FROM   evidencia_fotografica f
+              JOIN   orden_servicio os ON os.id_os = f.id_os AND os.eliminado_en IS NULL AND os.estado <> 'anulada'
+              LEFT JOIN expediente_digital ed ON ed.id_expediente = os.id_expediente
+              LEFT JOIN requerimiento rq      ON rq.id_requerimiento = ed.id_requerimiento
+              LEFT JOIN area_servicio_rq asr  ON asr.id_area_rq = rq.id_area
+              WHERE  f.eliminado_en IS NULL AND f.override_aprobado = 1 AND f.vigente = 1 AND f.revision_jefe IS NULL
+                AND  (v_aut_general = 1 OR (v_aut_area IS NOT NULL AND (asr.area_usuario IS NULL OR asr.area_usuario = v_aut_area))))
+           + (SELECT COUNT(*)
+              FROM   informe_tecnico it
+              JOIN   orden_servicio os ON os.id_os = it.id_os AND os.eliminado_en IS NULL AND os.estado <> 'anulada'
+              LEFT JOIN expediente_digital ed ON ed.id_expediente = os.id_expediente
+              LEFT JOIN requerimiento rq      ON rq.id_requerimiento = ed.id_requerimiento
+              LEFT JOIN area_servicio_rq asr  ON asr.id_area_rq = rq.id_area
+              WHERE  it.eliminado_en IS NULL AND it.error_critico_motivo IS NOT NULL AND it.error_critico_revision IS NULL
+                AND  (v_aut_general = 1 OR (v_aut_area IS NOT NULL AND (asr.area_usuario IS NULL OR asr.area_usuario = v_aut_area))))
+           -- Gastos pendientes: solo para quien los revisa (el mismo contador de la tarjeta Viáticos y Gastos)
+           + IFNULL(v_gastos, 0)                                            AS aprobaciones_pendientes,
            v_alertas                                                        AS alertas_criticas,
            v_informes                                                       AS informes_por_revisar,
            v_certificados                                                   AS certificados_pendientes,
