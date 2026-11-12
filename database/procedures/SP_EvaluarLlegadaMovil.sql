@@ -1,7 +1,7 @@
 -- ============================================================
 -- SP_EvaluarLlegadaMovil  (App Mobile HU-06 — apoyo, no es un endpoint)
 -- Regla de la llegada validada por GPS, UNA sola vez (la usan la validación y el registro). Solo lectura.
---   Referencia = coordenada de la sede del cliente (sede.latitud/longitud); si la sede no la tiene, la llegada ya registrada de la OS
+--   Referencia = coordenada de la planta: sede_cliente.latitud/longitud (migración 110) de la OS o, si no tiene, la del requerimiento (RQ); luego la tabla sede; si ninguna la tiene, la llegada ya registrada de la OS
 --   (orden_servicio.latitud_llegada/longitud_llegada), igual que la bandeja de Seguimiento Operativo.
 --   Parámetros (PARAMETRO_PROGRAMACION, migración 97): LLEGADA_RADIO_METROS (200) y LLEGADA_PRECISION_MAX_METROS (100).
 --   Resultado:
@@ -9,6 +9,7 @@
 --     sin_referencia  la planta no tiene coordenada: se puede registrar, queda sin validar distancia
 --     valida          dentro del radio permitido
 --     fuera_rango     fuera del radio: no se puede registrar
+--     autorizada      fuera del radio, pero Jefatura aprobó la llegada forzada (llegada_forzada_os, aprobada y sin usar): se puede registrar UNA vez
 --   p_registrable: 1 = se puede confirmar la llegada. p_mensaje: texto para el técnico. Distancia por Haversine (m).
 -- ============================================================
 DROP PROCEDURE IF EXISTS SP_EvaluarLlegadaMovil;
@@ -41,9 +42,12 @@ BEGIN
     SET p_lat_ref       = NULL;
     SET p_lon_ref       = NULL;
 
-    SELECT COALESCE(s.latitud, os.latitud_llegada), COALESCE(s.longitud, os.longitud_llegada) INTO p_lat_ref, p_lon_ref
+    SELECT COALESCE(sc.latitud, s.latitud, sc2.latitud, os.latitud_llegada), COALESCE(sc.longitud, s.longitud, sc2.longitud, os.longitud_llegada) INTO p_lat_ref, p_lon_ref
     FROM   orden_servicio os
-    LEFT JOIN sede s ON s.id_sede = os.id_sede AND s.id_cliente = os.id_cliente AND s.eliminado_en IS NULL
+    LEFT JOIN sede_cliente sc  ON sc.id_sede = os.id_sede AND sc.SoftDelete = 0
+    LEFT JOIN sede s           ON s.id_sede = os.id_sede AND s.id_cliente = os.id_cliente AND s.eliminado_en IS NULL
+    LEFT JOIN requerimiento rq ON rq.id_requerimiento = os.id_requerimiento
+    LEFT JOIN sede_cliente sc2 ON sc2.id_sede = rq.id_sede AND sc2.SoftDelete = 0
     WHERE  os.id_os = p_id_os;
 
     IF p_precision IS NOT NULL AND p_precision > p_precision_max THEN
@@ -66,6 +70,12 @@ BEGIN
             SET p_resultado   = 'fuera_rango';
             SET p_registrable = 0;
             SET p_mensaje     = CONCAT('Estás a ', FORMAT(p_distancia, 0), ' m de la planta (máximo ', p_radio, ' m). Acércate para registrar tu llegada.');
+            -- Llegada forzada aprobada por Jefatura (HU-06): se puede registrar aunque esté fuera del radio, una sola vez
+            IF EXISTS (SELECT 1 FROM llegada_forzada_os f WHERE f.id_os = p_id_os AND f.estado = 'aprobada' AND f.usada_en IS NULL AND f.eliminado_en IS NULL) THEN
+                SET p_resultado   = 'autorizada';
+                SET p_registrable = 1;
+                SET p_mensaje     = CONCAT('Jefatura autorizó tu llegada (estás a ', FORMAT(p_distancia, 0), ' m de la planta). Ya puedes confirmarla.');
+            END IF;
         END IF;
     END IF;
 END$$

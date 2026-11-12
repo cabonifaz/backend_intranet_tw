@@ -196,7 +196,12 @@ proc: BEGIN
             FROM   autorizacion_salida_os a
             WHERE  a.eliminado_en IS NULL AND a.estado = 'pendiente'
               AND  (v_aut_general = 1
-                    OR (v_aut_area IS NOT NULL AND (a.area_destino IS NULL OR a.area_destino = v_aut_area)))) AS aprobaciones_pendientes,
+                    OR (v_aut_area IS NOT NULL AND (a.area_destino IS NULL OR a.area_destino = v_aut_area))))
+           + (SELECT COUNT(*)
+              FROM   llegada_forzada_os lf
+              WHERE  lf.eliminado_en IS NULL AND lf.estado = 'pendiente'
+                AND  (v_aut_general = 1
+                      OR (v_aut_area IS NOT NULL AND (lf.area_destino IS NULL OR lf.area_destino = v_aut_area)))) AS aprobaciones_pendientes,
            v_alertas                                                        AS alertas_criticas,
            v_informes                                                       AS informes_por_revisar,
            v_certificados                                                   AS certificados_pendientes,

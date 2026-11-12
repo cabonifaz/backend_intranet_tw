@@ -25,12 +25,19 @@ proc: BEGIN
     DECLARE v_pmax       DECIMAL(18,6);
     DECLARE v_lat_ref    DECIMAL(10,7);
     DECLARE v_lon_ref    DECIMAL(10,7);
+    DECLARE v_o_lat      DECIMAL(10,7) DEFAULT NULL;
+    DECLARE v_o_lon      DECIMAL(10,7) DEFAULT NULL;
     DECLARE v_ll_utc     DATETIME;
     DECLARE v_ll_lat     DECIMAL(10,7);
     DECLARE v_ll_lon     DECIMAL(10,7);
     DECLARE v_ll_prec    DECIMAL(8,1);
     DECLARE v_ll_dist    INT;
     DECLARE v_puede      TINYINT DEFAULT 0;
+    DECLARE v_f_estado   VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
+    DECLARE v_f_coment   VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
+    DECLARE v_f_jefe     VARCHAR(210) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
+    DECLARE v_f_resuelta DATETIME DEFAULT NULL;
+    DECLARE v_f_usada    DATETIME DEFAULT NULL;
 
     SELECT os.estado INTO v_estado
     FROM   orden_servicio os
@@ -52,10 +59,20 @@ proc: BEGIN
     JOIN   tabla_maestra m ON m.IdMaestro = 29 AND m.IdEmpresa = 1 AND m.Num1 = e.id_tipo_evento AND m.String2 = 'SALIDA_BASE'
     WHERE  e.id_os = p_id_os AND e.eliminado_en IS NULL;
 
-    SELECT COALESCE(s.latitud, os.latitud_llegada), COALESCE(s.longitud, os.longitud_llegada) INTO v_lat_ref, v_lon_ref
+    SELECT COALESCE(sc.latitud, s.latitud, sc2.latitud, os.latitud_llegada), COALESCE(sc.longitud, s.longitud, sc2.longitud, os.longitud_llegada) INTO v_lat_ref, v_lon_ref
     FROM   orden_servicio os
-    LEFT JOIN sede s ON s.id_sede = os.id_sede AND s.id_cliente = os.id_cliente AND s.eliminado_en IS NULL
+    LEFT JOIN sede_cliente sc  ON sc.id_sede = os.id_sede AND sc.SoftDelete = 0
+    LEFT JOIN sede s           ON s.id_sede = os.id_sede AND s.id_cliente = os.id_cliente AND s.eliminado_en IS NULL
+    LEFT JOIN requerimiento rq ON rq.id_requerimiento = os.id_requerimiento
+    LEFT JOIN sede_cliente sc2 ON sc2.id_sede = rq.id_sede AND sc2.SoftDelete = 0
     WHERE  os.id_os = p_id_os;
+
+    -- Punto de salida (HU-20): la coordenada del evento «Salida» de este viaje
+    SELECT e.latitud, e.longitud INTO v_o_lat, v_o_lon
+    FROM   evento_campo e
+    JOIN   tabla_maestra m ON m.IdMaestro = 29 AND m.IdEmpresa = 1 AND m.Num1 = e.id_tipo_evento AND m.String2 = 'SALIDA_BASE'
+    WHERE  e.id_os = p_id_os AND e.eliminado_en IS NULL AND e.latitud IS NOT NULL AND e.longitud IS NOT NULL
+    ORDER BY e.timestamp_utc DESC, e.id_evento DESC LIMIT 1;
 
     SELECT e.timestamp_utc, e.latitud, e.longitud, e.precision_metros, e.distancia_metros INTO v_ll_utc, v_ll_lat, v_ll_lon, v_ll_prec, v_ll_dist
     FROM   evento_campo e
@@ -64,6 +81,15 @@ proc: BEGIN
     ORDER BY e.timestamp_utc DESC, e.id_evento DESC LIMIT 1;
 
     SET v_puede = IF(v_estado = 'en_ruta' AND v_ll_utc IS NULL, 1, 0);
+
+    -- Llegada forzada (HU-06): la última solicitud de esta OS y lo que respondió Jefatura
+    SELECT s.estado, s.comentario, NULLIF(TRIM(CONCAT(IFNULL(j.nombre, ''), ' ', IFNULL(j.apellido, ''))), ''), s.resuelto_en, s.usada_en
+    INTO   v_f_estado, v_f_coment, v_f_jefe, v_f_resuelta, v_f_usada
+    FROM   llegada_forzada_os s
+    LEFT JOIN usuario j ON j.id_usuario = s.id_jefe
+    WHERE  s.id_os = p_id_os AND s.eliminado_en IS NULL
+    ORDER BY s.id_solicitud DESC LIMIT 1;
+    IF v_f_usada IS NOT NULL THEN SET v_f_estado = NULL; END IF;   -- ya se usó: la llegada quedó registrada
 
     SELECT 2 AS IdTipoMensaje, 'Éxito.' AS Mensaje;
 
@@ -76,6 +102,8 @@ proc: BEGIN
            TIME_FORMAT(os.hora_inicio, '%H:%i')                              AS hora_programada,
            v_lat_ref                                                         AS lat_ref,
            v_lon_ref                                                         AS lon_ref,
+           v_o_lat                                                           AS origen_lat,
+           v_o_lon                                                           AS origen_lon,
            ROUND(v_radio)                                                    AS radio_m,
            ROUND(v_pmax)                                                     AS precision_max_m,
            IF(v_salida_utc IS NULL, NULL, CONVERT_TZ(v_salida_utc, '+00:00', '-05:00')) AS salida_en,
@@ -86,6 +114,10 @@ proc: BEGIN
            v_ll_dist                                                         AS llegada_distancia,
            IF(v_ll_utc IS NULL, NULL, IF(v_ll_dist IS NULL, 'sin_referencia', 'valida')) AS llegada_resultado,
            v_puede                                                           AS puede_registrar,
+           v_f_estado                                                        AS forzada_estado,
+           v_f_coment                                                        AS forzada_comentario,
+           v_f_jefe                                                          AS forzada_jefe,
+           v_f_resuelta                                                      AS forzada_resuelta_en,
            CASE WHEN v_puede = 1 THEN NULL
                 WHEN v_ll_utc IS NOT NULL THEN 'Ya registraste tu llegada.'
                 WHEN v_estado IN ('programada', 'reprogramada') THEN 'Primero inicia el traslado desde la validación antes de salir.'

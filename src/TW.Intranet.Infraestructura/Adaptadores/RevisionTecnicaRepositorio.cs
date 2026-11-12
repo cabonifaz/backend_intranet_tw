@@ -154,6 +154,22 @@ public class RevisionTecnicaRepositorio(CadenaConexionBd conexion) : Repositorio
                 return new RespuestaDto<HistorialInformeDto>(2, mensaje, new HistorialInformeDto(contadores, eventos));
             }, ct);
 
+    public Task<RespuestaDto<ArchivoEvidenciaMovilDto>> ObtenerArchivoFotoAsync(long idInforme, long idEvidencia, long idUsuario, CancellationToken ct)
+        => EjecutarAsync<ArchivoEvidenciaMovilDto>("SP_ObtenerArchivoFotoInforme",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario",   idUsuario);
+                p.AddWithValue("p_id_informe",   idInforme);
+                p.AddWithValue("p_id_evidencia", idEvidencia);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct)) return new RespuestaDto<ArchivoEvidenciaMovilDto>(1, "Foto no encontrada.");
+                return new RespuestaDto<ArchivoEvidenciaMovilDto>(2, mensaje, new ArchivoEvidenciaMovilDto(
+                    Texto(r, "ruta") ?? string.Empty, Texto(r, "ruta_cuadro"), Booleano(r, "es_video")));
+            }, ct);
+
     // ── CRM › Precotizaciones Técnicas ────────────────────────────────────────────────────────
 
     public Task<RespuestaDto<BandejaPrecotizacionesDto>> ObtenerBandejaPrecotizacionesAsync(FiltrosPrecotizacionesDto f, long idUsuario, CancellationToken ct)

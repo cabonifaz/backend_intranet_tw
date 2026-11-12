@@ -41,7 +41,9 @@ public class LlegadaMovilRepositorio(CadenaConexionBd conexion)
                         EnteroNulo(r, "llegada_distancia"), Texto(r, "llegada_resultado")),
                     Booleano(r, "puede_registrar"),
                     Entero(r, "precision_max_m"),
-                    Texto(r, "motivo_no_registra")));
+                    Texto(r, "motivo_no_registra"),
+                    DecimalNulo(r, "origen_lat") is { } olat && DecimalNulo(r, "origen_lon") is { } olon ? new PuntoGpsLlegadaDto(olat, olon) : null,
+                    Texto(r, "forzada_estado") is { } fe ? new LlegadaForzadaEstadoDto(fe, Texto(r, "forzada_comentario"), Texto(r, "forzada_jefe"), FechaHora(r, "forzada_resuelta_en")) : null));
             }, ct);
 
     public Task<RespuestaDto<ValidacionLlegadaMovilDto>> ValidarAsync(

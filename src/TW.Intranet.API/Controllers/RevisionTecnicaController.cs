@@ -25,6 +25,7 @@ public class RevisionTecnicaController(
     PrepararRevisionInformeCasoDeUso      prepararRevision,
     RegistrarRevisionInformeCasoDeUso     registrarRevision,
     ObtenerHistorialInformeCasoDeUso      historial,
+    ObtenerArchivoFotoInformeCasoDeUso    archivoFoto,
     ILogger<RevisionTecnicaController>    logger) : ControllerBase
 {
     private long IdUsuarioActual =>
@@ -88,6 +89,16 @@ public class RevisionTecnicaController(
     [HttpPost("{idInforme:long}/revision")]
     public async Task<IActionResult> RegistrarRevision(long idInforme, [FromBody] RegistrarRevisionInformeDto? datos, CancellationToken ct = default)
         => Responder(await registrarRevision.EjecutarAsync(idInforme, datos, IdUsuarioActual, ct));
+
+    /// <summary>HU-57 Pestaña Fotos: el archivo de una foto del informe (JPEG, o MP4 / con ?cuadro=true su miniatura). Requiere el token en la cabecera Authorization:
+    /// el front debe pedirlo con fetch y mostrarlo con URL.createObjectURL (un &lt;img src&gt; directo no envía el token).</summary>
+    [RequierePermiso("rt_bandeja")]
+    [HttpGet("{idInforme:long}/fotos/{idEvidencia:long}/archivo")]
+    public async Task<IActionResult> ArchivoFoto(long idInforme, long idEvidencia, [FromQuery] bool cuadro, CancellationToken ct = default)
+    {
+        var (contenido, tipo, mensaje) = await archivoFoto.EjecutarAsync(idInforme, idEvidencia, cuadro, IdUsuarioActual, ct);
+        return contenido is null ? NotFound(new RespuestaDto<object>(1, mensaje ?? "Foto no encontrada.")) : File(contenido, tipo!, enableRangeProcessing: true);
+    }
 
     /// <summary>HU-59 Pestaña Historial. Query: categoria (todos · edicion · precotizacion · revision · sistema).</summary>
     [RequierePermiso("rt_bandeja", "precot_ver")]

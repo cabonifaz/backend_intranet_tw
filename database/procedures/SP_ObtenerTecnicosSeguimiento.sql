@@ -47,7 +47,12 @@ proc: BEGIN
     CREATE TEMPORARY TABLE tmp_sg_tf (id_usuario BIGINT NOT NULL, PRIMARY KEY (id_usuario));
     INSERT INTO tmp_sg_tf
     SELECT DISTINCT ut.id_usuario FROM tmp_sg_ut ut JOIN tmp_sg_f f ON f.id_os = ut.id_os
-    WHERE p_id_tecnico IS NULL OR ut.id_usuario = p_id_tecnico;
+    WHERE p_id_tecnico IS NULL OR ut.id_usuario = p_id_tecnico
+    UNION
+    -- HU-20: técnicos con la jornada iniciada y sin servicio programado hoy (solo cuando no hay filtros que los excluyan)
+    SELECT t.id_usuario FROM tmp_sg_tec t
+    WHERE t.n_servicios = 0 AND p_id_cliente IS NULL AND (p_id_tecnico IS NULL OR t.id_usuario = p_id_tecnico)
+      AND NULLIF(p_zona, '') IS NULL AND NULLIF(TRIM(p_busqueda), '') IS NULL;
     IF NULLIF(p_estado, '') IS NOT NULL THEN
         DELETE tf FROM tmp_sg_tf tf JOIN tmp_sg_tec t ON t.id_usuario = tf.id_usuario WHERE t.estado_seg <> p_estado;
     END IF;
@@ -64,7 +69,8 @@ proc: BEGIN
            IF(t.salida_utc IS NULL, NULL,
               TIMESTAMPDIFF(MINUTE, TIMESTAMP(c.hoy, t.salida_prog), CONVERT_TZ(t.salida_utc, '+00:00', '-05:00'))) AS DiferenciaSalidaMin,
            COALESCE(NULLIF(p.direccion, ''), IF(p.lat IS NULL, NULL, CONCAT(FORMAT(p.lat, 5), ', ', FORMAT(p.lon, 5)))) AS UltimaUbicacion,
-           IF(p.ts_utc IS NULL, NULL, TIMESTAMPDIFF(MINUTE, p.ts_utc, c.ahora_utc)) AS MinutosUbicacion
+           IF(p.ts_utc IS NULL, NULL, TIMESTAMPDIFF(MINUTE, p.ts_utc, c.ahora_utc)) AS MinutosUbicacion,
+           t.jornada AS Jornada, t.actividad AS Actividad
     FROM tmp_sg_tec t
     JOIN tmp_sg_tf tf ON tf.id_usuario = t.id_usuario
     LEFT JOIN tmp_sg_pos p ON p.id_usuario = t.id_usuario

@@ -211,6 +211,7 @@ proc: BEGIN
     UPDATE informe_tecnico
     SET    forma_plato = v_forma,
            error_critico_motivo = IF(v_criticos > 0, v_motivo, NULL),
+           error_critico_notificado_en = IF(v_criticos > 0, error_critico_notificado_en, NULL),
            ensayos_finalizado_en = IF(v_final = 1, UTC_TIMESTAMP(), NULL),
            resultado_global = IF(v_criticos > 0, 'fuera', 'dentro'),
            error_maximo = v_err_max,
@@ -234,6 +235,8 @@ proc: BEGIN
             WHERE  u.eliminado_en IS NULL AND u.estado = 'activo' AND u.id_usuario <> p_id_usuario AND u.rol_sistema IN ('administrador', 'admin');
             SET v_notif = ROW_COUNT();
         END IF;
+        -- Quedó constancia de que se avisó (o de que no había a quién avisar): con el aviso hecho, el ensayo ya no bloquea el cierre del equipo (HU-16)
+        UPDATE informe_tecnico SET error_critico_notificado_en = IF(v_notif > 0, NOW(), NULL) WHERE id_informe = v_informe;
     END IF;
 
     INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion, id_usuario, registrado_en, metadata)

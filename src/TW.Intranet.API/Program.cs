@@ -270,6 +270,10 @@ builder.Services.AddScoped<ObtenerDemorasMovilCasoDeUso>();
 builder.Services.AddScoped<RegistrarDemoraMovilCasoDeUso>();
 // App Mobile HU-06 — registro de llegada y Hard Stop
 builder.Services.AddScoped<ILlegadaMovilRepositorio, LlegadaMovilRepositorio>();
+builder.Services.AddScoped<ILlegadaForzadaRepositorio, LlegadaForzadaRepositorio>();
+builder.Services.AddScoped<SolicitarLlegadaForzadaMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerAprobacionLlegadaMovilCasoDeUso>();
+builder.Services.AddScoped<ResolverAprobacionLlegadaMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerLlegadaMovilCasoDeUso>();
 builder.Services.AddScoped<ValidarLlegadaMovilCasoDeUso>();
 builder.Services.AddScoped<RegistrarLlegadaMovilCasoDeUso>();
@@ -713,6 +717,11 @@ builder.Services.AddScoped<ObtenerTecnicosSeguimientoCasoDeUso>();
 builder.Services.AddScoped<ObtenerIncidenciasSeguimientoCasoDeUso>();
 builder.Services.AddScoped<ObtenerFiltrosSeguimientoCasoDeUso>();
 builder.Services.AddScoped<RegistrarUbicacionMovilCasoDeUso>();
+// App Mobile HU-20: Reloj marcador de jornada
+builder.Services.AddScoped<IJornadaMovilRepositorio, JornadaMovilRepositorio>();
+builder.Services.AddScoped<ObtenerJornadaMovilCasoDeUso>();
+builder.Services.AddScoped<MarcarJornadaMovilCasoDeUso>();
+builder.Services.AddScoped<RegistrarUbicacionJornadaMovilCasoDeUso>();
 
 // HU-52 Detalle del Servicio en Ruta (Sprint 5): solo lectura
 builder.Services.AddScoped<IDetalleServicioRutaRepositorio, DetalleServicioRutaRepositorio>();
@@ -743,6 +752,7 @@ builder.Services.AddScoped<GuardarPrecotizacionInformeCasoDeUso>();
 builder.Services.AddScoped<PrepararRevisionInformeCasoDeUso>();
 builder.Services.AddScoped<RegistrarRevisionInformeCasoDeUso>();
 builder.Services.AddScoped<ObtenerHistorialInformeCasoDeUso>();
+builder.Services.AddScoped<ObtenerArchivoFotoInformeCasoDeUso>();
 builder.Services.AddScoped<ObtenerBandejaPrecotizacionesCasoDeUso>();
 builder.Services.AddScoped<ObtenerDetallePrecotizacionCasoDeUso>();
 builder.Services.AddScoped<ObtenerPrecargaPrecotizacionCasoDeUso>();

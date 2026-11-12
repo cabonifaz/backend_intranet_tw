@@ -5,6 +5,9 @@ namespace TW.Intranet.Aplicacion.Dtos;
 /// <summary>Coordenada de la planta del cliente y radio dentro del cual se puede confirmar la llegada.</summary>
 public record ReferenciaGpsMovilDto(decimal Latitud, decimal Longitud, int RadioMetros);
 
+/// <summary>Punto GPS (por ejemplo, el de salida del viaje).</summary>
+public record PuntoGpsLlegadaDto(decimal Latitud, decimal Longitud);
+
 /// <summary>La llegada ya registrada en este viaje. Resultado: valida | sin_referencia (la planta no tenía coordenada).</summary>
 public record LlegadaRegistradaMovilDto(
     DateTime? En, decimal? Latitud, decimal? Longitud, decimal? PrecisionMetros, int? DistanciaMetros, string? Resultado);
@@ -16,7 +19,11 @@ public record LlegadaRegistradaMovilDto(
 public record LlegadaMovilDto(
     long IdOs, string NumeroOs, string EstadoOs, string? Cliente, string? Sede, string? Direccion, string? HoraProgramada,
     ReferenciaGpsMovilDto? Referencia, DateTime? SalidaEn, LlegadaRegistradaMovilDto? Llegada, bool PuedeRegistrar,
-    int PrecisionMaximaMetros, string? MotivoNoRegistra);
+    int PrecisionMaximaMetros, string? MotivoNoRegistra,
+    /// <summary>HU-20: punto de salida del viaje (coordenada del evento «Salida»), para dibujar la ruta prevista hasta la planta. Null si la app no la envió.</summary>
+    PuntoGpsLlegadaDto? Origen = null,
+    /// <summary>HU-06: la solicitud de llegada forzada de esta OS (pendiente | aprobada | rechazada). Null = no hay una vigente.</summary>
+    LlegadaForzadaEstadoDto? Forzada = null);
 
 /// <summary>
 /// Lo que la app envía para validar o registrar la llegada. CapturadoEn = hora (ISO 8601, UTC) en que el técnico confirmó en el teléfono:
@@ -31,7 +38,7 @@ public class PeticionLlegadaMovilDto
 }
 
 /// <summary>
-/// Comparación de la ubicación con la planta (no registra). Resultado: valida | fuera_rango | sin_referencia | precision_baja.
+/// Comparación de la ubicación con la planta (no registra). Resultado: valida | fuera_rango | sin_referencia | precision_baja | autorizada (fuera del rango pero Jefatura aprobó la llegada forzada).
 /// Registrable = se puede confirmar la llegada con esa ubicación.
 /// </summary>
 public record ValidacionLlegadaMovilDto(

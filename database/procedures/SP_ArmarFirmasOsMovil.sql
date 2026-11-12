@@ -58,16 +58,22 @@ BEGIN
     INSERT INTO tmp_fm_inf (id_os_equipo, id_equipo, id_informe, numero_informe, equipo, codigo_equipo, completo, motivo, resp_nombre, resp_cargo, resp_telefono, clave, generado_en)
     SELECT oe.id, oe.id_equipo, it.id_informe, it.numero_informe,
            LEFT(COALESCE(NULLIF(TRIM(su.descripcion), ''), ec.clasificacion), 200), COALESCE(NULLIF(ec.codigo_cliente, ''), ec.codigo_tw),
-           IF(it.id_informe IS NOT NULL AND NULLIF(TRIM(it.responsable_nombre), '') IS NOT NULL, 1, 0),
+           IF(it.id_informe IS NOT NULL AND COALESCE(NULLIF(TRIM(it.responsable_nombre), ''), NULLIF(TRIM(cc.nombres), '')) IS NOT NULL, 1, 0),
            CASE WHEN it.id_informe IS NULL THEN 'Falta finalizar el trabajo en el equipo (HU-16)'
-                WHEN NULLIF(TRIM(it.responsable_nombre), '') IS NULL THEN 'Falta «Quién atiende en planta» en la cabecera del informe'
+                WHEN COALESCE(NULLIF(TRIM(it.responsable_nombre), ''), NULLIF(TRIM(cc.nombres), '')) IS NULL THEN 'Falta «Quién atiende en planta» en la cabecera del informe'
                 ELSE NULL END,
-           NULLIF(TRIM(it.responsable_nombre), ''), NULLIF(TRIM(it.responsable_cargo), ''), NULLIF(TRIM(it.responsable_telefono), ''),
-           IF(it.id_informe IS NOT NULL AND NULLIF(TRIM(it.responsable_nombre), '') IS NOT NULL,
-              MD5(CONCAT(LOWER(TRIM(it.responsable_nombre)), '|', LOWER(TRIM(IFNULL(it.responsable_cargo, ''))))), NULL),
+           -- «Quién atiende en planta»: lo guardado en la cabecera o, si el técnico no lo tocó, el contacto de la OS (lo mismo que muestra la pestaña Datos)
+           COALESCE(NULLIF(TRIM(it.responsable_nombre), ''), NULLIF(TRIM(cc.nombres), '')),
+           IF(NULLIF(TRIM(it.responsable_nombre), '') IS NULL, NULLIF(TRIM(cc.cargo), ''), NULLIF(TRIM(it.responsable_cargo), '')),
+           IF(NULLIF(TRIM(it.responsable_nombre), '') IS NULL, NULLIF(TRIM(cc.telefono_movil), ''), NULLIF(TRIM(it.responsable_telefono), '')),
+           IF(it.id_informe IS NOT NULL AND COALESCE(NULLIF(TRIM(it.responsable_nombre), ''), NULLIF(TRIM(cc.nombres), '')) IS NOT NULL,
+              MD5(CONCAT(LOWER(TRIM(COALESCE(NULLIF(TRIM(it.responsable_nombre), ''), cc.nombres))), '|',
+                         LOWER(TRIM(IFNULL(IF(NULLIF(TRIM(it.responsable_nombre), '') IS NULL, cc.cargo, it.responsable_cargo), ''))))), NULL),
            it.generado_en
     FROM   os_equipo oe
     JOIN   equipo_cliente ec ON ec.id_equipo = oe.id_equipo
+    JOIN   orden_servicio osr ON osr.id_os = oe.id_os
+    LEFT JOIN contacto_cliente cc ON cc.id_contacto = osr.id_contacto AND cc.SoftDelete = 0
     LEFT JOIN suministros su ON su.id_suministro = ec.id_suministro
     LEFT JOIN informe_tecnico it ON it.id_informe = (SELECT MAX(x.id_informe) FROM informe_tecnico x
                                                      WHERE x.id_os = oe.id_os AND x.id_equipo = oe.id_equipo AND x.eliminado_en IS NULL AND x.generado_en IS NOT NULL)

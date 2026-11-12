@@ -7,7 +7,9 @@
 --     estado: conforme | en_curso | pendiente | bloqueado | no_conforme (Ensayos finalizados CON error crítico: bloquea el cierre).
 --     1 variables   conforme con las variables ambientales guardadas (HU-09).
 --     2 fotos       conforme con las 9 evidencias completas: aprobadas por la IA, forzadas o sin validar (SP_ResumenEvidenciasMovil, HU-11 / HU-12).
---     3 ensayos     bloqueado sin variables; conforme al finalizar sin error crítico; NO CONFORME si se finalizó con error crítico (HU-10).
+--     3 ensayos     bloqueado sin variables; conforme al finalizar sin error crítico; si se finalizó con error crítico: NOTIFICADO (el encargado ya fue avisado,
+--                   informe_tecnico.error_critico_notificado_en: cuenta como resuelto y deja generar el informe, que queda registrado fuera de EMP) o NO CONFORME
+--                   (nadie fue notificado: bloquea el cierre) (HU-10).
 --     4 cabecera    "Cabecera del informe" (HU-15): conforme con la cabecera guardada y sin pendientes (recomendaciones o "sin recomendaciones", fallas o
 --                   "sin fallas", Detalle Serv. guardado, Diagnóstico final completo y cada falla con su prueba).
 --     5 correlativo conforme con el certificado guardado en el informe (HU-14); bloqueado hasta finalizar los ensayos.
@@ -55,6 +57,7 @@ BEGIN
     DECLARE v_tk_num     VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
     DECLARE v_tk_corr    VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
     DECLARE v_crit_carga DECIMAL(14,4) DEFAULT NULL;
+    DECLARE v_ens_notif  DATETIME DEFAULT NULL;
     DECLARE v_pend_cab   INT DEFAULT 0;
     DECLARE v_prim_cab   VARCHAR(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
     DECLARE s1 VARCHAR(12) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
@@ -105,8 +108,8 @@ BEGIN
 
     -- ── Informe técnico del equipo (lo crea la primera captura de ensayos o de la cabecera) ───
     SELECT it.id_informe, it.ensayos_finalizado_en, it.error_critico_motivo, it.numero_certificado, it.cabecera_guardada_en, IF(it.detalle_servicio IS NULL, 0, 1),
-           it.severidad_general, it.estado_equipo_final, it.sin_recomendaciones, it.sin_fallas
-    INTO   v_informe, v_ens_final, v_ens_motivo, v_cert, v_cab_guard, v_tiene_det, v_sev, v_est_fin, v_sin_rec, v_sin_fal
+           it.severidad_general, it.estado_equipo_final, it.sin_recomendaciones, it.sin_fallas, it.error_critico_notificado_en
+    INTO   v_informe, v_ens_final, v_ens_motivo, v_cert, v_cab_guard, v_tiene_det, v_sev, v_est_fin, v_sin_rec, v_sin_fal, v_ens_notif
     FROM   informe_tecnico it
     WHERE  it.id_os = p_id_os AND it.id_equipo = p_id_equipo AND it.eliminado_en IS NULL
     ORDER BY it.id_informe DESC LIMIT 1;
@@ -122,18 +125,21 @@ BEGIN
     ELSEIF v_ens_final IS NULL THEN
         INSERT INTO tmp_pend_eq (orden, codigo, texto) VALUES (3, 'ensayos', 'Falta finalizar los ensayos y la calibración');
     ELSEIF v_ens_motivo IS NOT NULL THEN
-        -- Finalizado CON error crítico: una pendiente por cada lectura fuera del EMP (carga, error con signo y EMP)
-        INSERT INTO tmp_pend_eq (orden, codigo, texto)
-        SELECT 3, 'ensayos',
-               LEFT(CONCAT('Error crítico en ', FORMAT(en.carga, 0), ' ', v_unidad, ' (', IF(en.error >= 0, '+', ''),
-                           TRIM(TRAILING '.' FROM TRIM(TRAILING '0' FROM CAST(ROUND(en.error, 4) AS CHAR))), ' ', v_unidad, ' · EMP ±',
-                           IFNULL(TRIM(TRAILING '.' FROM TRIM(TRAILING '0' FROM CAST(ROUND(en.tolerancia, 4) AS CHAR))), '?'), ' ', v_unidad, ')'), 250)
-        FROM   informe_ensayo en
-        WHERE  en.id_informe = v_informe AND en.eliminado_en IS NULL AND en.critico = 1
-        ORDER BY en.tipo, en.grupo, en.orden;
+        -- Finalizado CON error crítico: si el encargado YA FUE NOTIFICADO (error_critico_notificado_en) no bloquea el cierre (etapa "notificado");
+        -- si nadie fue notificado, una pendiente por cada lectura fuera del EMP (carga, error con signo y EMP)
         SELECT MIN(en.carga) INTO v_crit_carga FROM informe_ensayo en WHERE en.id_informe = v_informe AND en.eliminado_en IS NULL AND en.critico = 1;
-        IF NOT EXISTS (SELECT 1 FROM tmp_pend_eq WHERE orden = 3) THEN
-            INSERT INTO tmp_pend_eq (orden, codigo, texto) VALUES (3, 'ensayos', 'El ensayo se guardó con un error crítico: repítelo o corrige la lectura');
+        IF v_ens_notif IS NULL THEN
+            INSERT INTO tmp_pend_eq (orden, codigo, texto)
+            SELECT 3, 'ensayos',
+                   LEFT(CONCAT('Error crítico en ', FORMAT(en.carga, 0), ' ', v_unidad, ' (', IF(en.error >= 0, '+', ''),
+                               TRIM(TRAILING '.' FROM TRIM(TRAILING '0' FROM CAST(ROUND(en.error, 4) AS CHAR))), ' ', v_unidad, ' · EMP ±',
+                               IFNULL(TRIM(TRAILING '.' FROM TRIM(TRAILING '0' FROM CAST(ROUND(en.tolerancia, 4) AS CHAR))), '?'), ' ', v_unidad, ')'), 250)
+            FROM   informe_ensayo en
+            WHERE  en.id_informe = v_informe AND en.eliminado_en IS NULL AND en.critico = 1
+            ORDER BY en.tipo, en.grupo, en.orden;
+            IF NOT EXISTS (SELECT 1 FROM tmp_pend_eq WHERE orden = 3) THEN
+                INSERT INTO tmp_pend_eq (orden, codigo, texto) VALUES (3, 'ensayos', 'El ensayo se guardó con un error crítico y no se avisó al encargado: guárdalo de nuevo con un motivo');
+            END IF;
         END IF;
     END IF;
 
@@ -180,7 +186,7 @@ BEGIN
     -- ── Estados y detalle de las 5 etapas ──────────────────────────────────────────────────────
     SET s1 = IF(v_vars > 0, 'conforme', 'pendiente');
     SET s2 = IF(v_ev_compl >= v_ev_total, 'conforme', IF(v_ev_compl > 0 OR v_ev_rech > 0, 'en_curso', 'pendiente'));
-    SET s3 = IF(v_vars = 0, 'bloqueado', IF(v_ens_final IS NOT NULL, IF(v_ens_motivo IS NULL, 'conforme', 'no_conforme'), IF(v_n_ensayos > 0, 'en_curso', 'pendiente')));
+    SET s3 = IF(v_vars = 0, 'bloqueado', IF(v_ens_final IS NOT NULL, IF(v_ens_motivo IS NULL, 'conforme', IF(v_ens_notif IS NULL, 'no_conforme', 'notificado')), IF(v_n_ensayos > 0, 'en_curso', 'pendiente')));
     SET s4 = IF(v_cab_guard IS NOT NULL AND v_pend_cab = 0, 'conforme', IF(v_cab_guard IS NOT NULL, 'en_curso', 'pendiente'));
     SET s5 = IF(v_cert IS NOT NULL, 'conforme', IF(v_ens_final IS NULL, 'bloqueado', IF(v_tk_estado IS NOT NULL, 'en_curso', 'pendiente')));
 
@@ -192,7 +198,9 @@ BEGIN
             IF(v_vars = 0, 'Se habilita al guardar las variables ambientales',
                IF(v_ens_final IS NOT NULL,
                   IF(v_ens_motivo IS NULL, 'Pesaje y excentricidad conformes',
-                     CONCAT('Pesaje guardado con error crítico', IF(v_crit_carga IS NULL, '', CONCAT(' (', FORMAT(v_crit_carga, 0), ' ', v_unidad, ')')))),
+                     IF(v_ens_notif IS NULL,
+                        CONCAT('Pesaje guardado con error crítico', IF(v_crit_carga IS NULL, '', CONCAT(' (', FORMAT(v_crit_carga, 0), ' ', v_unidad, ')'))),
+                        CONCAT('Lectura fuera de EMP', IF(v_crit_carga IS NULL, '', CONCAT(' en ', FORMAT(v_crit_carga, 0), ' ', v_unidad)), ' · encargado notificado'))),
                   IF(v_n_ensayos > 0, CONCAT(v_n_ensayos, ' lecturas guardadas · falta finalizar'), 'Verificación de pesaje tras el ajuste'))), 1),
         (4, 'cabecera', 'Cabecera del informe', s4,
             IF(s4 = 'conforme', 'Cabecera completa', IF(s4 = 'en_curso', v_prim_cab, 'Datos · Detalle Serv. · Observación y pruebas')), 1),
@@ -202,7 +210,8 @@ BEGIN
                   IF(v_tk_estado = 'asignado', CONCAT(v_tk_num, ' asignado · listo para usar'),
                      IF(v_tk_estado = 'solicitado', CONCAT(v_tk_num, ' · esperando a Metrología'), 'Correlativo de Metrología → N° de certificado')))), 1);
 
-    SELECT COUNT(*) INTO p_conformes FROM tmp_etapas_mov WHERE estado = 'conforme';
+    -- "notificado" (ensayo con lecturas fuera de EMP y el encargado ya avisado) cuenta como resuelto: no bloquea el cierre
+    SELECT COUNT(*) INTO p_conformes FROM tmp_etapas_mov WHERE estado IN ('conforme', 'notificado');
 END$$
 
 DELIMITER ;
