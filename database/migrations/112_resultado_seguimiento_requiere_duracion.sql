@@ -1,5 +1,5 @@
 -- ============================================================
--- Migración 106 — Flag "requiere duración" en RESULTADO_SEGUIMIENTO (IdMaestro 27)
+-- Migración 112 (antes 106; en pre-prod ya se aplicó con ese número) — Flag "requiere duración" en RESULTADO_SEGUIMIENTO (IdMaestro 27)
 --   Num2 = 1: hubo conversación efectiva → la llamada exige duración y notas (mín. 5 caracteres).
 --   Num2 = 0: sin conversación (No contesta, Buzón, Correo enviado, Pendiente) → duración y notas opcionales.
 --   OJO: Num1 es el id del resultado (seguimiento_comercial.id_resultado); no se toca.

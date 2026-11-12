@@ -7,7 +7,7 @@
 --   Fecha de la interacción (NULL = ahora) no futura y no anterior al envío de la propuesta.
 --   Notas obligatorias (mínimo 5 caracteres) salvo en correos, que llevan asunto.
 --   Llamada: duración obligatoria entre 0 y 600 minutos, solo si el resultado tiene Num2 = 1
---   (conversación efectiva, migración 106). Si no (No contesta, Buzón...), duración y notas opcionales.
+--   (conversación efectiva, migración 112). Si no (No contesta, Buzón...), duración y notas opcionales.
 --   Próxima acción (p_programar = 1): tipo, fecha futura, responsable activo del área y prioridad.
 --   Sin próxima acción (p_programar = 0) se mantiene la acción pendiente del seguimiento anterior,
 --   salvo que p_ejecuta_accion = 1 (se registró desde "Ejecutar ahora": la acción queda realizada).
