@@ -5,7 +5,7 @@
 -- El back valida antes el checklist (ReglasChecklistSalida). Aquí se vuelve a validar lo
 -- que podría cambiar en el medio: estado de la OS, que sea el día programado (SP_ObtenerSalidaHabilitadaMovil)
 -- y, si se usa, el visto bueno vigente.
---   p_con_visto_bueno = 1 → sale con pendientes gracias al visto bueno del jefe.
+--   La aprobación de Jefatura (autorizacion_salida_os 'aprobada') es SIEMPRE obligatoria, con o sin pendientes en el checklist; p_con_visto_bueno se conserva por compatibilidad.
 -- ============================================================
 DROP PROCEDURE IF EXISTS SP_IniciarTrasladoMovil;
 
@@ -60,17 +60,15 @@ proc: BEGIN
         LEAVE proc;
     END IF;
 
-    IF p_con_visto_bueno = 1 THEN
-        SELECT a.estado INTO v_aut_estado
-        FROM   autorizacion_salida_os a
-        WHERE  a.id_os = p_id_os AND a.eliminado_en IS NULL
-        ORDER BY a.id_autorizacion DESC LIMIT 1;
+    SELECT a.estado INTO v_aut_estado
+    FROM   autorizacion_salida_os a
+    WHERE  a.id_os = p_id_os AND a.eliminado_en IS NULL
+    ORDER BY a.id_autorizacion DESC LIMIT 1;
 
-        IF IFNULL(v_aut_estado, '') <> 'aprobada' THEN
-            ROLLBACK;
-            SELECT 1 AS IdTipoMensaje, 'El visto bueno del encargado del área ya no está vigente.' AS Mensaje;
-            LEAVE proc;
-        END IF;
+    IF IFNULL(v_aut_estado, '') <> 'aprobada' THEN
+        ROLLBACK;
+        SELECT 1 AS IdTipoMensaje, 'Necesitas la aprobación de Jefatura para iniciar el traslado.' AS Mensaje;
+        LEAVE proc;
     END IF;
 
     SELECT t.Num1 INTO v_tipo
