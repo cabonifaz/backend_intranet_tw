@@ -305,7 +305,9 @@ public class MaestrosRepositorio(CadenaConexionBd conexion) : IMaestrosRepositor
                     Distrito:        nullable("distrito")         ? null : reader.GetString("distrito"),
                     Urbanizacion:    nullable("urbanizacion")     ? null : reader.GetString("urbanizacion"),
                     DireccionExacta: nullable("direccion_exacta") ? null : reader.GetString("direccion_exacta"),
-                    Estado:          reader.GetString("estado")
+                    Estado:          reader.GetString("estado"),
+                    Latitud:         nullable("latitud")          ? null : reader.GetDecimal("latitud"),
+                    Longitud:        nullable("longitud")         ? null : reader.GetDecimal("longitud")
                 ));
             }
 
@@ -338,6 +340,9 @@ public class MaestrosRepositorio(CadenaConexionBd conexion) : IMaestrosRepositor
             cmd.Parameters.AddWithValue("p_distrito",         dto.Distrito        ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("p_urbanizacion",     dto.Urbanizacion    ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("p_direccion_exacta", dto.DireccionExacta ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("p_latitud",          dto.Latitud         ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("p_longitud",         dto.Longitud        ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("p_quitar_ubicacion", dto.QuitarUbicacion ? 1 : 0);
             cmd.Parameters.AddWithValue("p_usu_cre",          usuCre);
 
             await using var reader = await cmd.ExecuteReaderAsync(ct);

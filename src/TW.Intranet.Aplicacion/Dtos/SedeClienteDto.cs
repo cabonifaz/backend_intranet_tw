@@ -10,5 +10,7 @@ public record SedeClienteDto(
     string? Distrito,
     string? Urbanizacion,
     string? DireccionExacta,
-    string  Estado
+    string  Estado,
+    decimal? Latitud  = null,
+    decimal? Longitud = null
 );

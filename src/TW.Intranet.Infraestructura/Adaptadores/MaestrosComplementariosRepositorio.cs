@@ -26,6 +26,45 @@ public class MaestrosComplementariosRepositorio(CadenaConexionBd conexion)
                 return new RespuestaDto<List<UbigeoItemDto>>(2, mensaje, items);
             }, ct);
 
+    public Task<RespuestaDto<UbigeoReversoDto?>> ObtenerUbigeoPorCoordenadasAsync(
+        decimal latitud, decimal longitud, CancellationToken ct)
+        => EjecutarAsync("SP_ObtenerUbigeoPorCoordenadas",
+            p =>
+            {
+                p.AddWithValue("p_latitud",  latitud);
+                p.AddWithValue("p_longitud", longitud);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<UbigeoReversoDto?>(3, "El procedimiento no devolvió el ubigeo.");
+                var distrito = Texto(r, "distrito_codigo") ?? "";
+                return new RespuestaDto<UbigeoReversoDto?>(2, mensaje, new UbigeoReversoDto(
+                    new UbigeoItemDto(Texto(r, "departamento_codigo") ?? "", Texto(r, "departamento") ?? ""),
+                    new UbigeoItemDto(Texto(r, "provincia_codigo") ?? "", Texto(r, "provincia") ?? ""),
+                    new UbigeoItemDto(distrito, Texto(r, "distrito") ?? ""),
+                    distrito,
+                    Booleano(r, "aproximado")));
+            }, ct);
+
+    public Task<RespuestaDto<List<SedeSinUbicacionDto>>> ObtenerSedesSinUbicacionAsync(long? idCliente, CancellationToken ct)
+        => EjecutarAsync("SP_ObtenerSedesSinUbicacion",
+            p => p.AddWithValue("p_id_cliente", (object?)idCliente ?? DBNull.Value),
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                var lista = new List<SedeSinUbicacionDto>();
+                while (await r.ReadAsync(ct))
+                {
+                    var proximo = r.IsDBNull(r.GetOrdinal("proximo_servicio")) ? null : r.GetDateTime("proximo_servicio").ToString("yyyy-MM-dd");
+                    lista.Add(new SedeSinUbicacionDto(EnteroLargo(r, "id_sede"), EnteroLargo(r, "id_cliente"), Texto(r, "cliente") ?? "", Texto(r, "sede") ?? "",
+                        Texto(r, "direccion_exacta"), Texto(r, "region"), Texto(r, "provincia"), Texto(r, "distrito"),
+                        Entero(r, "servicios_proximos"), proximo));
+                }
+                return new RespuestaDto<List<SedeSinUbicacionDto>>(2, mensaje, lista);
+            }, ct);
+
     // ── Áreas por cliente (nombres libres) ────────────────────────────────────
     public Task<RespuestaDto<List<AreaClienteDto>>> ObtenerAreasClienteAsync(
         long idCliente, bool soloActivas, CancellationToken ct)

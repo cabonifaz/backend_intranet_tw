@@ -2,6 +2,8 @@
 -- Acceso: seg_bandeja (observacional: solo lectura; la bandeja no cambia datos). Los KPIs y contadores del día NO dependen de los filtros;
 -- el mapa y las alertas sí respetan los filtros globales. "Hoy" es la fecha de Lima.
 -- Resultados: 1 mensaje, 2 KPIs y contadores, 3 pines del mapa, 4 alertas críticas (más recientes), 5 totales de alertas, 6 próximos hitos, 7 resumen de hitos.
+-- Pines: además del técnico, la planta de su servicio actual (NombreSede, LatitudPlanta, LongitudPlanta, DistanciaPlantaM, EtaMin). PlantaUbicada = 1 si la
+-- coordenada es la de la sede (mapa de la sede); 0 si la sede no tiene ubicación y se usa la llegada registrada del técnico, o no hay ninguna.
 DROP PROCEDURE IF EXISTS SP_ObtenerResumenSeguimiento;
 
 DELIMITER $$
@@ -71,7 +73,10 @@ proc: BEGIN
       AND NULLIF(p_estado, '') IS NULL AND NULLIF(p_zona, '') IS NULL AND NULLIF(TRIM(p_busqueda), '') IS NULL;
     SELECT t.id_usuario AS IdUsuario, t.nombre AS Tecnico, t.iniciales AS Iniciales, t.estado_seg AS Estado, p.lat AS Latitud, p.lon AS Longitud,
            COALESCE(p.direccion, '') AS Direccion, IF(p.ts_utc IS NULL, NULL, TIMESTAMPDIFF(MINUTE, p.ts_utc, c.ahora_utc)) AS MinutosUbicacion,
-           t.id_os_actual AS IdOs, o.numero AS NumeroOs, o.razon_social AS Cliente, t.jornada AS Jornada, t.actividad AS Actividad, t.actividad_tono AS ActividadTono, t.actividad_color AS ActividadColor
+           t.id_os_actual AS IdOs, o.numero AS NumeroOs, o.razon_social AS Cliente, t.jornada AS Jornada, t.actividad AS Actividad, t.actividad_tono AS ActividadTono, t.actividad_color AS ActividadColor,
+           -- Planta del servicio actual: pin y línea técnico–planta. Distancia en línea recta; ETA solo en ruta (referencial).
+           o.sede_nombre AS NombreSede, o.lat_sede AS LatitudPlanta, o.lon_sede AS LongitudPlanta, IFNULL(o.planta_ubicada, 0) AS PlantaUbicada,
+           t.dist_m AS DistanciaPlantaM, o.eta_min AS EtaMin
     FROM tmp_sg_tec t
     JOIN tmp_sg_tf tf ON tf.id_usuario = t.id_usuario
     LEFT JOIN tmp_sg_pos p ON p.id_usuario = t.id_usuario

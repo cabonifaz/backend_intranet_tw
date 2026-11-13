@@ -535,6 +535,8 @@ builder.Services.AddScoped<GenerarPdfPreviewPropuestaCasoDeUso>();
 // ── INYECCIÓN DE DEPENDENCIAS — Ubigeo, áreas del cliente y formatos (reunión 02-oct) ──
 builder.Services.AddScoped<IMaestrosComplementariosRepositorio, MaestrosComplementariosRepositorio>();
 builder.Services.AddScoped<ObtenerUbigeoCasoDeUso>();
+builder.Services.AddScoped<ObtenerUbigeoPorCoordenadasCasoDeUso>();
+builder.Services.AddScoped<ObtenerSedesSinUbicacionCasoDeUso>();
 builder.Services.AddScoped<ObtenerAreasClienteCasoDeUso>();
 builder.Services.AddScoped<GuardarAreaClienteCasoDeUso>();
 builder.Services.AddScoped<CambiarEstadoAreaClienteCasoDeUso>();

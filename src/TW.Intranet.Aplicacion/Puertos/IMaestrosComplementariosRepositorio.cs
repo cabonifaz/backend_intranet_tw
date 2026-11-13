@@ -6,6 +6,8 @@ namespace TW.Intranet.Aplicacion.Puertos;
 public interface IMaestrosComplementariosRepositorio
 {
     Task<RespuestaDto<List<UbigeoItemDto>>> ObtenerUbigeoAsync(string nivel, string? departamento, string? provincia, CancellationToken ct);
+    Task<RespuestaDto<UbigeoReversoDto?>>   ObtenerUbigeoPorCoordenadasAsync(decimal latitud, decimal longitud, CancellationToken ct);
+    Task<RespuestaDto<List<SedeSinUbicacionDto>>> ObtenerSedesSinUbicacionAsync(long? idCliente, CancellationToken ct);
 
     Task<RespuestaDto<List<AreaClienteDto>>> ObtenerAreasClienteAsync(long idCliente, bool soloActivas, CancellationToken ct);
     Task<RespuestaDto<AreaClienteDto?>>      GuardarAreaClienteAsync(long idCliente, GuardarAreaClienteDto dto, long idUsuario, CancellationToken ct);

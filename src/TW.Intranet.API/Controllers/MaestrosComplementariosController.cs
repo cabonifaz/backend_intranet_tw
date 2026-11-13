@@ -13,6 +13,8 @@ namespace TW.Intranet.API.Controllers;
 [Authorize]
 public class MaestrosComplementariosController(
     ObtenerUbigeoCasoDeUso                 obtenerUbigeo,
+    ObtenerUbigeoPorCoordenadasCasoDeUso   obtenerUbigeoPorCoordenadas,
+    ObtenerSedesSinUbicacionCasoDeUso      obtenerSedesSinUbicacion,
     ObtenerAreasClienteCasoDeUso           obtenerAreas,
     GuardarAreaClienteCasoDeUso            guardarArea,
     CambiarEstadoAreaClienteCasoDeUso      cambiarEstadoArea,
@@ -46,6 +48,16 @@ public class MaestrosComplementariosController(
     [HttpGet("ubigeo/distritos")]
     public async Task<IActionResult> Distritos([FromQuery] string? departamento, [FromQuery] string? provincia, CancellationToken ct = default)
         => Responder(await obtenerUbigeo.EjecutarAsync("distritos", departamento, provincia, ct));
+
+    /// <summary>Pin del mapa de la sede → departamento, provincia y distrito (ubigeo INEI). 400 si está fuera del Perú o de los distritos.</summary>
+    [HttpGet("ubigeo/reverse")]
+    public async Task<IActionResult> UbigeoPorCoordenadas([FromQuery] decimal? lat, [FromQuery] decimal? lng, CancellationToken ct = default)
+        => Responder(await obtenerUbigeoPorCoordenadas.EjecutarAsync(lat, lng, ct));
+
+    /// <summary>Sedes activas que faltan marcar en el mapa (primero las con servicios próximos). idCliente opcional.</summary>
+    [HttpGet("sedes/sin-ubicacion")]
+    public async Task<IActionResult> SedesSinUbicacion([FromQuery] long? idCliente, CancellationToken ct = default)
+        => Responder(await obtenerSedesSinUbicacion.EjecutarAsync(idCliente, ct));
 
     // ── Áreas por cliente (nombres libres, estado activo/inactivo) ───────────
     [HttpGet("clientes/{idCliente:long}/areas")]

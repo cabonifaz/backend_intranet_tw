@@ -42,7 +42,9 @@ public class SeguimientoOperativoRepositorio(CadenaConexionBd conexion) : Reposi
                     pines.Add(new PinMapaDto(EnteroLargo(r, "IdUsuario"), Texto(r, "Tecnico") ?? "", Texto(r, "Iniciales") ?? "", Texto(r, "Estado") ?? "",
                         DecimalNulo(r, "Latitud"), DecimalNulo(r, "Longitud"), Texto(r, "Direccion") ?? "", EnteroNulo(r, "MinutosUbicacion"),
                         EnteroLargoNulo(r, "IdOs"), Texto(r, "NumeroOs"), Texto(r, "Cliente"), Texto(r, "Jornada"), Texto(r, "Actividad"),
-                        Texto(r, "ActividadTono"), Texto(r, "ActividadColor")));
+                        Texto(r, "ActividadTono"), Texto(r, "ActividadColor"),
+                        Texto(r, "NombreSede"), DecimalNulo(r, "LatitudPlanta"), DecimalNulo(r, "LongitudPlanta"), Booleano(r, "PlantaUbicada"),
+                        EnteroNulo(r, "DistanciaPlantaM"), EnteroNulo(r, "EtaMin")));
 
                 await r.NextResultAsync(ct);
                 var alertas = new List<AlertaSeguimientoDto>();

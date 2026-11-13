@@ -1,3 +1,4 @@
+-- SP_ObtenerSedesPorCliente: sedes del cliente con su ubicación exacta (latitud/longitud, NULL si no se ha marcado). Solo lectura.
 DROP PROCEDURE IF EXISTS SP_ObtenerSedesPorCliente;
 
 DELIMITER //
@@ -17,6 +18,8 @@ BEGIN
         distrito,
         urbanizacion,
         direccion_exacta,
+        latitud,
+        longitud,
         estado
     FROM sede_cliente
     WHERE id_cliente = p_id_cliente

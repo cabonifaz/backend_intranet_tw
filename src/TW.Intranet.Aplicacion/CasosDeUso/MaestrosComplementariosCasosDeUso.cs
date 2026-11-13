@@ -18,6 +18,50 @@ public class ObtenerUbigeoCasoDeUso(IMaestrosComplementariosRepositorio reposito
     }
 }
 
+/// <summary>
+/// Regla de la ubicación de una sede (pin del mapa): van la latitud y la longitud juntas, o ninguna, y dentro del recuadro de Perú
+/// (latitud −18.5..−0.5, longitud −82..−68). La misma regla la repiten SP_GuardarSede y SP_ObtenerUbigeoPorCoordenadas.
+/// </summary>
+public static class UbicacionPeru
+{
+    public const string FueraDelPeru = "La ubicación debe estar dentro del Perú.";
+
+    /// <summary>null si es válida (o si no viene ninguna y <paramref name="obligatoria"/> es false); si no, el mensaje de negocio.</summary>
+    public static string? Validar(decimal? latitud, decimal? longitud, bool obligatoria)
+    {
+        if (latitud is null && longitud is null)
+            return obligatoria ? "Indique la latitud y la longitud." : null;
+        if (latitud is null || longitud is null)
+            return "Envía la latitud y la longitud de la sede juntas.";
+        if (latitud < -18.5m || latitud > -0.5m || longitud < -82m || longitud > -68m)
+            return FueraDelPeru;
+        return null;
+    }
+}
+
+/// <summary>Sedes activas sin ubicación en el mapa (para completarlas): sin ellas no se valida la llegada por GPS ni se ve la planta en el seguimiento.</summary>
+public class ObtenerSedesSinUbicacionCasoDeUso(IMaestrosComplementariosRepositorio repositorio)
+{
+    public Task<RespuestaDto<List<SedeSinUbicacionDto>>> EjecutarAsync(long? idCliente, CancellationToken ct = default)
+    {
+        if (idCliente is <= 0)
+            return Task.FromResult(new RespuestaDto<List<SedeSinUbicacionDto>>(1, "El cliente no es válido."));
+        return repositorio.ObtenerSedesSinUbicacionAsync(idCliente, ct);
+    }
+}
+
+/// <summary>Coordenada del mapa de la sede → departamento, provincia y distrito (ubigeo INEI). El distrito lo resuelve el SP con los polígonos.</summary>
+public class ObtenerUbigeoPorCoordenadasCasoDeUso(IMaestrosComplementariosRepositorio repositorio)
+{
+    public Task<RespuestaDto<UbigeoReversoDto?>> EjecutarAsync(decimal? latitud, decimal? longitud, CancellationToken ct = default)
+    {
+        var error = UbicacionPeru.Validar(latitud, longitud, obligatoria: true);
+        if (error is not null)
+            return Task.FromResult(new RespuestaDto<UbigeoReversoDto?>(1, error));
+        return repositorio.ObtenerUbigeoPorCoordenadasAsync(Math.Round(latitud!.Value, 7), Math.Round(longitud!.Value, 7), ct);
+    }
+}
+
 // ── Áreas por cliente (nombres libres, no catálogo global) ──────────────────
 public class ObtenerAreasClienteCasoDeUso(IMaestrosComplementariosRepositorio repositorio)
 {

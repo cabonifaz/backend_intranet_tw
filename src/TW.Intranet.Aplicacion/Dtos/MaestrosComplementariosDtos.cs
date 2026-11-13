@@ -4,6 +4,17 @@ namespace TW.Intranet.Aplicacion.Dtos;
 /// <summary>Opción de ubigeo. Código INEI: 2 dígitos (departamento), 4 (provincia) o 6 (distrito).</summary>
 public record UbigeoItemDto(string Codigo, string Nombre);
 
+/// <summary>
+/// Ubigeo de una coordenada (pin del mapa de la sede). Los nombres son los mismos de los selects en cascada.
+/// Aproximado = true cuando el punto no cayó dentro de ningún distrito y se tomó el más cercano (a menos de ~1 km).
+/// </summary>
+public record UbigeoReversoDto(UbigeoItemDto Departamento, UbigeoItemDto Provincia, UbigeoItemDto Distrito, string Ubigeo, bool Aproximado);
+
+/// <summary>Sede activa sin ubicación en el mapa. Primero las que tienen servicios próximos (ProximoServicio = yyyy-MM-dd).</summary>
+public record SedeSinUbicacionDto(
+    long IdSede, long IdCliente, string Cliente, string Sede, string? DireccionExacta, string? Region, string? Provincia, string? Distrito,
+    int ServiciosProximos, string? ProximoServicio);
+
 // ── Áreas por cliente (nombres libres, estado activo/inactivo) ─────────────────
 /// <summary>
 /// Área del cliente. Modelo por cliente (no catálogo global) — nombres libres

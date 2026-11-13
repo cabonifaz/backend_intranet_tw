@@ -34,7 +34,13 @@ public record PinMapaDto(
     /// <summary>HU-20: estado del Reloj marcador (en_labores · en_refrigerio · salio_planta · finalizada; null si no inició) y lo que hace el técnico.</summary>
     string? Jornada = null, string? Actividad = null,
     /// <summary>Color de lo que hace el técnico: tono (trabajo · planta · ruta · refrigerio · refrigerio_fin · salida_planta · finalizada · sin_iniciar · demora · incidente) y su color hexadecimal.</summary>
-    string? ActividadTono = null, string? ActividadColor = null);
+    string? ActividadTono = null, string? ActividadColor = null,
+    /// <summary>
+    /// Planta del servicio actual (pin y línea técnico–planta). DistanciaPlantaM = línea recta en metros; EtaMin = minutos estimados, solo en ruta (referencial).
+    /// PlantaUbicada = true si la coordenada es la de la sede; false si la sede no tiene ubicación (puede ser la llegada registrada del técnico).
+    /// </summary>
+    string? NombreSede = null, decimal? LatitudPlanta = null, decimal? LongitudPlanta = null, bool PlantaUbicada = false,
+    int? DistanciaPlantaM = null, int? EtaMin = null);
 
 public record AlertaSeguimientoDto(
     string Clave, string Tipo, string Severidad, string Titulo, string Detalle, int Minutos, bool Nueva,
