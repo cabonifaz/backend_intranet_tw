@@ -327,6 +327,9 @@ builder.Services.AddScoped<ObtenerPanelCampoMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerServiciosJefaturaMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerServicioJefaturaMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerRutaServicioJefaturaMovilCasoDeUso>();
+// Ruta por calles hasta la planta (OSRM; configurable en la sección "Rutas")
+builder.Services.AddSingleton(builder.Configuration.GetSection("Rutas").Get<ConfiguracionRutas>() ?? new ConfiguracionRutas());
+builder.Services.AddHttpClient<IProveedorRutas, OsrmProveedorRutas>(c => c.Timeout = TimeSpan.FromSeconds(6));
 builder.Services.AddScoped<RegistrarSeguimientoJefaturaMovilCasoDeUso>();
 // HU-14 / HU-34 — Correlativos de Metrología (técnico y Jefe de Metrología)
 builder.Services.AddScoped<ICorrelativosMovilRepositorio, CorrelativosMovilRepositorio>();

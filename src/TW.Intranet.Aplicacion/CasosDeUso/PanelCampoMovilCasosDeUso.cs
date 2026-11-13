@@ -89,12 +89,52 @@ public class ObtenerServicioJefaturaMovilCasoDeUso(IPanelCampoMovilRepositorio r
 }
 
 /// <summary>Ubicación y ruta del técnico en un servicio (HU-30).</summary>
-public class ObtenerRutaServicioJefaturaMovilCasoDeUso(IPanelCampoMovilRepositorio repositorio)
+public class ObtenerRutaServicioJefaturaMovilCasoDeUso(IPanelCampoMovilRepositorio repositorio, IProveedorRutas rutas)
 {
-    public Task<RespuestaDto<RutaServicioDto>> EjecutarAsync(long idUsuario, long idOs, CancellationToken ct = default) =>
-        idUsuario <= 0 ? Task.FromResult(new RespuestaDto<RutaServicioDto>(1, "No se pudo identificar al usuario."))
-        : idOs <= 0    ? Task.FromResult(new RespuestaDto<RutaServicioDto>(1, "El servicio indicado no es válido."))
-        : repositorio.ObtenerRutaAsync(idUsuario, idOs, ct);
+    public async Task<RespuestaDto<RutaServicioDto>> EjecutarAsync(long idUsuario, long idOs, CancellationToken ct = default)
+    {
+        if (idUsuario <= 0) return new RespuestaDto<RutaServicioDto>(1, "No se pudo identificar al usuario.");
+        if (idOs <= 0)      return new RespuestaDto<RutaServicioDto>(1, "El servicio indicado no es válido.");
+        var respuesta = await repositorio.ObtenerRutaAsync(idUsuario, idOs, ct);
+        if (respuesta.Datos is not { } datos) return respuesta;
+        try
+        {
+            return respuesta with { Datos = datos with { Resumen = await EnriquecerAsync(datos.Resumen, ct) } };
+        }
+        catch (Exception) when (!ct.IsCancellationRequested)
+        {
+            return respuesta; // el servicio externo es un extra: sin él se muestra lo que ya calculó la base de datos
+        }
+    }
+
+    /// <summary>
+    /// Con la sede ubicada (coordenada real, la de Maestros › Clientes › Sedes) calcula distancia y tiempo por calles. Sin ubicación real NO se inventa un destino: la coordenada
+    /// que traiga el seguimiento puede ser la llegada del técnico, así que se omite (destino, distancia y ETA) y la app avisa que falta registrar la ubicación de la sede.
+    /// </summary>
+    private async Task<RutaResumenDto> EnriquecerAsync(RutaResumenDto r, CancellationToken ct)
+    {
+        if (!r.PlantaUbicada || r.DestinoLatitud is null || r.DestinoLongitud is null)
+            return r with { PlantaUbicada = false, DestinoLatitud = null, DestinoLongitud = null, DistanciaM = null, EtaMinutos = null, EtaEstimada = null, Eta = null };
+        if (r.Latitud is null || r.Longitud is null) return r;
+
+        var recta = (int)Math.Round(DistanciaMetros(r.Latitud.Value, r.Longitud.Value, r.DestinoLatitud.Value, r.DestinoLongitud.Value));
+        if (recta <= 150) return r with { EtaMinutos = 0, EtaEstimada = null, DistanciaRutaM = recta, EtaPorCalles = true };
+
+        if (await rutas.CalcularAsync(r.Latitud.Value, r.Longitud.Value, r.DestinoLatitud.Value, r.DestinoLongitud.Value, ct) is not { } ruta) return r; // respaldo: la estimación del seguimiento
+        var llegada = DateTime.UtcNow.AddHours(-5).AddMinutes(ruta.Minutos); // hora de Lima
+        return r with { EtaMinutos = ruta.Minutos, EtaEstimada = llegada.ToString("HH:mm"), DistanciaRutaM = ruta.DistanciaM, EtaPorCalles = true };
+    }
+
+    /// <summary>Haversine (metros).</summary>
+    public static double DistanciaMetros(decimal lat1, decimal lon1, decimal lat2, decimal lon2)
+    {
+        const double R = 6371000.0;
+        static double Rad(decimal g) => (double)g * Math.PI / 180.0;
+        var dLat = Rad(lat2 - lat1);
+        var dLon = Rad(lon2 - lon1);
+        var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) + Math.Cos(Rad(lat1)) * Math.Cos(Rad(lat2)) * Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+        return R * 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+    }
 }
 
 /// <summary>

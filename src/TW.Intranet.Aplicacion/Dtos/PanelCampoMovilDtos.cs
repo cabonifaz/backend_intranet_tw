@@ -53,7 +53,11 @@ public record RutaResumenDto(long IdOs, string Numero, string? Cliente, string E
                              string? Eta, string? EtaProgramada, string? DemoraTexto, string? DemoraOrigen, string? ContactoNombre, string? ContactoTelefono,
                              string? Actualizado,
                              /// <summary>HU-20: llegada estimada desde la posición actual (en ruta; referencial) y dirección de la planta.</summary>
-                             int? EtaMinutos = null, string? EtaEstimada = null, string? DestinoDireccion = null);
+                             int? EtaMinutos = null, string? EtaEstimada = null, string? DestinoDireccion = null,
+                             /// <summary>Distancia por calles (m) y si la ETA se calculó por calles (solo con la sede ubicada).</summary>
+                             int? DistanciaRutaM = null, bool EtaPorCalles = false,
+                             /// <summary>true si destino_* es la coordenada real de la sede; false: la sede no tiene ubicación y el destino se omite (no se dibuja ni se calcula el tiempo).</summary>
+                             bool PlantaUbicada = true);
 
 public record PuntoGpsServicioDto(decimal Latitud, decimal Longitud, string? Hora);
 
