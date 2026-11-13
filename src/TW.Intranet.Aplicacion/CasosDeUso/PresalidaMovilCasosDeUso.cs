@@ -13,8 +13,8 @@ namespace TW.Intranet.Aplicacion.CasosDeUso;
 ///                 repuestos asignados y alertas predictivas resueltas.
 ///   Opcional:     OC cargada.
 ///   Visto bueno del encargado del área del servicio según la RQ (Jefe de Servicio Técnico o
-///   Jefe de Metrología; lo da desde la intranet o la app): con él se puede salir aunque queden
-///   obligatorios pendientes. Los pendientes se muestran como "aprobado" (Autorizado por el jefe) y todo queda conforme.
+///   Jefe de Metrología; lo da desde la intranet o la app). SIEMPRE es obligatorio: el técnico no inicia el traslado sin él,
+///   tenga o no pendientes. Si quedan pendientes, el jefe los ve en la solicitud y al aprobar se muestran como "aprobado".
 /// </summary>
 public static class ReglasChecklistSalida
 {
@@ -95,7 +95,7 @@ public static class ReglasChecklistSalida
                 "aprobada"  => "conforme",
                 "rechazada" => "bloqueado",
                 "pendiente" => "pendiente",
-                _           => "opcional",
+                _           => "pendiente",
             },
             autorizacion?.Estado switch
             {
@@ -104,8 +104,8 @@ public static class ReglasChecklistSalida
                 "rechazada" => $"No autorizado por {autorizacion.Jefe ?? "el jefe"}." + (string.IsNullOrWhiteSpace(autorizacion.Comentario) ? "" : $" {autorizacion.Comentario}"),
                 "pendiente" => $"Solicitud enviada {aQuien}: esperando respuesta.",
                 _           => area.Cargo is null
-                               ? "La RQ no indica el área: lo marca el encargado de Servicio Técnico o de Metrología desde la intranet."
-                               : $"Lo marca el {area.Cargo} desde la intranet. Solo hace falta si quedan pendientes.",
+                               ? "Obligatorio. La RQ no indica el área: lo da el encargado de Servicio Técnico o de Metrología. Solicítalo desde aquí."
+                               : $"Obligatorio: el {area.Cargo} debe aprobar tu salida. Solicítalo desde aquí.",
             },
             false));
 
@@ -116,7 +116,7 @@ public static class ReglasChecklistSalida
 
         var vistoBuenoVigente = autorizacion?.Estado == "aprobada";
         var completo          = faltantes.Count == 0;
-        var puedeIniciar      = editable && (completo || vistoBuenoVigente);
+        var puedeIniciar      = editable && vistoBuenoVigente; // la luz verde de Jefatura es siempre obligatoria
 
         // Con el visto bueno vigente, los pendientes obligatorios se muestran APROBADOS ("Autorizado por el Jefe …") y todo queda conforme
         if (vistoBuenoVigente)
@@ -131,9 +131,9 @@ public static class ReglasChecklistSalida
             items,
             faltantes,
             PuedeIniciar:               puedeIniciar,
-            TodoConforme:               editable && (completo || vistoBuenoVigente),
-            SaleConVistoBueno:          puedeIniciar && !completo,
-            PuedeSolicitarAutorizacion: editable && !completo && autorizacion?.Estado is not ("pendiente" or "aprobada"),
+            TodoConforme:               puedeIniciar,
+            SaleConVistoBueno:          puedeIniciar,
+            PuedeSolicitarAutorizacion: editable && autorizacion?.Estado is not ("pendiente" or "aprobada"),
             TrasladoIniciado:           !programada && h.EstadoOs is "en_ruta" or "en_ejecucion" or "pausada" or "finalizada",
             Autorizacion:               autorizacion,
             AreaAutoriza:               area,
@@ -214,7 +214,7 @@ public class MarcarItemChecklistSalidaMovilCasoDeUso(IPresalidaMovilRepositorio 
 }
 
 /// <summary>
-/// El técnico pide el visto bueno al encargado del área del servicio (según la RQ). Los pendientes los calcula el back
+/// El técnico pide la aprobación de Jefatura al encargado del área del servicio (según la RQ); es obligatoria antes de salir, con o sin pendientes. Los pendientes los calcula el back
 /// (no se aceptan desde la app). El motivo es opcional y se limpia (máx. 300 caracteres, sin saltos de control).
 /// </summary>
 public class SolicitarAutorizacionSalidaMovilCasoDeUso(IPresalidaMovilRepositorio repositorio)
@@ -239,13 +239,11 @@ public class SolicitarAutorizacionSalidaMovilCasoDeUso(IPresalidaMovilRepositori
             return new(1, antesDelDia);
 
         var checklist = ReglasChecklistSalida.Evaluar(hechos.Datos);
-        if (checklist.Faltantes.Count == 0)
-            return new(1, "No tienes pendientes: puedes iniciar el traslado sin autorización.");
         if (!checklist.PuedeSolicitarAutorizacion)
             return new(1, checklist.Autorizacion?.Estado switch
             {
                 "pendiente" => "Ya enviaste una solicitud: espera la respuesta del encargado del área.",
-                "aprobada"  => "Ya tienes el visto bueno: puedes iniciar el traslado.",
+                "aprobada"  => "Jefatura ya aprobó tu salida: puedes iniciar el traslado.",
                 _           => "El servicio ya no está programado.",
             });
 
@@ -271,8 +269,7 @@ public class SolicitarAutorizacionSalidaMovilCasoDeUso(IPresalidaMovilRepositori
 }
 
 /// <summary>
-/// Inicia el traslado. El back vuelve a evaluar el checklist (la app no decide): sin pendientes, o con
-/// pendientes y visto bueno vigente del jefe. Si no se puede, responde qué falta.
+/// Inicia el traslado. El back vuelve a evaluar (la app no decide): solo con la aprobación vigente de Jefatura. Si no se puede, responde qué falta.
 /// </summary>
 public class IniciarTrasladoMovilCasoDeUso(IPresalidaMovilRepositorio repositorio)
 {
@@ -291,7 +288,12 @@ public class IniciarTrasladoMovilCasoDeUso(IPresalidaMovilRepositorio repositori
             var mensaje = !ReglasChecklistSalida.EstaProgramada(checklist.EstadoOs)
                 ? "El servicio ya no está programado."
                 : checklist.SalidaMensaje
-                  ?? $"No puedes iniciar el traslado. Faltan: {string.Join(", ", checklist.Faltantes)}.";
+                  ?? checklist.Autorizacion?.Estado switch
+                  {
+                      "pendiente"  => "Jefatura aún no responde tu solicitud: podrás iniciar el traslado cuando la apruebe.",
+                      "rechazada"  => "Jefatura no autorizó tu salida. Revisa su comentario y vuelve a solicitarla.",
+                      _            => "Necesitas la aprobación de Jefatura para iniciar el traslado: solicítala primero.",
+                  };
             return new(1, mensaje, checklist);
         }
 
