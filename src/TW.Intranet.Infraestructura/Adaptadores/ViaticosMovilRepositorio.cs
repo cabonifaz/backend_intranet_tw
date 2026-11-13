@@ -8,6 +8,18 @@ namespace TW.Intranet.Infraestructura.Adaptadores;
 public class ViaticosMovilRepositorio(CadenaConexionBd conexion)
     : RepositorioSpBase(conexion), IViaticosMovilRepositorio
 {
+    public Task<RespuestaDto<List<ConceptoGastoMovilDto>>> ObtenerConceptosAsync(long idUsuario, CancellationToken ct) =>
+        EjecutarAsync<List<ConceptoGastoMovilDto>>("SP_ObtenerConceptosGastoMovil",
+            p => p.AddWithValue("p_id_usuario", idUsuario),
+            async (r, mensaje) =>
+            {
+                var lista = new List<ConceptoGastoMovilDto>();
+                await r.NextResultAsync(ct);
+                while (await r.ReadAsync(ct))
+                    lista.Add(new ConceptoGastoMovilDto(Entero(r, "id_concepto"), Texto(r, "concepto") ?? string.Empty, Booleano(r, "es_otro")));
+                return new RespuestaDto<List<ConceptoGastoMovilDto>>(2, mensaje, lista);
+            }, ct);
+
     public Task<RespuestaDto<ViaticosMovilDto>> ObtenerAsync(long idUsuario, CancellationToken ct) =>
         EjecutarAsync<ViaticosMovilDto>("SP_ObtenerViaticosMovil",
             p => p.AddWithValue("p_id_usuario", idUsuario),

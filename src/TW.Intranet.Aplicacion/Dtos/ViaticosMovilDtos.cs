@@ -99,6 +99,9 @@ public record GastoMovilDto(
     bool?     CoincideIa    = null,
     int       NFotos        = 0);
 
+/// <summary>Concepto del catálogo CONCEPTO_GASTO para un reembolso. EsOtro: la app pide el texto del concepto.</summary>
+public record ConceptoGastoMovilDto(int IdConcepto, string Concepto, bool EsOtro);
+
 // ── App Mobile HU-27 — Rendir un gasto o corregir uno observado ────────────────────────────
 
 /// <summary>Línea del reparto: de qué viático (línea del adelanto) sale cuánto.</summary>

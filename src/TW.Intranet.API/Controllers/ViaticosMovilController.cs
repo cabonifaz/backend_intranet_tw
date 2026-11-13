@@ -13,6 +13,7 @@ namespace TW.Intranet.API.Controllers;
 public class ViaticosMovilController(
     ObtenerViaticosMovilCasoDeUso    obtener,
     RendirGastoMovilCasoDeUso        rendir,
+    ObtenerConceptosGastoMovilCasoDeUso conceptos,
     ObtenerFotoGastoMovilCasoDeUso   foto,
     ILogger<ViaticosMovilController> logger) : ControladorAppMovil(logger)
 {
@@ -38,6 +39,11 @@ public class ViaticosMovilController(
     [HttpGet]
     public async Task<IActionResult> Obtener(CancellationToken ct)
         => Responder(await obtener.EjecutarAsync(IdUsuarioActual, ct));
+
+    /// <summary>HU-27 Conceptos del catálogo de la intranet para elegir en un reembolso ("Otro" pide el texto).</summary>
+    [HttpGet("conceptos")]
+    public async Task<IActionResult> Conceptos(CancellationToken ct)
+        => Responder(await conceptos.EjecutarAsync(IdUsuarioActual, ct));
 
     /// <summary>
     /// HU-27 Rendir un gasto (del adelanto con reparto, o reembolso) en una sola petición con sus fotos. Un reintento con el mismo idCliente devuelve el

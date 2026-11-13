@@ -348,6 +348,7 @@ builder.Services.AddScoped<ResolverAprobacionSalidaMovilCasoDeUso>();
 // App Mobile HU-25 / HU-26 — viáticos asignados al programar y gastos rendidos
 builder.Services.AddScoped<IViaticosMovilRepositorio, ViaticosMovilRepositorio>();
 builder.Services.AddScoped<ObtenerViaticosMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerConceptosGastoMovilCasoDeUso>();
 // App Mobile HU-27 (rendir gastos) y HU-31 (bandeja del jefe: evidencias forzadas, ensayos con error y gastos)
 builder.Services.AddScoped<IGastosAprobacionesMovilRepositorio, GastosAprobacionesMovilRepositorio>();
 builder.Services.AddScoped<RendirGastoMovilCasoDeUso>();
