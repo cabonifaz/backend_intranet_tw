@@ -59,6 +59,7 @@ proc: BEGIN
         FROM   orden_servicio os
         WHERE  os.eliminado_en IS NULL
           AND  os.estado IN ('programada', 'en_ruta', 'en_ejecucion', 'pausada', 'reprogramada', 'bloqueada')
+          AND  NOT EXISTS (SELECT 1 FROM os_constancia k WHERE k.id_os = os.id_os AND k.cerrada_en IS NOT NULL)
           AND  (os.fecha_ejecucion >= CURDATE() OR os.estado IN ('en_ruta', 'en_ejecucion', 'pausada'))
           AND  (os.id_tecnico_principal = p_id_usuario
                 OR EXISTS (SELECT 1 FROM os_personal op
@@ -91,6 +92,7 @@ proc: BEGIN
                               WHERE x.Descripcion = 'TIPO_SERVICIO' AND x.IdEmpresa = 1)
     WHERE  os.eliminado_en IS NULL
       AND  os.estado IN ('programada', 'en_ruta', 'en_ejecucion', 'pausada', 'reprogramada', 'bloqueada')
+      AND  NOT EXISTS (SELECT 1 FROM os_constancia k WHERE k.id_os = os.id_os AND k.cerrada_en IS NOT NULL)
       AND  (os.fecha_ejecucion >= CURDATE() OR os.estado IN ('en_ruta', 'en_ejecucion', 'pausada'))
       AND  (os.id_tecnico_principal = p_id_usuario
             OR EXISTS (SELECT 1 FROM os_personal op
