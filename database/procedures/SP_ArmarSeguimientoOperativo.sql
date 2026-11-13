@@ -192,7 +192,8 @@ BEGIN
         prio INT, estado_seg VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci, id_os_actual BIGINT,
         n_servicios INT, n_completados INT, n_en_curso INT,
         salida_utc DATETIME, salida_prog TIME, dist_m INT,
-        jornada VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci, jornada_desde DATETIME, actividad VARCHAR(150) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+        jornada VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci, jornada_n INT DEFAULT 0, jornada_desde DATETIME, actividad VARCHAR(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+        actividad_tono VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci, actividad_color CHAR(7) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
         PRIMARY KEY (id_usuario)
     );
     INSERT INTO tmp_sg_tec (id_usuario, nombre, nombre_pila, iniciales, cargo, zona, prio, n_servicios, n_completados, n_en_curso, salida_utc, salida_prog)
@@ -258,24 +259,56 @@ BEGIN
                                                             WHERE b.id_usuario = p.id_usuario AND b.timestamp_utc >= v_ini_utc AND b.timestamp_utc <= p.ts_utc
                                                               AND (ABS(b.latitud - p.lat) > 0.0003 OR ABS(b.longitud - p.lon) > 0.0003)), '1000-01-01'));
 
-    -- Jornada del técnico (HU-20): estado del Reloj marcador de hoy (la misma tabla de estados de SP_EstadoJornadaMovil) y lo que está haciendo
+    -- Jornada del técnico (HU-20): estado del Reloj marcador de hoy (la misma tabla de estados de SP_EstadoJornadaMovil) y lo que está haciendo.
+    -- jornada_n = marcaciones de hoy (1 inicio · 2 refrigerio · 3 volvió del refrigerio · 4 salida de planta · 5 fin).
     UPDATE tmp_sg_tec t
-    SET t.jornada = (SELECT CASE COUNT(*) WHEN 0 THEN NULL WHEN 1 THEN 'en_labores' WHEN 2 THEN 'en_refrigerio' WHEN 3 THEN 'en_labores'
-                                          WHEN 4 THEN 'salio_planta' ELSE 'finalizada' END
-                     FROM jornada_marcacion j WHERE j.id_usuario = t.id_usuario AND j.fecha = v_hoy),
+    SET t.jornada_n = (SELECT COUNT(*) FROM jornada_marcacion j WHERE j.id_usuario = t.id_usuario AND j.fecha = v_hoy),
         t.jornada_desde = (SELECT MAX(j.marcado_utc) FROM jornada_marcacion j WHERE j.id_usuario = t.id_usuario AND j.fecha = v_hoy);
     UPDATE tmp_sg_tec t
+    SET t.jornada = CASE t.jornada_n WHEN 0 THEN NULL WHEN 1 THEN 'en_labores' WHEN 2 THEN 'en_refrigerio' WHEN 3 THEN 'en_labores'
+                                     WHEN 4 THEN 'salio_planta' ELSE 'finalizada' END;
+    -- Actividad (texto) y actividad_tono / actividad_color (para diferenciar por colores a simple vista):
+    --   trabajo (verde) ejecutando un equipo · planta (turquesa) en planta sin iniciar · ruta (azul) · refrigerio (ámbar) comiendo/descansando (fuera de sus responsabilidades) ·
+    --   refrigerio_fin (lima) acaba de volver de comer (menos de 15 min) · salida_planta (morado) · finalizada (gris) · sin_iniciar (gris claro) · demora (naranja) · incidente (rojo)
+    UPDATE tmp_sg_tec t
     LEFT JOIN tmp_sg_os o ON o.id_os = t.id_os_actual
-    SET t.actividad = LEFT(CASE t.jornada
-            WHEN 'en_refrigerio' THEN CONCAT('En refrigerio · hace ', TIMESTAMPDIFF(MINUTE, t.jornada_desde, v_ahora_utc), ' min')
-            WHEN 'salio_planta'  THEN CONCAT('Salió de planta · hace ', TIMESTAMPDIFF(MINUTE, t.jornada_desde, v_ahora_utc), ' min')
-            WHEN 'finalizada'    THEN CONCAT('Jornada finalizada · ', TIME_FORMAT(CONVERT_TZ(t.jornada_desde, '+00:00', '-05:00'), '%H:%i'))
-            ELSE CASE o.fase WHEN 'en_ruta'      THEN CONCAT('En labores · en ruta a ', o.razon_social)
-                             WHEN 'en_planta'    THEN CONCAT('En labores · en planta de ', o.razon_social)
-                             WHEN 'en_ejecucion' THEN CONCAT('En labores · ejecutando servicio en ', o.razon_social)
-                             WHEN 'finalizado'   THEN 'En labores · servicio finalizado'
-                             ELSE 'En labores' END END, 150)
-    WHERE t.jornada IS NOT NULL;
+    SET t.actividad = LEFT(CASE
+            WHEN t.jornada = 'en_refrigerio' THEN CONCAT('En refrigerio (almuerzo/descanso) desde las ', TIME_FORMAT(CONVERT_TZ(t.jornada_desde, '+00:00', '-05:00'), '%H:%i'),
+                 ' · hace ', TIMESTAMPDIFF(MINUTE, t.jornada_desde, v_ahora_utc), ' min · fuera de sus labores')
+            WHEN t.jornada = 'salio_planta' THEN CONCAT('Salió de planta hace ', TIMESTAMPDIFF(MINUTE, t.jornada_desde, v_ahora_utc), ' min (',
+                 TIME_FORMAT(CONVERT_TZ(t.jornada_desde, '+00:00', '-05:00'), '%H:%i'), ')', IF(o.id_os IS NULL, '', CONCAT(' · servicio ', o.numero)))
+            WHEN t.jornada = 'finalizada' THEN CONCAT('Jornada finalizada a las ', TIME_FORMAT(CONVERT_TZ(t.jornada_desde, '+00:00', '-05:00'), '%H:%i'))
+            WHEN t.jornada = 'en_labores' THEN CONCAT(
+                 IF(t.jornada_n = 3, CONCAT('Volvió del refrigerio hace ', TIMESTAMPDIFF(MINUTE, t.jornada_desde, v_ahora_utc), ' min · '), 'En labores · '),
+                 CASE o.fase WHEN 'en_ruta'      THEN CONCAT('en ruta a ', o.razon_social, IF(o.eta_min IS NULL, '', CONCAT(' · llega en ~', o.eta_min, ' min')), ' · ', o.numero)
+                             WHEN 'en_planta'    THEN CONCAT('en planta de ', o.razon_social, IF(o.llegada_dt IS NULL, '', CONCAT(' desde hace ', TIMESTAMPDIFF(MINUTE, o.llegada_dt, v_ahora), ' min')), ' · ', o.numero)
+                             WHEN 'en_ejecucion' THEN CONCAT('ejecutando ', o.numero, ' en ', o.razon_social, ' · ', o.n_ejecutados, ' de ', o.n_equipos, ' equipos',
+                                                             IFNULL((SELECT CONCAT(' · trabajando en ', COALESCE(NULLIF(ec.codigo_cliente, ''), ec.codigo_tw))
+                                                                     FROM os_equipo oe JOIN equipo_cliente ec ON ec.id_equipo = oe.id_equipo
+                                                                     WHERE oe.id_os = o.id_os AND oe.eliminado_en IS NULL AND oe.estado_ejecucion = 'en_proceso' AND oe.pausado = 0
+                                                                     ORDER BY oe.id LIMIT 1), ''))
+                             WHEN 'finalizado'   THEN CONCAT('servicio ', o.numero, ' finalizado · ', o.n_ejecutados, ' de ', o.n_equipos, ' equipos')
+                             WHEN 'sin_salir'    THEN CONCAT('aún en base · servicio ', o.numero, ' programado ', IFNULL(TIME_FORMAT(o.hora_inicio, '%H:%i'), ''))
+                             ELSE 'sin servicio asignado hoy' END,
+                 IF(t.estado_seg = 'con_incidente', ' · CON INCIDENTE', IF(t.estado_seg = 'con_demora', ' · con demora', '')))
+            ELSE CASE o.fase WHEN 'en_ruta' THEN CONCAT('En ruta a ', o.razon_social, ' (sin marcar el Reloj) · ', o.numero) ELSE 'Jornada sin iniciar (no marcó el Reloj)' END
+        END, 250),
+        t.actividad_tono = CASE
+            WHEN t.jornada = 'en_refrigerio' THEN 'refrigerio'
+            WHEN t.jornada = 'salio_planta'  THEN 'salida_planta'
+            WHEN t.jornada = 'finalizada'    THEN 'finalizada'
+            WHEN t.estado_seg = 'con_incidente' THEN 'incidente'
+            WHEN t.estado_seg = 'con_demora'    THEN 'demora'
+            WHEN t.jornada = 'en_labores' AND t.jornada_n = 3 AND TIMESTAMPDIFF(MINUTE, t.jornada_desde, v_ahora_utc) < 15 THEN 'refrigerio_fin'
+            WHEN o.fase = 'en_ejecucion' THEN 'trabajo'
+            WHEN o.fase = 'en_planta'    THEN 'planta'
+            WHEN o.fase = 'en_ruta'      THEN 'ruta'
+            WHEN t.jornada = 'en_labores' THEN 'trabajo'
+            ELSE 'sin_iniciar' END;
+    UPDATE tmp_sg_tec t
+    SET t.actividad_color = CASE t.actividad_tono
+            WHEN 'trabajo' THEN '#16A34A' WHEN 'planta' THEN '#14B8A6' WHEN 'ruta' THEN '#2563EB' WHEN 'refrigerio' THEN '#F59E0B' WHEN 'refrigerio_fin' THEN '#84CC16'
+            WHEN 'salida_planta' THEN '#7C3AED' WHEN 'finalizada' THEN '#64748B' WHEN 'demora' THEN '#EA580C' WHEN 'incidente' THEN '#DC2626' ELSE '#94A3B8' END;
 
     -- Distancia (m) al cliente: técnico principal de cada servicio y técnico (servicio actual)
     UPDATE tmp_sg_os o

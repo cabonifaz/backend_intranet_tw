@@ -41,7 +41,8 @@ public class SeguimientoOperativoRepositorio(CadenaConexionBd conexion) : Reposi
                 while (await r.ReadAsync(ct))
                     pines.Add(new PinMapaDto(EnteroLargo(r, "IdUsuario"), Texto(r, "Tecnico") ?? "", Texto(r, "Iniciales") ?? "", Texto(r, "Estado") ?? "",
                         DecimalNulo(r, "Latitud"), DecimalNulo(r, "Longitud"), Texto(r, "Direccion") ?? "", EnteroNulo(r, "MinutosUbicacion"),
-                        EnteroLargoNulo(r, "IdOs"), Texto(r, "NumeroOs"), Texto(r, "Cliente"), Texto(r, "Jornada"), Texto(r, "Actividad")));
+                        EnteroLargoNulo(r, "IdOs"), Texto(r, "NumeroOs"), Texto(r, "Cliente"), Texto(r, "Jornada"), Texto(r, "Actividad"),
+                        Texto(r, "ActividadTono"), Texto(r, "ActividadColor")));
 
                 await r.NextResultAsync(ct);
                 var alertas = new List<AlertaSeguimientoDto>();
@@ -120,9 +121,9 @@ public class SeguimientoOperativoRepositorio(CadenaConexionBd conexion) : Reposi
                             prog = Texto(r, "SalidaProgramada"), ubic = Texto(r, "UltimaUbicacion");
                     int servicios = Entero(r, "Servicios"), completados = Entero(r, "Completados"), enCurso = Entero(r, "EnCurso");
                     int? dif = EnteroNulo(r, "DiferenciaSalidaMin"), minUbic = EnteroNulo(r, "MinutosUbicacion");
-                    string? jornada = Texto(r, "Jornada"), actividad = Texto(r, "Actividad");
+                    string? jornada = Texto(r, "Jornada"), actividad = Texto(r, "Actividad"), tono = Texto(r, "ActividadTono"), color = Texto(r, "ActividadColor");
                     cabeceras.Add((id, s => new TecnicoSeguimientoDto(id, nombre, iniciales, cargo, zona, estado, ssoma, servicios, completados, enCurso,
-                        real, prog, dif, ubic, minUbic, s, jornada, actividad)));
+                        real, prog, dif, ubic, minUbic, s, jornada, actividad, tono, color)));
                 }
 
                 await r.NextResultAsync(ct);

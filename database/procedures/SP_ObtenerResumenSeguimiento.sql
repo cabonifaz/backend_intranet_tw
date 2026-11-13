@@ -71,7 +71,7 @@ proc: BEGIN
       AND NULLIF(p_estado, '') IS NULL AND NULLIF(p_zona, '') IS NULL AND NULLIF(TRIM(p_busqueda), '') IS NULL;
     SELECT t.id_usuario AS IdUsuario, t.nombre AS Tecnico, t.iniciales AS Iniciales, t.estado_seg AS Estado, p.lat AS Latitud, p.lon AS Longitud,
            COALESCE(p.direccion, '') AS Direccion, IF(p.ts_utc IS NULL, NULL, TIMESTAMPDIFF(MINUTE, p.ts_utc, c.ahora_utc)) AS MinutosUbicacion,
-           t.id_os_actual AS IdOs, o.numero AS NumeroOs, o.razon_social AS Cliente, t.jornada AS Jornada, t.actividad AS Actividad
+           t.id_os_actual AS IdOs, o.numero AS NumeroOs, o.razon_social AS Cliente, t.jornada AS Jornada, t.actividad AS Actividad, t.actividad_tono AS ActividadTono, t.actividad_color AS ActividadColor
     FROM tmp_sg_tec t
     JOIN tmp_sg_tf tf ON tf.id_usuario = t.id_usuario
     LEFT JOIN tmp_sg_pos p ON p.id_usuario = t.id_usuario
