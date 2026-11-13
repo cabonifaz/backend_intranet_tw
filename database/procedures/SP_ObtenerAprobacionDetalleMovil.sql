@@ -99,7 +99,7 @@ proc: BEGIN
                os.id_os, os.numero AS numero_os, COALESCE(NULLIF(cl.nombre_comercial, ''), cl.razon_social) AS cliente, sc.nombre AS sede,
                NULLIF(TRIM(CONCAT(IFNULL(t.nombre, ''), ' ', IFNULL(t.apellido, ''))), '') AS tecnico,
                os.fecha_ejecucion, TIME_FORMAT(os.hora_inicio, '%H:%i') AS hora_inicio,
-               COALESCE(f.forzada_en, f.timestamp_captura) AS solicitada_en,
+               CONVERT_TZ(COALESCE(f.forzada_en, f.timestamp_captura), '+00:00', '-05:00') AS solicitada_en,
                f.motivo_forzado AS motivo,
                CONCAT_WS(' · ', IF(ec.codigo_tw IS NULL, NULL, CONCAT('Equipo ', ec.codigo_tw)), IF(IFNULL(f.pagina, 1) > 1, CONCAT('hoja ', f.pagina), NULL)) AS detalle,
                f.comentario_jefe AS comentario,

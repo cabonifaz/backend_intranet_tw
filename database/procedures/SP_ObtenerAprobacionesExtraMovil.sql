@@ -77,7 +77,7 @@ proc: BEGIN
                               IF(f.motivo_forzado IS NULL, NULL, CONCAT('motivo: ', f.motivo_forzado))), 500),
                os.fecha_ejecucion, TIME_FORMAT(os.hora_inicio, '%H:%i'),
                IF(os.fecha_ejecucion = v_hoy, 1, 0),
-               COALESCE(f.forzada_en, f.timestamp_captura)
+               CONVERT_TZ(COALESCE(f.forzada_en, f.timestamp_captura), '+00:00', '-05:00')
         FROM evidencia_fotografica f
         JOIN orden_servicio os ON os.id_os = f.id_os AND os.eliminado_en IS NULL AND os.estado <> 'anulada'
         LEFT JOIN cliente cl            ON cl.id_cliente = os.id_cliente

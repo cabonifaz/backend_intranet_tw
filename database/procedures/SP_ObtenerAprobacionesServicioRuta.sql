@@ -122,7 +122,7 @@ proc: BEGIN
            LEFT(CONCAT('Evidencia forzada: ', IFNULL(f.codigo, 'foto'), IF(IFNULL(f.pagina, 1) > 1, CONCAT(' (hoja ', f.pagina, ')'), ''),
                        IF(ec.codigo_tw IS NULL, '', CONCAT(' · ', ec.codigo_tw))), 200),
            NULLIF(TRIM(CONCAT(IFNULL(t.nombre, ''), ' ', IFNULL(t.apellido, ''))), ''),
-           COALESCE(f.forzada_en, f.timestamp_captura), f.motivo_forzado,
+           CONVERT_TZ(COALESCE(f.forzada_en, f.timestamp_captura), '+00:00', '-05:00'), f.motivo_forzado,
            LEFT(CONCAT('La IA la rechazó', IF(f.motivo_rechazo_ia IS NULL, '.', CONCAT(': ', f.motivo_rechazo_ia))), 500),
            IFNULL(f.revision_jefe, 'pendiente'),
            NULLIF(TRIM(CONCAT(IFNULL(j.nombre, ''), ' ', IFNULL(j.apellido, ''))), ''), IFNULL(cj.String1, NULLIF(j.cargo, '')),
