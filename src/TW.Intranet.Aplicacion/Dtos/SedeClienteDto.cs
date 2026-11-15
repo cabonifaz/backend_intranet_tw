@@ -8,9 +8,13 @@ public record SedeClienteDto(
     string? Region,
     string? Provincia,
     string? Distrito,
-    string? Urbanizacion,
+    string? Referencia,
     string? DireccionExacta,
     string  Estado,
     decimal? Latitud  = null,
     decimal? Longitud = null
-);
+)
+{
+    /// <summary>TRANSICIÓN: mismo valor que Referencia con el nombre viejo, mientras el front no se actualice. Quitar cuando el front lea "referencia".</summary>
+    public string? Urbanizacion => Referencia;
+}

@@ -50,15 +50,26 @@ public class ObtenerSedesSinUbicacionCasoDeUso(IMaestrosComplementariosRepositor
     }
 }
 
-/// <summary>Coordenada del mapa de la sede → departamento, provincia y distrito (ubigeo INEI). El distrito lo resuelve el SP con los polígonos.</summary>
-public class ObtenerUbigeoPorCoordenadasCasoDeUso(IMaestrosComplementariosRepositorio repositorio)
+/// <summary>
+/// Coordenada del mapa de la sede → departamento, provincia y distrito (ubigeo INEI, lo resuelve el SP con los polígonos) + dirección legible (OpenStreetMap).
+/// Las dos consultas van en paralelo; la dirección es opcional: si no se resuelve sale null y no afecta al ubigeo.
+/// </summary>
+public class ObtenerUbigeoPorCoordenadasCasoDeUso(IMaestrosComplementariosRepositorio repositorio, IProveedorDireccion proveedorDireccion)
 {
-    public Task<RespuestaDto<UbigeoReversoDto?>> EjecutarAsync(decimal? latitud, decimal? longitud, CancellationToken ct = default)
+    public async Task<RespuestaDto<UbigeoReversoDto?>> EjecutarAsync(decimal? latitud, decimal? longitud, CancellationToken ct = default)
     {
         var error = UbicacionPeru.Validar(latitud, longitud, obligatoria: true);
         if (error is not null)
-            return Task.FromResult(new RespuestaDto<UbigeoReversoDto?>(1, error));
-        return repositorio.ObtenerUbigeoPorCoordenadasAsync(Math.Round(latitud!.Value, 7), Math.Round(longitud!.Value, 7), ct);
+            return new RespuestaDto<UbigeoReversoDto?>(1, error);
+
+        var lat = Math.Round(latitud!.Value, 7);
+        var lng = Math.Round(longitud!.Value, 7);
+        var tareaDireccion = proveedorDireccion.ObtenerDireccionAsync(lat, lng, ct);
+        var respuesta = await repositorio.ObtenerUbigeoPorCoordenadasAsync(lat, lng, ct);
+        if (respuesta.IdTipoMensaje != 2 || respuesta.Datos is null)
+            return respuesta;
+
+        return respuesta with { Datos = respuesta.Datos with { Direccion = await tareaDireccion } };
     }
 }
 

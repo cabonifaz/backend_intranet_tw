@@ -1,4 +1,4 @@
--- SP_ObtenerSedesPorCliente: sedes del cliente con su ubicación exacta (latitud/longitud, NULL si no se ha marcado). Solo lectura.
+-- SP_ObtenerSedesPorCliente: sedes del cliente con su ubicación exacta (latitud/longitud, NULL si no se ha marcado) y su referencia (antes urbanizacion, migración 116). Solo lectura.
 DROP PROCEDURE IF EXISTS SP_ObtenerSedesPorCliente;
 
 DELIMITER //
@@ -16,7 +16,8 @@ BEGIN
         region,
         provincia,
         distrito,
-        urbanizacion,
+        referencia,
+        referencia AS urbanizacion,   -- TRANSICIÓN: lo lee el back anterior mientras termina de desplegarse; quitar después
         direccion_exacta,
         latitud,
         longitud,

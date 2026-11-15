@@ -7,8 +7,9 @@ public record UbigeoItemDto(string Codigo, string Nombre);
 /// <summary>
 /// Ubigeo de una coordenada (pin del mapa de la sede). Los nombres son los mismos de los selects en cascada.
 /// Aproximado = true cuando el punto no cayó dentro de ningún distrito y se tomó el más cercano (a menos de ~1 km).
+/// Direccion = calle y número (o barrio/caserío) según OpenStreetMap; null si no se pudo resolver. Es referencial: el usuario la puede corregir.
 /// </summary>
-public record UbigeoReversoDto(UbigeoItemDto Departamento, UbigeoItemDto Provincia, UbigeoItemDto Distrito, string Ubigeo, bool Aproximado);
+public record UbigeoReversoDto(UbigeoItemDto Departamento, UbigeoItemDto Provincia, UbigeoItemDto Distrito, string Ubigeo, bool Aproximado, string? Direccion = null);
 
 /// <summary>Sede activa sin ubicación en el mapa. Primero las que tienen servicios próximos (ProximoServicio = yyyy-MM-dd).</summary>
 public record SedeSinUbicacionDto(

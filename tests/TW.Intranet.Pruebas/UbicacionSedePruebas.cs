@@ -46,18 +46,54 @@ public class UbicacionSedePruebas
     public async Task Reverse_invalido_no_llega_a_la_base(double? lat, double? lng)
     {
         var (repo, contador) = Proxy<IMaestrosComplementariosRepositorio>();
-        var r = await new ObtenerUbigeoPorCoordenadasCasoDeUso(repo).EjecutarAsync((decimal?)lat, (decimal?)lng);
+        var direccion = new DireccionFalsa("Calle Lima 123");
+        var r = await new ObtenerUbigeoPorCoordenadasCasoDeUso(repo, direccion).EjecutarAsync((decimal?)lat, (decimal?)lng);
         Assert.Equal(1, r.IdTipoMensaje);
         Assert.Equal(0, contador.Llamadas);
+        Assert.Equal(0, direccion.Llamadas);
     }
 
     [Fact]
     public async Task Reverse_valido_consulta_la_base()
     {
         var (repo, contador) = Proxy<IMaestrosComplementariosRepositorio>();
-        var r = await new ObtenerUbigeoPorCoordenadasCasoDeUso(repo).EjecutarAsync(-14.064m, -75.7286m);
+        var r = await new ObtenerUbigeoPorCoordenadasCasoDeUso(repo, new DireccionFalsa(null)).EjecutarAsync(-14.064m, -75.7286m);
         Assert.Equal(2, r.IdTipoMensaje);
         Assert.Equal(1, contador.Llamadas);
+    }
+
+    [Fact]
+    public async Task Reverse_agrega_la_direccion_al_ubigeo()
+    {
+        var repo = UbigeoFijo.Crear();
+        var r = await new ObtenerUbigeoPorCoordenadasCasoDeUso(repo,new DireccionFalsa("Calle Los Constructores 123")).EjecutarAsync(-14.064m, -75.7286m);
+        Assert.Equal(2, r.IdTipoMensaje);
+        Assert.Equal("110101", r.Datos!.Ubigeo);
+        Assert.Equal("Calle Los Constructores 123", r.Datos.Direccion);
+    }
+
+    [Fact]
+    public async Task Reverse_sin_direccion_igual_devuelve_el_ubigeo()
+    {
+        var r = await new ObtenerUbigeoPorCoordenadasCasoDeUso(UbigeoFijo.Crear(),new DireccionFalsa(null)).EjecutarAsync(-14.064m, -75.7286m);
+        Assert.Equal(2, r.IdTipoMensaje);
+        Assert.Equal("110101", r.Datos!.Ubigeo);
+        Assert.Null(r.Datos.Direccion);
+    }
+
+    [Theory]
+    [InlineData("""{"road":"Calle Los Constructores","house_number":"123","city":"Ica","country":"Perú"}""", "Calle Los Constructores 123")]
+    [InlineData("""{"road":"Avenida Grau","suburb":"Cercado"}""", "Avenida Grau")]
+    [InlineData("""{"neighbourhood":"Urb. San José","suburb":"La Tinguiña"}""", "Urb. San José")]
+    [InlineData("""{"suburb":"La Tinguiña"}""", "La Tinguiña")]
+    [InlineData("""{"hamlet":"Caserío El Huarango","village":"Pueblo"}""", "Caserío El Huarango")]
+    [InlineData("""{"village":"Santiago"}""", "Santiago")]
+    [InlineData("""{"city":"Ica","state":"Ica","country":"Perú"}""", null)]
+    [InlineData("""{"road":"   "}""", null)]
+    public void Direccion_de_nominatim_se_arma_corta(string address, string? esperada)
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(address);
+        Assert.Equal(esperada, TW.Intranet.Infraestructura.Adaptadores.NominatimProveedorDireccion.ArmarDireccion(doc.RootElement));
     }
 
     [Fact]
@@ -92,6 +128,28 @@ public class UbicacionSedePruebas
     {
         var repo = DispatchProxy.Create<T, RepoContador>();
         return (repo, (RepoContador)(object)repo);
+    }
+}
+
+public class DireccionFalsa(string? direccion) : IProveedorDireccion
+{
+    public int Llamadas { get; private set; }
+    public Task<string?> ObtenerDireccionAsync(decimal latitud, decimal longitud, CancellationToken ct)
+    {
+        Llamadas++;
+        return Task.FromResult(direccion);
+    }
+}
+
+// Repositorio falso que responde el ubigeo de Ica (110101) en cualquier método Task<RespuestaDto<UbigeoReversoDto?>>.
+public class UbigeoFijo : DispatchProxy
+{
+    public static IMaestrosComplementariosRepositorio Crear() => Create<IMaestrosComplementariosRepositorio, UbigeoFijo>();
+
+    protected override object? Invoke(MethodInfo? metodo, object?[]? args)
+    {
+        var ica = new UbigeoReversoDto(new UbigeoItemDto("11", "ICA"), new UbigeoItemDto("1101", "ICA"), new UbigeoItemDto("110101", "ICA"), "110101", false);
+        return Task.FromResult(new RespuestaDto<UbigeoReversoDto?>(2, "Éxito.", ica));
     }
 }
 

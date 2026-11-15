@@ -303,7 +303,7 @@ public class MaestrosRepositorio(CadenaConexionBd conexion) : IMaestrosRepositor
                     Region:          nullable("region")           ? null : reader.GetString("region"),
                     Provincia:       nullable("provincia")        ? null : reader.GetString("provincia"),
                     Distrito:        nullable("distrito")         ? null : reader.GetString("distrito"),
-                    Urbanizacion:    nullable("urbanizacion")     ? null : reader.GetString("urbanizacion"),
+                    Referencia:      nullable("referencia")       ? null : reader.GetString("referencia"),
                     DireccionExacta: nullable("direccion_exacta") ? null : reader.GetString("direccion_exacta"),
                     Estado:          reader.GetString("estado"),
                     Latitud:         nullable("latitud")          ? null : reader.GetDecimal("latitud"),
@@ -338,7 +338,7 @@ public class MaestrosRepositorio(CadenaConexionBd conexion) : IMaestrosRepositor
             cmd.Parameters.AddWithValue("p_region",           dto.Region          ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("p_provincia",        dto.Provincia       ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("p_distrito",         dto.Distrito        ?? (object)DBNull.Value);
-            cmd.Parameters.AddWithValue("p_urbanizacion",     dto.Urbanizacion    ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("p_referencia",       dto.ReferenciaFinal ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("p_direccion_exacta", dto.DireccionExacta ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("p_latitud",          dto.Latitud         ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("p_longitud",         dto.Longitud        ?? (object)DBNull.Value);

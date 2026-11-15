@@ -539,6 +539,9 @@ builder.Services.AddScoped<GenerarPdfPreviewPropuestaCasoDeUso>();
 builder.Services.AddScoped<IMaestrosComplementariosRepositorio, MaestrosComplementariosRepositorio>();
 builder.Services.AddScoped<ObtenerUbigeoCasoDeUso>();
 builder.Services.AddScoped<ObtenerUbigeoPorCoordenadasCasoDeUso>();
+// Dirección legible del pin de la sede (Nominatim / OpenStreetMap; sección "Nominatim", opcional). Nunca lanza: si falla, la dirección sale null.
+builder.Services.AddSingleton(builder.Configuration.GetSection("Nominatim").Get<ConfiguracionNominatim>() ?? new ConfiguracionNominatim());
+builder.Services.AddHttpClient<IProveedorDireccion, NominatimProveedorDireccion>(c => c.Timeout = TimeSpan.FromSeconds(6));
 builder.Services.AddScoped<ObtenerSedesSinUbicacionCasoDeUso>();
 builder.Services.AddScoped<ObtenerAreasClienteCasoDeUso>();
 builder.Services.AddScoped<GuardarAreaClienteCasoDeUso>();
