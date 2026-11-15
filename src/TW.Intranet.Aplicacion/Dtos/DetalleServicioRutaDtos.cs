@@ -13,7 +13,7 @@ public record CabeceraServicioRutaDto(
 
 public record MetricasServicioRutaDto(
     int AvancePct, int EquiposCompletados, int EquiposTotal, int DemorasIncidencias, int MinutosDemora, string? MotivoDemora, int AlertasActivas,
-    int MinutosServicio, int? MinutosEstimados);
+    int MinutosServicio, int? MinutosEstimados, int AprobacionesPendientes = 0, int GastosPorRevisar = 0);
 
 public record EquipoResumenRutaDto(long IdEquipo, string Codigo, string? Modelo, string? Serie, string EstadoEjecucion, string? EtapaActual, string? HoraCompletado, bool Observado);
 public record ResponsableServicioRutaDto(long IdUsuario, string Nombre, string Rol, string? Cargo, string? Nota);

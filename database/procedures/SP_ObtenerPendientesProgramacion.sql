@@ -126,6 +126,7 @@ proc: BEGIN
         t.id_reprogramacion_pendiente,
         DATEDIFF(CURDATE(), DATE(t.fecha_emision))                                    AS dias_en_espera,
         t.viatico_monto,
+        t.viatico_pendiente_monto                                                     AS viatico_pendiente,
         IFNULL(t.viatico_moneda, 'S/')                                                AS viatico_moneda,
         CASE WHEN t.viatico_monto = 0        THEN 'sin_asignar'
              WHEN t.viatico_pendientes > 0   THEN 'pendiente_deposito'

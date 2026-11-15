@@ -6,4 +6,7 @@ namespace TW.Intranet.Aplicacion.Puertos;
 public interface IViaticosMovilRepositorio
 {
     Task<RespuestaDto<ViaticosMovilDto>> ObtenerAsync(long idUsuario, CancellationToken ct);
+
+    /// <summary>HU-27: conceptos del catálogo para elegir en un reembolso.</summary>
+    Task<RespuestaDto<List<ConceptoGastoMovilDto>>> ObtenerConceptosAsync(long idUsuario, CancellationToken ct);
 }

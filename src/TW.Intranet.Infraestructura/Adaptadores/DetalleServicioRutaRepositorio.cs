@@ -23,7 +23,8 @@ public class DetalleServicioRutaRepositorio(CadenaConexionBd conexion) : Reposit
                     Texto(r, "Estado") ?? "", Texto(r, "FechaEjecucion") ?? "", Texto(r, "UltimaActualizacion") ?? "", Entero(r, "RefrescoSegundos"),
                     Booleano(r, "MostrarCierre"), Texto(r, "TelefonoTecnico"));
                 var met = new MetricasServicioRutaDto(Entero(r, "AvancePct"), Entero(r, "EquiposCompletados"), Entero(r, "EquiposTotal"), Entero(r, "DemorasIncidencias"),
-                    Entero(r, "MinutosDemora"), Texto(r, "MotivoDemora"), Entero(r, "AlertasActivas"), Entero(r, "MinutosServicio"), EnteroNulo(r, "MinutosEstimados"));
+                    Entero(r, "MinutosDemora"), Texto(r, "MotivoDemora"), Entero(r, "AlertasActivas"), Entero(r, "MinutosServicio"), EnteroNulo(r, "MinutosEstimados"),
+                    Entero(r, "AprobacionesPendientes"), Entero(r, "GastosPorRevisar"));
 
                 await r.NextResultAsync(ct);
                 var equipos = new List<EquipoResumenRutaDto>();

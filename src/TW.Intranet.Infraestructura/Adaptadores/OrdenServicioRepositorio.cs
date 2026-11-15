@@ -258,6 +258,23 @@ public class OrdenServicioRepositorio(CadenaConexionBd conexion) : RepositorioSp
             },
             ct);
 
+    public Task<RespuestaDto<TipoOrdenDto>> ObtenerTipoAsync(long? idOs, long? idPropuesta, long? idSolicitud, CancellationToken ct)
+        => EjecutarAsync("SP_ObtenerTipoOrdenServicio",
+            p =>
+            {
+                p.AddWithValue("p_id_os",        Valor(idOs));
+                p.AddWithValue("p_id_propuesta", Valor(idPropuesta));
+                p.AddWithValue("p_id_solicitud", Valor(idSolicitud));
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<TipoOrdenDto>(3, "El procedimiento no devolvió el tipo de la orden.");
+                long? id = EsNulo(r, "id_os") ? null : EnteroLargo(r, "id_os");
+                return new RespuestaDto<TipoOrdenDto>(2, mensaje, new TipoOrdenDto(Texto(r, "tipo") ?? "", id));
+            }, ct);
+
     public Task<RespuestaDto<List<OpcionFiltroDto>>> ObtenerMotivosAsync(string tipo, long idUsuario, CancellationToken ct)
         => EjecutarAsync("SP_ObtenerMotivosOrdenServicio",
             p => { p.AddWithValue("p_id_usuario", idUsuario); p.AddWithValue("p_tipo", tipo); },

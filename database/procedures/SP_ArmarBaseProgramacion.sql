@@ -146,6 +146,9 @@ BEGIN
            (SELECT COUNT(*) FROM gasto_viatico gv2
             WHERE gv2.id_os = os.id_os AND gv2.tipo = 'viatico_asignado'
               AND gv2.estado IN ('pendiente', 'observado') AND gv2.eliminado_en IS NULL)  AS viatico_pendientes,
+           (SELECT IFNULL(SUM(gv4.monto), 0) FROM gasto_viatico gv4
+            WHERE gv4.id_os = os.id_os AND gv4.tipo = 'viatico_asignado'
+              AND gv4.estado IN ('pendiente', 'observado') AND gv4.eliminado_en IS NULL)  AS viatico_pendiente_monto,
            (SELECT mo.String2 FROM gasto_viatico gv3
             JOIN tabla_maestra mo ON mo.IdMaestro = 1 AND mo.IdEmpresa = 1 AND mo.Num1 = gv3.id_moneda
             WHERE gv3.id_os = os.id_os AND gv3.tipo = 'viatico_asignado'

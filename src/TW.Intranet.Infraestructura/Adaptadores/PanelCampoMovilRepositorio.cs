@@ -120,7 +120,8 @@ public class PanelCampoMovilRepositorio(CadenaConexionBd conexion)
                     DecimalNulo(r, "velocidad_kmh"), EnteroNulo(r, "distancia_m"), DecimalNulo(r, "destino_latitud"), DecimalNulo(r, "destino_longitud"),
                     Texto(r, "destino_nombre"), DecimalNulo(r, "origen_latitud"), DecimalNulo(r, "origen_longitud"), Texto(r, "eta"), Texto(r, "eta_programada"),
                     Texto(r, "demora_texto"), Texto(r, "demora_origen"), Texto(r, "contacto_nombre"), Texto(r, "contacto_telefono"), Texto(r, "actualizado"),
-                    EnteroNulo(r, "eta_minutos"), Texto(r, "eta_estimada"), Texto(r, "destino_direccion"));
+                    EnteroNulo(r, "eta_minutos"), Texto(r, "eta_estimada"), Texto(r, "destino_direccion"),
+                    PlantaUbicada: Booleano(r, "planta_ubicada"));
 
                 await r.NextResultAsync(ct);
                 var recorrido = new List<PuntoGpsServicioDto>();

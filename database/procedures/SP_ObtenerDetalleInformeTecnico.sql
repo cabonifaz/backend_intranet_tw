@@ -2,7 +2,9 @@
 -- Acceso: rt_bandeja (y el informe debe estar en el alcance del usuario, ver SP_ArmarBaseInformes).
 -- Resultados:
 --   1 mensaje
---   2 cabecera: Resumen (tarjetas, información general, validaciones, diagnóstico, trazabilidad), resultado global de los
+--   2 cabecera: Resumen (tarjetas, información general, validaciones —incluida la rendición de viáticos de la OS: rendicion_estado
+--     abierta | cerrada | sin_programacion, rendicion_saldo, rendicion_tipo reembolso | devolucion | cuadrado, gastos_por_revisar—,
+--     diagnóstico, trazabilidad), resultado global de los
 --     ensayos, descripción complementaria, precotización (cabecera) y acciones permitidas
 --   3 procedimiento ejecutado · 4 ensayos · 5 observaciones · 6 recomendaciones · 7 fotos · 8 ítems de la precotización
 --   9 historial reciente (5 últimos eventos; el completo está en SP_ObtenerHistorialInforme)
@@ -18,6 +20,13 @@ proc: BEGIN
     DECLARE v_editar  TINYINT DEFAULT 0;
     DECLARE v_revisar TINYINT DEFAULT 0;
     DECLARE v_existe  INT DEFAULT 0;
+    DECLARE v_id_os       BIGINT;
+    DECLARE v_prog        BIGINT;
+    DECLARE v_id_rend     BIGINT;
+    DECLARE v_rend_estado VARCHAR(20)   CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_rend_saldo  DECIMAL(12,2);
+    DECLARE v_rend_tipo   VARCHAR(12)   CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_gastos_rev  INT DEFAULT 0;
 
     IF FN_PermisoAccion(p_id_usuario, 'rt_bandeja') = 0 THEN
         SELECT 1 AS IdTipoMensaje, 'No tienes permiso para ver la revisión de informes técnicos.' AS Mensaje;
@@ -33,6 +42,32 @@ proc: BEGIN
         SELECT 1 AS IdTipoMensaje, 'El informe no existe o no está en tu alcance.' AS Mensaje;
         LEAVE proc;
     END IF;
+
+    -- Rendición de viáticos de la OS (Resumen de Validaciones): abierta | cerrada | sin_programacion, saldo, tipo y gastos por revisar
+    SELECT MAX(id_os) INTO v_id_os FROM tmp_rt_base;
+    SELECT MAX(id_programacion) INTO v_prog
+    FROM programacion WHERE id_os = v_id_os AND estado <> 'cancelada' AND eliminado_en IS NULL;
+    IF v_prog IS NULL THEN
+        SET v_rend_estado = 'sin_programacion';
+    ELSE
+        SELECT MAX(id_rendicion) INTO v_id_rend FROM programacion_rendicion WHERE id_programacion = v_prog AND eliminado_en IS NULL;
+        IF v_id_rend IS NOT NULL THEN
+            SELECT 'cerrada', saldo, tipo_saldo INTO v_rend_estado, v_rend_saldo, v_rend_tipo
+            FROM programacion_rendicion WHERE id_rendicion = v_id_rend;
+        ELSE
+            SELECT IFNULL(SUM(IF(g.tipo = 'gasto_solicitado' AND g.estado <> 'rechazado', g.monto, 0)), 0)
+                 - IFNULL(SUM(IF(g.tipo = 'viatico_asignado', g.monto, 0)), 0)
+              INTO v_rend_saldo
+            FROM gasto_viatico g
+            WHERE g.eliminado_en IS NULL AND g.tipo IN ('viatico_asignado', 'gasto_solicitado')
+              AND (g.id_programacion = v_prog OR (g.id_programacion IS NULL AND g.id_os = v_id_os));
+            SET v_rend_estado = 'abierta';
+            SET v_rend_tipo = CASE WHEN v_rend_saldo > 0 THEN 'reembolso' WHEN v_rend_saldo < 0 THEN 'devolucion' ELSE 'cuadrado' END;
+        END IF;
+    END IF;
+    SELECT COUNT(*) INTO v_gastos_rev
+    FROM gasto_viatico
+    WHERE id_os = v_id_os AND tipo = 'gasto_solicitado' AND estado IN ('pendiente', 'observado') AND eliminado_en IS NULL;
 
     SELECT 2 AS IdTipoMensaje, 'Éxito.' AS Mensaje;
 
@@ -64,6 +99,7 @@ proc: BEGIN
                 WHEN b.id_propuesta_derivada IS NOT NULL THEN 'convertida'
                 WHEN IFNULL(b.n_items_precot, 0) > 0 THEN 'precotizacion_enviada'
                 ELSE 'requiere_precotizacion' END                      AS oportunidad_comercial,
+           v_rend_estado AS rendicion_estado, v_rend_saldo AS rendicion_saldo, v_rend_tipo AS rendicion_tipo, v_gastos_rev AS gastos_por_revisar,
            -- Resultado global de los ensayos
            it.normativa, it.patron_ensayo, it.tolerancia_excentricidad, it.resultado_global,
            it.error_maximo, it.error_maximo_detalle, it.incertidumbre, it.factor_k, it.decision_tecnica,

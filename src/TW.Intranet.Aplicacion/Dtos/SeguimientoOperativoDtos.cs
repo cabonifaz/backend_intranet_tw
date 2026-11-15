@@ -32,7 +32,15 @@ public record PinMapaDto(
     long IdUsuario, string Tecnico, string Iniciales, string Estado, decimal? Latitud, decimal? Longitud, string Direccion,
     int? MinutosUbicacion, long? IdOs, string? NumeroOs, string? Cliente,
     /// <summary>HU-20: estado del Reloj marcador (en_labores · en_refrigerio · salio_planta · finalizada; null si no inició) y lo que hace el técnico.</summary>
-    string? Jornada = null, string? Actividad = null);
+    string? Jornada = null, string? Actividad = null,
+    /// <summary>Color de lo que hace el técnico: tono (trabajo · planta · ruta · refrigerio · refrigerio_fin · salida_planta · finalizada · sin_iniciar · demora · incidente) y su color hexadecimal.</summary>
+    string? ActividadTono = null, string? ActividadColor = null,
+    /// <summary>
+    /// Planta del servicio actual (pin y línea técnico–planta). DistanciaPlantaM = línea recta en metros; EtaMin = minutos estimados, solo en ruta (referencial).
+    /// PlantaUbicada = true si la coordenada es la de la sede; false si la sede no tiene ubicación (puede ser la llegada registrada del técnico).
+    /// </summary>
+    string? NombreSede = null, decimal? LatitudPlanta = null, decimal? LongitudPlanta = null, bool PlantaUbicada = false,
+    int? DistanciaPlantaM = null, int? EtaMin = null);
 
 public record AlertaSeguimientoDto(
     string Clave, string Tipo, string Severidad, string Titulo, string Detalle, int Minutos, bool Nueva,
@@ -65,7 +73,9 @@ public record TecnicoSeguimientoDto(
     string? SalidaReal, string? SalidaProgramada, int? DiferenciaSalidaMin, string? UltimaUbicacion, int? MinutosUbicacion,
     IReadOnlyList<ServicioDeTecnicoDto> ServiciosDelDia,
     /// <summary>HU-20: estado del Reloj marcador y lo que hace el técnico.</summary>
-    string? Jornada = null, string? Actividad = null);
+    string? Jornada = null, string? Actividad = null,
+    /// <summary>Color de lo que hace el técnico: tono (trabajo · planta · ruta · refrigerio · refrigerio_fin · salida_planta · finalizada · sin_iniciar · demora · incidente) y su color hexadecimal.</summary>
+    string? ActividadTono = null, string? ActividadColor = null);
 
 /// <summary>Pestaña 3 Técnicos Activos.</summary>
 public record TecnicosSeguimientoDto(int Total, int AdicionalesSinIniciar, string? Actualizado, IReadOnlyList<TecnicoSeguimientoDto> Tecnicos);

@@ -5,4 +5,7 @@
     <Project Path="src/TW.Intranet.Dominio/TW.Intranet.Dominio.csproj" />
     <Project Path="src/TW.Intranet.Infraestructura/TW.Intranet.Infraestructura.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TW.Intranet.Pruebas/TW.Intranet.Pruebas.csproj" />
+  </Folder>
 </Solution>

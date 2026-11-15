@@ -9,6 +9,39 @@ namespace TW.Intranet.Aplicacion.CasosDeUso;
 // (HU-41 Bandeja en OrdenServicioCasosDeUso.cs)
 // ═══════════════════════════════════════════════════════════════════════════
 
+// ── Módulo 13 (OM): cada bandeja solo opera sus órdenes ─────────────────────
+
+/// <summary>
+/// Confirma que la orden, la propuesta o la solicitud de edición son del tipo de la bandeja que la pide ("OS" u "OM").
+/// IdTipoMensaje 2 = coincide; 1 = no existe o es del otro tipo (mensaje para el usuario); 3 = error.
+/// Si llegan idSolicitud e idOs, además la solicitud debe ser de esa orden.
+/// </summary>
+public class ValidarTipoOrdenCasoDeUso(IOrdenServicioRepositorio repositorio)
+{
+    public static string Nombre(string tipo) => tipo == "OM" ? "orden de metrología" : "orden de servicio";
+
+    public async Task<RespuestaDto<bool>> EjecutarAsync(string tipoEsperado, long? idOs, long? idPropuesta, long? idSolicitud, CancellationToken ct = default)
+    {
+        if (idOs is null or <= 0 && idPropuesta is null or <= 0 && idSolicitud is null or <= 0)
+            return new RespuestaDto<bool>(1, "Indique la orden, la propuesta o la solicitud.");
+
+        var r = await repositorio.ObtenerTipoAsync(idOs is > 0 ? idOs : null, idPropuesta is > 0 ? idPropuesta : null,
+                                                   idSolicitud is > 0 ? idSolicitud : null, ct);
+        if (r.IdTipoMensaje != 2 || r.Datos is null)
+            return new RespuestaDto<bool>(r.IdTipoMensaje is 1 or 3 ? r.IdTipoMensaje : 3, r.Mensaje);
+
+        if (idSolicitud is > 0 && idOs is > 0 && r.Datos.IdOs != idOs)
+            return new RespuestaDto<bool>(1, "La solicitud de edición no pertenece a esta orden.");
+
+        if (!string.Equals(r.Datos.Tipo, tipoEsperado, StringComparison.OrdinalIgnoreCase))
+            return new RespuestaDto<bool>(1, idPropuesta is > 0 && idOs is null or <= 0 && idSolicitud is null or <= 0
+                ? $"La propuesta no corresponde a una {Nombre(tipoEsperado)}: genera una {Nombre(r.Datos.Tipo)} desde su módulo."
+                : $"No es una {Nombre(tipoEsperado)}: ábrela desde el módulo de {(r.Datos.Tipo == "OM" ? "Órdenes de Metrología" : "Órdenes de Servicio")}.");
+
+        return new RespuestaDto<bool>(2, "OK", true);
+    }
+}
+
 // ── HU-40 Crear / editar ─────────────────────────────────────────────────────
 
 /// <summary>Modal "Elegir Propuesta Aceptada": propuestas aceptadas sin OS/OM activa.</summary>

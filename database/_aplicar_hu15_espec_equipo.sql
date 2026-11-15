@@ -1,9 +1,8 @@
--- Ensayos: d y e con decimales llegaban como 0. Ejecutar completo (Alt+X); al final muestra la comprobación (d y e deben ser 0.5000). Luego reiniciar la API.
+-- Ensayos: capacidad, d y e siempre en kg. Ejecutar y reiniciar la API.
 -- ============================================================
 -- SP_EspecEquipoMovil  (App Mobile HU-10 / HU-15 — apoyo, NO es un endpoint)
 -- Especificaciones metrológicas de un equipo, UNA sola vez: clase de exactitud, unidad, capacidad máxima, d y e (división de verificación; si no tiene,
--- la división mínima). Los datos del equipo son texto libre ("80,000 kg", "0,5 g", "0.5 kg"): "80,000" y "80 000" son miles, "0,5" es decimal; la unidad son las letras
--- del primer dato (kg por defecto). Lo usan SP_ContextoEnsayoMovil (Ensayos y Calibración) y SP_GuardarCabeceraInformeMovil (EMP de la prueba de una falla).
+-- la división mínima). Los datos del equipo son texto libre ("80,000 kg", "0,5 g", "0.5 kg"): "80,000" y "80 000" son miles, "0,5" es decimal; la unidad SIEMPRE es kg (lo registrado en g, mg o t se convierte). Lo usan SP_ContextoEnsayoMovil (Ensayos y Calibración) y SP_GuardarCabeceraInformeMovil (EMP de la prueba de una falla).
 -- Los números se arman con la parte entera y la parte decimal por separado (cada una se convierte como entero): convertir directamente un texto con punto
 -- ("0.5") a DECIMAL devolvía 0 en el servidor y d y e salían en 0. Solo lectura.
 -- ============================================================
@@ -26,6 +25,8 @@ BEGIN
     DECLARE v_num     VARCHAR(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
     DECLARE v_ent     VARCHAR(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
     DECLARE v_dec     VARCHAR(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
+    DECLARE v_un      VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
+    DECLARE v_f       DECIMAL(14,6) DEFAULT 1;
 
     SET p_clase = NULL, p_unidad = 'kg', p_cap_max = NULL, p_d = NULL, p_e = NULL;
 
@@ -58,10 +59,11 @@ BEGIN
     END IF;
     SET p_e = COALESCE(p_e, p_d);
 
-    SET p_unidad = LOWER(IFNULL(NULLIF(REGEXP_SUBSTR(COALESCE(v_cap_txt, v_d_txt, ''), '[A-Za-z]+'), ''), 'kg'));
+    -- La capacidad máxima, d y e se trabajan SIEMPRE en kilogramos: lo registrado en g o mg se convierte
+    SET v_un = LOWER(IFNULL(NULLIF(REGEXP_SUBSTR(COALESCE(v_cap_txt, v_d_txt, ''), '[A-Za-z]+'), ''), 'kg'));
+    SET v_f = CASE v_un WHEN 'g' THEN 0.001 WHEN 'mg' THEN 0.000001 WHEN 't' THEN 1000 ELSE 1 END;
+    SET p_cap_max = p_cap_max * v_f, p_d = p_d * v_f, p_e = p_e * v_f;
+    SET p_unidad = 'kg';
 END$$
 
 DELIMITER ;
-
-CALL SP_EspecEquipoMovil((SELECT id_equipo FROM equipo_cliente WHERE codigo_tw = 'EQ-TW-2026-0001'), @clase, @unidad, @cap, @d, @e);
-SELECT @clase AS clase, @unidad AS unidad, CAST(@cap AS CHAR) AS cap_texto, CAST(@d AS CHAR) AS d_texto, CAST(@e AS CHAR) AS e_texto;

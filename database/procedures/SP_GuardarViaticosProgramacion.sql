@@ -1,5 +1,5 @@
 -- HU-45 (Sprint 5) "Guardar asignación" de la pestaña Asignación de Viáticos. Solo el Jefe (prog_aprobar_reprogramacion) y con la programación
--- CONFIRMADA (Programado) y su rendición abierta. Modelo B: el Jefe asigna un monto por técnico y concepto como ADELANTO.
+-- CONFIRMADA (Programado), su rendición abierta y el servicio todavía sin salir a campo (OS no en_ruta/en_ejecucion/pausada/finalizada). Modelo B: el Jefe asigna un monto por técnico y concepto como ADELANTO.
 --   p_version: la huella que devolvió SP_ObtenerViaticosProgramacion. Si otra persona (o Contabilidad al depositar) cambió la asignación
 --     mientras se editaba, se rechaza y hay que recargar (control de concurrencia optimista).
 --   p_lineas (JSON): la asignación COMPLETA que debe quedar: [{"idGasto":n|null,"idTecnico":n,"idConcepto":n|null,"nuevoConcepto":"texto"|null,"monto":0.00}]
@@ -28,6 +28,7 @@ proc: BEGIN
     DECLARE v_cliente    VARCHAR(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_codigo     VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_estado     VARCHAR(25)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_estado_os  VARCHAR(25)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_version    VARCHAR(80);
     DECLARE v_cap        DECIMAL(18,6) DEFAULT 5000;
     DECLARE v_error      VARCHAR(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
@@ -97,11 +98,15 @@ proc: BEGIN
 
     START TRANSACTION;
 
-    SELECT numero, tipo, id_cliente INTO v_numero, v_tipo, v_id_cliente FROM orden_servicio WHERE id_os = v_id_os AND eliminado_en IS NULL FOR UPDATE;
+    SELECT numero, tipo, id_cliente, estado INTO v_numero, v_tipo, v_id_cliente, v_estado_os
+    FROM orden_servicio WHERE id_os = v_id_os AND eliminado_en IS NULL FOR UPDATE;
     SELECT codigo, estado INTO v_codigo, v_estado FROM programacion WHERE id_programacion = p_id_programacion AND eliminado_en IS NULL FOR UPDATE;
 
     IF v_codigo IS NULL THEN
         SET v_error = 'La programación no existe.';
+    ELSEIF v_estado_os IN ('en_ruta', 'en_ejecucion', 'pausada', 'finalizada') THEN
+        -- La app pasa la OS a en_ruta al iniciar el traslado (SP_IniciarTrasladoMovil)
+        SET v_error = 'La asignación ya no se puede editar: el servicio salió a campo.';
     ELSEIF v_estado = 'cancelada' THEN
         SET v_error = CONCAT('La programación ', v_codigo, ' está cancelada: ya no admite viáticos.');
     ELSEIF v_estado <> 'confirmada' THEN

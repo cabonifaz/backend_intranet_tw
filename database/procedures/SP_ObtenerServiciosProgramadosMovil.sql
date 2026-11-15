@@ -15,6 +15,7 @@
 -- Datos de la programación operativa (intranet, HU-36/38): horario inicio–fin, tipo de servicio, cantidad de técnicos y
 --   objetivos = equipos que se confirmaron en la programación vigente (sin selección, todos los equipos de la OS).
 -- alerta_predictiva: texto de la alerta sin resolver de mayor prioridad (máx. 120 caracteres); alertas_predictivas, la cantidad.
+--   No se listan los servicios ya CERRADOS (constancia firmada y cerrada: os_constancia.cerrada_en), aunque la OS siga programada/en curso en el sistema.
 -- Solo lectura. Usa CTE (sin tablas temporales).
 -- ============================================================
 DROP PROCEDURE IF EXISTS SP_ObtenerServiciosProgramadosMovil;
@@ -52,6 +53,7 @@ proc: BEGIN
         FROM   orden_servicio os
         WHERE  os.eliminado_en IS NULL
           AND  os.estado IN ('programada', 'en_ruta', 'en_ejecucion', 'pausada', 'reprogramada', 'bloqueada')
+          AND  NOT EXISTS (SELECT 1 FROM os_constancia k WHERE k.id_os = os.id_os AND k.cerrada_en IS NOT NULL)
           AND  (os.fecha_ejecucion >= v_hoy OR os.estado IN ('en_ruta', 'en_ejecucion', 'pausada'))
           AND  (os.id_tecnico_principal = p_id_usuario
                 OR EXISTS (SELECT 1 FROM os_personal op

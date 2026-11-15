@@ -8,7 +8,7 @@ namespace TW.Intranet.Infraestructura.Adaptadores;
 /// <summary>HU-45 Asignación de Viáticos y Rendición de Gastos Operativos (Sprint 5). Todo pasa por SPs parametrizados.</summary>
 public class ProgramacionViaticosRepositorio(CadenaConexionBd conexion) : RepositorioSpBase(conexion), IProgramacionViaticosRepositorio
 {
-    private static ResumenRendicionDto LeerResumen(MySqlDataReader r) => new(
+    internal static ResumenRendicionDto LeerResumen(MySqlDataReader r) => new(
         EnteroLargo(r, "id_programacion"), DecimalNulo(r, "total_asignado") ?? 0m, DecimalNulo(r, "total_depositado") ?? 0m,
         DecimalNulo(r, "total_pendiente_deposito") ?? 0m, DecimalNulo(r, "total_solicitado") ?? 0m, Entero(r, "n_gastos"),
         Entero(r, "n_comprobantes"), DecimalNulo(r, "total_aprobado") ?? 0m, Entero(r, "n_aprobados"), DecimalNulo(r, "total_observado") ?? 0m,
@@ -16,7 +16,7 @@ public class ProgramacionViaticosRepositorio(CadenaConexionBd conexion) : Reposi
         Texto(r, "tipo_saldo") ?? "cuadrado", Entero(r, "pendientes_revision"), Booleano(r, "cerrada"), Booleano(r, "puede_cerrar"),
         Texto(r, "motivo_no_cerrar"), Texto(r, "advertencia_cierre"));
 
-    private static readonly ResumenRendicionDto ResumenVacio =
+    internal static readonly ResumenRendicionDto ResumenVacio =
         new(0, 0m, 0m, 0m, 0m, 0, 0, 0m, 0, 0m, 0m, 0m, 0m, "cuadrado", 0, false, false, null, null);
 
     public Task<RespuestaDto<ViaticosProgramacionDto>> ObtenerAsync(long idProgramacion, long idUsuario, CancellationToken ct)
@@ -36,7 +36,8 @@ public class ProgramacionViaticosRepositorio(CadenaConexionBd conexion) : Reposi
                     Texto(r, "razon_social"), Fecha(r, "fecha_ejecucion"), Texto(r, "hora_inicio"), Texto(r, "hora_fin"),
                     EnteroLargoNulo(r, "id_tecnico_principal"), Texto(r, "tecnico_principal"), Texto(r, "cargo_principal"),
                     Booleano(r, "puede_gestionar"), Texto(r, "motivo_no_gestionar"), Booleano(r, "rendicion_cerrada"),
-                    Texto(r, "version") ?? "", Texto(r, "moneda") ?? "S/");
+                    Texto(r, "version") ?? "", Texto(r, "moneda") ?? "S/",
+                    Booleano(r, "puede_editar_asignacion"), Texto(r, "motivo_no_editar_asignacion"));
 
                 await r.NextResultAsync(ct);
                 var tecnicos = new List<ViaticosTecnicoDto>();

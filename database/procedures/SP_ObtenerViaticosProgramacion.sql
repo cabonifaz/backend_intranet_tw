@@ -24,6 +24,7 @@ proc: BEGIN
     DECLARE v_version   VARCHAR(80);
     DECLARE v_pend_not  DECIMAL(12,2) DEFAULT 0;
     DECLARE v_n_pend_not INT DEFAULT 0;
+    DECLARE v_en_campo  TINYINT DEFAULT 0;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -50,6 +51,9 @@ proc: BEGIN
     END IF;
 
     SET v_vigente = IF(v_estado <> 'cancelada', 1, 0);
+    -- El servicio ya salió a campo: la asignación queda congelada (los gastos se siguen revisando)
+    SELECT IF(estado IN ('en_ruta', 'en_ejecucion', 'pausada', 'finalizada'), 1, 0) INTO v_en_campo
+    FROM orden_servicio WHERE id_os = v_id_os;
     SELECT IF(COUNT(*) > 0, 1, 0) INTO v_cerrada FROM programacion_rendicion WHERE id_programacion = p_id_programacion AND eliminado_en IS NULL;
     SET v_jefe     = FN_PermisoAccion(p_id_usuario, 'prog_aprobar_reprogramacion');
     SET v_gestiona = IF(v_jefe = 1 AND v_estado = 'confirmada' AND v_cerrada = 0, 1, 0);
@@ -75,7 +79,9 @@ proc: BEGIN
            TIME_FORMAT(p.hora_inicio, '%H:%i') AS hora_inicio, TIME_FORMAT(p.hora_fin_estimada, '%H:%i') AS hora_fin,
            p.id_tecnico_principal, TRIM(CONCAT(tp.nombre, ' ', tp.apellido)) AS tecnico_principal, COALESCE(cg.String1, tp.cargo) AS cargo_principal,
            v_gestiona AS puede_gestionar, v_motivo AS motivo_no_gestionar, v_cerrada AS rendicion_cerrada,
-           v_version AS version, 'S/' AS moneda
+           v_version AS version, 'S/' AS moneda,
+           IF(v_gestiona = 1 AND v_en_campo = 0, 1, 0) AS puede_editar_asignacion,
+           IF(v_en_campo = 1, 'La asignación ya no se puede editar: el servicio salió a campo.', NULL) AS motivo_no_editar_asignacion
     FROM programacion p
     JOIN orden_servicio os ON os.id_os = p.id_os
     LEFT JOIN cliente c    ON c.id_cliente = os.id_cliente
@@ -110,7 +116,7 @@ proc: BEGIN
            g.id_concepto, IFNULL(cg.String1, 'Concepto') AS concepto, g.monto,
            IF(g.estado IN ('aprobado', 'rendido'), 'depositado', 'pendiente') AS estado_deposito,
            g.fecha_deposito, IF(g.notificado_en IS NULL, 0, 1) AS notificado,
-           IF(v_gestiona = 1 AND g.estado NOT IN ('aprobado', 'rendido'), 1, 0) AS editable
+           IF(v_gestiona = 1 AND v_en_campo = 0 AND g.estado NOT IN ('aprobado', 'rendido'), 1, 0) AS editable
     FROM gasto_viatico g
     JOIN usuario u ON u.id_usuario = g.id_usuario
     LEFT JOIN programacion_tecnico pt ON pt.id_programacion = p_id_programacion AND pt.id_usuario = g.id_usuario AND pt.eliminado_en IS NULL
@@ -130,7 +136,9 @@ proc: BEGIN
 
     -- 7. Gastos rendidos por los técnicos
     SELECT g.id_gasto, COALESCE(g.fecha_gasto, g.fecha_solicitud) AS fecha, g.id_usuario AS id_tecnico, TRIM(CONCAT(u.nombre, ' ', u.apellido)) AS tecnico,
-           g.id_concepto, IFNULL(cg.String1, 'Concepto') AS concepto, g.descripcion, g.monto,
+           g.id_concepto,
+           IF(cg.String3 = 'OTRO' AND g.concepto_texto IS NOT NULL, CONCAT('Otro: ', g.concepto_texto), IFNULL(cg.String1, 'Concepto')) AS concepto,
+           g.descripcion, g.monto,
            IF(g.url_comprobante IS NULL OR g.url_comprobante = '', 0, 1) AS tiene_comprobante,
            g.estado, g.comentario_revision,
            IF(v_gestiona = 1 AND g.estado IN ('pendiente', 'observado'), 1, 0) AS puede_aprobar,

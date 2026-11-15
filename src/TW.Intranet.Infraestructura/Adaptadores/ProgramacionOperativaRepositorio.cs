@@ -222,6 +222,7 @@ public class ProgramacionOperativaRepositorio(CadenaConexionBd conexion) : Repos
         IdReprogramacionPendiente    = EnteroLargoNulo(r, "id_reprogramacion_pendiente"),
         DiasEnEspera                 = Entero(r, "dias_en_espera"),
         ViaticoMonto                 = DecimalNulo(r, "viatico_monto") ?? 0,
+        ViaticoPendiente             = DecimalNulo(r, "viatico_pendiente") ?? 0,
         ViaticoMoneda                = Texto(r, "viatico_moneda") ?? "S/",
         ViaticoEstado                = Texto(r, "viatico_estado") ?? "sin_asignar",
         PuedeProgramar               = Booleano(r, "puede_programar"),

@@ -5,6 +5,9 @@ namespace TW.Intranet.Aplicacion.Dtos;
 // La OS/OM no maneja montos: es el documento operativo que nace de una propuesta aceptada.
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// <summary>Tipo de una orden, propuesta o solicitud: "OS" u "OM". IdOs = la orden (null si se consultó una propuesta).</summary>
+public record TipoOrdenDto(string Tipo, long? IdOs);
+
 // ── HU-41 Bandeja ──────────────────────────────────────────────────────────
 
 /// <summary>Filtros de la bandeja (query string).</summary>
