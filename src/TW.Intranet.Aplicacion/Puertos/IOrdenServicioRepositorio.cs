@@ -35,6 +35,10 @@ public interface IOrdenServicioRepositorio
     Task<RespuestaDto<BusquedaEquiposOsDto>> BuscarEquiposAsync(FiltrosBuscarEquiposOsDto filtros, long idUsuario, CancellationToken ct);
     Task<RespuestaDto<BusquedaConceptosOsDto>> BuscarConceptosAsync(FiltrosBuscarConceptosOsDto filtros, long idUsuario, CancellationToken ct);
 
+    // ── Módulo 13 (OM): a qué bandeja pertenece una orden, propuesta o solicitud ──
+    /// <summary>Prioridad: idSolicitud → idOs → idPropuesta.</summary>
+    Task<RespuestaDto<TipoOrdenDto>> ObtenerTipoAsync(long? idOs, long? idPropuesta, long? idSolicitud, CancellationToken ct);
+
     // ── HU-44 ──
     Task<RespuestaDto<CandidatosImportacionOsDto>> ObtenerCandidatosImportacionAsync(
         long idCliente, long? idOs, IReadOnlyList<string> codigosTw, long idUsuario, CancellationToken ct);

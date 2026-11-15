@@ -693,6 +693,8 @@ builder.Services.AddScoped<BuscarEquiposOrdenServicioCasoDeUso>();
 builder.Services.AddScoped<BuscarConceptosOrdenServicioCasoDeUso>();
 builder.Services.AddScoped<DescargarPlantillaImportacionOsCasoDeUso>();
 builder.Services.AddScoped<AnalizarImportacionOsCasoDeUso>();
+// Módulo 13 Órdenes de Metrología (OM): mismo flujo que OS, cada bandeja solo opera las suyas
+builder.Services.AddScoped<ValidarTipoOrdenCasoDeUso>();
 
 // ── INYECCIÓN DE DEPENDENCIAS — Programación Operativa (Sprint 5, HU-35) ──
 builder.Services.AddScoped<IProgramacionOperativaRepositorio, ProgramacionOperativaRepositorio>();
