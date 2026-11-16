@@ -3,7 +3,8 @@
 -- El técnico escanea el QR de un equipo que existe en el maestro del cliente pero NO está en la lista de la OS: se agrega como objetivo de esta OS.
 --   - El técnico sale del token; la OS debe ser suya. Hard Stop (HU-06): solo con la llegada registrada y la OS en curso (SP_EvaluarCampoMovil).
 --   - El equipo se busca por COD TW, código del cliente o N/S (sin distinguir mayúsculas), por una URL que traiga su COD TW / código (5 o más caracteres)
---     o por la etiqueta QR de TW ya vinculada al equipo (equipo_qr). Debe ser del MISMO cliente de la OS.
+--     o por la etiqueta QR de TW ya vinculada al equipo (equipo_qr). Debe ser del MISMO cliente de la OS (también se acepta el de otro registro de cliente con el mismo RUC, o un equipo sin cliente asignado).
+--     Si es de OTRO cliente el mensaje dice de cuál es y, si está en una OS vigente, en cuál; solo en ese caso no se puede agregar.
 --   - No se agregan equipos inactivos ni en evaluación (bloqueados) ni en borrador (pendientes de validar). Si ya está en la lista de la OS, se avisa.
 --   - Queda con el mismo tipo de intervención que los demás objetivos de la OS, al final de la lista, "por iniciar". Auditoría en auditoria_evento.
 --     ingresado_en_campo = 1: así lo muestra la lista de objetivos aunque no esté en la programación (SP_ArmarObjetivosMovil). La app solo lo marca como BORRADOR
@@ -47,6 +48,11 @@ proc: BEGIN
     DECLARE v_serie       VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
     DECLARE v_cod_cli     VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
     DECLARE v_ubic        VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
+    DECLARE v_ruc         VARCHAR(30)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
+    DECLARE v_otro_id     BIGINT DEFAULT NULL;
+    DECLARE v_otro_cod    VARCHAR(30)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
+    DECLARE v_otro_cli    VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
+    DECLARE v_otra_os     VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -87,6 +93,9 @@ proc: BEGIN
         LEAVE proc;
     END IF;
 
+    -- RUC del cliente de la OS: un mismo cliente puede tener más de un registro y sus equipos también valen
+    SELECT NULLIF(TRIM(c.ruc), '') INTO v_ruc FROM cliente c WHERE c.id_cliente = v_id_cliente;
+
     -- Etiqueta QR de TW (enlace corto): se reconoce si ya está vinculada a un equipo
     CALL SP_NormalizarQrMovil(p_codigo, v_clave);
 
@@ -94,7 +103,9 @@ proc: BEGIN
     SELECT ec.id_equipo, ec.codigo_tw, ec.id_cliente, IF(ec.es_activo = 0 OR ec.estado = 'inactivo' OR ec.estado_operativo = 'evaluacion', 0, 1), ec.estado
     INTO   v_id_equipo, v_codigo_tw, v_id_cli_eq, v_activo, v_estado_eq
     FROM   equipo_cliente ec
-    WHERE  ec.SoftDelete = 0 AND ec.id_cliente = v_id_cliente
+    WHERE  ec.SoftDelete = 0
+      AND  (ec.id_cliente = v_id_cliente OR ec.id_cliente IS NULL
+            OR (v_ruc IS NOT NULL AND ec.id_cliente IN (SELECT c2.id_cliente FROM cliente c2 WHERE NULLIF(TRIM(c2.ruc), '') = v_ruc)))
       AND  (UPPER(ec.codigo_tw) = v_codigo OR UPPER(ec.codigo_cliente) = v_codigo OR UPPER(ec.num_serie) = v_codigo
             OR (CHAR_LENGTH(IFNULL(ec.codigo_tw, '')) >= 5 AND LOCATE(UPPER(ec.codigo_tw), v_codigo) > 0)
             OR (CHAR_LENGTH(IFNULL(ec.codigo_cliente, '')) >= 5 AND LOCATE(UPPER(ec.codigo_cliente), v_codigo) > 0)
@@ -103,11 +114,28 @@ proc: BEGIN
     LIMIT 1;
 
     IF v_id_equipo IS NULL THEN
-        -- ¿Existe, pero es de otro cliente?
-        IF EXISTS (SELECT 1 FROM equipo_cliente ec
-                   WHERE ec.SoftDelete = 0 AND (UPPER(ec.codigo_tw) = v_codigo OR UPPER(ec.codigo_cliente) = v_codigo OR UPPER(ec.num_serie) = v_codigo)) THEN
+        -- ¿Existe, pero es de otro cliente? Se dice de cuál es (y en qué OS vigente está) para que el técnico sepa por qué no se puede agregar
+        SELECT ec.id_equipo, ec.codigo_tw, COALESCE(NULLIF(c.nombre_comercial, ''), c.razon_social)
+        INTO   v_otro_id, v_otro_cod, v_otro_cli
+        FROM   equipo_cliente ec
+        LEFT JOIN cliente c ON c.id_cliente = ec.id_cliente
+        WHERE  ec.SoftDelete = 0
+          AND  (UPPER(ec.codigo_tw) = v_codigo OR UPPER(ec.codigo_cliente) = v_codigo OR UPPER(ec.num_serie) = v_codigo
+                OR (v_clave IS NOT NULL AND ec.id_equipo IN (SELECT q.id_equipo FROM equipo_qr q WHERE q.clave = v_clave AND q.eliminado_en IS NULL)))
+        ORDER BY ec.id_equipo
+        LIMIT 1;
+        IF v_otro_id IS NOT NULL THEN
+            SELECT os.numero INTO v_otra_os
+            FROM   os_equipo oe
+            JOIN   orden_servicio os ON os.id_os = oe.id_os AND os.eliminado_en IS NULL AND os.estado NOT IN ('finalizada', 'anulada')
+            WHERE  oe.id_equipo = v_otro_id AND oe.eliminado_en IS NULL AND oe.id_os <> p_id_os
+            ORDER BY os.id_os DESC
+            LIMIT 1;
             ROLLBACK;
-            SELECT 1 AS IdTipoMensaje, 'Ese equipo pertenece a otro cliente: no se puede agregar a esta OS.' AS Mensaje;
+            SELECT 1 AS IdTipoMensaje,
+                   CONCAT(IFNULL(v_otro_cod, 'Ese equipo'), ' pertenece a ', IFNULL(v_otro_cli, 'otro cliente'),
+                          IF(v_otra_os IS NULL, '', CONCAT(' y está asignado a la ', v_otra_os)),
+                          ': no se puede agregar a esta OS porque es de otro cliente.') AS Mensaje;
         ELSE
             ROLLBACK;
             SELECT 1 AS IdTipoMensaje, 'El código no corresponde a ningún equipo registrado de este cliente. Regístralo como equipo nuevo (NEW).' AS Mensaje;
