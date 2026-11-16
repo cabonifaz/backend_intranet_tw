@@ -10,6 +10,8 @@
 --     si tampoco, Jefe/Coordinador de Operaciones; si tampoco, administradores.
 --   - Una sola solicitud pendiente por OS (evita duplicados y spam de notificaciones).
 --   - Solo desde el día programado de la OS (SP_ObtenerSalidaHabilitadaMovil).
+--   - La notificación al encargado es CRÍTICA (prioridad_origen = critica, control_campo / autorizacion_salida): sale como alerta crítica; el Seguimiento Operativo
+--     también la muestra en «Alertas críticas» mientras la solicitud siga pendiente (SP_ArmarSeguimientoOperativo).
 --   - Deja también una notificación al propio técnico ("Solicitud de autorización enviada") para que la vea en la app.
 --   - Deja registro en autorizacion_salida_os (con area_destino) y auditoria_evento.
 -- ============================================================
@@ -153,14 +155,16 @@ proc: BEGIN
         WHERE  u.eliminado_en IS NULL AND u.estado = 'activo' AND u.rol_sistema IN ('administrador', 'admin');
     END IF;
 
-    INSERT INTO notificacion (id_usuario_destino, id_canal, titulo, cuerpo, entidad_tipo, id_entidad, fecha_creacion, creado_por)
+    INSERT INTO notificacion (id_usuario_destino, id_canal, titulo, cuerpo, entidad_tipo, id_entidad, fecha_creacion, creado_por,
+                              modulo_origen, tipo_origen, prioridad_origen)
     SELECT d.id_usuario, 5,
            CONCAT('Autorización de salida', IF(v_area_nombre IS NULL, '', CONCAT(' · ', v_area_nombre)), ': ', v_numero),
            CONCAT(v_tecnico, ' solicita tu visto bueno para salir a ', IFNULL(v_cliente, 'el cliente'), ' (', v_numero, ').',
                   IF(v_area_nombre IS NULL, ' La RQ no indica el área del servicio.', CONCAT(' Área del servicio según la RQ: ', v_area_nombre, '.')),
                   IF(NULLIF(TRIM(p_pendientes), '') IS NULL, '', CONCAT(' Pendientes: ', TRIM(p_pendientes), '.')),
                   IF(NULLIF(TRIM(p_motivo), '') IS NULL, '', CONCAT(' Motivo: ', TRIM(p_motivo)))),
-           'orden_servicio', p_id_os, NOW(), p_id_usuario
+           'orden_servicio', p_id_os, NOW(), p_id_usuario,
+           'control_campo', 'autorizacion_salida', 'critica'
     FROM   tmp_aut_destino d;
     SET v_destinos = ROW_COUNT();
 

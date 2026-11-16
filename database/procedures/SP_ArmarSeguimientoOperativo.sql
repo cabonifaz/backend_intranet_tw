@@ -12,7 +12,7 @@
 --   sin_salir       programada o reprogramada: el técnico aún no marcó "Salida"
 -- Estado del técnico = el del servicio más urgente de su día (el finalizado solo si todos lo están).
 -- Alertas automáticas (se calculan al consultar; umbrales en PARAMETRO_PROGRAMACION, migración 90):
---   perdida_contacto (crítica) · gps_parado (advertencia) · sin_movimiento (advertencia, HU-20) · sin_ingreso_post_llegada (advertencia) · sin_iniciar_servicio (advertencia)
+--   perdida_contacto (crítica) · gps_parado (advertencia) · sin_movimiento (crítica, HU-20) · autorizacion_salida (crítica: el técnico pidió autorización para iniciar el traslado y el encargado aún no responde) · sin_ingreso_post_llegada (advertencia) · sin_iniciar_servicio (advertencia)
 --   · proximidad (info) · incidente (crítica)
 -- Tablas temporales (MySQL no permite abrir dos veces la misma temporal en una consulta):
 --   tmp_sg_cfg (1 fila: hoy, ahora y umbrales) · tmp_sg_os (un servicio por fila) · tmp_sg_ev (eventos de campo del día por OS)
@@ -378,6 +378,15 @@ BEGIN
     WHERE t.jornada IN ('en_labores', 'salio_planta') AND o.fase NOT IN ('en_ruta', 'en_ejecucion', 'finalizado') AND p.parado_desde IS NOT NULL
       AND TIMESTAMPDIFF(MINUTE, p.ts_utc, v_ahora_utc) <= v_perdida
       AND TIMESTAMPDIFF(MINUTE, GREATEST(p.parado_desde, jd.desde_utc), p.ts_utc) >= v_sin_mov;
+
+    -- Autorización de salida pendiente: el técnico pidió el visto bueno para iniciar el traslado y el encargado aún no responde (crítica: sale en «Alertas críticas»)
+    INSERT INTO tmp_sg_alerta
+    SELECT CONCAT('autorizacion_salida:', a.id_tecnico, ':', o.id_os), 'autorizacion_salida', 'critica', 'Autorización de salida pendiente',
+           CONCAT(t.nombre, ' · ', o.numero), GREATEST(0, TIMESTAMPDIFF(MINUTE, a.solicitado_en, NOW())), t.id_usuario, t.nombre, o.id_os, o.numero
+    FROM tmp_sg_os o
+    JOIN tmp_sg_tec t ON t.id_usuario = o.id_tecnico
+    JOIN autorizacion_salida_os a ON a.id_os = o.id_os AND a.estado = 'pendiente'
+    WHERE o.fase = 'sin_salir';
 
     -- Sin ingreso post-llegada: llegó a planta y no inicia el trabajo
     INSERT INTO tmp_sg_alerta
