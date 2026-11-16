@@ -257,6 +257,12 @@ builder.Services.AddScoped<ObtenerAccesoMovilCasoDeUso>();
 // App Mobile HU-02 — menú principal
 builder.Services.AddScoped<IMenuMovilRepositorio, MenuMovilRepositorio>();
 builder.Services.AddScoped<ObtenerResumenMenuMovilCasoDeUso>();
+builder.Services.AddScoped<IAlertasCampoMovilRepositorio, AlertasCampoMovilRepositorio>();
+builder.Services.AddScoped<ObtenerAlertaCampoMovilCasoDeUso>();
+builder.Services.AddScoped<AccionAlertaCampoMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerTecnicosReasignacionMovilCasoDeUso>();
+builder.Services.AddScoped<ReasignarTecnicoMovilCasoDeUso>();
+builder.Services.AddScoped<RegistrarIncidenciaCampoMovilCasoDeUso>();
 builder.Services.AddScoped<IIngresoEquiposMovilRepositorio, IngresoEquiposMovilRepositorio>();
 builder.Services.AddScoped<ObtenerIngresosEquiposMovilCasoDeUso>();
 builder.Services.AddScoped<RegistrarIngresoEquipoMovilCasoDeUso>();
