@@ -30,13 +30,14 @@ public class IngresoEquiposMovilRepositorio(CadenaConexionBd conexion)
                 return new RespuestaDto<IngresosOsMovilDto>(2, mensaje, new IngresosOsMovilDto(lista));
             }, ct);
 
-    public Task<RespuestaDto<EquipoAgregadoMovilDto>> AgregarExistenteAsync(long idUsuario, long idOs, string codigo, CancellationToken ct) =>
+    public Task<RespuestaDto<EquipoAgregadoMovilDto>> AgregarExistenteAsync(long idUsuario, long idOs, string codigo, bool soloVerificar, CancellationToken ct) =>
         EjecutarAsync<EquipoAgregadoMovilDto>("SP_AgregarEquipoExistenteOsMovil",
             p =>
             {
                 p.AddWithValue("p_id_usuario", idUsuario);
                 p.AddWithValue("p_id_os", idOs);
                 p.AddWithValue("p_codigo", codigo);
+                p.AddWithValue("p_solo_verificar", soloVerificar ? 1 : 0);
             },
             async (r, mensaje) =>
             {
@@ -44,7 +45,8 @@ public class IngresoEquiposMovilRepositorio(CadenaConexionBd conexion)
                 if (!await r.ReadAsync(ct))
                     return new RespuestaDto<EquipoAgregadoMovilDto>(1, "No se pudo agregar el equipo a la OS.");
                 return new RespuestaDto<EquipoAgregadoMovilDto>(2, mensaje,
-                    new EquipoAgregadoMovilDto(EnteroLargo(r, "id_os_equipo"), EnteroLargo(r, "id_equipo"), Texto(r, "codigo_tw") ?? string.Empty));
+                    new EquipoAgregadoMovilDto(EnteroLargo(r, "id_os_equipo"), EnteroLargo(r, "id_equipo"), Texto(r, "codigo_tw") ?? string.Empty,
+                        Texto(r, "marca"), Texto(r, "modelo"), Texto(r, "num_serie"), Texto(r, "codigo_cliente"), Texto(r, "ubicacion")));
             }, ct);
 
     public Task<RespuestaDto<ResultadoIngresoEquipoMovilDto>> RegistrarAsync(

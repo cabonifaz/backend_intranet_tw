@@ -9,7 +9,9 @@
 --     ingresado_en_campo = 1: así lo muestra la lista de objetivos aunque no esté en la programación (SP_ArmarObjetivosMovil). La app solo lo marca como BORRADOR
 --     si su COD TW es provisional (NEW-…).
 --   - Si el código no corresponde a ningún equipo del cliente, la app ofrece registrarlo como equipo nuevo (NEW, con foto de la placa).
--- Resultados: 1 mensaje; 2 (id_os_equipo, id_equipo, codigo_tw).
+--   - p_solo_verificar = 1: hace TODAS las validaciones y devuelve los datos del equipo SIN agregarlo (id_os_equipo = 0): la app los muestra y pide confirmar;
+--     solo con la confirmación vuelve a llamar con p_solo_verificar = 0 y recién entonces el equipo se registra en la OS.
+-- Resultados: 1 mensaje; 2 (id_os_equipo, id_equipo, codigo_tw, marca, modelo, num_serie, codigo_cliente, ubicacion).
 -- ============================================================
 DROP PROCEDURE IF EXISTS SP_AgregarEquipoExistenteOsMovil;
 
@@ -18,7 +20,8 @@ DELIMITER $$
 CREATE PROCEDURE SP_AgregarEquipoExistenteOsMovil(
     IN p_id_usuario BIGINT,
     IN p_id_os      BIGINT,
-    IN p_codigo     VARCHAR(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci
+    IN p_codigo     VARCHAR(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_solo_verificar TINYINT
 )
 proc: BEGIN
     DECLARE v_codigo      VARCHAR(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
@@ -39,6 +42,11 @@ proc: BEGIN
     DECLARE v_tipo_interv INT DEFAULT NULL;
     DECLARE v_orden       INT DEFAULT 1;
     DECLARE v_id_oe       BIGINT DEFAULT NULL;
+    DECLARE v_marca       VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
+    DECLARE v_modelo      VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
+    DECLARE v_serie       VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
+    DECLARE v_cod_cli     VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
+    DECLARE v_ubic        VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -118,6 +126,20 @@ proc: BEGIN
         LEAVE proc;
     END IF;
 
+    -- Datos del equipo para mostrar en la confirmación de la app
+    SELECT ec.marca, ec.modelo, ec.num_serie, ec.codigo_cliente, ec.ubicacion_especifica
+    INTO   v_marca, v_modelo, v_serie, v_cod_cli, v_ubic
+    FROM   equipo_cliente ec WHERE ec.id_equipo = v_id_equipo;
+
+    -- Solo verificar: el equipo es válido para esta OS pero NO se agrega hasta que el técnico confirme
+    IF IFNULL(p_solo_verificar, 0) = 1 THEN
+        ROLLBACK;
+        SELECT 2 AS IdTipoMensaje, CONCAT(v_codigo_tw, ' encontrado: confirma para agregarlo a la OS.') AS Mensaje;
+        SELECT 0 AS id_os_equipo, v_id_equipo AS id_equipo, v_codigo_tw AS codigo_tw, v_marca AS marca, v_modelo AS modelo, v_serie AS num_serie,
+               v_cod_cli AS codigo_cliente, v_ubic AS ubicacion;
+        LEAVE proc;
+    END IF;
+
     -- Si el equipo ya tiene fila en la OS pero la lista de objetivos no lo mostraba (SP_ArmarObjetivosMovil solo muestra los de la programación o los
     -- registrados en campo), se deja visible. Si el técnico llegó aquí es porque la búsqueda en la lista no lo encontró.
     SELECT oe.id INTO v_id_oe FROM os_equipo oe WHERE oe.id_os = p_id_os AND oe.id_equipo = v_id_equipo AND oe.eliminado_en IS NULL LIMIT 1;
@@ -129,7 +151,8 @@ proc: BEGIN
                 p_id_usuario, NOW(), JSON_OBJECT('id_os', p_id_os, 'id_equipo', v_id_equipo, 'codigo_tw', v_codigo_tw, 'ya_estaba_en_la_os', TRUE));
         COMMIT;
         SELECT 2 AS IdTipoMensaje, CONCAT(v_codigo_tw, ' agregado a la lista de la OS.') AS Mensaje;
-        SELECT v_id_oe AS id_os_equipo, v_id_equipo AS id_equipo, v_codigo_tw AS codigo_tw;
+        SELECT v_id_oe AS id_os_equipo, v_id_equipo AS id_equipo, v_codigo_tw AS codigo_tw, v_marca AS marca, v_modelo AS modelo, v_serie AS num_serie,
+               v_cod_cli AS codigo_cliente, v_ubic AS ubicacion;
         LEAVE proc;
     END IF;
 
@@ -153,7 +176,8 @@ proc: BEGIN
     COMMIT;
 
     SELECT 2 AS IdTipoMensaje, CONCAT(v_codigo_tw, ' agregado a la lista de la OS.') AS Mensaje;
-    SELECT v_id_oe AS id_os_equipo, v_id_equipo AS id_equipo, v_codigo_tw AS codigo_tw;
+    SELECT v_id_oe AS id_os_equipo, v_id_equipo AS id_equipo, v_codigo_tw AS codigo_tw, v_marca AS marca, v_modelo AS modelo, v_serie AS num_serie,
+           v_cod_cli AS codigo_cliente, v_ubic AS ubicacion;
 END$$
 
 DELIMITER ;

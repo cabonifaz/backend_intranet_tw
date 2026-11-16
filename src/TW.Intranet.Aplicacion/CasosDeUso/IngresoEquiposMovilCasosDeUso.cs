@@ -18,13 +18,13 @@ public class ObtenerIngresosEquiposMovilCasoDeUso(IIngresoEquiposMovilRepositori
 /// </summary>
 public class AgregarEquipoExistenteOsMovilCasoDeUso(IIngresoEquiposMovilRepositorio repositorio)
 {
-    public Task<RespuestaDto<EquipoAgregadoMovilDto>> EjecutarAsync(long idUsuario, long idOs, string? codigo, CancellationToken ct = default)
+    public Task<RespuestaDto<EquipoAgregadoMovilDto>> EjecutarAsync(long idUsuario, long idOs, string? codigo, bool soloVerificar = false, CancellationToken ct = default)
     {
         if (idUsuario <= 0 || idOs <= 0) return Task.FromResult(new RespuestaDto<EquipoAgregadoMovilDto>(1, EntradaObjetivosMovil.SinServicio));
         var limpio = EntradaObjetivosMovil.Limpiar(codigo);
         if (limpio is null || limpio.Length > EntradaObjetivosMovil.MaxCodigoQr)
             return Task.FromResult(new RespuestaDto<EquipoAgregadoMovilDto>(1, "El código escaneado no es válido."));
-        return repositorio.AgregarExistenteAsync(idUsuario, idOs, limpio, ct);
+        return repositorio.AgregarExistenteAsync(idUsuario, idOs, limpio, soloVerificar, ct);
     }
 }
 
