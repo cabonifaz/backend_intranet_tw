@@ -660,16 +660,20 @@ BEGIN
       AND TIMESTAMPDIFF(MINUTE, p.parado_desde, p.ts_utc) >= v_parado;
 
     -- Sin movimiento (HU-20): jornada en curso (no en refrigerio ni finalizada), con señal reciente y el GPS en el mismo punto por el umbral o más.
-    -- Severidad crítica (aparece en «Alertas críticas»). En ruta lo cubre «GPS parado»; con el servicio ya finalizado o con el trabajo en ejecución no se alerta. Se asocia al servicio del día del técnico (la notificación lo exige).
+    -- El tiempo sin movimiento se cuenta desde el último «Inicio de labores» o «Fin de refrigerio» (no desde antes de marcar). Severidad crítica (aparece en «Alertas críticas»). En ruta lo cubre «GPS parado»; con el servicio ya finalizado o con el trabajo en ejecución no se alerta. Se asocia al servicio del día del técnico (la notificación lo exige).
     INSERT INTO tmp_sg_alerta
     SELECT CONCAT('sin_movimiento:', t.id_usuario, ':', o.id_os), 'sin_movimiento', 'critica', 'Técnico sin movimiento',
-           CONCAT(t.nombre, ' · ', o.numero), TIMESTAMPDIFF(MINUTE, p.parado_desde, v_ahora_utc), t.id_usuario, t.nombre, o.id_os, o.numero
+           CONCAT(t.nombre, ' · ', o.numero), TIMESTAMPDIFF(MINUTE, GREATEST(p.parado_desde, jd.desde_utc), v_ahora_utc), t.id_usuario, t.nombre, o.id_os, o.numero
     FROM tmp_sg_tec t
     JOIN tmp_sg_os o ON o.id_os = t.id_os_actual
     JOIN tmp_sg_pos p ON p.id_usuario = t.id_usuario
+    JOIN (SELECT j.id_usuario, MAX(j.marcado_utc) AS desde_utc
+          FROM   jornada_marcacion j
+          WHERE  j.fecha = v_hoy AND j.tipo IN ('inicio_labores', 'fin_refrigerio')
+          GROUP BY j.id_usuario) jd ON jd.id_usuario = t.id_usuario
     WHERE t.jornada IN ('en_labores', 'salio_planta') AND o.fase NOT IN ('en_ruta', 'en_ejecucion', 'finalizado') AND p.parado_desde IS NOT NULL
       AND TIMESTAMPDIFF(MINUTE, p.ts_utc, v_ahora_utc) <= v_perdida
-      AND TIMESTAMPDIFF(MINUTE, p.parado_desde, p.ts_utc) >= v_sin_mov;
+      AND TIMESTAMPDIFF(MINUTE, GREATEST(p.parado_desde, jd.desde_utc), p.ts_utc) >= v_sin_mov;
 
     -- Sin ingreso post-llegada: llegó a planta y no inicia el trabajo
     INSERT INTO tmp_sg_alerta
