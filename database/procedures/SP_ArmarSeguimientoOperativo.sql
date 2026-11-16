@@ -116,7 +116,7 @@ BEGIN
     LEFT JOIN requerimiento rq ON rq.id_requerimiento = COALESCE(os.id_requerimiento, pr.id_requerimiento)
     LEFT JOIN sede_cliente sc2 ON sc2.id_sede = rq.id_sede AND sc2.SoftDelete = 0
     WHERE p.eliminado_en IS NULL AND p.estado = 'confirmada' AND p.fecha_ejecucion = v_hoy
-      AND os.estado NOT IN ('anulada', 'borrador', 'emitida');
+      AND os.estado NOT IN ('anulada', 'borrador', 'emitida', 'finalizada');   -- finalizada: ya está en Revisión de Informes (el técnico sigue en el mapa por su jornada)
 
     -- Eventos de campo de hoy (una fila por OS)
     CREATE TEMPORARY TABLE tmp_sg_ev (id_os BIGINT NOT NULL, salida_utc DATETIME, llegada_utc DATETIME, inicio_utc DATETIME, cierre_utc DATETIME, PRIMARY KEY (id_os));
@@ -297,7 +297,8 @@ BEGIN
         END, 250),
         t.actividad_tono = CASE
             WHEN t.jornada = 'en_refrigerio' THEN 'refrigerio'
-            WHEN t.jornada = 'salio_planta'  THEN 'salida_planta'
+            WHEN t.jornada = 'salio_planta' AND o.fase = 'en_ejecucion' THEN 'trabajo'
+            WHEN t.jornada = 'salio_planta'  THEN 'activo'
             WHEN t.jornada = 'finalizada'    THEN 'finalizada'
             WHEN t.estado_seg = 'con_incidente' THEN 'incidente'
             WHEN t.estado_seg = 'con_demora'    THEN 'demora'
@@ -305,11 +306,11 @@ BEGIN
             WHEN o.fase = 'en_ejecucion' THEN 'trabajo'
             WHEN o.fase = 'en_planta'    THEN 'planta'
             WHEN o.fase = 'en_ruta'      THEN 'ruta'
-            WHEN t.jornada = 'en_labores' THEN 'trabajo'
+            WHEN t.jornada = 'en_labores' THEN 'activo'
             ELSE 'sin_iniciar' END;
     UPDATE tmp_sg_tec t
     SET t.actividad_color = CASE t.actividad_tono
-            WHEN 'trabajo' THEN '#16A34A' WHEN 'planta' THEN '#14B8A6' WHEN 'ruta' THEN '#2563EB' WHEN 'refrigerio' THEN '#F59E0B' WHEN 'refrigerio_fin' THEN '#84CC16'
+            WHEN 'trabajo' THEN '#EAB308' WHEN 'activo' THEN '#16A34A' WHEN 'planta' THEN '#14B8A6' WHEN 'ruta' THEN '#2563EB' WHEN 'refrigerio' THEN '#F97316' WHEN 'refrigerio_fin' THEN '#84CC16'
             WHEN 'salida_planta' THEN '#7C3AED' WHEN 'finalizada' THEN '#64748B' WHEN 'demora' THEN '#EA580C' WHEN 'incidente' THEN '#DC2626' ELSE '#94A3B8' END;
 
     -- Distancia (m) al cliente: técnico principal de cada servicio y técnico (servicio actual)
@@ -363,14 +364,14 @@ BEGIN
       AND TIMESTAMPDIFF(MINUTE, p.parado_desde, p.ts_utc) >= v_parado;
 
     -- Sin movimiento (HU-20): jornada en curso (no en refrigerio ni finalizada), con señal reciente y el GPS en el mismo punto por el umbral o más.
-    -- En ruta lo cubre «GPS parado»; con el servicio ya finalizado no se alerta. Se asocia al servicio del día del técnico (la notificación lo exige).
+    -- Severidad crítica (aparece en «Alertas críticas»). En ruta lo cubre «GPS parado»; con el servicio ya finalizado o con el trabajo en ejecución no se alerta. Se asocia al servicio del día del técnico (la notificación lo exige).
     INSERT INTO tmp_sg_alerta
-    SELECT CONCAT('sin_movimiento:', t.id_usuario, ':', o.id_os), 'sin_movimiento', 'advertencia', 'Sin movimiento',
+    SELECT CONCAT('sin_movimiento:', t.id_usuario, ':', o.id_os), 'sin_movimiento', 'critica', 'Técnico sin movimiento',
            CONCAT(t.nombre, ' · ', o.numero), TIMESTAMPDIFF(MINUTE, p.parado_desde, v_ahora_utc), t.id_usuario, t.nombre, o.id_os, o.numero
     FROM tmp_sg_tec t
     JOIN tmp_sg_os o ON o.id_os = t.id_os_actual
     JOIN tmp_sg_pos p ON p.id_usuario = t.id_usuario
-    WHERE t.jornada IN ('en_labores', 'salio_planta') AND o.fase NOT IN ('en_ruta', 'finalizado') AND p.parado_desde IS NOT NULL
+    WHERE t.jornada IN ('en_labores', 'salio_planta') AND o.fase NOT IN ('en_ruta', 'en_ejecucion', 'finalizado') AND p.parado_desde IS NOT NULL
       AND TIMESTAMPDIFF(MINUTE, p.ts_utc, v_ahora_utc) <= v_perdida
       AND TIMESTAMPDIFF(MINUTE, p.parado_desde, p.ts_utc) >= v_sin_mov;
 
