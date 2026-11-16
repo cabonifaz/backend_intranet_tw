@@ -6,6 +6,8 @@
 --     o por la etiqueta QR de TW ya vinculada al equipo (equipo_qr). Debe ser del MISMO cliente de la OS.
 --   - No se agregan equipos inactivos ni en evaluación (bloqueados) ni en borrador (pendientes de validar). Si ya está en la lista de la OS, se avisa.
 --   - Queda con el mismo tipo de intervención que los demás objetivos de la OS, al final de la lista, "por iniciar". Auditoría en auditoria_evento.
+--     ingresado_en_campo = 1: así lo muestra la lista de objetivos aunque no esté en la programación (SP_ArmarObjetivosMovil). La app solo lo marca como BORRADOR
+--     si su COD TW es provisional (NEW-…).
 --   - Si el código no corresponde a ningún equipo del cliente, la app ofrece registrarlo como equipo nuevo (NEW, con foto de la placa).
 -- Resultados: 1 mensaje; 2 (id_os_equipo, id_equipo, codigo_tw).
 -- ============================================================
@@ -116,10 +118,18 @@ proc: BEGIN
         LEAVE proc;
     END IF;
 
+    -- Si el equipo ya tiene fila en la OS pero la lista de objetivos no lo mostraba (SP_ArmarObjetivosMovil solo muestra los de la programación o los
+    -- registrados en campo), se deja visible. Si el técnico llegó aquí es porque la búsqueda en la lista no lo encontró.
     SELECT oe.id INTO v_id_oe FROM os_equipo oe WHERE oe.id_os = p_id_os AND oe.id_equipo = v_id_equipo AND oe.eliminado_en IS NULL LIMIT 1;
     IF v_id_oe IS NOT NULL THEN
-        ROLLBACK;
-        SELECT 1 AS IdTipoMensaje, CONCAT(v_codigo_tw, ' ya está en la lista de esta OS: búscalo y selecciónalo.') AS Mensaje;
+        UPDATE os_equipo SET ingresado_en_campo = 1 WHERE id = v_id_oe;
+        INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion, id_usuario, registrado_en, metadata)
+        VALUES ('os_equipo', v_id_oe, 'agregar_equipo_existente', NULL, 'por iniciar',
+                LEFT(CONCAT('Equipo ', v_codigo_tw, ' agregado desde campo (QR) a ', v_numero_os), 300),
+                p_id_usuario, NOW(), JSON_OBJECT('id_os', p_id_os, 'id_equipo', v_id_equipo, 'codigo_tw', v_codigo_tw, 'ya_estaba_en_la_os', TRUE));
+        COMMIT;
+        SELECT 2 AS IdTipoMensaje, CONCAT(v_codigo_tw, ' agregado a la lista de la OS.') AS Mensaje;
+        SELECT v_id_oe AS id_os_equipo, v_id_equipo AS id_equipo, v_codigo_tw AS codigo_tw;
         LEAVE proc;
     END IF;
 
@@ -131,7 +141,7 @@ proc: BEGIN
     FROM   os_equipo oe WHERE oe.id_os = p_id_os AND oe.eliminado_en IS NULL;
 
     INSERT INTO os_equipo (id_os, id_equipo, id_tipo_intervencion, orden, ingresado_en_campo, estado_ejecucion, creado_por)
-    VALUES (p_id_os, v_id_equipo, v_tipo_interv, v_orden, 0, 'pendiente', p_id_usuario);
+    VALUES (p_id_os, v_id_equipo, v_tipo_interv, v_orden, 1, 'pendiente', p_id_usuario);
     SET v_id_oe = LAST_INSERT_ID();
 
     INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion, id_usuario, registrado_en, metadata)
