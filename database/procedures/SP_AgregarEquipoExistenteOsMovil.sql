@@ -12,7 +12,12 @@
 --   - Si el código no corresponde a ningún equipo del cliente, la app ofrece registrarlo como equipo nuevo (NEW, con foto de la placa).
 --   - p_solo_verificar = 1: hace TODAS las validaciones y devuelve los datos del equipo SIN agregarlo (id_os_equipo = 0): la app los muestra y pide confirmar;
 --     solo con la confirmación vuelve a llamar con p_solo_verificar = 0 y recién entonces el equipo se registra en la OS.
--- Resultados: 1 mensaje; 2 (id_os_equipo, id_equipo, codigo_tw, marca, modelo, num_serie, codigo_cliente, ubicacion).
+--   - REEMPLAZO (no se crea un objetivo nuevo): el equipo escaneado ocupa el lugar del equipo de un objetivo SIN INICIAR (estado pendiente, visible y sin ingreso registrado):
+--     el objetivo indicado (p_id_os_equipo_objetivo, el de la pantalla Selección de equipo) o, sin indicar, el primero de la lista. Así un servicio de 1 objetivo sigue teniendo 1
+--     aunque se use otro equipo para hacer el trabajo. El objetivo conserva su id (concepto, ingreso y tiempos) y queda como «agregado desde campo». El equipo reemplazado sale de la OS
+--     (sigue en el maestro de equipos) y queda en la auditoría. Si ningún objetivo se puede reemplazar (todos iniciados) se agrega como objetivo nuevo, como antes.
+--     Un equipo que está en OTRA orden también se puede agregar: solo se evita repetirlo en la misma OS.
+-- Resultados: 1 mensaje; 2 (id_os_equipo, id_equipo, codigo_tw, marca, modelo, num_serie, codigo_cliente, ubicacion, reemplaza_id_os_equipo, reemplaza_codigo_tw, reemplaza_nombre).
 -- ============================================================
 DROP PROCEDURE IF EXISTS SP_AgregarEquipoExistenteOsMovil;
 
@@ -22,7 +27,8 @@ CREATE PROCEDURE SP_AgregarEquipoExistenteOsMovil(
     IN p_id_usuario BIGINT,
     IN p_id_os      BIGINT,
     IN p_codigo     VARCHAR(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
-    IN p_solo_verificar TINYINT
+    IN p_solo_verificar TINYINT,
+    IN p_id_os_equipo_objetivo BIGINT
 )
 proc: BEGIN
     DECLARE v_codigo      VARCHAR(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
@@ -53,6 +59,13 @@ proc: BEGIN
     DECLARE v_otro_cod    VARCHAR(30)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
     DECLARE v_otro_cli    VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
     DECLARE v_otra_os     VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
+    DECLARE v_id_obj      BIGINT DEFAULT NULL;
+    DECLARE v_cod_obj     VARCHAR(30)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
+    DECLARE v_nom_obj     VARCHAR(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
+    DECLARE v_id_prog     BIGINT DEFAULT NULL;
+    DECLARE v_n_prog      INT DEFAULT 0;
+    DECLARE v_dup         BIGINT DEFAULT NULL;
+    DECLARE v_id_dest     BIGINT DEFAULT NULL;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -159,12 +172,62 @@ proc: BEGIN
     INTO   v_marca, v_modelo, v_serie, v_cod_cli, v_ubic
     FROM   equipo_cliente ec WHERE ec.id_equipo = v_id_equipo;
 
+    -- Objetivo cuyo equipo ocupará el escaneado: el indicado por la app o, sin indicar, el primero sin iniciar (mismas reglas de visibilidad que SP_ArmarObjetivosMovil)
+    SELECT pr.id_programacion INTO v_id_prog
+    FROM   programacion pr
+    WHERE  pr.id_os = p_id_os AND pr.estado <> 'cancelada' AND pr.eliminado_en IS NULL
+    ORDER BY pr.id_programacion DESC LIMIT 1;
+    SELECT COUNT(*) INTO v_n_prog FROM programacion_equipo pe WHERE pe.id_programacion = v_id_prog AND pe.eliminado_en IS NULL;
+
+    SELECT oe.id, ec2.codigo_tw, LEFT(TRIM(CONCAT(IFNULL(ec2.marca, ''), ' ', IFNULL(ec2.modelo, ''))), 200)
+    INTO   v_id_obj, v_cod_obj, v_nom_obj
+    FROM   os_equipo oe
+    JOIN   equipo_cliente ec2 ON ec2.id_equipo = oe.id_equipo
+    WHERE  oe.id_os = p_id_os AND oe.eliminado_en IS NULL
+      AND  IFNULL(oe.estado_ejecucion, 'pendiente') = 'pendiente'
+      AND  oe.id_equipo <> v_id_equipo
+      AND  (IFNULL(p_id_os_equipo_objetivo, 0) = 0 OR oe.id = p_id_os_equipo_objetivo)
+      AND  (v_n_prog = 0 OR oe.ingresado_en_campo = 1
+            OR EXISTS (SELECT 1 FROM programacion_equipo pe WHERE pe.id_programacion = v_id_prog AND pe.id_equipo = oe.id_equipo AND pe.eliminado_en IS NULL))
+      AND  NOT EXISTS (SELECT 1 FROM os_equipo_ingreso i WHERE i.id_os_equipo = oe.id)
+    ORDER BY IFNULL(oe.orden, oe.id), oe.id
+    LIMIT 1;
+    IF IFNULL(p_id_os_equipo_objetivo, 0) > 0 AND v_id_obj IS NULL THEN
+        ROLLBACK;
+        SELECT 1 AS IdTipoMensaje, 'Ese objetivo ya se inició o ya tiene su ingreso registrado: no se puede cambiar su equipo.' AS Mensaje;
+        LEAVE proc;
+    END IF;
+
     -- Solo verificar: el equipo es válido para esta OS pero NO se agrega hasta que el técnico confirme
     IF IFNULL(p_solo_verificar, 0) = 1 THEN
         ROLLBACK;
         SELECT 2 AS IdTipoMensaje, CONCAT(v_codigo_tw, ' encontrado: confirma para agregarlo a la OS.') AS Mensaje;
         SELECT 0 AS id_os_equipo, v_id_equipo AS id_equipo, v_codigo_tw AS codigo_tw, v_marca AS marca, v_modelo AS modelo, v_serie AS num_serie,
-               v_cod_cli AS codigo_cliente, v_ubic AS ubicacion;
+               v_cod_cli AS codigo_cliente, v_ubic AS ubicacion, v_id_obj AS reemplaza_id_os_equipo, v_cod_obj AS reemplaza_codigo_tw, v_nom_obj AS reemplaza_nombre;
+        LEAVE proc;
+    END IF;
+
+    -- Reemplazo: el equipo escaneado ocupa el lugar del equipo pendiente del objetivo (no se crea un objetivo nuevo)
+    IF v_id_obj IS NOT NULL THEN
+        SELECT oe.id INTO v_dup FROM os_equipo oe
+        WHERE  oe.id_os = p_id_os AND oe.id_equipo = v_id_equipo AND oe.eliminado_en IS NULL AND oe.id <> v_id_obj LIMIT 1;
+        IF v_dup IS NOT NULL THEN
+            -- el equipo ya tenía una fila (oculta) en esta OS: se deja visible y el objetivo reemplazado sale de la OS
+            UPDATE os_equipo SET ingresado_en_campo = 1 WHERE id = v_dup;
+            UPDATE os_equipo SET eliminado_en = NOW() WHERE id = v_id_obj;
+            SET v_id_dest = v_dup;
+        ELSE
+            UPDATE os_equipo SET id_equipo = v_id_equipo, ingresado_en_campo = 1 WHERE id = v_id_obj;
+            SET v_id_dest = v_id_obj;
+        END IF;
+        INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion, id_usuario, registrado_en, metadata)
+        VALUES ('os_equipo', v_id_dest, 'reemplazar_equipo_objetivo', v_cod_obj, v_codigo_tw,
+                LEFT(CONCAT('Equipo ', v_codigo_tw, ' ocupó el lugar de ', v_cod_obj, ' en el objetivo de ', v_numero_os, ' (escaneado en campo)'), 300),
+                p_id_usuario, NOW(), JSON_OBJECT('id_os', p_id_os, 'id_os_equipo', v_id_dest, 'codigo_tw_nuevo', v_codigo_tw, 'codigo_tw_anterior', v_cod_obj));
+        COMMIT;
+        SELECT 2 AS IdTipoMensaje, CONCAT(v_codigo_tw, ' ocupó el lugar de ', v_cod_obj, ' en el objetivo de la OS.') AS Mensaje;
+        SELECT v_id_dest AS id_os_equipo, v_id_equipo AS id_equipo, v_codigo_tw AS codigo_tw, v_marca AS marca, v_modelo AS modelo, v_serie AS num_serie,
+               v_cod_cli AS codigo_cliente, v_ubic AS ubicacion, v_id_obj AS reemplaza_id_os_equipo, v_cod_obj AS reemplaza_codigo_tw, v_nom_obj AS reemplaza_nombre;
         LEAVE proc;
     END IF;
 
@@ -180,7 +243,7 @@ proc: BEGIN
         COMMIT;
         SELECT 2 AS IdTipoMensaje, CONCAT(v_codigo_tw, ' agregado a la lista de la OS.') AS Mensaje;
         SELECT v_id_oe AS id_os_equipo, v_id_equipo AS id_equipo, v_codigo_tw AS codigo_tw, v_marca AS marca, v_modelo AS modelo, v_serie AS num_serie,
-               v_cod_cli AS codigo_cliente, v_ubic AS ubicacion;
+               v_cod_cli AS codigo_cliente, v_ubic AS ubicacion, NULL AS reemplaza_id_os_equipo, NULL AS reemplaza_codigo_tw, NULL AS reemplaza_nombre;
         LEAVE proc;
     END IF;
 
@@ -205,7 +268,7 @@ proc: BEGIN
 
     SELECT 2 AS IdTipoMensaje, CONCAT(v_codigo_tw, ' agregado a la lista de la OS.') AS Mensaje;
     SELECT v_id_oe AS id_os_equipo, v_id_equipo AS id_equipo, v_codigo_tw AS codigo_tw, v_marca AS marca, v_modelo AS modelo, v_serie AS num_serie,
-           v_cod_cli AS codigo_cliente, v_ubic AS ubicacion;
+           v_cod_cli AS codigo_cliente, v_ubic AS ubicacion, NULL AS reemplaza_id_os_equipo, NULL AS reemplaza_codigo_tw, NULL AS reemplaza_nombre;
 END$$
 
 DELIMITER ;

@@ -36,11 +36,12 @@ public class IngresoEquiposMovilController(
 
     /// <summary>
     /// Agrega a la OS un equipo ya registrado del mismo cliente, a partir del QR o código escaneado (?codigo=). Con ?verificar=true solo valida y devuelve los datos del equipo
-    /// (no lo agrega): la app los muestra y pide confirmar antes de llamar de nuevo sin verificar.
+    /// (no lo agrega): la app los muestra y pide confirmar antes de llamar de nuevo sin verificar. El equipo ocupa el lugar del equipo de un objetivo sin iniciar
+    /// (?objetivo= = id_os_equipo del objetivo; sin indicar, el primero sin iniciar) para no crear objetivos nuevos.
     /// </summary>
     [HttpPost("agregar")]
-    public async Task<IActionResult> Agregar(long idOs, [FromQuery] string? codigo, [FromQuery] bool verificar, CancellationToken ct)
-        => Responder(await agregarExistente.EjecutarAsync(IdUsuarioActual, idOs, codigo, verificar, ct));
+    public async Task<IActionResult> Agregar(long idOs, [FromQuery] string? codigo, [FromQuery] bool verificar, [FromQuery] long? objetivo, CancellationToken ct)
+        => Responder(await agregarExistente.EjecutarAsync(IdUsuarioActual, idOs, codigo, verificar, objetivo, ct));
 
     /// <summary>
     /// Registra el ingreso de un equipo. Con observaciones o inoperativo exige observación y al menos una foto. Un equipo no se ingresa dos veces en la misma OS.

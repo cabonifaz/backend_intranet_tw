@@ -30,7 +30,7 @@ public class IngresoEquiposMovilRepositorio(CadenaConexionBd conexion)
                 return new RespuestaDto<IngresosOsMovilDto>(2, mensaje, new IngresosOsMovilDto(lista));
             }, ct);
 
-    public Task<RespuestaDto<EquipoAgregadoMovilDto>> AgregarExistenteAsync(long idUsuario, long idOs, string codigo, bool soloVerificar, CancellationToken ct) =>
+    public Task<RespuestaDto<EquipoAgregadoMovilDto>> AgregarExistenteAsync(long idUsuario, long idOs, string codigo, bool soloVerificar, long? idOsEquipoObjetivo, CancellationToken ct) =>
         EjecutarAsync<EquipoAgregadoMovilDto>("SP_AgregarEquipoExistenteOsMovil",
             p =>
             {
@@ -38,6 +38,7 @@ public class IngresoEquiposMovilRepositorio(CadenaConexionBd conexion)
                 p.AddWithValue("p_id_os", idOs);
                 p.AddWithValue("p_codigo", codigo);
                 p.AddWithValue("p_solo_verificar", soloVerificar ? 1 : 0);
+                p.AddWithValue("p_id_os_equipo_objetivo", idOsEquipoObjetivo is > 0 ? idOsEquipoObjetivo : DBNull.Value);
             },
             async (r, mensaje) =>
             {
@@ -46,7 +47,8 @@ public class IngresoEquiposMovilRepositorio(CadenaConexionBd conexion)
                     return new RespuestaDto<EquipoAgregadoMovilDto>(1, "No se pudo agregar el equipo a la OS.");
                 return new RespuestaDto<EquipoAgregadoMovilDto>(2, mensaje,
                     new EquipoAgregadoMovilDto(EnteroLargo(r, "id_os_equipo"), EnteroLargo(r, "id_equipo"), Texto(r, "codigo_tw") ?? string.Empty,
-                        Texto(r, "marca"), Texto(r, "modelo"), Texto(r, "num_serie"), Texto(r, "codigo_cliente"), Texto(r, "ubicacion")));
+                        Texto(r, "marca"), Texto(r, "modelo"), Texto(r, "num_serie"), Texto(r, "codigo_cliente"), Texto(r, "ubicacion"),
+                        EnteroLargoNulo(r, "reemplaza_id_os_equipo"), Texto(r, "reemplaza_codigo_tw"), Texto(r, "reemplaza_nombre")));
             }, ct);
 
     public Task<RespuestaDto<ResultadoIngresoEquipoMovilDto>> RegistrarAsync(
