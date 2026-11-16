@@ -257,6 +257,9 @@ builder.Services.AddScoped<ObtenerAccesoMovilCasoDeUso>();
 // App Mobile HU-02 — menú principal
 builder.Services.AddScoped<IMenuMovilRepositorio, MenuMovilRepositorio>();
 builder.Services.AddScoped<ObtenerResumenMenuMovilCasoDeUso>();
+builder.Services.AddScoped<IProcedimientosMovilRepositorio, ProcedimientosMovilRepositorio>();
+builder.Services.AddScoped<ObtenerBibliotecaProcedimientosMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerPdfProcedimientoMovilCasoDeUso>();
 // App Mobile HU-03 — agenda de servicios programados
 builder.Services.AddScoped<IServiciosMovilRepositorio, ServiciosMovilRepositorio>();
 builder.Services.AddScoped<ObtenerServiciosProgramadosMovilCasoDeUso>();
