@@ -15,6 +15,7 @@ namespace TW.Intranet.API.Controllers;
 public class IngresoEquiposMovilController(
     ObtenerIngresosEquiposMovilCasoDeUso   obtener,
     RegistrarIngresoEquipoMovilCasoDeUso   registrar,
+    AgregarEquipoExistenteOsMovilCasoDeUso agregarExistente,
     ILogger<IngresoEquiposMovilController> logger) : ControladorAppMovil(logger)
 {
     /// <summary>5 fotos de hasta 5 MB + margen del formulario.</summary>
@@ -32,6 +33,11 @@ public class IngresoEquiposMovilController(
     [HttpGet]
     public async Task<IActionResult> Obtener(long idOs, CancellationToken ct)
         => Responder(await obtener.EjecutarAsync(IdUsuarioActual, idOs, ct));
+
+    /// <summary>Agrega a la OS un equipo ya registrado del mismo cliente, a partir del QR o código escaneado (?codigo=).</summary>
+    [HttpPost("agregar")]
+    public async Task<IActionResult> Agregar(long idOs, [FromQuery] string? codigo, CancellationToken ct)
+        => Responder(await agregarExistente.EjecutarAsync(IdUsuarioActual, idOs, codigo, ct));
 
     /// <summary>
     /// Registra el ingreso de un equipo. Con observaciones o inoperativo exige observación y al menos una foto. Un equipo no se ingresa dos veces en la misma OS.

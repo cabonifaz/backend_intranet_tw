@@ -30,6 +30,23 @@ public class IngresoEquiposMovilRepositorio(CadenaConexionBd conexion)
                 return new RespuestaDto<IngresosOsMovilDto>(2, mensaje, new IngresosOsMovilDto(lista));
             }, ct);
 
+    public Task<RespuestaDto<EquipoAgregadoMovilDto>> AgregarExistenteAsync(long idUsuario, long idOs, string codigo, CancellationToken ct) =>
+        EjecutarAsync<EquipoAgregadoMovilDto>("SP_AgregarEquipoExistenteOsMovil",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario", idUsuario);
+                p.AddWithValue("p_id_os", idOs);
+                p.AddWithValue("p_codigo", codigo);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<EquipoAgregadoMovilDto>(1, "No se pudo agregar el equipo a la OS.");
+                return new RespuestaDto<EquipoAgregadoMovilDto>(2, mensaje,
+                    new EquipoAgregadoMovilDto(EnteroLargo(r, "id_os_equipo"), EnteroLargo(r, "id_equipo"), Texto(r, "codigo_tw") ?? string.Empty));
+            }, ct);
+
     public Task<RespuestaDto<ResultadoIngresoEquipoMovilDto>> RegistrarAsync(
         long idUsuario, long idOs, long idOsEquipo, string estado, string? observacion, IReadOnlyList<string> rutasFotos, CancellationToken ct) =>
         EjecutarAsync<ResultadoIngresoEquipoMovilDto>("SP_RegistrarIngresoEquipoMovil",

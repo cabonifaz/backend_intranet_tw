@@ -260,6 +260,7 @@ builder.Services.AddScoped<ObtenerResumenMenuMovilCasoDeUso>();
 builder.Services.AddScoped<IIngresoEquiposMovilRepositorio, IngresoEquiposMovilRepositorio>();
 builder.Services.AddScoped<ObtenerIngresosEquiposMovilCasoDeUso>();
 builder.Services.AddScoped<RegistrarIngresoEquipoMovilCasoDeUso>();
+builder.Services.AddScoped<AgregarEquipoExistenteOsMovilCasoDeUso>();
 builder.Services.AddScoped<IProcedimientosMovilRepositorio, ProcedimientosMovilRepositorio>();
 builder.Services.AddScoped<ObtenerBibliotecaProcedimientosMovilCasoDeUso>();
 builder.Services.AddSingleton<IGeneradorProcedimientoPdf, GeneradorProcedimientoPdf>();

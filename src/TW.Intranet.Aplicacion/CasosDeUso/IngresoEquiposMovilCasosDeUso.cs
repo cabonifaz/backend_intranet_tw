@@ -13,6 +13,22 @@ public class ObtenerIngresosEquiposMovilCasoDeUso(IIngresoEquiposMovilRepositori
 }
 
 /// <summary>
+/// App Mobile HU-22 — Agrega a la lista de la OS un equipo YA REGISTRADO del mismo cliente, a partir del QR o código escaneado.
+/// Si el código no corresponde a un equipo del cliente, el mensaje indica registrarlo como equipo nuevo (NEW).
+/// </summary>
+public class AgregarEquipoExistenteOsMovilCasoDeUso(IIngresoEquiposMovilRepositorio repositorio)
+{
+    public Task<RespuestaDto<EquipoAgregadoMovilDto>> EjecutarAsync(long idUsuario, long idOs, string? codigo, CancellationToken ct = default)
+    {
+        if (idUsuario <= 0 || idOs <= 0) return Task.FromResult(new RespuestaDto<EquipoAgregadoMovilDto>(1, EntradaObjetivosMovil.SinServicio));
+        var limpio = EntradaObjetivosMovil.Limpiar(codigo);
+        if (limpio is null || limpio.Length > EntradaObjetivosMovil.MaxCodigoQr)
+            return Task.FromResult(new RespuestaDto<EquipoAgregadoMovilDto>(1, "El código escaneado no es válido."));
+        return repositorio.AgregarExistenteAsync(idUsuario, idOs, limpio, ct);
+    }
+}
+
+/// <summary>
 /// App Mobile HU-22 — Registrar el ingreso de un equipo de la OS: estado de ingreso, observación y fotos de evidencia (solo cámara, JPEG, hasta 5 de 5 MB).
 /// El back valida y guarda las fotos ANTES de llamar al SP y las borra si el SP no registra el ingreso.
 /// </summary>
