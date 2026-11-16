@@ -33,6 +33,7 @@ public class ProcedimientosMovilRepositorio(CadenaConexionBd conexion)
                         Texto(r, "pdf_nombre"),
                         EnteroLargoNulo(r, "pdf_tamano"),
                         Texto(r, "pdf_hash"),
+                        Booleano(r, "formato_digital_iso"),
                         Texto(r, "para_servicio_hoy"),
                         []));
                 }

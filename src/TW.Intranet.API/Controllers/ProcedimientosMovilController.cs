@@ -24,7 +24,7 @@ public class ProcedimientosMovilController(
     public async Task<IActionResult> Listar(CancellationToken ct)
         => Responder(await biblioteca.EjecutarAsync(IdUsuarioActual, ct));
 
-    /// <summary>PDF aprobado del procedimiento (el técnico lo guarda en el teléfono).</summary>
+    /// <summary>PDF del procedimiento, generado con lo registrado en la intranet (el técnico lo guarda en el teléfono).</summary>
     [HttpGet("{id:long}/pdf")]
     public async Task<IActionResult> ObtenerPdf(long id, CancellationToken ct)
     {

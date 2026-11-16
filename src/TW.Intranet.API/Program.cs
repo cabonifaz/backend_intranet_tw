@@ -259,6 +259,7 @@ builder.Services.AddScoped<IMenuMovilRepositorio, MenuMovilRepositorio>();
 builder.Services.AddScoped<ObtenerResumenMenuMovilCasoDeUso>();
 builder.Services.AddScoped<IProcedimientosMovilRepositorio, ProcedimientosMovilRepositorio>();
 builder.Services.AddScoped<ObtenerBibliotecaProcedimientosMovilCasoDeUso>();
+builder.Services.AddSingleton<IGeneradorProcedimientoPdf, GeneradorProcedimientoPdf>();
 builder.Services.AddScoped<ObtenerPdfProcedimientoMovilCasoDeUso>();
 // App Mobile HU-03 — agenda de servicios programados
 builder.Services.AddScoped<IServiciosMovilRepositorio, ServiciosMovilRepositorio>();

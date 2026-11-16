@@ -1,14 +1,16 @@
 -- HU-24: biblioteca de procedimientos en la app. Ejecutar con Alt+X (No al aviso) y reiniciar la API.
 -- ============================================================
 -- SP_ObtenerProcedimientosMovil  (App Mobile HU-24 — Biblioteca de procedimientos)
--- Procedimientos APROBADOS (estado activo) con su PDF cargado, para consultarlos en la app:
+-- Procedimientos APROBADOS (estado activo) para consultarlos en la app. El PDF NO es el archivo cargado en la intranet: el back .NET lo GENERA con lo registrado
+-- (QuestPDF). pdf_hash cambia cuando cambia lo registrado, así el teléfono sabe si tiene la versión vigente:
 --   1) Header.
---   2) Procedimientos: código, norma, versión, año, tipo (calibración / verificación…), alcance, aprobado por, fecha de actualización,
+--   2) Procedimientos: código, norma, versión, año, tipo (calibración / verificación: se deduce del código y la descripción, porque la columna tipo_procedimiento se eliminó en la migración 33),
+--      fecha de actualización (alcance y aprobado_por tampoco existen ya: salen NULL),
 --      datos del PDF (nombre, tamaño, hash para saber si el teléfono tiene la versión vigente) y `para_servicio_hoy`:
 --      número de la OS de HOY del técnico cuyos conceptos usan ese procedimiento (misma regla que el Asistente IA: suministros de clase servicio →
 --      id_primer_procedimiento / id_segundo_procedimiento, resueltos por código o por id). La app descarga esos solos al iniciar la jornada.
 --   3) Historial de versiones anteriores (procedimiento_metrologico_version): la vigente es la fila del procedimiento.
--- Los inactivos, borradores o sin PDF no se muestran (no hay nada que consultar). Hora de Lima (CURDATE).
+-- Los inactivos y borradores no se muestran. Hora de Lima (CURDATE).
 -- Solo lectura.
 -- ============================================================
 DROP PROCEDURE IF EXISTS SP_ObtenerProcedimientosMovil;
@@ -63,14 +65,17 @@ proc: BEGIN
            pm.version,
            pm.norma_base,
            pm.autor_norma,
-           pm.tipo_procedimiento,
+           CASE WHEN LOWER(CONCAT(pm.codigo, ' ', pm.descripcion)) LIKE '%calibra%' THEN 'calibracion'
+                WHEN LOWER(CONCAT(pm.codigo, ' ', pm.descripcion)) LIKE '%verific%' THEN 'verificacion'
+                ELSE NULL END                                         AS tipo_procedimiento,
            pm.descripcion,
-           pm.alcance,
-           pm.aprobado_por,
+           NULL                                                   AS alcance,
+           NULL                                                   AS aprobado_por,
            DATE(COALESCE(pm.pdf_subido_en, pm.FchMod, pm.FchCre)) AS actualizado,
-           pm.pdf_nombre_original                                 AS pdf_nombre,
-           pm.pdf_tamano_bytes                                    AS pdf_tamano,
-           pm.pdf_hash_sha256                                     AS pdf_hash,
+           CONCAT(pm.codigo, '_v', pm.version, '.pdf')            AS pdf_nombre,
+           NULL                                                   AS pdf_tamano,
+           LEFT(SHA2(CONCAT_WS('|', pm.id_procedimiento, pm.codigo, pm.anio, pm.version, pm.norma_base, pm.autor_norma, pm.descripcion, pm.es_formato_digital_iso, pm.FchMod), 256), 16) AS pdf_hash,
+           pm.es_formato_digital_iso                              AS formato_digital_iso,
            (SELECT MIN(r.numero)
             FROM   refs r
             WHERE  pm.codigo = TRIM(SUBSTRING_INDEX(r.ref, ' - ', 1))
@@ -78,7 +83,6 @@ proc: BEGIN
     FROM   procedimiento_metrologico pm
     WHERE  pm.SoftDelete = 0
       AND  pm.estado = 'activo'
-      AND  NULLIF(TRIM(pm.url_pdf_aprobado), '') IS NOT NULL
     ORDER BY pm.codigo, pm.anio DESC, pm.version DESC;
 
     -- 3. Versiones anteriores (ya no se pueden usar)
@@ -88,7 +92,6 @@ proc: BEGIN
     FROM   procedimiento_metrologico_version v
     JOIN   procedimiento_metrologico pm ON pm.id_procedimiento = v.id_procedimiento
                                        AND pm.SoftDelete = 0 AND pm.estado = 'activo'
-                                       AND NULLIF(TRIM(pm.url_pdf_aprobado), '') IS NOT NULL
     WHERE  v.version < pm.version
     ORDER BY v.id_procedimiento, v.version DESC;
 END$$
