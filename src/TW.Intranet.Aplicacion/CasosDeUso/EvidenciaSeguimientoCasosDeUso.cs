@@ -128,19 +128,21 @@ public class ObtenerEvidenciaIncidenciaCasoDeUso(IDetalleServicioRutaRepositorio
 /// </summary>
 public class ObtenerFotoEquipoServicioRutaCasoDeUso(ObtenerSeccionEquipoServicioRutaCasoDeUso seccion, IAlmacenArchivos almacen)
 {
-    public async Task<RespuestaDto<ArchivoDescargaDto>> EjecutarAsync(long idUsuario, long idOs, long idEquipo, long idEvidencia, CancellationToken ct = default)
+    public async Task<RespuestaDto<ArchivoDescargaDto>> EjecutarAsync(long idUsuario, long idOs, long idEquipo, long idEvidencia, bool cuadro = false, CancellationToken ct = default)
     {
         if (idEvidencia <= 0) return new(1, "La foto indicada no es válida.");
         var r = await seccion.EjecutarAsync(idUsuario, idOs, idEquipo, "fotos", ct);
         if (r.IdTipoMensaje != 2 || r.Datos is null) return new(r.IdTipoMensaje, r.Mensaje);
 
-        var url = r.Datos.Elementos.FirstOrDefault(x => x.Id == idEvidencia)?.Url?.Trim();
+        var el = r.Datos.Elementos.FirstOrDefault(x => x.Id == idEvidencia);
+        // cuadro = la miniatura del video; sin él, el archivo (foto o video mp4)
+        var url = (cuadro ? el?.UrlCuadro : el?.Url)?.Trim();
         if (string.IsNullOrEmpty(url)) return new(1, "Esta evidencia no tiene archivo.");
         if (url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) return new(1, "La evidencia es un enlace externo: ábrelo desde el detalle.");
 
         var ruta = url.TrimStart('/');
-        var tipo = EvidenciaSeguimiento.TipoPorExtension(ruta);
-        if (tipo is null || ruta.Contains("..")) return new(1, "La evidencia no es una imagen.");
+        var tipo = ruta.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase) ? "video/mp4" : EvidenciaSeguimiento.TipoPorExtension(ruta);
+        if (tipo is null || ruta.Contains("..")) return new(1, "La evidencia no es una foto ni un video.");
 
         var stream = await almacen.AbrirLecturaAsync(ruta, ct);
         return stream is null

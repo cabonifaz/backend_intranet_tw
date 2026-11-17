@@ -32,7 +32,9 @@ public record EquipoAvanceRutaDto(
 public record AvanceServicioRutaDto(int EquiposCompletados, int EquiposTotal, IReadOnlyList<EquipoAvanceRutaDto> Equipos);
 
 /// <summary>Fila común de los drill-downs del equipo (Fotos, Ensayos, Documentos, Observaciones, Mediciones).</summary>
-public record ElementoEquipoRutaDto(long Id, string Titulo, string? Detalle, string? Fecha, string? Url, string? Resultado, int? UltimaHaceMin, long? IdEvidencia = null);
+public record ElementoEquipoRutaDto(long Id, string Titulo, string? Detalle, string? Fecha, string? Url, string? Resultado, int? UltimaHaceMin, long? IdEvidencia = null,
+    /// <summary>Miniatura (cuadro) del video de evidencia; null si no es video.</summary>
+    string? UrlCuadro = null, bool EsVideo = false);
 public record SeccionEquipoRutaDto(string Seccion, IReadOnlyList<ElementoEquipoRutaDto> Elementos);
 
 // Mapa GPS

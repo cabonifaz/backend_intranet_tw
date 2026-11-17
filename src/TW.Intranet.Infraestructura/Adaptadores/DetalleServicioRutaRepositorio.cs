@@ -84,7 +84,7 @@ public class DetalleServicioRutaRepositorio(CadenaConexionBd conexion) : Reposit
                 var filas = new List<ElementoEquipoRutaDto>();
                 while (await r.ReadAsync(ct))
                     filas.Add(new ElementoEquipoRutaDto(EnteroLargo(r, "Id"), Texto(r, "Titulo") ?? "", Texto(r, "Detalle"), Texto(r, "Fecha"), Texto(r, "Url"),
-                        Texto(r, "Resultado"), EnteroNulo(r, "UltimaHaceMin"), EnteroLargoNulo(r, "IdEvidencia")));
+                        Texto(r, "Resultado"), EnteroNulo(r, "UltimaHaceMin"), EnteroLargoNulo(r, "IdEvidencia"), Texto(r, "UrlCuadro"), Booleano(r, "EsVideo")));
                 return new RespuestaDto<SeccionEquipoRutaDto>(2, mensaje, new SeccionEquipoRutaDto(seccion, filas));
             },
             ct);

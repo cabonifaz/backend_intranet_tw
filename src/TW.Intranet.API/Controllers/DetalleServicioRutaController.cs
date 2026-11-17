@@ -70,15 +70,15 @@ public class DetalleServicioRutaController(
     /// <summary>Foto de evidencia de un equipo (registro fotográfico o foto de una falla). Devuelve la imagen; el front la pide con el token y la muestra como blob.</summary>
     [RequierePermiso("seg_bandeja")]
     [HttpGet("avance/{idEquipo:long}/fotos/{idEvidencia:long}/archivo")]
-    public async Task<IActionResult> FotoEquipo(long idOs, long idEquipo, long idEvidencia, CancellationToken ct = default)
+    public async Task<IActionResult> FotoEquipo(long idOs, long idEquipo, long idEvidencia, [FromQuery] bool cuadro = false, CancellationToken ct = default)
     {
-        var r = await fotoEquipo.EjecutarAsync(IdUsuarioActual, idOs, idEquipo, idEvidencia, ct);
+        var r = await fotoEquipo.EjecutarAsync(IdUsuarioActual, idOs, idEquipo, idEvidencia, cuadro, ct);
         if (r.IdTipoMensaje != 2 || r.Datos is null)
             return Responder(r);
         Response.Headers.CacheControl = "private, no-store";
         Response.Headers["X-Content-Type-Options"] = "nosniff";
         Response.Headers["Content-Security-Policy"] = "default-src 'none'";
-        return File(r.Datos.Contenido, r.Datos.TipoContenido);
+        return File(r.Datos.Contenido, r.Datos.TipoContenido, enableRangeProcessing: true);
     }
 
     /// <summary>Pestaña Mapa GPS: posición actual, ruta del día, pin del cliente con radio de proximidad, panel y cronograma GPS.</summary>
