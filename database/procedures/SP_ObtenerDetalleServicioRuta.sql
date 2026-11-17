@@ -108,7 +108,7 @@ proc: BEGIN
            DATE_FORMAT(CONVERT_TZ(oe.fecha_ejecucion, '+00:00', '-05:00'), '%H:%i') AS HoraCompletado,
            IF(e.estado_operativo = 'observado', 1, 0) AS Observado
     FROM os_equipo oe JOIN (SELECT ec.id_equipo, ec.codigo_tw, ec.modelo, ec.num_serie AS numero_serie, ec.estado_operativo FROM equipo_cliente ec) e ON e.id_equipo = oe.id_equipo
-    WHERE oe.id_os = p_id_os AND oe.eliminado_en IS NULL AND FN_ObjetivoVisible(oe.id) = 1   -- mismos equipos que ve el técnico en la app
+    WHERE oe.id_os = p_id_os AND oe.eliminado_en IS NULL AND EXISTS (SELECT 1 FROM vw_objetivo_visible vv WHERE vv.id_os_equipo = oe.id)   -- mismos equipos que ve el técnico en la app
     ORDER BY oe.orden, oe.id;
 
     -- Responsables: líder, apoyo y supervisión técnica

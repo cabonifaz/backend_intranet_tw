@@ -1,42 +1,21 @@
 -- HU-22: la intranet muestra los mismos equipos que la app (Avance por equipos, detalle y contadores del seguimiento). Ejecutar con Alt+X (No al aviso) y reiniciar la API.
--- ¿El equipo (fila de os_equipo) es un objetivo VISIBLE de su OS? (1 = sí, 0 = no)
--- Misma regla que la lista de objetivos de la app (SP_ArmarObjetivosMovil; si se cambia una, cambiar la otra): se ve si lo registró el técnico en campo
--- (ingresado_en_campo = 1), si la programación vigente de la OS no elige equipos (se trabajan todos) o si está entre los equipos de esa programación.
+-- Objetivos VISIBLES de cada OS (os_equipo): una fila (id_os_equipo) por cada equipo que ve el técnico en la lista de objetivos de la app.
+-- Misma regla que SP_ArmarObjetivosMovil (si se cambia una, cambiar la otra): se ve si lo registró el técnico en campo (ingresado_en_campo = 1), si la programación
+-- vigente de la OS no elige equipos (se trabajan todos) o si está entre los equipos de esa programación.
 -- La usan los detalles de la intranet (Avance por equipos, detalle del servicio y contadores del seguimiento) para mostrar los mismos equipos que la app.
-DROP FUNCTION IF EXISTS FN_ObjetivoVisible;
-
-DELIMITER $$
-
-CREATE FUNCTION FN_ObjetivoVisible(
-    p_id_os_equipo BIGINT
-) RETURNS TINYINT
-READS SQL DATA
-BEGIN
-    DECLARE v_id_os     BIGINT DEFAULT NULL;
-    DECLARE v_id_equipo BIGINT DEFAULT NULL;
-    DECLARE v_campo     TINYINT DEFAULT 0;
-    DECLARE v_id_prog   BIGINT DEFAULT NULL;
-    DECLARE v_n         INT DEFAULT 0;
-    DECLARE v_en        INT DEFAULT 0;
-
-    SELECT oe.id_os, oe.id_equipo, IFNULL(oe.ingresado_en_campo, 0) INTO v_id_os, v_id_equipo, v_campo
-    FROM   os_equipo oe WHERE oe.id = p_id_os_equipo;
-    IF v_id_os IS NULL THEN RETURN 0; END IF;
-    IF v_campo = 1 THEN RETURN 1; END IF;
-
-    SELECT pr.id_programacion INTO v_id_prog
-    FROM   programacion pr
-    WHERE  pr.id_os = v_id_os AND pr.estado <> 'cancelada' AND pr.eliminado_en IS NULL
-    ORDER BY pr.id_programacion DESC LIMIT 1;
-
-    SELECT COUNT(*), IFNULL(SUM(pe.id_equipo = v_id_equipo), 0) INTO v_n, v_en
-    FROM   programacion_equipo pe
-    WHERE  pe.id_programacion = v_id_prog AND pe.eliminado_en IS NULL;
-
-    RETURN IF(v_n = 0 OR v_en > 0, 1, 0);
-END$$
-
-DELIMITER ;
+-- Es una vista (no una función) porque crear funciones exige el privilegio SUPER cuando el log binario está activo.
+CREATE OR REPLACE VIEW vw_objetivo_visible AS
+SELECT oe.id AS id_os_equipo
+FROM   os_equipo oe
+WHERE  oe.ingresado_en_campo = 1
+   OR  NOT EXISTS (SELECT 1 FROM programacion_equipo pe
+                   WHERE  pe.eliminado_en IS NULL
+                     AND  pe.id_programacion = (SELECT MAX(pr.id_programacion) FROM programacion pr
+                                                WHERE  pr.id_os = oe.id_os AND pr.estado <> 'cancelada' AND pr.eliminado_en IS NULL))
+   OR  EXISTS     (SELECT 1 FROM programacion_equipo pe
+                   WHERE  pe.eliminado_en IS NULL AND pe.id_equipo = oe.id_equipo
+                     AND  pe.id_programacion = (SELECT MAX(pr.id_programacion) FROM programacion pr
+                                                WHERE  pr.id_os = oe.id_os AND pr.estado <> 'cancelada' AND pr.eliminado_en IS NULL));
 
 -- HU-52 (Sprint 5) Pestaña "Avance por Equipos": por equipo, mini-checklist Limpieza → Desmontaje → Pruebas → Montaje → Cierre con hora y estado
 -- (pendiente | en_curso | completada) y chips de conteo (fotos, ensayos, certificado preliminar, observaciones, mediciones). SOLO LECTURA.
@@ -88,7 +67,7 @@ proc: BEGIN
                       IF(oe.estado_ejecucion = 'ejecutado', MAX(g.fin_utc), UTC_TIMESTAMP()))))
               FROM os_equipo_etapa g WHERE g.id_os = oe.id_os AND g.id_equipo = oe.id_equipo AND g.eliminado_en IS NULL) AS Minutos
     FROM os_equipo oe JOIN (SELECT ec.id_equipo, ec.codigo_tw, ec.modelo, ec.num_serie AS numero_serie, ec.estado_operativo FROM equipo_cliente ec) e ON e.id_equipo = oe.id_equipo
-    WHERE oe.id_os = p_id_os AND oe.eliminado_en IS NULL AND FN_ObjetivoVisible(oe.id) = 1   -- mismos equipos que ve el técnico en la app
+    WHERE oe.id_os = p_id_os AND oe.eliminado_en IS NULL AND EXISTS (SELECT 1 FROM vw_objetivo_visible vv WHERE vv.id_os_equipo = oe.id)   -- mismos equipos que ve el técnico en la app
     ORDER BY oe.orden, oe.id;
 
     SELECT oe.id_equipo AS IdEquipo, s.etapa AS Etapa, s.n AS Orden,
@@ -97,7 +76,7 @@ proc: BEGIN
     FROM os_equipo oe
     JOIN (SELECT 1 AS n, 'limpieza' AS etapa UNION ALL SELECT 2, 'desmontaje' UNION ALL SELECT 3, 'pruebas' UNION ALL SELECT 4, 'montaje' UNION ALL SELECT 5, 'cierre') s
     LEFT JOIN os_equipo_etapa g ON g.id_os = oe.id_os AND g.id_equipo = oe.id_equipo AND g.etapa = s.etapa AND g.eliminado_en IS NULL
-    WHERE oe.id_os = p_id_os AND oe.eliminado_en IS NULL AND FN_ObjetivoVisible(oe.id) = 1   -- mismos equipos que ve el técnico en la app
+    WHERE oe.id_os = p_id_os AND oe.eliminado_en IS NULL AND EXISTS (SELECT 1 FROM vw_objetivo_visible vv WHERE vv.id_os_equipo = oe.id)   -- mismos equipos que ve el técnico en la app
     ORDER BY oe.orden, oe.id, s.n;
 END$$
 
@@ -213,7 +192,7 @@ proc: BEGIN
            DATE_FORMAT(CONVERT_TZ(oe.fecha_ejecucion, '+00:00', '-05:00'), '%H:%i') AS HoraCompletado,
            IF(e.estado_operativo = 'observado', 1, 0) AS Observado
     FROM os_equipo oe JOIN (SELECT ec.id_equipo, ec.codigo_tw, ec.modelo, ec.num_serie AS numero_serie, ec.estado_operativo FROM equipo_cliente ec) e ON e.id_equipo = oe.id_equipo
-    WHERE oe.id_os = p_id_os AND oe.eliminado_en IS NULL AND FN_ObjetivoVisible(oe.id) = 1   -- mismos equipos que ve el técnico en la app
+    WHERE oe.id_os = p_id_os AND oe.eliminado_en IS NULL AND EXISTS (SELECT 1 FROM vw_objetivo_visible vv WHERE vv.id_os_equipo = oe.id)   -- mismos equipos que ve el técnico en la app
     ORDER BY oe.orden, oe.id;
 
     -- Responsables: líder, apoyo y supervisión técnica
@@ -348,8 +327,8 @@ BEGIN
            p.id_tecnico_principal, TRIM(CONCAT(u.nombre, ' ', u.apellido)), u.nombre, COALESCE(zn.String1, u.sede_operativa),
            p.hora_inicio, p.hora_fin_estimada, os.estado,
            IF(pr.id_propuesta IS NULL, NULL, pr.numero),
-           (SELECT COUNT(*) FROM os_equipo e WHERE e.id_os = os.id_os AND e.eliminado_en IS NULL AND FN_ObjetivoVisible(e.id) = 1),
-           (SELECT COUNT(*) FROM os_equipo e WHERE e.id_os = os.id_os AND e.eliminado_en IS NULL AND FN_ObjetivoVisible(e.id) = 1 AND e.estado_ejecucion = 'ejecutado'),
+           (SELECT COUNT(*) FROM os_equipo e WHERE e.id_os = os.id_os AND e.eliminado_en IS NULL AND EXISTS (SELECT 1 FROM vw_objetivo_visible vv WHERE vv.id_os_equipo = e.id)),
+           (SELECT COUNT(*) FROM os_equipo e WHERE e.id_os = os.id_os AND e.eliminado_en IS NULL AND EXISTS (SELECT 1 FROM vw_objetivo_visible vv WHERE vv.id_os_equipo = e.id) AND e.estado_ejecucion = 'ejecutado'),
            IF(os.hora_llegada_real IS NULL, NULL, TIMESTAMP(v_hoy, os.hora_llegada_real)),
            IF(os.hora_fin_real IS NULL, NULL, TIMESTAMP(v_hoy, os.hora_fin_real))
     FROM programacion p
