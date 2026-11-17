@@ -787,6 +787,8 @@ builder.Services.AddScoped<ObtenerViaticosServicioRutaCasoDeUso>();
 builder.Services.AddScoped<RevisarGastoServicioRutaCasoDeUso>();
 builder.Services.AddScoped<ObtenerComprobanteGastoServicioRutaCasoDeUso>();
 builder.Services.AddScoped<ObtenerViaticosInformeCasoDeUso>();
+builder.Services.AddScoped<RevisarGastoInformeCasoDeUso>();              // revisar un gasto desde el detalle del informe
+builder.Services.AddScoped<ObtenerComprobanteGastoInformeCasoDeUso>();   // comprobante del gasto desde el detalle del informe
 
 // HU-53 Registro operativo del Asistente de Seguimiento (Sprint 5): observación, demora/incidente y cambio manual de estado
 builder.Services.AddScoped<IRegistroAsistenteRepositorio, RegistroAsistenteRepositorio>();

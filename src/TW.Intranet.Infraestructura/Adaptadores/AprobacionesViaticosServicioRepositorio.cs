@@ -99,6 +99,49 @@ public class AprobacionesViaticosServicioRepositorio(CadenaConexionBd conexion) 
             },
             ct);
 
+    public Task<RespuestaDto<RevisarGastoResultadoDto>> RevisarGastoInformeAsync(
+        long idUsuario, long idInforme, long idGasto, string accion, string? comentario, CancellationToken ct)
+        => EjecutarAsync("SP_RevisarGastoInforme",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario", idUsuario);
+                p.AddWithValue("p_id_informe", idInforme);
+                p.AddWithValue("p_id_gasto",   idGasto);
+                p.AddWithValue("p_accion",     accion);
+                p.AddWithValue("p_comentario", Valor(comentario));
+            },
+            async (r, mensaje) =>
+            {
+                // Mismos resultados que SP_RevisarGastoProgramacion: 2 gasto resultante, 3 tarjetas de la rendición
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct))
+                    return new RespuestaDto<RevisarGastoResultadoDto>(3, "El cambio se guardó pero el procedimiento no devolvió su detalle.");
+                var id = EnteroLargo(r, "id_programacion"); var g = EnteroLargo(r, "id_gasto");
+                var estado = Texto(r, "estado") ?? ""; var tec = EnteroLargo(r, "id_tecnico");
+                await r.NextResultAsync(ct);
+                var resumen = await r.ReadAsync(ct) ? ProgramacionViaticosRepositorio.LeerResumen(r) : ProgramacionViaticosRepositorio.ResumenVacio;
+                return new RespuestaDto<RevisarGastoResultadoDto>(2, mensaje, new RevisarGastoResultadoDto(id, g, estado, tec, resumen));
+            },
+            ct);
+
+    public Task<RespuestaDto<string>> ObtenerRutaComprobanteInformeAsync(long idUsuario, long idInforme, long idGasto, int n, CancellationToken ct)
+        => EjecutarAsync("SP_ObtenerComprobanteGastoInforme",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario", idUsuario);
+                p.AddWithValue("p_id_informe", idInforme);
+                p.AddWithValue("p_id_gasto",   idGasto);
+                p.AddWithValue("p_n",          n);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                return await r.ReadAsync(ct) && Texto(r, "ruta") is { } ruta
+                    ? new RespuestaDto<string>(2, mensaje, ruta)
+                    : new RespuestaDto<string>(1, "El gasto no tiene ese comprobante.");
+            },
+            ct);
+
     /// <summary>Lee 2 cabecera, 3 resumen, 4 líneas, 5 gastos y (Revisión de Informes) 6 cierre de la rendición.</summary>
     private static async Task<RespuestaDto<ViaticosOsDto>> LeerViaticosAsync(MySqlDataReader r, string mensaje, bool conCierre, CancellationToken ct)
     {
