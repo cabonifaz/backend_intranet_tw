@@ -1,7 +1,7 @@
 -- HU-52 (Sprint 5) Detalle del Servicio en Ruta: cabecera fija, pestaña Resumen y contadores de las pestañas. SOLO LECTURA.
 -- Resultados: 1 mensaje · 2 cabecera+programación+métricas (1 fila) · 3 equipos a intervenir · 4 responsables · 5 contacto en planta (0 o 1 fila).
 -- Estado del servicio: el mismo de la bandeja (HU-51). "Cierre del Servicio" solo se muestra si el estado es finalizado (campo MostrarCierre).
--- Chips: AprobacionesPendientes (salida, llegada forzada, evidencias forzadas y ensayos con error sin resolver; requiere la migración 113) y
+-- Chips: AprobacionesPendientes (salida, llegada forzada y ensayos con error sin resolver; requiere la migración 113) y
 --   GastosPorRevisar (gastos rendidos pendientes u observados).
 -- Fix 06/11: los equipos de la OS son de equipo_cliente (os_equipo.id_equipo), no de la tabla equipo (activos TW).
 DROP PROCEDURE IF EXISTS SP_ObtenerDetalleServicioRuta;
@@ -64,8 +64,6 @@ proc: BEGIN
     -- Chips de las pestañas Aprobaciones y Viáticos (mismo universo que SP_ObtenerAprobacionesServicioRuta / SP_ObtenerViaticosServicioRuta)
     SELECT (SELECT COUNT(*) FROM autorizacion_salida_os WHERE id_os = p_id_os AND estado = 'pendiente' AND eliminado_en IS NULL)
          + (SELECT COUNT(*) FROM llegada_forzada_os     WHERE id_os = p_id_os AND estado = 'pendiente' AND eliminado_en IS NULL)
-         + (SELECT COUNT(*) FROM evidencia_fotografica  WHERE id_os = p_id_os AND override_aprobado = 1 AND vigente = 1
-                                                          AND revision_jefe IS NULL AND eliminado_en IS NULL)
          + (SELECT COUNT(*) FROM informe_tecnico        WHERE id_os = p_id_os AND error_critico_motivo IS NOT NULL
                                                           AND error_critico_revision IS NULL AND eliminado_en IS NULL)
       INTO v_apr_pend;
