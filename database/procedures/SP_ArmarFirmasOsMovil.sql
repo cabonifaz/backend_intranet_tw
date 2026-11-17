@@ -2,7 +2,7 @@
 -- SP_ArmarFirmasOsMovil  (App Mobile HU-17 — apoyo, NO es un endpoint)
 -- Arma, UNA sola vez, el estado de firmas de los informes técnicos de una OS en dos tablas temporales (quien la llame debe terminar con
 -- DROP TEMPORARY TABLE IF EXISTS tmp_fm_inf, tmp_fm_resp):
---   tmp_fm_inf  : un informe por equipo de la OS (os_equipo con equipo): numero_informe, equipo, código, completo (informe GENERADO — HU-15/HU-16 — y con el
+--   tmp_fm_inf  : un informe por objetivo de la OS (os_equipo visible, con equipo): numero_informe, equipo, código, completo (informe GENERADO — HU-15/HU-16 — y con el
 --                 responsable "Quién atiende en planta"), motivo del INCOMPLETO, responsable (nombre, cargo, teléfono), clave y si está firmado.
 --   tmp_fm_resp : los RESPONSABLES distintos (clave = MD5 de nombre y cargo en minúsculas) de los informes completos, con sus informes, su firma
 --                 (dispositivo / fisico / ausente), la hora, los trazos y si está "resuelto" (firmado, o cliente ausente con el plazo de aceptación tácita vencido).
@@ -78,6 +78,7 @@ BEGIN
     LEFT JOIN informe_tecnico it ON it.id_informe = (SELECT MAX(x.id_informe) FROM informe_tecnico x
                                                      WHERE x.id_os = oe.id_os AND x.id_equipo = oe.id_equipo AND x.eliminado_en IS NULL AND x.generado_en IS NOT NULL)
     WHERE  oe.id_os = p_id_os AND oe.eliminado_en IS NULL AND oe.id_equipo IS NOT NULL
+      AND  EXISTS (SELECT 1 FROM vw_objetivo_visible vv WHERE vv.id_os_equipo = oe.id)   -- un informe por objetivo de la OS (los mismos equipos que ve el técnico), no por cada fila oculta
     ORDER BY oe.id;
 
     -- Aceptación tácita: desde el primer informe generado

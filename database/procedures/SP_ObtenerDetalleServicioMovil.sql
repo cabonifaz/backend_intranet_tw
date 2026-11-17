@@ -171,10 +171,7 @@ proc: BEGIN
            -- Objetivos = equipos de la OS que se confirmaron en la programación (si no hay selección, todos los de la OS)
            (SELECT COUNT(*) FROM os_equipo oe
             WHERE  oe.id_os = os.id_os AND oe.eliminado_en IS NULL
-              AND  (v_n_eq_prog = 0
-                    OR EXISTS (SELECT 1 FROM programacion_equipo pe
-                               WHERE pe.id_programacion = v_id_prog AND pe.id_equipo = oe.id_equipo
-                                 AND pe.eliminado_en IS NULL)))             AS objetivos_total,
+              AND  EXISTS (SELECT 1 FROM vw_objetivo_visible vv WHERE vv.id_os_equipo = oe.id))   AS objetivos_total,
            os.notas_operativas
     FROM   orden_servicio os
     LEFT JOIN cliente            cl ON cl.id_cliente       = os.id_cliente
@@ -331,9 +328,7 @@ proc: BEGIN
     FROM   os_equipo oe
     JOIN   equipo_cliente ec ON ec.id_equipo = oe.id_equipo
     WHERE  oe.id_os = p_id_os AND oe.eliminado_en IS NULL
-      AND  (v_n_eq_prog = 0
-            OR EXISTS (SELECT 1 FROM programacion_equipo pe
-                       WHERE pe.id_programacion = v_id_prog AND pe.id_equipo = oe.id_equipo AND pe.eliminado_en IS NULL))
+      AND  EXISTS (SELECT 1 FROM vw_objetivo_visible vv WHERE vv.id_os_equipo = oe.id)
     ORDER BY ec.codigo_tw, ec.id_equipo;
 
     -- 11. Conceptos del servicio
