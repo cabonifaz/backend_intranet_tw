@@ -246,6 +246,15 @@ public class RegistrarRevisionInformeCasoDeUso(IRevisionTecnicaRepositorio repos
 }
 
 /// <summary>HU-59 Pestaña "Historial" (auditoría inmutable) con filtro por categoría.</summary>
+/// <summary>Observaciones que se registraron durante el servicio en el Seguimiento Operativo, para la pestaña Observaciones del Detalle del Servicio Técnico. Solo lectura.</summary>
+public class ObtenerObservacionesSeguimientoInformeCasoDeUso(IRevisionTecnicaRepositorio repositorio)
+{
+    public Task<RespuestaDto<IReadOnlyList<ObservacionSeguimientoInformeDto>>> EjecutarAsync(long idInforme, long idUsuario, CancellationToken ct = default)
+        => idInforme <= 0
+            ? Task.FromResult(new RespuestaDto<IReadOnlyList<ObservacionSeguimientoInformeDto>>(1, "Informe no válido."))
+            : repositorio.ObtenerObservacionesSeguimientoAsync(idInforme, idUsuario, ct);
+}
+
 public class ObtenerHistorialInformeCasoDeUso(IRevisionTecnicaRepositorio repositorio)
 {
     private static readonly string[] Categorias = ["todos", "edicion", "precotizacion", "revision", "sistema"];

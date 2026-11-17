@@ -137,6 +137,20 @@ public class RevisionTecnicaRepositorio(CadenaConexionBd conexion) : Repositorio
                 return new RespuestaDto<InformeRevisadoDto>(2, mensaje, await LeerUnaAsync<InformeRevisadoDto>(r, ct));
             }, ct);
 
+    public Task<RespuestaDto<IReadOnlyList<ObservacionSeguimientoInformeDto>>> ObtenerObservacionesSeguimientoAsync(long idInforme, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_ObtenerObservacionesSeguimientoInforme",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario", idUsuario);
+                p.AddWithValue("p_id_informe", idInforme);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                var filas = await LeerFilasAsync<ObservacionSeguimientoInformeDto>(r, ct);
+                return new RespuestaDto<IReadOnlyList<ObservacionSeguimientoInformeDto>>(2, mensaje, filas);
+            }, ct);
+
     public Task<RespuestaDto<HistorialInformeDto>> ObtenerHistorialAsync(long idInforme, string? categoria, long idUsuario, CancellationToken ct)
         => EjecutarAsync("SP_ObtenerHistorialInforme",
             p =>

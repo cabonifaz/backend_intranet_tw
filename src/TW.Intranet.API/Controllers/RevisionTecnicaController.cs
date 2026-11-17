@@ -29,6 +29,7 @@ public class RevisionTecnicaController(
     ObtenerViaticosInformeCasoDeUso       viaticos,
     RevisarGastoInformeCasoDeUso          revisarGasto,
     ObtenerComprobanteGastoInformeCasoDeUso comprobanteGasto,
+    ObtenerObservacionesSeguimientoInformeCasoDeUso observacionesSeguimiento,
     ILogger<RevisionTecnicaController>    logger) : ControllerBase
 {
     private long IdUsuarioActual =>
@@ -132,6 +133,12 @@ public class RevisionTecnicaController(
         Response.Headers["Content-Security-Policy"] = "default-src 'none'";
         return File(r.Datos.Contenido, r.Datos.TipoContenido);
     }
+
+    /// <summary>Observaciones que se registraron durante el servicio en el Seguimiento Operativo (notas del Asistente, observaciones del equipo). Solo lectura.</summary>
+    [RequierePermiso("rt_bandeja")]
+    [HttpGet("{idInforme:long}/observaciones-seguimiento")]
+    public async Task<IActionResult> ObservacionesSeguimiento(long idInforme, CancellationToken ct = default)
+        => Responder(await observacionesSeguimiento.EjecutarAsync(idInforme, IdUsuarioActual, ct));
 
     /// <summary>HU-59 Pestaña Historial. Query: categoria (todos · edicion · precotizacion · revision · sistema).</summary>
     [RequierePermiso("rt_bandeja", "precot_ver")]
