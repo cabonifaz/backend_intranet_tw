@@ -118,6 +118,18 @@ public record PeticionValoracionAsistenteMovilDto(bool? Util);
 
 public record TranscripcionVozAsistenteMovilDto(string Texto);
 
+/// <summary>Un turno anterior de la conversación (Rol: usuario | asistente) para que el asistente entienda "¿y a qué hora llego?".</summary>
+public record TurnoChatAsistenteMovilDto(string? Rol, string? Texto);
+
+/// <summary>
+/// Conversación general del asistente: NO exige equipo. La app envía su ubicación (opcional) para calcular la distancia y la llegada estimada a la planta.
+/// Historial: los últimos turnos (hasta 6).
+/// </summary>
+public record PeticionChatAsistenteMovilDto(string? Pregunta, string? Origen, decimal? Latitud, decimal? Longitud, List<TurnoChatAsistenteMovilDto>? Historial);
+
+/// <summary>Respuesta de la conversación general: texto en español. EsJefatura = la respuesta pudo usar los datos de todo el equipo de campo.</summary>
+public record RespuestaChatAsistenteMovilDto(string Respuesta, bool EsJefatura, string Hora);
+
 /// <summary>Un guardado del listado "Guardados". Tipo: respuesta | fragmento. TamanoBytes = lo que ocupa su contenido.</summary>
 public record GuardadoAsistenteMovilDto(
     long      IdGuardado,

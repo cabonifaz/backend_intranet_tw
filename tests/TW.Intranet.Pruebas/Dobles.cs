@@ -92,4 +92,11 @@ internal sealed class AprobacionesViaticosRepoFalso : IAprobacionesViaticosServi
 
     public Task<RespuestaDto<ViaticosOsDto>> ObtenerViaticosInformeAsync(long idUsuario, long idInforme, CancellationToken ct)
     { Llamadas++; return Task.FromResult(new RespuestaDto<ViaticosOsDto>(1, "No")); }
+
+    public Task<RespuestaDto<RevisarGastoResultadoDto>> RevisarGastoInformeAsync(long idUsuario, long idInforme, long idGasto, string accion, string? comentario, CancellationToken ct)
+    { Llamadas++; return Task.FromResult(new RespuestaDto<RevisarGastoResultadoDto>(1, "No")); }
+
+    public Task<RespuestaDto<string>> ObtenerRutaComprobanteInformeAsync(long idUsuario, long idInforme, long idGasto, int n, CancellationToken ct)
+    { Llamadas++; return Task.FromResult(RutaComprobante is null ? new RespuestaDto<string>(1, "El gasto no pertenece a este informe.")
+                                                                  : new RespuestaDto<string>(2, "OK", RutaComprobante)); }
 }

@@ -481,3 +481,71 @@ public class EliminarGuardadoAsistenteMovilCasoDeUso(IAsistenteMovilRepositorio 
             ? Task.FromResult(new RespuestaDto<object>(1, "Guardado no encontrado."))
             : repositorio.EliminarGuardadoAsync(idUsuario, idGuardado, ct);
 }
+
+/// <summary>Límite de mensajes de la conversación general por usuario (en memoria): 20 por minuto.</summary>
+public static class LimitadorChatAsistente
+{
+    public const int MaxPorMinuto = 20;
+    private static readonly ConcurrentDictionary<long, Queue<DateTime>> Usos = new();
+
+    public static bool Permitir(long idUsuario, DateTime ahoraUtc)
+    {
+        var cola = Usos.GetOrAdd(idUsuario, _ => new Queue<DateTime>());
+        lock (cola)
+        {
+            while (cola.Count > 0 && ahoraUtc - cola.Peek() >= TimeSpan.FromMinutes(1)) cola.Dequeue();
+            if (cola.Count >= MaxPorMinuto) return false;
+            cola.Enqueue(ahoraUtc);
+            return true;
+        }
+    }
+}
+
+/// <summary>
+/// Conversación general del asistente (sin elegir equipo): arma lo que el sistema sabe del usuario (técnico: sus servicios, distancia y llegada a la planta, equipos, viáticos y
+/// procedimientos; jefatura: además los movimientos de todos los técnicos y los equipos recepcionados) y la IA responde con eso, más las consultas básicas (hora, fecha…).
+/// </summary>
+public class ConversarAsistenteMovilCasoDeUso(IAsistenteMovilRepositorio repositorio, IAsistenteManuales ia)
+{
+    public const int MaxHistorial = 6;
+
+    /// <summary>Historial listo para la IA: solo los últimos turnos, con rol válido y el texto limpio y recortado.</summary>
+    public static List<(string Rol, string Texto)> LimpiarHistorial(IEnumerable<TurnoChatAsistenteMovilDto>? turnos) =>
+        (turnos ?? [])
+            .Select(t => (Rol: (t.Rol ?? string.Empty).Trim().ToLowerInvariant() == "asistente" ? "asistente" : "usuario", Texto: EntradaAsistenteMovil.LimpiarTranscripcion(t.Texto)))
+            .Where(t => t.Texto is not null)
+            .Select(t => (t.Rol, t.Texto!))
+            .TakeLast(MaxHistorial)
+            .ToList();
+
+    public async Task<RespuestaDto<RespuestaChatAsistenteMovilDto>> EjecutarAsync(long idUsuario, PeticionChatAsistenteMovilDto? d, CancellationToken ct = default)
+    {
+        if (idUsuario <= 0) return new(1, "Usuario no válido.");
+        if (d is null) return new(1, "Datos incompletos.");
+        var pregunta = EntradaAsistenteMovil.LimpiarPregunta(d.Pregunta);
+        if (pregunta is null) return new(1, "Escribe tu consulta.");
+        if (pregunta.Length > EntradaAsistenteMovil.MaxPregunta) return new(1, $"La consulta puede tener hasta {EntradaAsistenteMovil.MaxPregunta} caracteres.");
+        if (!EntradaAsistenteMovil.Origenes.Contains((d.Origen ?? "texto").Trim().ToLowerInvariant())) return new(1, "El origen de la consulta no es válido.");
+        if (!ia.Disponible) return new(1, EntradaAsistenteMovil.IaNoDisponible);
+        if (!LimitadorChatAsistente.Permitir(idUsuario, DateTime.UtcNow)) return new(1, "Hiciste muchas consultas seguidas. Espera un minuto e inténtalo de nuevo.");
+
+        // La ubicación solo se usa si es una coordenada válida (si no, se ignora: la respuesta dirá que falta ese dato)
+        var lat = d.Latitud is >= -90 and <= 90 ? d.Latitud : null;
+        var lon = d.Longitud is >= -180 and <= 180 ? d.Longitud : null;
+        if (lat is null || lon is null) { lat = null; lon = null; }
+
+        var contexto = await repositorio.ObtenerContextoGeneralAsync(idUsuario, lat, lon, ct);
+        if (contexto.IdTipoMensaje != 2 || contexto.Datos is null) return new(contexto.IdTipoMensaje, contexto.Mensaje);
+
+        try
+        {
+            var (texto, error) = await ia.ConversarAsync(new SolicitudChatAsistente(pregunta, LimpiarHistorial(d.Historial), contexto.Datos), ct);
+            if (error is not null || string.IsNullOrWhiteSpace(texto)) return new(1, error ?? "El asistente no pudo responder. Inténtalo de nuevo.");
+            return new(2, "Éxito.", new RespuestaChatAsistenteMovilDto(texto, contexto.Datos.EsJefatura, contexto.Datos.AhoraLima));
+        }
+        catch (Exception) when (!ct.IsCancellationRequested)
+        {
+            return new(1, "No se pudo consultar al asistente por ahora. Inténtalo de nuevo en unos minutos.");
+        }
+    }
+}
