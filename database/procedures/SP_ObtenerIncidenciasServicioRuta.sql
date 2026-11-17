@@ -48,7 +48,7 @@ proc: BEGIN
                                        GROUP_CONCAT(CONCAT('• ', IF(ie.tipo = 'pesaje', 'Pesaje', 'Excentricidad'), ' · ', ie.punto,
                                                            IF(ie.tipo = 'excentricidad' AND ie.grupo IS NOT NULL, CONCAT(' (carga ', ie.grupo, ')'), ''),
                                                            ': carga ', IFNULL(TRIM(TRAILING '.' FROM TRIM(TRAILING '0' FROM CAST(ie.carga AS CHAR))), '-'), ' kg · lectura ', IFNULL(TRIM(TRAILING '.' FROM TRIM(TRAILING '0' FROM CAST(ie.lectura AS CHAR))), '-'), ' kg · error ', IFNULL(TRIM(TRAILING '.' FROM TRIM(TRAILING '0' FROM CAST(ie.error AS CHAR))), '-'),
-                                                           ' kg · EMP ±', IFNULL(TRIM(TRAILING '.' FROM TRIM(TRAILING '0' FROM CAST(ie.tolerancia AS CHAR))), '-'), ' kg') ORDER BY ie.tipo, ie.orden SEPARATOR CHAR(10)))
+                                                           ' kg · EMP ±', IFNULL(TRIM(TRAILING '.' FROM TRIM(TRAILING '0' FROM CAST(ie.tolerancia AS CHAR))), '-'), ' kg') ORDER BY ie.tipo, ie.orden SEPARATOR '\n'))
                                 FROM informe_ensayo ie WHERE ie.id_informe = it.id_informe AND ie.critico = 1 AND ie.eliminado_en IS NULL), ''))
                  FROM informe_tecnico it LEFT JOIN equipo_cliente ec ON ec.id_equipo = it.id_equipo
                  WHERE i.clave = CONCAT('c', it.id_informe)), i.descripcion)) AS Descripcion,
