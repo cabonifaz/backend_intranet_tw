@@ -275,6 +275,19 @@ public class RecomendacionInformeDto
     public string? Origen            { get; init; }
 }
 
+/// <summary>Observación registrada durante el servicio en el Seguimiento Operativo (nota del Asistente, observación del equipo o de ejecución).</summary>
+public class ObservacionSeguimientoInformeDto
+{
+    public string    Clave       { get; init; } = "";
+    /// <summary>asistente · equipo · ejecucion.</summary>
+    public string    Origen      { get; init; } = "";
+    public string?   Registrador { get; init; }
+    /// <summary>Cómo se enteró el Asistente: llamada telefónica, WhatsApp, contacto en planta u observación directa.</summary>
+    public string?   Fuente      { get; init; }
+    public string    Texto       { get; init; } = "";
+    public DateTime? Fecha       { get; init; }
+}
+
 public class FotoInformeDto
 {
     public long      IdEvidencia       { get; init; }

@@ -12,7 +12,7 @@
 --   sin_salir       programada o reprogramada: el técnico aún no marcó "Salida"
 -- Estado del técnico = el del servicio más urgente de su día (el finalizado solo si todos lo están).
 -- Alertas automáticas (se calculan al consultar; umbrales en PARAMETRO_PROGRAMACION, migración 90):
---   perdida_contacto (crítica) · gps_parado (advertencia) · sin_movimiento (advertencia, HU-20) · sin_ingreso_post_llegada (advertencia) · sin_iniciar_servicio (advertencia)
+--   perdida_contacto (crítica) · gps_parado (advertencia) · sin_movimiento (crítica, HU-20) · ensayo_critico (crítica: ensayo guardado con error crítico, sin revisión del jefe) · autorizacion_salida (crítica: el técnico pidió autorización para iniciar el traslado y el encargado aún no responde) · sin_ingreso_post_llegada (advertencia) · sin_iniciar_servicio (advertencia)
 --   · proximidad (info) · incidente (crítica)
 -- Tablas temporales (MySQL no permite abrir dos veces la misma temporal en una consulta):
 --   tmp_sg_cfg (1 fila: hoy, ahora y umbrales) · tmp_sg_os (un servicio por fila) · tmp_sg_ev (eventos de campo del día por OS)
@@ -101,8 +101,8 @@ BEGIN
            p.id_tecnico_principal, TRIM(CONCAT(u.nombre, ' ', u.apellido)), u.nombre, COALESCE(zn.String1, u.sede_operativa),
            p.hora_inicio, p.hora_fin_estimada, os.estado,
            IF(pr.id_propuesta IS NULL, NULL, pr.numero),
-           (SELECT COUNT(*) FROM os_equipo e WHERE e.id_os = os.id_os AND e.eliminado_en IS NULL),
-           (SELECT COUNT(*) FROM os_equipo e WHERE e.id_os = os.id_os AND e.eliminado_en IS NULL AND e.estado_ejecucion = 'ejecutado'),
+           (SELECT COUNT(*) FROM os_equipo e WHERE e.id_os = os.id_os AND e.eliminado_en IS NULL AND EXISTS (SELECT 1 FROM vw_objetivo_visible vv WHERE vv.id_os_equipo = e.id)),
+           (SELECT COUNT(*) FROM os_equipo e WHERE e.id_os = os.id_os AND e.eliminado_en IS NULL AND EXISTS (SELECT 1 FROM vw_objetivo_visible vv WHERE vv.id_os_equipo = e.id) AND e.estado_ejecucion = 'ejecutado'),
            IF(os.hora_llegada_real IS NULL, NULL, TIMESTAMP(v_hoy, os.hora_llegada_real)),
            IF(os.hora_fin_real IS NULL, NULL, TIMESTAMP(v_hoy, os.hora_fin_real))
     FROM programacion p
@@ -116,7 +116,7 @@ BEGIN
     LEFT JOIN requerimiento rq ON rq.id_requerimiento = COALESCE(os.id_requerimiento, pr.id_requerimiento)
     LEFT JOIN sede_cliente sc2 ON sc2.id_sede = rq.id_sede AND sc2.SoftDelete = 0
     WHERE p.eliminado_en IS NULL AND p.estado = 'confirmada' AND p.fecha_ejecucion = v_hoy
-      AND os.estado NOT IN ('anulada', 'borrador', 'emitida');
+      AND os.estado NOT IN ('anulada', 'borrador', 'emitida', 'finalizada');   -- finalizada: ya está en Revisión de Informes (el técnico sigue en el mapa por su jornada)
 
     -- Eventos de campo de hoy (una fila por OS)
     CREATE TEMPORARY TABLE tmp_sg_ev (id_os BIGINT NOT NULL, salida_utc DATETIME, llegada_utc DATETIME, inicio_utc DATETIME, cierre_utc DATETIME, PRIMARY KEY (id_os));
@@ -297,7 +297,8 @@ BEGIN
         END, 250),
         t.actividad_tono = CASE
             WHEN t.jornada = 'en_refrigerio' THEN 'refrigerio'
-            WHEN t.jornada = 'salio_planta'  THEN 'salida_planta'
+            WHEN t.jornada = 'salio_planta' AND o.fase = 'en_ejecucion' THEN 'trabajo'
+            WHEN t.jornada = 'salio_planta'  THEN 'activo'
             WHEN t.jornada = 'finalizada'    THEN 'finalizada'
             WHEN t.estado_seg = 'con_incidente' THEN 'incidente'
             WHEN t.estado_seg = 'con_demora'    THEN 'demora'
@@ -305,11 +306,11 @@ BEGIN
             WHEN o.fase = 'en_ejecucion' THEN 'trabajo'
             WHEN o.fase = 'en_planta'    THEN 'planta'
             WHEN o.fase = 'en_ruta'      THEN 'ruta'
-            WHEN t.jornada = 'en_labores' THEN 'trabajo'
+            WHEN t.jornada = 'en_labores' THEN 'activo'
             ELSE 'sin_iniciar' END;
     UPDATE tmp_sg_tec t
     SET t.actividad_color = CASE t.actividad_tono
-            WHEN 'trabajo' THEN '#16A34A' WHEN 'planta' THEN '#14B8A6' WHEN 'ruta' THEN '#2563EB' WHEN 'refrigerio' THEN '#F59E0B' WHEN 'refrigerio_fin' THEN '#84CC16'
+            WHEN 'trabajo' THEN '#EAB308' WHEN 'activo' THEN '#16A34A' WHEN 'planta' THEN '#14B8A6' WHEN 'ruta' THEN '#2563EB' WHEN 'refrigerio' THEN '#F97316' WHEN 'refrigerio_fin' THEN '#84CC16'
             WHEN 'salida_planta' THEN '#7C3AED' WHEN 'finalizada' THEN '#64748B' WHEN 'demora' THEN '#EA580C' WHEN 'incidente' THEN '#DC2626' ELSE '#94A3B8' END;
 
     -- Distancia (m) al cliente: técnico principal de cada servicio y técnico (servicio actual)
@@ -363,16 +364,40 @@ BEGIN
       AND TIMESTAMPDIFF(MINUTE, p.parado_desde, p.ts_utc) >= v_parado;
 
     -- Sin movimiento (HU-20): jornada en curso (no en refrigerio ni finalizada), con señal reciente y el GPS en el mismo punto por el umbral o más.
-    -- En ruta lo cubre «GPS parado»; con el servicio ya finalizado no se alerta. Se asocia al servicio del día del técnico (la notificación lo exige).
+    -- El tiempo sin movimiento se cuenta desde el último «Inicio de labores» o «Fin de refrigerio» (no desde antes de marcar). Severidad crítica (aparece en «Alertas críticas»). En ruta lo cubre «GPS parado»; con el servicio ya finalizado o con el trabajo en ejecución no se alerta. Se asocia al servicio del día del técnico (la notificación lo exige).
     INSERT INTO tmp_sg_alerta
-    SELECT CONCAT('sin_movimiento:', t.id_usuario, ':', o.id_os), 'sin_movimiento', 'advertencia', 'Sin movimiento',
-           CONCAT(t.nombre, ' · ', o.numero), TIMESTAMPDIFF(MINUTE, p.parado_desde, v_ahora_utc), t.id_usuario, t.nombre, o.id_os, o.numero
+    SELECT CONCAT('sin_movimiento:', t.id_usuario, ':', o.id_os), 'sin_movimiento', 'critica', 'Técnico sin movimiento',
+           CONCAT(t.nombre, ' · ', o.numero), TIMESTAMPDIFF(MINUTE, GREATEST(p.parado_desde, jd.desde_utc), v_ahora_utc), t.id_usuario, t.nombre, o.id_os, o.numero
     FROM tmp_sg_tec t
     JOIN tmp_sg_os o ON o.id_os = t.id_os_actual
     JOIN tmp_sg_pos p ON p.id_usuario = t.id_usuario
-    WHERE t.jornada IN ('en_labores', 'salio_planta') AND o.fase NOT IN ('en_ruta', 'finalizado') AND p.parado_desde IS NOT NULL
+    JOIN (SELECT j.id_usuario, MAX(j.marcado_utc) AS desde_utc
+          FROM   jornada_marcacion j
+          WHERE  j.fecha = v_hoy AND j.tipo IN ('inicio_labores', 'fin_refrigerio')
+          GROUP BY j.id_usuario) jd ON jd.id_usuario = t.id_usuario
+    WHERE t.jornada IN ('en_labores', 'salio_planta') AND o.fase NOT IN ('en_ruta', 'en_ejecucion', 'finalizado') AND p.parado_desde IS NOT NULL
       AND TIMESTAMPDIFF(MINUTE, p.ts_utc, v_ahora_utc) <= v_perdida
-      AND TIMESTAMPDIFF(MINUTE, p.parado_desde, p.ts_utc) >= v_sin_mov;
+      AND TIMESTAMPDIFF(MINUTE, GREATEST(p.parado_desde, jd.desde_utc), p.ts_utc) >= v_sin_mov;
+
+    -- Autorización de salida pendiente: el técnico pidió el visto bueno para iniciar el traslado y el encargado aún no responde (crítica: sale en «Alertas críticas»)
+    INSERT INTO tmp_sg_alerta
+    SELECT CONCAT('autorizacion_salida:', a.id_tecnico, ':', o.id_os), 'autorizacion_salida', 'critica', 'Autorización de salida pendiente',
+           CONCAT(t.nombre, ' · ', o.numero), GREATEST(0, TIMESTAMPDIFF(MINUTE, a.solicitado_en, NOW())), t.id_usuario, t.nombre, o.id_os, o.numero
+    FROM tmp_sg_os o
+    JOIN tmp_sg_tec t ON t.id_usuario = o.id_tecnico
+    JOIN autorizacion_salida_os a ON a.id_os = o.id_os AND a.estado = 'pendiente'
+    WHERE o.fase = 'sin_salir';
+
+    -- Ensayo y calibración guardado con error crítico y sin revisión del jefe (crítica: sale en «Alertas críticas»). La notificación al encargado ya la crea SP_GuardarEnsayosMovil.
+    INSERT INTO tmp_sg_alerta
+    SELECT CONCAT('ensayo_critico:', it.id_informe), 'ensayo_critico', 'critica', 'Ensayo con error crítico',
+           LEFT(CONCAT(IFNULL(TRIM(CONCAT(u.nombre, ' ', u.apellido)), 'Técnico'), ' · ', o.numero, IFNULL(CONCAT(' · ', ec.codigo_tw), '')), 200),
+           GREATEST(0, TIMESTAMPDIFF(MINUTE, COALESCE(it.error_critico_notificado_en, it.ensayos_finalizado_en, it.modificado_en, it.creado_en), NOW())), it.id_tecnico, TRIM(CONCAT(IFNULL(u.nombre, ''), ' ', IFNULL(u.apellido, ''))), o.id_os, o.numero
+    FROM informe_tecnico it
+    JOIN tmp_sg_os o ON o.id_os = it.id_os
+    LEFT JOIN usuario u ON u.id_usuario = it.id_tecnico
+    LEFT JOIN equipo_cliente ec ON ec.id_equipo = it.id_equipo
+    WHERE it.eliminado_en IS NULL AND it.error_critico_motivo IS NOT NULL AND it.error_critico_revision IS NULL;
 
     -- Sin ingreso post-llegada: llegó a planta y no inicia el trabajo
     INSERT INTO tmp_sg_alerta
@@ -490,6 +515,21 @@ BEGIN
     JOIN usuario ut ON ut.id_usuario = COALESCE(ra.id_tecnico, ra.id_usuario)
     LEFT JOIN tabla_maestra m ON m.Descripcion = 'TIPO_DEMORA_INCIDENTE' AND m.IdEmpresa = 1 AND m.Num1 = ra.id_tipo
     WHERE ra.modo = 'demora' AND ra.fecha_utc >= v_ini_utc AND ra.fecha_utc < DATE_ADD(v_ini_utc, INTERVAL 1 DAY);
+    -- Ensayo y calibración guardado con error crítico (clave 'c<id_informe>'): incidencia del técnico que detiene el servicio; el detalle (motivo y lecturas fuera del EMP) se ve al abrirla
+    INSERT IGNORE INTO tmp_sg_inc
+    SELECT CONCAT('c', it.id_informe), COALESCE(it.error_critico_notificado_en, it.ensayos_finalizado_en, it.modificado_en, it.creado_en), it.id_tecnico,
+           TRIM(CONCAT(IFNULL(u.nombre, ''), ' ', IFNULL(u.apellido, ''))), UPPER(CONCAT(LEFT(IFNULL(u.nombre, '?'), 1), LEFT(IFNULL(u.apellido, ''), 1))),
+           it.id_os, os.numero, c.razon_social, 'ENSAYO_ERROR', 'Ensayo con error crítico',
+           LEFT(CONCAT(IFNULL(CONCAT(ec.codigo_tw, ' · '), ''), 'Motivo del técnico: ', it.error_critico_motivo, ' · ',
+                       (SELECT COUNT(*) FROM informe_ensayo ie WHERE ie.id_informe = it.id_informe AND ie.critico = 1 AND ie.eliminado_en IS NULL), ' lectura(s) fuera del EMP'), 400),
+           NULL, 'detiene', 'tecnico', NULL
+    FROM informe_tecnico it
+    JOIN orden_servicio os ON os.id_os = it.id_os
+    JOIN cliente c ON c.id_cliente = os.id_cliente
+    LEFT JOIN usuario u ON u.id_usuario = it.id_tecnico
+    LEFT JOIN equipo_cliente ec ON ec.id_equipo = it.id_equipo
+    WHERE it.eliminado_en IS NULL AND it.error_critico_motivo IS NOT NULL
+      AND COALESCE(it.error_critico_notificado_en, it.ensayos_finalizado_en, it.modificado_en, it.creado_en) >= v_hoy AND COALESCE(it.error_critico_notificado_en, it.ensayos_finalizado_en, it.modificado_en, it.creado_en) < DATE_ADD(v_hoy, INTERVAL 1 DAY);
 END$$
 
 DELIMITER ;

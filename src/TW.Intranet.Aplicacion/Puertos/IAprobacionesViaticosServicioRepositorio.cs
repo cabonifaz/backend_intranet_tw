@@ -14,4 +14,6 @@ public interface IAprobacionesViaticosServicioRepositorio
     Task<RespuestaDto<RevisarGastoResultadoDto>> RevisarGastoServicioAsync(long idUsuario, long idOs, long idGasto, string accion, string? comentario, CancellationToken ct);
     Task<RespuestaDto<string>> ObtenerRutaComprobanteAsync(long idUsuario, long idOs, long idGasto, int n, CancellationToken ct);
     Task<RespuestaDto<ViaticosOsDto>> ObtenerViaticosInformeAsync(long idUsuario, long idInforme, CancellationToken ct);
+    Task<RespuestaDto<RevisarGastoResultadoDto>> RevisarGastoInformeAsync(long idUsuario, long idInforme, long idGasto, string accion, string? comentario, CancellationToken ct);
+    Task<RespuestaDto<string>> ObtenerRutaComprobanteInformeAsync(long idUsuario, long idInforme, long idGasto, int n, CancellationToken ct);
 }

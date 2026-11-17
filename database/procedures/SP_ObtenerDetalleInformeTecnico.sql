@@ -162,7 +162,7 @@ proc: BEGIN
     SELECT f.id_evidencia, f.url_archivo, f.descripcion,
            tf.String2                                         AS momento,
            IF(f.es_video = 1, 'Video de encendido', tf.String1) AS momento_label,
-           f.timestamp_captura                                AS fecha_captura,
+           CONVERT_TZ(f.timestamp_captura, '+00:00', '-05:00') AS fecha_captura,   -- hora de Lima
            f.latitud, f.longitud, (f.latitud IS NOT NULL AND f.longitud IS NOT NULL) AS georreferenciada,
            f.validacion_ia,
            f.es_video,

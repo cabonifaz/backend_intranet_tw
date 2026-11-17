@@ -19,7 +19,7 @@ internal static partial class EntradaDetalleServicioRuta
     internal static readonly string[] Ordenes = ["reciente", "antiguo"];
     internal static readonly string[] Secciones = ["fotos", "ensayos", "documentos", "observaciones", "mediciones"];
 
-    [GeneratedRegex("^[dia][0-9]{1,18}$")]
+    [GeneratedRegex("^[diac][0-9]{1,18}$")]
     private static partial Regex ClaveIncidencia();
 
     [GeneratedRegex(@"^(https://[^\s<>""\\]+|/[^/\s<>""\\][^\s<>""\\]*)$")]

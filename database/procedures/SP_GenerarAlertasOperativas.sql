@@ -3,10 +3,11 @@
 -- Lo ejecuta el worker de la API (AlertasOperativasWorker) cada minuto. Proceso del sistema: no valida permisos de quien llama.
 -- Las alertas automáticas del Módulo 11 solo se calculaban al abrir la bandeja de seguimiento; este SP las guarda como notificación
 -- para que lleguen a la campana. Usa EXACTAMENTE el mismo cálculo y los mismos umbrales (SP_ArmarSeguimientoOperativo, migración 90):
---   perdida_contacto (crítica) · gps_parado (advertencia) · sin_movimiento (advertencia, HU-20) · sin_ingreso_post_llegada (advertencia) · sin_iniciar_servicio (advertencia)
+--   perdida_contacto (crítica) · gps_parado (advertencia) · sin_movimiento (CRÍTICA, HU-20: avisa a los 10 min y se repite cada 5 min hasta que el técnico se mueve o inicia el trabajo) · sin_ingreso_post_llegada (advertencia) · sin_iniciar_servicio (advertencia)
 --   · proximidad (info) · incidente crítico (crítica)
 -- Destinatarios: usuarios activos con el permiso seg_bandeja (los que ven la bandeja de seguimiento).
 -- Sin duplicados: clave_alerta = clave de la alerta + fecha de Lima → una sola notificación por alerta, técnico, servicio y día.
+-- Excepción «sin_movimiento»: la clave lleva además el tramo de 5 minutos (minutos / 5) → una notificación nueva cada 5 min mientras siga parado.
 -- Varias instancias de la API: GET_LOCK evita que dos corran a la vez (la otra sale sin hacer nada).
 -- Se guarda con modulo_origen = control_campo, tipo_origen = alerta_operativa y la prioridad según la severidad.
 -- Resultados: 1 mensaje · 2 generadas (notificaciones insertadas) y alertas (alertas activas en este momento).
@@ -57,7 +58,7 @@ proc: BEGIN
         INSERT INTO notificacion (id_usuario_destino, id_canal, titulo, cuerpo, entidad_tipo, id_entidad, fecha_creacion, creado_por,
                                   modulo_origen, tipo_origen, prioridad_origen, clave_alerta)
         SELECT d.id_usuario, 5,
-               LEFT(CONCAT('Técnico ', IFNULL(a.tecnico, ''), ' — ', a.titulo), 150),
+               IF(a.tipo = 'sin_movimiento', LEFT(CONCAT('Técnico sin movimiento — ', IFNULL(a.tecnico, '')), 150), LEFT(CONCAT('Técnico ', IFNULL(a.tecnico, ''), ' — ', a.titulo), 150)),
                LEFT(CONCAT(
                    CASE a.tipo
                        WHEN 'gps_parado'               THEN CONCAT('Sin movimiento registrado en los últimos ', IFNULL(a.minutos, 0), ' min')
@@ -74,12 +75,13 @@ proc: BEGIN
                'orden_servicio', a.id_os, NOW(), NULL,
                'control_campo', 'alerta_operativa',
                CASE a.severidad WHEN 'critica' THEN 'critica' WHEN 'advertencia' THEN 'alta' ELSE 'normal' END,
-               CONCAT(a.clave, ':', DATE_FORMAT(v_hoy, '%Y%m%d'))
+               CONCAT(a.clave, IF(a.tipo = 'sin_movimiento', CONCAT(':r', FLOOR(IFNULL(a.minutos, 0) / 5)), ''), ':', DATE_FORMAT(v_hoy, '%Y%m%d'))
         FROM   tmp_sg_alerta a
         JOIN   tmp_sg_os o ON o.id_os = a.id_os
         CROSS JOIN tmp_alerta_dest d
-        WHERE  NOT EXISTS (SELECT 1 FROM notificacion n
-                           WHERE  n.clave_alerta = CONCAT(a.clave, ':', DATE_FORMAT(v_hoy, '%Y%m%d'))
+        WHERE  a.tipo NOT IN ('autorizacion_salida', 'ensayo_critico')   -- sus notificaciones (críticas) ya las crean SP_SolicitarAutorizacionSalidaMovil y SP_GuardarEnsayosMovil
+          AND  NOT EXISTS (SELECT 1 FROM notificacion n
+                           WHERE  n.clave_alerta = CONCAT(a.clave, IF(a.tipo = 'sin_movimiento', CONCAT(':r', FLOOR(IFNULL(a.minutos, 0) / 5)), ''), ':', DATE_FORMAT(v_hoy, '%Y%m%d'))
                              AND  n.id_usuario_destino = d.id_usuario);
         SET v_generadas = ROW_COUNT();
 

@@ -24,14 +24,17 @@ public record DetalleServicioRutaDto(
     IReadOnlyList<ResponsableServicioRutaDto> Responsables, ContactoPlantaDto? Contacto);
 
 // Avance por equipos
-public record EtapaEquipoRutaDto(string Etapa, int Orden, string Estado, string? Hora);
+/// <summary>Etapa del trabajo en el equipo (las de la app) con su estado y el detalle de lo que lleva.</summary>
+public record EtapaEquipoRutaDto(string Etapa, int Orden, string Estado, string? Hora, string? Detalle = null);
 public record EquipoAvanceRutaDto(
     long IdEquipo, string Codigo, string? Modelo, string? Serie, string Estado, int Fotos, int Ensayos, int CertificadoPreliminar, int Observaciones, int Mediciones,
     string? Iniciado, string? Finalizado, int? Minutos, IReadOnlyList<EtapaEquipoRutaDto> Etapas);
 public record AvanceServicioRutaDto(int EquiposCompletados, int EquiposTotal, IReadOnlyList<EquipoAvanceRutaDto> Equipos);
 
 /// <summary>Fila común de los drill-downs del equipo (Fotos, Ensayos, Documentos, Observaciones, Mediciones).</summary>
-public record ElementoEquipoRutaDto(long Id, string Titulo, string? Detalle, string? Fecha, string? Url, string? Resultado, int? UltimaHaceMin);
+public record ElementoEquipoRutaDto(long Id, string Titulo, string? Detalle, string? Fecha, string? Url, string? Resultado, int? UltimaHaceMin, long? IdEvidencia = null,
+    /// <summary>Miniatura (cuadro) del video de evidencia; null si no es video.</summary>
+    string? UrlCuadro = null, bool EsVideo = false);
 public record SeccionEquipoRutaDto(string Seccion, IReadOnlyList<ElementoEquipoRutaDto> Elementos);
 
 // Mapa GPS

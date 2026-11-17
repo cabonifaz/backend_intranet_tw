@@ -128,3 +128,47 @@ public class ObtenerViaticosInformeCasoDeUso(IAprobacionesViaticosServicioReposi
             ? Task.FromResult(new RespuestaDto<ViaticosOsDto>(1, "El informe no existe o no está en tu alcance."))
             : repositorio.ObtenerViaticosInformeAsync(idUsuario, idInforme, ct);
 }
+
+
+/// <summary>Revisar (aprobar, observar o rechazar) un gasto rendido desde el Detalle del Servicio Técnico (Revisión de Informes). Solo el Jefe de Operaciones; el SP lo comprueba.</summary>
+public class RevisarGastoInformeCasoDeUso(IAprobacionesViaticosServicioRepositorio repositorio)
+{
+    public Task<RespuestaDto<RevisarGastoResultadoDto>> EjecutarAsync(long idUsuario, long idInforme, long idGasto, RevisarGastoDto? dto, CancellationToken ct = default)
+    {
+        if (idInforme <= 0)
+            return Task.FromResult(new RespuestaDto<RevisarGastoResultadoDto>(1, "El informe no existe o no está en tu alcance."));
+        // Mismas reglas que la revisión desde la Programación y el Seguimiento: acción de lista cerrada y comentario según la acción
+        var (accion, comentario, error) = EntradaViaticos.NormalizarRevision(idInforme, idGasto, dto);
+        return error is not null
+            ? Task.FromResult(new RespuestaDto<RevisarGastoResultadoDto>(1, error))
+            : repositorio.RevisarGastoInformeAsync(idUsuario, idInforme, idGasto, accion!, comentario, ct);
+    }
+}
+
+/// <summary>Comprobante n (1 a 5) de un gasto de la OS de un informe, servido con autenticación (solo rutas del almacenamiento del sistema, imagen o PDF).</summary>
+public class ObtenerComprobanteGastoInformeCasoDeUso(IAprobacionesViaticosServicioRepositorio repositorio, IAlmacenArchivos almacen)
+{
+    public async Task<RespuestaDto<ArchivoDescargaDto>> EjecutarAsync(long idUsuario, long idInforme, long idGasto, int n, CancellationToken ct = default)
+    {
+        if (idInforme <= 0) return new(1, "El informe no existe o no está en tu alcance.");
+        if (idGasto <= 0) return new(1, "El gasto indicado no es válido.");
+        if (n is < 1 or > 5) return new(1, "El comprobante indicado no es válido (1 a 5).");
+
+        var r = await repositorio.ObtenerRutaComprobanteInformeAsync(idUsuario, idInforme, idGasto, n, ct);
+        if (r.IdTipoMensaje != 2 || string.IsNullOrWhiteSpace(r.Datos))
+            return new(r.IdTipoMensaje == 2 ? 1 : r.IdTipoMensaje, r.IdTipoMensaje == 2 ? "El gasto no tiene ese comprobante." : r.Mensaje);
+
+        var ruta = r.Datos.Trim();
+        if (ruta.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || ruta.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            return new(1, "El comprobante de este gasto es un enlace externo.");
+        ruta = ruta.TrimStart('/');
+        var tipo = EntradaAprobacionesViaticos.TipoComprobante(ruta);
+        if (tipo is null || ruta.Contains(".."))
+            return new(1, "El comprobante de este gasto no es una imagen ni un PDF.");
+
+        var stream = await almacen.AbrirLecturaAsync(ruta, ct);
+        return stream is null
+            ? new(1, "No se encontró el archivo del comprobante.")
+            : new(2, "Éxito.", new ArchivoDescargaDto(stream, Path.GetFileName(ruta), tipo));
+    }
+}

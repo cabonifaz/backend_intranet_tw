@@ -27,6 +27,9 @@ public class RevisionTecnicaController(
     ObtenerHistorialInformeCasoDeUso      historial,
     ObtenerArchivoFotoInformeCasoDeUso    archivoFoto,
     ObtenerViaticosInformeCasoDeUso       viaticos,
+    RevisarGastoInformeCasoDeUso          revisarGasto,
+    ObtenerComprobanteGastoInformeCasoDeUso comprobanteGasto,
+    ObtenerObservacionesSeguimientoInformeCasoDeUso observacionesSeguimiento,
     ILogger<RevisionTecnicaController>    logger) : ControllerBase
 {
     private long IdUsuarioActual =>
@@ -106,6 +109,36 @@ public class RevisionTecnicaController(
     [HttpGet("{idInforme:long}/viaticos")]
     public async Task<IActionResult> Viaticos(long idInforme, CancellationToken ct = default)
         => Responder(await viaticos.EjecutarAsync(IdUsuarioActual, idInforme, ct));
+
+    /// <summary>
+    /// Aprobar, observar o rechazar un gasto rendido de la OS del informe, desde la pestaña Viáticos y Gastos. Solo el Jefe de Operaciones; el SP vuelve a exigir
+    /// rt_bandeja y que el gasto sea de esa OS.
+    /// </summary>
+    [RequierePermiso("prog_aprobar_reprogramacion")]
+    [RequestSizeLimit(4 * 1024)]
+    [HttpPost("{idInforme:long}/viaticos/gastos/{idGasto:long}/revision")]
+    public async Task<IActionResult> RevisarGasto(long idInforme, long idGasto, [FromBody] RevisarGastoDto? dto, CancellationToken ct = default)
+        => Responder(await revisarGasto.EjecutarAsync(IdUsuarioActual, idInforme, idGasto, dto, ct));
+
+    /// <summary>Comprobante n (1 a 5) de un gasto de la OS del informe: imagen o PDF. El front lo pide con el token y lo muestra como blob.</summary>
+    [RequierePermiso("rt_bandeja")]
+    [HttpGet("{idInforme:long}/viaticos/gastos/{idGasto:long}/comprobante/{n:int}")]
+    public async Task<IActionResult> ComprobanteGasto(long idInforme, long idGasto, int n, CancellationToken ct = default)
+    {
+        var r = await comprobanteGasto.EjecutarAsync(IdUsuarioActual, idInforme, idGasto, n, ct);
+        if (r.IdTipoMensaje != 2 || r.Datos is null)
+            return Responder(r);
+        Response.Headers.CacheControl = "private, no-store";
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
+        Response.Headers["Content-Security-Policy"] = "default-src 'none'";
+        return File(r.Datos.Contenido, r.Datos.TipoContenido);
+    }
+
+    /// <summary>Observaciones que se registraron durante el servicio en el Seguimiento Operativo (notas del Asistente, observaciones del equipo). Solo lectura.</summary>
+    [RequierePermiso("rt_bandeja")]
+    [HttpGet("{idInforme:long}/observaciones-seguimiento")]
+    public async Task<IActionResult> ObservacionesSeguimiento(long idInforme, CancellationToken ct = default)
+        => Responder(await observacionesSeguimiento.EjecutarAsync(idInforme, IdUsuarioActual, ct));
 
     /// <summary>HU-59 Pestaña Historial. Query: categoria (todos · edicion · precotizacion · revision · sistema).</summary>
     [RequierePermiso("rt_bandeja", "precot_ver")]

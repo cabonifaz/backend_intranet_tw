@@ -7,6 +7,9 @@
 --   · GPS obligatorio (rango válido, distinto de 0,0, precisión 0 a 5000 m). Lugar = la sede de cliente más cercana a 300 m o menos (si hay).
 --   · Ingreso: «a tiempo» si marcó hasta JORNADA_TOLERANCIA_MIN minutos después del inicio programado; si no, «tardanza» con los minutos.
 --   · Idempotente: la misma marcación del día ya registrada (reintento de la cola sin conexión) responde éxito con repetida = 1, sin duplicar.
+--   · Salida de planta (HU-20): confirma que el técnico concluyó el servicio programado en ejecución. Si a sus equipos (los visibles en la app) les falta ejecutar alguno,
+--     NO deja salir (regla de negocio); si están todos, la OS pasa a «finalizada» (evento de campo CIERRE, hora fin real, auditoría) y sale del Seguimiento Operativo (queda en
+--     Revisión de Informes). Con otro servicio del día en ejecución la salida se puede marcar de nuevo (jornada_salida guarda cada salida; jornada_marcacion solo la primera).
 --   · Cada marcación deja también una posición en ubicacion_tecnico: el técnico aparece de inmediato en el mapa del Seguimiento Operativo de la intranet.
 -- Auditoría: auditoria_evento (jornada_marcacion). Se bloquea al usuario para serializar sus marcaciones.
 -- Resultados: 1 mensaje (1 regla de negocio · 2 éxito · 3 error) · 2 (solo éxito) marcación registrada y el estado siguiente.
@@ -47,6 +50,13 @@ proc: BEGIN
     DECLARE v_id        BIGINT;
     DECLARE v_nombre    VARCHAR(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_nom_sig   VARCHAR(40) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_id_os     BIGINT DEFAULT NULL;
+    DECLARE v_num_os    VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
+    DECLARE v_id_prog   BIGINT DEFAULT NULL;
+    DECLARE v_n_prog    INT DEFAULT 0;
+    DECLARE v_pend      INT DEFAULT 0;
+    DECLARE v_tipo_cie  INT DEFAULT NULL;
+    DECLARE v_cerro     TINYINT DEFAULT 0;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -88,8 +98,16 @@ proc: BEGIN
     SELECT u.id_usuario INTO v_id_usr FROM usuario u WHERE u.id_usuario = p_id_usuario FOR UPDATE;
 
     -- Reintento de una marcación ya registrada
-    SELECT j.id_marcacion INTO v_existente FROM jornada_marcacion j WHERE j.id_usuario = p_id_usuario AND j.fecha = v_fecha AND j.tipo = p_tipo LIMIT 1;
     CALL SP_EstadoJornadaMovil(p_id_usuario, v_fecha, v_n, v_estado, v_sig, v_ultima);
+    SELECT j.id_marcacion INTO v_existente FROM jornada_marcacion j WHERE j.id_usuario = p_id_usuario AND j.fecha = v_fecha AND j.tipo = p_tipo LIMIT 1;
+    -- Salida adicional (otro servicio del día): su repetición se reconoce por la hora marcada
+    IF p_tipo = 'salida_planta' AND v_n >= 4 THEN
+        SET v_existente = NULL;
+        SELECT s.id_salida INTO v_existente FROM jornada_salida s WHERE s.id_usuario = p_id_usuario AND s.fecha = v_fecha AND s.marcado_utc = v_marcado LIMIT 1;
+        IF v_existente IS NULL THEN
+            SELECT j.id_marcacion INTO v_existente FROM jornada_marcacion j WHERE j.id_usuario = p_id_usuario AND j.fecha = v_fecha AND j.tipo = 'salida_planta' AND j.marcado_utc = v_marcado LIMIT 1;
+        END IF;
+    END IF;
     IF v_existente IS NOT NULL THEN
         ROLLBACK;
         SELECT 2 AS IdTipoMensaje, CONCAT(v_nombre, ' ya estaba registrada.') AS Mensaje;
@@ -110,6 +128,34 @@ proc: BEGIN
         LEAVE proc;
     END IF;
     IF v_ultima IS NOT NULL AND v_marcado < v_ultima THEN SET v_marcado = v_ultima; END IF;
+
+    -- Salida de planta: el servicio programado en ejecución debe tener todos sus equipos ejecutados
+    IF p_tipo = 'salida_planta' THEN
+        SELECT os.id_os, os.numero INTO v_id_os, v_num_os
+        FROM   orden_servicio os
+        WHERE  os.eliminado_en IS NULL AND os.estado = 'en_ejecucion'
+          AND  (os.id_tecnico_principal = p_id_usuario
+                OR EXISTS (SELECT 1 FROM os_personal op WHERE op.id_os = os.id_os AND op.id_usuario = p_id_usuario AND op.eliminado_en IS NULL))
+          AND  EXISTS (SELECT 1 FROM programacion pg WHERE pg.id_os = os.id_os AND pg.estado = 'confirmada' AND pg.eliminado_en IS NULL AND pg.fecha_ejecucion = v_fecha)
+        ORDER BY os.id_os LIMIT 1;
+        IF v_id_os IS NOT NULL THEN
+            SELECT MAX(pg.id_programacion) INTO v_id_prog FROM programacion pg
+            WHERE  pg.id_os = v_id_os AND pg.estado = 'confirmada' AND pg.eliminado_en IS NULL AND pg.fecha_ejecucion = v_fecha;
+            SELECT COUNT(*) INTO v_n_prog FROM programacion_equipo pe WHERE pe.id_programacion = v_id_prog AND pe.eliminado_en IS NULL;
+            -- mismos equipos que ve el técnico en la app (SP_ArmarObjetivosMovil)
+            SELECT COUNT(*) INTO v_pend
+            FROM   os_equipo oe
+            WHERE  oe.id_os = v_id_os AND oe.eliminado_en IS NULL AND IFNULL(oe.estado_ejecucion, '') <> 'ejecutado'
+              AND  (v_n_prog = 0 OR oe.ingresado_en_campo = 1
+                    OR EXISTS (SELECT 1 FROM programacion_equipo pe WHERE pe.id_programacion = v_id_prog AND pe.id_equipo = oe.id_equipo AND pe.eliminado_en IS NULL));
+            IF v_pend > 0 THEN
+                ROLLBACK;
+                SELECT 1 AS IdTipoMensaje,
+                       CONCAT('Aún falta ejecutar ', v_pend, IF(v_pend = 1, ' equipo', ' equipos'), ' del servicio ', v_num_os, '. Termina el trabajo antes de marcar la salida de planta.') AS Mensaje;
+                LEAVE proc;
+            END IF;
+        END IF;
+    END IF;
 
     -- Ingreso: a tiempo o tardanza
     IF p_tipo = 'inicio_labores' THEN
@@ -133,10 +179,38 @@ proc: BEGIN
     ORDER BY x.d
     LIMIT 1;
 
-    INSERT INTO jornada_marcacion (id_usuario, fecha, tipo, marcado_utc, latitud, longitud, precision_m, lugar, puntualidad, minutos_diferencia, sin_conexion)
-    VALUES (p_id_usuario, v_fecha, p_tipo, v_marcado, p_latitud, p_longitud, IF(p_precision IS NULL, NULL, ROUND(p_precision)), v_lugar, v_punt, v_dif,
-            IF(IFNULL(p_sin_conexion, 0) = 1, 1, 0));
-    SET v_id = LAST_INSERT_ID();
+    IF p_tipo = 'salida_planta' AND v_n >= 4 THEN
+        SET v_id = NULL;   -- salida adicional: la marcación del día ya existe (índice único); queda registrada en jornada_salida
+    ELSE
+        INSERT INTO jornada_marcacion (id_usuario, fecha, tipo, marcado_utc, latitud, longitud, precision_m, lugar, puntualidad, minutos_diferencia, sin_conexion)
+        VALUES (p_id_usuario, v_fecha, p_tipo, v_marcado, p_latitud, p_longitud, IF(p_precision IS NULL, NULL, ROUND(p_precision)), v_lugar, v_punt, v_dif,
+                IF(IFNULL(p_sin_conexion, 0) = 1, 1, 0));
+        SET v_id = LAST_INSERT_ID();
+    END IF;
+
+    IF p_tipo = 'salida_planta' THEN
+        INSERT INTO jornada_salida (id_usuario, fecha, id_os, marcado_utc, latitud, longitud, precision_m, lugar, sin_conexion)
+        VALUES (p_id_usuario, v_fecha, v_id_os, v_marcado, p_latitud, p_longitud, IF(p_precision IS NULL, NULL, ROUND(p_precision)), v_lugar,
+                IF(IFNULL(p_sin_conexion, 0) = 1, 1, 0));
+        IF v_id IS NULL THEN SET v_id = LAST_INSERT_ID(); END IF;
+
+        IF v_id_os IS NOT NULL THEN
+            SELECT t.Num1 INTO v_tipo_cie FROM tabla_maestra t WHERE t.Descripcion = 'TIPO_EVENTO_CAMPO' AND t.IdEmpresa = 1 AND t.String2 = 'CIERRE' LIMIT 1;
+            IF v_tipo_cie IS NOT NULL THEN
+                INSERT INTO evento_campo (id_os, id_usuario, id_tipo_evento, timestamp_utc, latitud, longitud, sincronizado, notas, creado_por)
+                VALUES (v_id_os, p_id_usuario, v_tipo_cie, v_marcado, p_latitud, p_longitud, 1,
+                        'Salida de planta marcada en el Reloj marcador: el técnico concluyó el servicio.', p_id_usuario);
+            END IF;
+            UPDATE orden_servicio
+            SET    estado = 'finalizada', hora_fin_real = TIME(CONVERT_TZ(v_marcado, '+00:00', '-05:00')), modificado_por = p_id_usuario, modificado_en = NOW()
+            WHERE  id_os = v_id_os;
+            INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion, id_usuario, registrado_en, metadata)
+            VALUES ('orden_servicio', v_id_os, 'cerrar_por_salida_planta', 'en_ejecucion', 'finalizada',
+                    LEFT(CONCAT('El técnico marcó la salida de planta a las ', TIME_FORMAT(CONVERT_TZ(v_marcado, '+00:00', '-05:00'), '%H:%i'), ' y concluyó el servicio ', v_num_os, '.'), 900),
+                    p_id_usuario, NOW(), JSON_OBJECT('id_os', v_id_os, 'fecha', DATE_FORMAT(v_fecha, '%Y-%m-%d')));
+            SET v_cerro = 1;
+        END IF;
+    END IF;
 
     -- La posición queda en el seguimiento: el técnico se ve en el mapa de la intranet apenas marca
     INSERT INTO ubicacion_tecnico (id_usuario, id_os, latitud, longitud, precision_m, direccion, timestamp_utc)
@@ -151,7 +225,7 @@ proc: BEGIN
     COMMIT;
 
     CALL SP_EstadoJornadaMovil(p_id_usuario, v_fecha, v_n2, v_estado2, v_sig2, v_ult2);
-    SELECT 2 AS IdTipoMensaje, CONCAT(v_nombre, ' registrado.') AS Mensaje;
+    SELECT 2 AS IdTipoMensaje, CONCAT(v_nombre, ' registrado.', IF(v_cerro = 1, CONCAT(' El servicio ', v_num_os, ' quedó finalizado.'), '')) AS Mensaje;
     SELECT p_tipo AS tipo, 0 AS repetida, v_estado2 AS estado, v_sig2 AS siguiente,
            TIME_FORMAT(CONVERT_TZ(v_marcado, '+00:00', '-05:00'), '%H:%i:%s') AS hora, v_lugar AS lugar, v_punt AS puntualidad, v_dif AS minutos_diferencia;
 END$$

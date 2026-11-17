@@ -62,6 +62,16 @@ proc: BEGIN
             p_id_usuario, NOW(),
             JSON_OBJECT('id_os', p_id_os, 'id_encargado', v_id_enc, 'telefono', v_tel_enc));
 
+    -- HU-32: el aviso «Ensayo con error crítico» le llega al encargado del área (abre «Alerta de campo» con la tabla del ensayo y las decisiones)
+    IF v_id_enc IS NOT NULL AND v_id_enc <> p_id_usuario THEN
+        INSERT INTO notificacion (id_usuario_destino, id_canal, titulo, cuerpo, entidad_tipo, id_entidad, fecha_creacion, creado_por)
+        SELECT v_id_enc, 5, 'Ensayo con error crítico',
+               LEFT(CONCAT(TRIM(CONCAT(IFNULL(u.nombre, ''), ' ', IFNULL(u.apellido, ''))), ' pide apoyo en ', v_num_os, ': ', v_nombre,
+                           IF(NULLIF(TRIM(IFNULL(p_detalle, '')), '') IS NULL, '', CONCAT(' (', TRIM(p_detalle), ')'))), 500),
+               'orden_servicio', p_id_os, NOW(), p_id_usuario
+        FROM   usuario u WHERE u.id_usuario = p_id_usuario;
+    END IF;
+
     SELECT 2 AS IdTipoMensaje, 'Llamada registrada en el ensayo.' AS Mensaje;
     SELECT v_nom_enc AS nombre, v_car_enc AS cargo, v_tel_enc AS telefono, v_area AS area;
 END$$

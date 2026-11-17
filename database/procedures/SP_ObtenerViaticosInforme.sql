@@ -1,4 +1,6 @@
--- HU-57 (Sprint 5) Viáticos de la OS de un informe técnico (Revisión de Informes): el resultado final de lo asignado y lo rendido. SIEMPRE SOLO LECTURA.
+-- HU-57 (Sprint 5) Viáticos de la OS de un informe técnico (Revisión de Informes): el resultado final de lo asignado y lo rendido. Solo lee; la revisión de los gastos
+-- por revisar se hace con SP_RevisarGastoInforme. puede_revisar = el usuario es el Jefe de Operaciones (prog_aprobar_reprogramacion), la programación está confirmada y la
+-- rendición sigue abierta (misma regla que el Seguimiento): habilita aprobar / observar / rechazar en cada gasto.
 -- Acceso: rt_bandeja y el informe en el alcance del usuario (SP_ArmarBaseInformes), igual que el detalle del informe.
 -- Resuelve informe → OS → programación (la última no cancelada) y devuelve lo mismo que la pestaña Viáticos del Seguimiento más el cierre de la rendición.
 -- Resultados: 1 mensaje · 2 cabecera · 3 resumen · 4 líneas · 5 gastos (SP_ArmarViaticosOs) ·
@@ -24,6 +26,7 @@ proc: BEGIN
     DECLARE v_apr      DECIMAL(12,2) DEFAULT 0;
     DECLARE v_rec      DECIMAL(12,2) DEFAULT 0;
     DECLARE v_saldo    DECIMAL(12,2) DEFAULT 0;
+    DECLARE v_revisa   TINYINT DEFAULT 0;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -60,6 +63,8 @@ proc: BEGIN
         SELECT MAX(id_rendicion) INTO v_id_rend FROM programacion_rendicion WHERE id_programacion = v_prog AND eliminado_en IS NULL;
     END IF;
 
+    SET v_revisa = IF(FN_PermisoAccion(p_id_usuario, 'prog_aprobar_reprogramacion') = 1 AND v_estado = 'confirmada' AND v_id_rend IS NULL, 1, 0);
+
     -- Montos del momento (para la rendición abierta)
     SELECT IFNULL(SUM(g.monto), 0) INTO v_asignado
     FROM gasto_viatico g
@@ -75,9 +80,9 @@ proc: BEGIN
     SELECT 2 AS IdTipoMensaje, 'OK' AS Mensaje;
 
     SELECT v_prog AS id_programacion, v_codigo AS codigo, v_estado AS estado,
-           0 AS puede_revisar, 0 AS puede_gestionar, IF(v_id_rend IS NULL, 0, 1) AS rendicion_cerrada, 'S/' AS moneda;
+           v_revisa AS puede_revisar, 0 AS puede_gestionar, IF(v_id_rend IS NULL, 0, 1) AS rendicion_cerrada, 'S/' AS moneda;
 
-    CALL SP_ArmarViaticosOs(v_id_os, v_prog, 0);
+    CALL SP_ArmarViaticosOs(v_id_os, v_prog, v_revisa);
 
     IF v_id_rend IS NOT NULL THEN
         SELECT 'cerrada' AS estado, r.total_asignado AS asignado, r.total_aprobado AS aprobado, r.total_rechazado AS rechazado,

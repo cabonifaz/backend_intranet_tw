@@ -7,9 +7,9 @@
 -- técnico es principal o integra el personal (os_personal).
 -- Estado general de la tarjeta:
 --   BLOQUEADO : OS bloqueada, expediente con bloqueo sin resolver o SSOMA bloqueado.
---   LISTO     : llegó el día programado (hoy o antes: servicio en curso o atrasado).
---   PENDIENTE : programado para una fecha posterior a hoy.
---   (Cliente confirmado y SSOMA se muestran aparte en la tarjeta; no cambian LISTO/PENDIENTE.)
+--   PENDIENTE : el cliente aún NO confirmó la programación, o está programado para una fecha posterior a hoy. Se ve completo (solo BLOQUEADO deshabilita el detalle).
+--   LISTO     : el cliente aceptó (os.confirmacion_cliente) y llegó el día programado (hoy o antes: servicio en curso o atrasado).
+--   (SSOMA se muestra aparte en la tarjeta; no cambia LISTO/PENDIENTE.)
 -- "Hoy" = fecha de Lima (UTC-5), calculada desde UTC; es la misma regla de SP_ObtenerSalidaHabilitadaMovil.
 -- La regla de BLOQUEADO está también en SP_ObtenerBloqueoServicioMovil (la usa el detalle): si se cambia, cambiar las dos.
 -- Datos de la programación operativa (intranet, HU-36/38): horario inicio–fin, tipo de servicio, cantidad de técnicos y
@@ -134,6 +134,8 @@ proc: BEGIN
                CASE
                    WHEN d.estado_os = 'bloqueada' OR d.bloqueo_expediente IS NOT NULL OR d.estado_ssoma = 'bloqueado'
                        THEN 'BLOQUEADO'
+                   WHEN IFNULL(d.cliente_confirmado, 0) = 0
+                       THEN 'PENDIENTE'
                    WHEN d.fecha_ejecucion <= v_hoy
                        THEN 'LISTO'
                    ELSE 'PENDIENTE'

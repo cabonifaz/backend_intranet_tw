@@ -1,7 +1,7 @@
 -- HU-52 (Sprint 5) Pestaña Aprobaciones del Detalle del Servicio en Ruta: una sola lista con todo lo que el encargado aprueba en esa OS. SOLO LECTURA.
 --   salida    autorizacion_salida_os (App Mobile HU-04)
 --   llegada   llegada_forzada_os (migración 111, HU-06)
---   evidencia evidencia_fotografica forzada por el técnico (override_aprobado, motivo_forzado, HU-12); revisión en revision_jefe (migración 113)
+--   (las evidencias fotográficas forzadas ya NO se listan aquí: se ven en Avance por equipos > Fotos)
 --   ensayo    informe_tecnico guardado con error crítico (error_critico_motivo, migraciones 100 y 107); revisión en error_critico_revision (113)
 -- Acceso: seg_bandeja y el servicio en la jornada de hoy (SP_PrepararDetalleServicioRuta), igual que las demás pestañas.
 -- puede_resolver: misma regla de área que SP_ObtenerAutorizacionesSalida / SP_ResolverLlegadaForzada: el encargado del área de la solicitud (o de la RQ
@@ -116,27 +116,7 @@ proc: BEGIN
     LEFT JOIN tabla_maestra cj ON cj.IdMaestro = 80 AND cj.IdEmpresa = 1 AND cj.String2 = j.cargo
     WHERE  s.id_os = p_id_os AND s.eliminado_en IS NULL;
 
-    -- Evidencias forzadas (la toma vigente; o una anterior que ya fue revisada)
-    INSERT INTO tmp_apr
-    SELECT 'evidencia', f.id_evidencia,
-           LEFT(CONCAT('Evidencia forzada: ', IFNULL(f.codigo, 'foto'), IF(IFNULL(f.pagina, 1) > 1, CONCAT(' (hoja ', f.pagina, ')'), ''),
-                       IF(ec.codigo_tw IS NULL, '', CONCAT(' · ', ec.codigo_tw))), 200),
-           NULLIF(TRIM(CONCAT(IFNULL(t.nombre, ''), ' ', IFNULL(t.apellido, ''))), ''),
-           CONVERT_TZ(COALESCE(f.forzada_en, f.timestamp_captura), '+00:00', '-05:00'), f.motivo_forzado,
-           LEFT(CONCAT('La IA la rechazó', IF(f.motivo_rechazo_ia IS NULL, '.', CONCAT(': ', f.motivo_rechazo_ia))), 500),
-           IFNULL(f.revision_jefe, 'pendiente'),
-           NULLIF(TRIM(CONCAT(IFNULL(j.nombre, ''), ' ', IFNULL(j.apellido, ''))), ''), IFNULL(cj.String1, NULLIF(j.cargo, '')),
-           f.revisado_jefe_en, f.comentario_jefe,
-           0,
-           IF(f.revision_jefe IS NULL
-              AND (v_general = 1 OR (v_area_jefe IS NOT NULL AND (v_area_os IS NULL OR v_area_os = v_area_jefe))), 1, 0)
-    FROM   evidencia_fotografica f
-    LEFT JOIN equipo_cliente ec ON ec.id_equipo = f.id_equipo
-    LEFT JOIN usuario t         ON t.id_usuario = COALESCE(f.id_usuario_override, f.id_usuario)
-    LEFT JOIN usuario j         ON j.id_usuario = f.revisado_jefe_por
-    LEFT JOIN tabla_maestra cj  ON cj.IdMaestro = 80 AND cj.IdEmpresa = 1 AND cj.String2 = j.cargo
-    WHERE  f.id_os = p_id_os AND f.eliminado_en IS NULL AND f.override_aprobado = 1
-      AND  (f.vigente = 1 OR f.revision_jefe IS NOT NULL);
+    -- Las evidencias fotográficas forzadas NO se aprueban aquí: se ven en Avance por equipos > Fotos (marcadas como «Forzada por el técnico»).
 
     -- Ensayos guardados con error crítico
     INSERT INTO tmp_apr

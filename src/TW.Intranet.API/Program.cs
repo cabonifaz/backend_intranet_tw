@@ -257,6 +257,20 @@ builder.Services.AddScoped<ObtenerAccesoMovilCasoDeUso>();
 // App Mobile HU-02 — menú principal
 builder.Services.AddScoped<IMenuMovilRepositorio, MenuMovilRepositorio>();
 builder.Services.AddScoped<ObtenerResumenMenuMovilCasoDeUso>();
+builder.Services.AddScoped<IAlertasCampoMovilRepositorio, AlertasCampoMovilRepositorio>();
+builder.Services.AddScoped<ObtenerAlertaCampoMovilCasoDeUso>();
+builder.Services.AddScoped<AccionAlertaCampoMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerTecnicosReasignacionMovilCasoDeUso>();
+builder.Services.AddScoped<ReasignarTecnicoMovilCasoDeUso>();
+builder.Services.AddScoped<RegistrarIncidenciaCampoMovilCasoDeUso>();
+builder.Services.AddScoped<IIngresoEquiposMovilRepositorio, IngresoEquiposMovilRepositorio>();
+builder.Services.AddScoped<ObtenerIngresosEquiposMovilCasoDeUso>();
+builder.Services.AddScoped<RegistrarIngresoEquipoMovilCasoDeUso>();
+builder.Services.AddScoped<AgregarEquipoExistenteOsMovilCasoDeUso>();
+builder.Services.AddScoped<IProcedimientosMovilRepositorio, ProcedimientosMovilRepositorio>();
+builder.Services.AddScoped<ObtenerBibliotecaProcedimientosMovilCasoDeUso>();
+builder.Services.AddSingleton<IGeneradorProcedimientoPdf, GeneradorProcedimientoPdf>();
+builder.Services.AddScoped<ObtenerPdfProcedimientoMovilCasoDeUso>();
 // App Mobile HU-03 — agenda de servicios programados
 builder.Services.AddScoped<IServiciosMovilRepositorio, ServiciosMovilRepositorio>();
 builder.Services.AddScoped<ObtenerServiciosProgramadosMovilCasoDeUso>();
@@ -761,6 +775,7 @@ builder.Services.AddScoped<ObtenerIncidenciasServicioRutaCasoDeUso>();
 builder.Services.AddScoped<ExportarIncidenciasServicioRutaCasoDeUso>();
 builder.Services.AddScoped<ObtenerCierreServicioRutaCasoDeUso>();
 builder.Services.AddScoped<ObtenerAuditoriaServicioRutaCasoDeUso>(); // HU-54 Auditoría post-servicio (sin este registro todo el detalle del servicio en ruta respondía 500)
+builder.Services.AddScoped<ObtenerFotoEquipoServicioRutaCasoDeUso>();   // foto de evidencia de un equipo en «Avance por equipos»
 builder.Services.AddScoped<ObtenerEvidenciaIncidenciaCasoDeUso>();   // HU-52 foto de evidencia de una demora/incidencia
 builder.Services.AddScoped<SubirEvidenciaSeguimientoCasoDeUso>();    // HU-53 subida de la foto de evidencia del Asistente
 
@@ -772,6 +787,9 @@ builder.Services.AddScoped<ObtenerViaticosServicioRutaCasoDeUso>();
 builder.Services.AddScoped<RevisarGastoServicioRutaCasoDeUso>();
 builder.Services.AddScoped<ObtenerComprobanteGastoServicioRutaCasoDeUso>();
 builder.Services.AddScoped<ObtenerViaticosInformeCasoDeUso>();
+builder.Services.AddScoped<ObtenerObservacionesSeguimientoInformeCasoDeUso>();   // observaciones del Seguimiento Operativo en el detalle del informe
+builder.Services.AddScoped<RevisarGastoInformeCasoDeUso>();              // revisar un gasto desde el detalle del informe
+builder.Services.AddScoped<ObtenerComprobanteGastoInformeCasoDeUso>();   // comprobante del gasto desde el detalle del informe
 
 // HU-53 Registro operativo del Asistente de Seguimiento (Sprint 5): observación, demora/incidente y cambio manual de estado
 builder.Services.AddScoped<IRegistroAsistenteRepositorio, RegistroAsistenteRepositorio>();
