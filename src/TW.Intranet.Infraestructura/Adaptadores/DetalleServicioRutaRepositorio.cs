@@ -65,7 +65,7 @@ public class DetalleServicioRutaRepositorio(CadenaConexionBd conexion) : Reposit
                     long id = EnteroLargo(r, "IdEquipo");
                     if (!etapas.TryGetValue(id, out var lista))
                         etapas[id] = lista = [];
-                    lista.Add(new EtapaEquipoRutaDto(Texto(r, "Etapa") ?? "", Entero(r, "Orden"), Texto(r, "Estado") ?? "pendiente", Texto(r, "Hora")));
+                    lista.Add(new EtapaEquipoRutaDto(Texto(r, "Etapa") ?? "", Entero(r, "Orden"), Texto(r, "Estado") ?? "pendiente", Texto(r, "Hora"), Texto(r, "Detalle")));
                 }
 
                 var equipos = filas.Select(f => new EquipoAvanceRutaDto(f.Id, f.Codigo, f.Modelo, f.Serie, f.Estado, f.Fotos, f.Ensayos, f.Cert, f.Obs, f.Med, f.Ini, f.Fin, f.Min,
@@ -84,7 +84,7 @@ public class DetalleServicioRutaRepositorio(CadenaConexionBd conexion) : Reposit
                 var filas = new List<ElementoEquipoRutaDto>();
                 while (await r.ReadAsync(ct))
                     filas.Add(new ElementoEquipoRutaDto(EnteroLargo(r, "Id"), Texto(r, "Titulo") ?? "", Texto(r, "Detalle"), Texto(r, "Fecha"), Texto(r, "Url"),
-                        Texto(r, "Resultado"), EnteroNulo(r, "UltimaHaceMin")));
+                        Texto(r, "Resultado"), EnteroNulo(r, "UltimaHaceMin"), EnteroLargoNulo(r, "IdEvidencia")));
                 return new RespuestaDto<SeccionEquipoRutaDto>(2, mensaje, new SeccionEquipoRutaDto(seccion, filas));
             },
             ct);

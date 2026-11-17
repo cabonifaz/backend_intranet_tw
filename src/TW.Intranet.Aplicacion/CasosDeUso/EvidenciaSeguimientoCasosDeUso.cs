@@ -120,3 +120,31 @@ public class ObtenerEvidenciaIncidenciaCasoDeUso(IDetalleServicioRutaRepositorio
             : new(2, "Éxito.", new ArchivoDescargaDto(stream, Path.GetFileName(ruta), tipo));
     }
 }
+
+
+/// <summary>
+/// Foto de evidencia de un equipo (registro fotográfico y fotos de las fallas del informe) para «Avance por equipos» de la intranet.
+/// La imagen se busca entre las del equipo en la OS (anti-IDOR: la sección valida que el servicio sea de la jornada y el equipo de la OS).
+/// </summary>
+public class ObtenerFotoEquipoServicioRutaCasoDeUso(ObtenerSeccionEquipoServicioRutaCasoDeUso seccion, IAlmacenArchivos almacen)
+{
+    public async Task<RespuestaDto<ArchivoDescargaDto>> EjecutarAsync(long idUsuario, long idOs, long idEquipo, long idEvidencia, CancellationToken ct = default)
+    {
+        if (idEvidencia <= 0) return new(1, "La foto indicada no es válida.");
+        var r = await seccion.EjecutarAsync(idUsuario, idOs, idEquipo, "fotos", ct);
+        if (r.IdTipoMensaje != 2 || r.Datos is null) return new(r.IdTipoMensaje, r.Mensaje);
+
+        var url = r.Datos.Elementos.FirstOrDefault(x => x.Id == idEvidencia)?.Url?.Trim();
+        if (string.IsNullOrEmpty(url)) return new(1, "Esta evidencia no tiene archivo.");
+        if (url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) return new(1, "La evidencia es un enlace externo: ábrelo desde el detalle.");
+
+        var ruta = url.TrimStart('/');
+        var tipo = EvidenciaSeguimiento.TipoPorExtension(ruta);
+        if (tipo is null || ruta.Contains("..")) return new(1, "La evidencia no es una imagen.");
+
+        var stream = await almacen.AbrirLecturaAsync(ruta, ct);
+        return stream is null
+            ? new(1, "No se encontró la foto.")
+            : new(2, "Éxito.", new ArchivoDescargaDto(stream, Path.GetFileName(ruta), tipo));
+    }
+}

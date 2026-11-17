@@ -28,6 +28,7 @@ public class DetalleServicioRutaController(
     ObtenerAuditoriaServicioRutaCasoDeUso      auditoria,
     ObtenerEvidenciaIncidenciaCasoDeUso        evidencia,
     ObtenerAprobacionesServicioRutaCasoDeUso   aprobaciones,
+    ObtenerFotoEquipoServicioRutaCasoDeUso     fotoEquipo,
     ResolverAprobacionServicioRutaCasoDeUso    resolverAprobacion,
     ObtenerViaticosServicioRutaCasoDeUso       viaticos,
     RevisarGastoServicioRutaCasoDeUso          revisarGasto,
@@ -65,6 +66,20 @@ public class DetalleServicioRutaController(
     [HttpGet("avance/{idEquipo:long}/{seccion}")]
     public async Task<IActionResult> SeccionEquipo(long idOs, long idEquipo, string seccion, CancellationToken ct = default)
         => Responder(await seccionEquipo.EjecutarAsync(IdUsuarioActual, idOs, idEquipo, seccion, ct));
+
+    /// <summary>Foto de evidencia de un equipo (registro fotográfico o foto de una falla). Devuelve la imagen; el front la pide con el token y la muestra como blob.</summary>
+    [RequierePermiso("seg_bandeja")]
+    [HttpGet("avance/{idEquipo:long}/fotos/{idEvidencia:long}/archivo")]
+    public async Task<IActionResult> FotoEquipo(long idOs, long idEquipo, long idEvidencia, CancellationToken ct = default)
+    {
+        var r = await fotoEquipo.EjecutarAsync(IdUsuarioActual, idOs, idEquipo, idEvidencia, ct);
+        if (r.IdTipoMensaje != 2 || r.Datos is null)
+            return Responder(r);
+        Response.Headers.CacheControl = "private, no-store";
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
+        Response.Headers["Content-Security-Policy"] = "default-src 'none'";
+        return File(r.Datos.Contenido, r.Datos.TipoContenido);
+    }
 
     /// <summary>Pestaña Mapa GPS: posición actual, ruta del día, pin del cliente con radio de proximidad, panel y cronograma GPS.</summary>
     [RequierePermiso("seg_bandeja")]

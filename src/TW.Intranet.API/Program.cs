@@ -775,6 +775,7 @@ builder.Services.AddScoped<ObtenerIncidenciasServicioRutaCasoDeUso>();
 builder.Services.AddScoped<ExportarIncidenciasServicioRutaCasoDeUso>();
 builder.Services.AddScoped<ObtenerCierreServicioRutaCasoDeUso>();
 builder.Services.AddScoped<ObtenerAuditoriaServicioRutaCasoDeUso>(); // HU-54 Auditoría post-servicio (sin este registro todo el detalle del servicio en ruta respondía 500)
+builder.Services.AddScoped<ObtenerFotoEquipoServicioRutaCasoDeUso>();   // foto de evidencia de un equipo en «Avance por equipos»
 builder.Services.AddScoped<ObtenerEvidenciaIncidenciaCasoDeUso>();   // HU-52 foto de evidencia de una demora/incidencia
 builder.Services.AddScoped<SubirEvidenciaSeguimientoCasoDeUso>();    // HU-53 subida de la foto de evidencia del Asistente
 
