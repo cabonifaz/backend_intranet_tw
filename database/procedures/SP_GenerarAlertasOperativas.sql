@@ -79,7 +79,7 @@ proc: BEGIN
         FROM   tmp_sg_alerta a
         JOIN   tmp_sg_os o ON o.id_os = a.id_os
         CROSS JOIN tmp_alerta_dest d
-        WHERE  a.tipo <> 'autorizacion_salida'   -- su notificación (crítica) ya la crea SP_SolicitarAutorizacionSalidaMovil al pedir la autorización
+        WHERE  a.tipo NOT IN ('autorizacion_salida', 'ensayo_critico')   -- sus notificaciones (críticas) ya las crean SP_SolicitarAutorizacionSalidaMovil y SP_GuardarEnsayosMovil
           AND  NOT EXISTS (SELECT 1 FROM notificacion n
                            WHERE  n.clave_alerta = CONCAT(a.clave, IF(a.tipo = 'sin_movimiento', CONCAT(':r', FLOOR(IFNULL(a.minutos, 0) / 5)), ''), ':', DATE_FORMAT(v_hoy, '%Y%m%d'))
                              AND  n.id_usuario_destino = d.id_usuario);

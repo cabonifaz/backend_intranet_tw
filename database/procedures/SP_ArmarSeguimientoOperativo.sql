@@ -12,7 +12,7 @@
 --   sin_salir       programada o reprogramada: el técnico aún no marcó "Salida"
 -- Estado del técnico = el del servicio más urgente de su día (el finalizado solo si todos lo están).
 -- Alertas automáticas (se calculan al consultar; umbrales en PARAMETRO_PROGRAMACION, migración 90):
---   perdida_contacto (crítica) · gps_parado (advertencia) · sin_movimiento (crítica, HU-20) · autorizacion_salida (crítica: el técnico pidió autorización para iniciar el traslado y el encargado aún no responde) · sin_ingreso_post_llegada (advertencia) · sin_iniciar_servicio (advertencia)
+--   perdida_contacto (crítica) · gps_parado (advertencia) · sin_movimiento (crítica, HU-20) · ensayo_critico (crítica: ensayo guardado con error crítico, sin revisión del jefe) · autorizacion_salida (crítica: el técnico pidió autorización para iniciar el traslado y el encargado aún no responde) · sin_ingreso_post_llegada (advertencia) · sin_iniciar_servicio (advertencia)
 --   · proximidad (info) · incidente (crítica)
 -- Tablas temporales (MySQL no permite abrir dos veces la misma temporal en una consulta):
 --   tmp_sg_cfg (1 fila: hoy, ahora y umbrales) · tmp_sg_os (un servicio por fila) · tmp_sg_ev (eventos de campo del día por OS)
@@ -388,6 +388,17 @@ BEGIN
     JOIN autorizacion_salida_os a ON a.id_os = o.id_os AND a.estado = 'pendiente'
     WHERE o.fase = 'sin_salir';
 
+    -- Ensayo y calibración guardado con error crítico y sin revisión del jefe (crítica: sale en «Alertas críticas»). La notificación al encargado ya la crea SP_GuardarEnsayosMovil.
+    INSERT INTO tmp_sg_alerta
+    SELECT CONCAT('ensayo_critico:', it.id_informe), 'ensayo_critico', 'critica', 'Ensayo con error crítico',
+           LEFT(CONCAT(IFNULL(TRIM(CONCAT(u.nombre, ' ', u.apellido)), 'Técnico'), ' · ', o.numero, IFNULL(CONCAT(' · ', ec.codigo_tw), '')), 200),
+           GREATEST(0, TIMESTAMPDIFF(MINUTE, COALESCE(it.error_critico_notificado_en, it.ensayos_finalizado_en, it.modificado_en, it.creado_en), NOW())), it.id_tecnico, TRIM(CONCAT(IFNULL(u.nombre, ''), ' ', IFNULL(u.apellido, ''))), o.id_os, o.numero
+    FROM informe_tecnico it
+    JOIN tmp_sg_os o ON o.id_os = it.id_os
+    LEFT JOIN usuario u ON u.id_usuario = it.id_tecnico
+    LEFT JOIN equipo_cliente ec ON ec.id_equipo = it.id_equipo
+    WHERE it.eliminado_en IS NULL AND it.error_critico_motivo IS NOT NULL AND it.error_critico_revision IS NULL;
+
     -- Sin ingreso post-llegada: llegó a planta y no inicia el trabajo
     INSERT INTO tmp_sg_alerta
     SELECT CONCAT('sin_ingreso:', t.id_usuario, ':', o.id_os), 'sin_ingreso_post_llegada', 'advertencia', 'Sin ingreso post-llegada',
@@ -504,6 +515,21 @@ BEGIN
     JOIN usuario ut ON ut.id_usuario = COALESCE(ra.id_tecnico, ra.id_usuario)
     LEFT JOIN tabla_maestra m ON m.Descripcion = 'TIPO_DEMORA_INCIDENTE' AND m.IdEmpresa = 1 AND m.Num1 = ra.id_tipo
     WHERE ra.modo = 'demora' AND ra.fecha_utc >= v_ini_utc AND ra.fecha_utc < DATE_ADD(v_ini_utc, INTERVAL 1 DAY);
+    -- Ensayo y calibración guardado con error crítico (clave 'c<id_informe>'): incidencia del técnico que detiene el servicio; el detalle (motivo y lecturas fuera del EMP) se ve al abrirla
+    INSERT IGNORE INTO tmp_sg_inc
+    SELECT CONCAT('c', it.id_informe), COALESCE(it.error_critico_notificado_en, it.ensayos_finalizado_en, it.modificado_en, it.creado_en), it.id_tecnico,
+           TRIM(CONCAT(IFNULL(u.nombre, ''), ' ', IFNULL(u.apellido, ''))), UPPER(CONCAT(LEFT(IFNULL(u.nombre, '?'), 1), LEFT(IFNULL(u.apellido, ''), 1))),
+           it.id_os, os.numero, c.razon_social, 'ENSAYO_ERROR', 'Ensayo con error crítico',
+           LEFT(CONCAT(IFNULL(CONCAT(ec.codigo_tw, ' · '), ''), 'Motivo del técnico: ', it.error_critico_motivo, ' · ',
+                       (SELECT COUNT(*) FROM informe_ensayo ie WHERE ie.id_informe = it.id_informe AND ie.critico = 1 AND ie.eliminado_en IS NULL), ' lectura(s) fuera del EMP'), 400),
+           NULL, 'detiene', 'tecnico', NULL
+    FROM informe_tecnico it
+    JOIN orden_servicio os ON os.id_os = it.id_os
+    JOIN cliente c ON c.id_cliente = os.id_cliente
+    LEFT JOIN usuario u ON u.id_usuario = it.id_tecnico
+    LEFT JOIN equipo_cliente ec ON ec.id_equipo = it.id_equipo
+    WHERE it.eliminado_en IS NULL AND it.error_critico_motivo IS NOT NULL
+      AND COALESCE(it.error_critico_notificado_en, it.ensayos_finalizado_en, it.modificado_en, it.creado_en) >= v_hoy AND COALESCE(it.error_critico_notificado_en, it.ensayos_finalizado_en, it.modificado_en, it.creado_en) < DATE_ADD(v_hoy, INTERVAL 1 DAY);
 END$$
 
 DELIMITER ;
