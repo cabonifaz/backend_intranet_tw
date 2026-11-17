@@ -48,7 +48,7 @@ proc: BEGIN
                       IF(oe.estado_ejecucion = 'ejecutado', MAX(g.fin_utc), UTC_TIMESTAMP()))))
               FROM os_equipo_etapa g WHERE g.id_os = oe.id_os AND g.id_equipo = oe.id_equipo AND g.eliminado_en IS NULL) AS Minutos
     FROM os_equipo oe JOIN (SELECT ec.id_equipo, ec.codigo_tw, ec.modelo, ec.num_serie AS numero_serie, ec.estado_operativo FROM equipo_cliente ec) e ON e.id_equipo = oe.id_equipo
-    WHERE oe.id_os = p_id_os AND oe.eliminado_en IS NULL
+    WHERE oe.id_os = p_id_os AND oe.eliminado_en IS NULL AND FN_ObjetivoVisible(oe.id) = 1   -- mismos equipos que ve el técnico en la app
     ORDER BY oe.orden, oe.id;
 
     SELECT oe.id_equipo AS IdEquipo, s.etapa AS Etapa, s.n AS Orden,
@@ -57,7 +57,7 @@ proc: BEGIN
     FROM os_equipo oe
     JOIN (SELECT 1 AS n, 'limpieza' AS etapa UNION ALL SELECT 2, 'desmontaje' UNION ALL SELECT 3, 'pruebas' UNION ALL SELECT 4, 'montaje' UNION ALL SELECT 5, 'cierre') s
     LEFT JOIN os_equipo_etapa g ON g.id_os = oe.id_os AND g.id_equipo = oe.id_equipo AND g.etapa = s.etapa AND g.eliminado_en IS NULL
-    WHERE oe.id_os = p_id_os AND oe.eliminado_en IS NULL
+    WHERE oe.id_os = p_id_os AND oe.eliminado_en IS NULL AND FN_ObjetivoVisible(oe.id) = 1   -- mismos equipos que ve el técnico en la app
     ORDER BY oe.orden, oe.id, s.n;
 END$$
 
