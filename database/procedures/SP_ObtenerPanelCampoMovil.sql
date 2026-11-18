@@ -10,6 +10,8 @@
 --     demora         con demora/incidencia no crítica o pausada (no finalizada)      incidencia  incidente crítico o que detiene (no finalizada)
 --     finalizados    OS finalizadas hoy                       programados total del alcance
 --   Pin: estado del técnico = el de su servicio más urgente (HU-51). lat/lon NULL = el técnico aún no envía posición hoy (el mapa no lo dibuja).
+--     Salen los técnicos de los servicios del alcance Y los técnicos de campo con la jornada iniciada hoy sin servicio (estado sin_salir, id_os NULL),
+--     igual que el Mapa Operativo de la intranet (todos para quien ve todo; los del área para el Supervisor de Servicio Técnico / Metrología).
 --   Alertas (tipo): error_critico (ensayo con error crítico aceptado, HU-10: informe_tecnico.error_critico_motivo) · incidente (demora/incidencia que
 --     detiene) · demora (demoras e incidencias del día) · perdida_contacto · gps_parado · sin_ingreso_post_llegada · sin_iniciar_servicio (alertas automáticas HU-51).
 -- Requiere las migraciones 90 a 92, 97 y 100.
@@ -26,6 +28,7 @@ proc: BEGIN
     DECLARE v_sede        VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
     DECLARE v_aut_area    VARCHAR(30)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
     DECLARE v_aut_general TINYINT DEFAULT 0;
+    DECLARE v_todos       TINYINT DEFAULT 0;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -41,6 +44,9 @@ proc: BEGIN
         SELECT 1 AS IdTipoMensaje, 'Tu cargo no tiene el menú de Jefatura.' AS Mensaje;
         LEAVE proc;
     END IF;
+
+    -- ¿Ve a todos los técnicos y servicios? Las demás áreas y el Administrador de Servicio Técnico / Metrología sí; el Supervisor de ST / Metrología solo los de su área
+    SET v_todos = IF(v_area NOT IN ('servicio_tecnico', 'metrologia') OR IFNULL(@tw_jf_alcance_total, 0) = 1, 1, 0);
 
     CALL SP_ArmarSeguimientoOperativo();
     CALL SP_ArmarAlcanceJefaturaMovil(v_area, NULL);
@@ -97,6 +103,16 @@ proc: BEGIN
     DROP TEMPORARY TABLE IF EXISTS tmp_sg_tf;
     CREATE TEMPORARY TABLE tmp_sg_tf (id_usuario BIGINT NOT NULL, PRIMARY KEY (id_usuario));
     INSERT INTO tmp_sg_tf SELECT DISTINCT ut.id_usuario FROM tmp_sg_ut ut JOIN tmp_sg_f f ON f.id_os = ut.id_os;
+    -- Como en el Mapa Operativo de la intranet: también los técnicos de campo con la jornada iniciada hoy que NO tienen servicio ("Sin servicio asignado").
+    -- Técnico de campo = Servicio Técnico o Metrología con rol Usuario / Visor. Quien ve todo los ve a todos; el Supervisor de ST / Metrología solo los de su área.
+    INSERT IGNORE INTO tmp_sg_tf
+    SELECT t.id_usuario
+    FROM   tmp_sg_tec t
+    JOIN   usuario u ON u.id_usuario = t.id_usuario
+    WHERE  t.n_servicios = 0
+      AND  u.area IN ('servicio_tecnico', 'metrologia')
+      AND  u.rol_sistema NOT IN ('supervisor', 'administrador', 'admin')
+      AND  (v_todos = 1 OR u.area = v_area);
 
     SELECT 2 AS IdTipoMensaje, 'OK' AS Mensaje;
 
