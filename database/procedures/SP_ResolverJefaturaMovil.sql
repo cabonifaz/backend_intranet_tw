@@ -5,6 +5,8 @@
 --   · rol SUPERVISOR / ADMINISTRADOR con un área definida: esa área.  Cualquier otro usuario → p_area = NULL (no tiene menú de Jefatura).
 --   · EXCEPCIÓN (2026-11-18) — área Servicio Técnico o Metrología: manda el ROL. Administrador / Supervisor = Jefatura de esa área; Usuario / Visor =
 --     p_area NULL (menú de campo: OS, u OM en Metrología), aunque el cargo sea "Jefe de …".
+--   · Deja en la variable de sesión @tw_jf_alcance_total (1/0) si el jefe ve TODOS los servicios aunque su área sea Servicio Técnico o Metrología
+--     (rol Administrador). La lee SP_ArmarAlcanceJefaturaMovil; siempre se llama a este SP antes que a ese.
 --   p_sede           sede operativa del usuario (nombre). p_aut_area / p_aut_general: misma regla de SP_ObtenerAutorizacionesSalida (aprobaciones).
 -- Solo lectura. El alcance de los SERVICIOS (área de la RQ) lo arma SP_ArmarAlcanceJefaturaMovil.
 -- ============================================================
@@ -22,6 +24,7 @@ CREATE PROCEDURE SP_ResolverJefaturaMovil(
 BEGIN
     DECLARE v_rol VARCHAR(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
 
+    SET @tw_jf_alcance_total = 0;
     SET p_area = NULL;
     SET p_sede = NULL;
     SET p_aut_area = NULL;
@@ -50,6 +53,12 @@ BEGIN
         SET p_area     = NULL;
         SET p_aut_area = NULL;
     END IF;
+
+    -- Alcance de los servicios (lo lee SP_ArmarAlcanceJefaturaMovil, que se llama justo después con este mismo p_area):
+    --   · Servicio Técnico / Metrología con rol SUPERVISOR → solo los servicios de su área (OS en ST, OM en Metrología).
+    --   · Servicio Técnico / Metrología con rol ADMINISTRADOR → TODOS los servicios, como las demás áreas.
+    --   · Las demás áreas (Gerencia, Operaciones, Administración, TI, SSOMA, Calidad, Comercial) ya ven todo.
+    SET @tw_jf_alcance_total = IF(p_area IN ('servicio_tecnico', 'metrologia') AND IFNULL(v_rol, '') IN ('administrador', 'admin'), 1, 0);
 END$$
 
 DELIMITER ;

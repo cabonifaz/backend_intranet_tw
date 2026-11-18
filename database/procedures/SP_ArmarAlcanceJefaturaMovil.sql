@@ -4,7 +4,9 @@
 -- DROP TEMPORARY TABLE IF EXISTS tmp_jf_alc. Solo lectura.
 --   · Servicio Técnico y Metrología: solo los servicios cuya RQ es de su área (orden_servicio → expediente_digital → requerimiento.id_area
 --     → area_servicio_rq.area_usuario = área del jefe).
---   · Las demás áreas (Operaciones, TI, Gerencia, Comercial…) no tienen área en la RQ: ven TODOS los servicios.
+--     Si el jefe es ADMINISTRADOR (SP_ResolverJefaturaMovil deja @tw_jf_alcance_total = 1), ve TODOS los servicios, como las demás áreas.
+--     (OM = servicios cuya RQ es de Metrología: se filtran igual por el área de la RQ.)
+--   · Las demás áreas (Gerencia, Operaciones, Administración, TI, SSOMA, Calidad, Comercial) no tienen área en la RQ: ven TODOS los servicios.
 --   · p_area NULL (no es jefe) → ningún servicio.
 --   p_id_os NULL → los servicios de HOY (fecha de Lima, UTC-5);  p_id_os dado → solo ese servicio (si está en el alcance), de cualquier fecha.
 -- Lo usan el menú de Jefatura (contadores), el Panel de Campo, la lista de servicios, el detalle, la ruta y el registro del cambio de estado.
@@ -31,6 +33,7 @@ BEGIN
       AND  os.eliminado_en IS NULL
       AND  ((p_id_os IS NULL AND os.fecha_ejecucion = v_hoy) OR os.id_os = p_id_os)
       AND  (p_area NOT IN ('metrologia', 'servicio_tecnico')
+            OR IFNULL(@tw_jf_alcance_total, 0) = 1
             OR EXISTS (SELECT 1
                        FROM   expediente_digital ed
                        JOIN   requerimiento      rq  ON rq.id_requerimiento = ed.id_requerimiento
