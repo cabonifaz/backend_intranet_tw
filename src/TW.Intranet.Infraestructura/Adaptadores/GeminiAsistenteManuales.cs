@@ -52,24 +52,9 @@ public class GeminiAsistenteManuales(HttpClient http, ConfiguracionGemini config
         }, ["documento", "fragmento"])),
     }, ["encontrada", "pasos", "citas"]);
 
-    /// <summary>Esperas antes de reintentar (Gemini responde 500/503 de forma transitoria cuando está saturado): máx. 2 reintentos.</summary>
-    public static readonly TimeSpan[] EsperasReintento = [TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(5)];
-
-    /// <summary>true si el error de Gemini es transitorio (HTTP 500 o 503) y vale la pena reintentar.</summary>
-    public static bool EsTransitorio(string? error) =>
-        error is not null && (error.Contains("(HTTP 503)", StringComparison.Ordinal) || error.Contains("(HTTP 500)", StringComparison.Ordinal));
-
-    private async Task<(string? Texto, string? Error)> GenerarConReintentoAsync(string instruccion, JsonArray partes, JsonObject esquema, CancellationToken ct)
-    {
-        var resultado = await GenerarAsync(instruccion, (JsonArray)partes.DeepClone(), (JsonObject)esquema.DeepClone(), ct);
-        foreach (var espera in EsperasReintento)
-        {
-            if (!EsTransitorio(resultado.Error)) break;
-            await Task.Delay(espera, ct);
-            resultado = await GenerarAsync(instruccion, (JsonArray)partes.DeepClone(), (JsonObject)esquema.DeepClone(), ct);
-        }
-        return resultado;
-    }
+    /// <summary>Los reintentos ante 500/502/503/504 de Gemini ya los hace GeminiClienteBase.GenerarAsync.</summary>
+    private Task<(string? Texto, string? Error)> GenerarConReintentoAsync(string instruccion, JsonArray partes, JsonObject esquema, CancellationToken ct) =>
+        GenerarAsync(instruccion, partes, esquema, ct);
 
     /// <summary>La IA de las órdenes de compra habla de "carga manual": aquí no existe, el mensaje se adapta.</summary>
     private static string Adaptar(string error) =>
