@@ -10,6 +10,8 @@
 --     demora         con demora/incidencia no crítica o pausada (no finalizada)      incidencia  incidente crítico o que detiene (no finalizada)
 --     finalizados    OS finalizadas hoy                       programados total del alcance
 --   Pin: estado del técnico = el de su servicio más urgente (HU-51). lat/lon NULL = el técnico aún no envía posición hoy (el mapa no lo dibuja).
+--     jornada / actividad / actividad_tono / actividad_color = lo mismo que pinta el Mapa Operativo de la intranet: al marcar «Inicio de labores» el técnico sale en
+--     verde («Técnico activo»), en refrigerio naranja, en ruta azul, ejecutando amarillo, etc. (el color lo calcula SP_ArmarSeguimientoOperativo).
 --     Salen los técnicos de los servicios del alcance Y los técnicos de campo con la jornada iniciada hoy sin servicio (estado sin_salir, id_os NULL),
 --     igual que el Mapa Operativo de la intranet (todos para quien ve todo; los del área para el Supervisor de Servicio Técnico / Metrología).
 --   Alertas (tipo): error_critico (ensayo con error crítico aceptado, HU-10: informe_tecnico.error_critico_motivo) · incidente (demora/incidencia que
@@ -133,7 +135,8 @@ proc: BEGIN
     SELECT t.id_usuario AS id_usuario, t.nombre AS tecnico, t.iniciales AS iniciales, t.estado_seg AS estado,
            p.lat AS latitud, p.lon AS longitud,
            IF(p.ts_utc IS NULL, NULL, GREATEST(0, TIMESTAMPDIFF(MINUTE, p.ts_utc, c.ahora_utc))) AS minutos_ubicacion,
-           t.id_os_actual AS id_os, o.numero AS numero_os, o.razon_social AS cliente
+           t.id_os_actual AS id_os, o.numero AS numero_os, o.razon_social AS cliente,
+           t.jornada AS jornada, t.actividad AS actividad, t.actividad_tono AS actividad_tono, t.actividad_color AS actividad_color
     FROM   tmp_sg_tec t
     JOIN   tmp_sg_tf tf ON tf.id_usuario = t.id_usuario
     LEFT JOIN tmp_sg_pos p ON p.id_usuario = t.id_usuario

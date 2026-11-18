@@ -8,9 +8,12 @@ public record PanelCampoKpisDto(int Programados, int EnRuta, int Ejecucion, int 
 /// <summary>
 /// Un pin del mapa por técnico. Estado = el de su servicio más urgente (sin_salir, en_ruta, en_planta, en_ejecucion, con_demora, con_incidente, finalizado).
 /// Latitud/Longitud NULL = el técnico aún no envía posición hoy.
+/// Jornada / Actividad / ActividadTono / ActividadColor: como en el Mapa Operativo de la intranet. Jornada = estado del Reloj marcador (en_labores · en_refrigerio · salio_planta ·
+/// finalizada; null si no inició), Actividad = lo que hace el técnico (texto) y ActividadColor = su color hexadecimal (verde = en labores, naranja = refrigerio…).
 /// </summary>
 public record PanelCampoPinDto(long IdUsuario, string Tecnico, string Iniciales, string Estado, decimal? Latitud, decimal? Longitud, int? MinutosUbicacion,
-                               long? IdOs, string? NumeroOs, string? Cliente);
+                               long? IdOs, string? NumeroOs, string? Cliente,
+                               string? Jornada = null, string? Actividad = null, string? ActividadTono = null, string? ActividadColor = null);
 
 /// <summary>Alerta del panel. Tipo: error_critico · incidente · demora · perdida_contacto · gps_parado · sin_ingreso_post_llegada · sin_iniciar_servicio. Severidad: critica | advertencia.</summary>
 public record PanelCampoAlertaDto(string Clave, string Tipo, string Severidad, string Titulo, string? Detalle, long IdOs, string NumeroOs, string? Cliente,
