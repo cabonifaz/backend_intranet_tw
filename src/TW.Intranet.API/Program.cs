@@ -423,6 +423,16 @@ builder.Services.AddScoped<ObtenerNotificacionesNuevasCasoDeUso>();
 // notificacion.creada sin tocar los SPs que insertan (TiempoReal:Habilitado / IntervaloSegundos)
 builder.Services.AddHostedService<TW.Intranet.API.TiempoReal.NotificacionesTiempoRealWorker>();
 
+// App Mobile — notificaciones push: cada notificación nueva llega también a la bandeja de notificaciones del teléfono (Expo Push → Firebase).
+// Variables (opcionales): PushMovil__Habilitado (true), PushMovil__IntervaloSegundos (4), PushMovil__AccessToken (solo si en expo.dev se activó la seguridad mejorada).
+builder.Services.AddScoped<IPushMovilRepositorio, PushMovilRepositorio>();
+builder.Services.AddScoped<RegistrarDispositivoPushMovilCasoDeUso>();
+builder.Services.AddScoped<QuitarDispositivoPushMovilCasoDeUso>();
+builder.Services.AddScoped<EnviarPushNotificacionesCasoDeUso>();
+builder.Services.AddSingleton(new ConfiguracionPushMovil(builder.Configuration["PushMovil:AccessToken"]?.Trim() ?? ""));
+builder.Services.AddHttpClient<IEnviadorPushMovil, ExpoEnviadorPushMovil>(c => c.Timeout = TimeSpan.FromSeconds(15));
+builder.Services.AddHostedService<TW.Intranet.API.Configuracion.PushNotificacionesWorker>();
+
 // ── INYECCIÓN DE DEPENDENCIAS — Maestros ──────────────────────────────────────
 builder.Services.AddScoped<IMaestrosRepositorio, MaestrosRepositorio>();
 
