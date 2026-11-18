@@ -113,8 +113,8 @@ proc: BEGIN
                        AND EXISTS (SELECT 1 FROM vw_objetivo_visible vv WHERE vv.id_os_equipo = oe.id)
     LEFT JOIN equipo_cliente ec ON ec.id_equipo = oe.id_equipo
     LEFT JOIN suministros    su ON su.id_suministro = ec.id_suministro
-    LEFT JOIN (SELECT i.id_os_equipo, MAX(i.id_ingreso) AS id_ingreso FROM os_equipo_ingreso i GROUP BY i.id_os_equipo) li ON li.id_os_equipo = oe.id
-    LEFT JOIN os_equipo_ingreso ing ON ing.id_ingreso = li.id_ingreso
+    LEFT JOIN (SELECT i.id_os_equipo, MAX(i.id) AS id_ingreso FROM os_equipo_ingreso i WHERE i.eliminado_en IS NULL GROUP BY i.id_os_equipo) li ON li.id_os_equipo = oe.id
+    LEFT JOIN os_equipo_ingreso ing ON ing.id = li.id_ingreso
     WHERE  os.eliminado_en IS NULL
       AND  os.estado IN ('programada', 'en_ruta', 'en_ejecucion', 'pausada', 'reprogramada', 'bloqueada')
       AND  NOT EXISTS (SELECT 1 FROM os_constancia k WHERE k.id_os = os.id_os AND k.cerrada_en IS NOT NULL)
@@ -186,7 +186,8 @@ proc: BEGIN
         LEFT JOIN equipo_cliente ec ON ec.id_equipo = oe.id_equipo
         LEFT JOIN suministros    su ON su.id_suministro = ec.id_suministro
         LEFT JOIN usuario        u  ON u.id_usuario = i.id_usuario
-        WHERE  DATE(CONVERT_TZ(i.ingresado_utc, '+00:00', '-05:00')) = v_hoy
+        WHERE  i.eliminado_en IS NULL
+          AND  DATE(CONVERT_TZ(i.ingresado_utc, '+00:00', '-05:00')) = v_hoy
         ORDER BY i.ingresado_utc DESC
         LIMIT 60;
 
