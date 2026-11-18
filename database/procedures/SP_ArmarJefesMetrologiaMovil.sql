@@ -20,7 +20,9 @@ BEGIN
     WHERE  u.eliminado_en IS NULL AND u.estado = 'activo'
       AND  IF(u.cargo LIKE 'jefe\_%',
               COALESCE(NULLIF(u.area, ''), NULLIF(c.String3, ''), SUBSTRING(u.cargo, 6)),
-              IF(u.rol_sistema IN ('supervisor', 'administrador') AND IFNULL(u.area, '') <> '', u.area, NULL)) = 'metrologia';
+              IF(u.rol_sistema IN ('supervisor', 'administrador') AND IFNULL(u.area, '') <> '', u.area, NULL)) = 'metrologia'
+      -- en Metrología manda el ROL: solo Administrador / Supervisor tienen Jefatura (Usuario / Visor hacen las OM), igual que SP_ResolverJefaturaMovil
+      AND  u.rol_sistema IN ('supervisor', 'administrador');
 END$$
 
 DELIMITER ;
