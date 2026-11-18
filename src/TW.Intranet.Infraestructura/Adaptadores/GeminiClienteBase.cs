@@ -27,6 +27,13 @@ public abstract class GeminiClienteBase(HttpClient http, ConfiguracionGemini con
 
     // ══════════════════════ Llamada a Gemini ══════════════════════
 
+    /// <summary>Esperas antes de reintentar un error transitorio de Gemini (máx. 2 reintentos).</summary>
+    private static readonly TimeSpan[] EsperasReintento = [TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(5)];
+
+    private static bool EsTransitorio(HttpStatusCode estado) =>
+        estado is HttpStatusCode.InternalServerError or HttpStatusCode.BadGateway
+               or HttpStatusCode.ServiceUnavailable or HttpStatusCode.GatewayTimeout;
+
     protected async Task<(string? Texto, string? Error)> GenerarAsync(string instruccion, JsonArray partes, JsonObject esquema, CancellationToken ct)
     {
         var configGeneracion = new JsonObject
@@ -56,15 +63,27 @@ public abstract class GeminiClienteBase(HttpClient http, ConfiguracionGemini con
 
         try
         {
-            using var solicitud = new HttpRequestMessage(HttpMethod.Post,
-                $"v1beta/models/{Uri.EscapeDataString(configuracion.Modelo)}:generateContent")
+            // Gemini responde 500/502/503/504 de forma transitoria cuando está saturado: se reintenta antes de mostrar el error.
+            HttpResponseMessage respuesta;
+            string texto;
+            var intento = 0;
+            while (true)
             {
-                Content = new StringContent(json, Encoding.UTF8, "application/json"),
-            };
-            solicitud.Headers.Add("x-goog-api-key", configuracion.ApiKey);
+                using var solicitud = new HttpRequestMessage(HttpMethod.Post,
+                    $"v1beta/models/{Uri.EscapeDataString(configuracion.Modelo)}:generateContent")
+                {
+                    Content = new StringContent(json, Encoding.UTF8, "application/json"),
+                };
+                solicitud.Headers.Add("x-goog-api-key", configuracion.ApiKey);
 
-            using var respuesta = await http.SendAsync(solicitud, ct);
-            var texto = await respuesta.Content.ReadAsStringAsync(ct);
+                respuesta = await http.SendAsync(solicitud, ct);
+                texto = await respuesta.Content.ReadAsStringAsync(ct);
+
+                if (!EsTransitorio(respuesta.StatusCode) || intento >= EsperasReintento.Length) break;
+                respuesta.Dispose();
+                await Task.Delay(EsperasReintento[intento++], ct);
+            }
+            using var respuestaFinal = respuesta;
 
             if (!respuesta.IsSuccessStatusCode)
                 return (null, respuesta.StatusCode switch
