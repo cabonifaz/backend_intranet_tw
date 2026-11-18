@@ -1,10 +1,12 @@
--- Perfil y alcance por ÁREA y ROL: Servicio Técnico/Metrología (Administrador/Supervisor = Jefatura, Usuario/Visor = campo; Administrador ve todo, Supervisor solo su área) y las demás áreas ven todo. 3 SPs + verificación final. Ejecutar completo en DBeaver (Alt+X, "No" al aviso). Idempotente.
+-- Perfil y alcance por ÁREA y ROL: Servicio Técnico/Metrología (Administrador/Supervisor = Jefatura, Usuario/Visor = campo; Administrador ve todo, Supervisor solo su área); las demás áreas, cualquier rol = Jefatura y ven todo. 3 SPs + verificación final. Ejecutar completo en DBeaver (Alt+X, "No" al aviso). Idempotente.
 
 -- ============================================================
 -- SP_ResolverJefaturaMovil  (App Mobile HU-28 / HU-29 / HU-30 — apoyo, NO es un endpoint)
 -- Resuelve UNA sola vez quién es el jefe y de qué área, para el menú de Jefatura y las pantallas del Panel de Campo / Seguimiento del servicio.
 --   · cargo "Jefe de …" (CARGO_USUARIO jefe_*): su área sale de su ficha (usuario.area) o, si no la tiene, del catálogo del cargo (String3).
---   · rol SUPERVISOR / ADMINISTRADOR con un área definida: esa área.  Cualquier otro usuario → p_area = NULL (no tiene menú de Jefatura).
+--   · cualquier usuario con un ÁREA definida que NO sea Servicio Técnico ni Metrología (Gerencia, Operaciones, Administración, TI, SSOMA, Calidad,
+--     Comercial…): esa área, con CUALQUIER rol (Administrador, Supervisor, Usuario o Visor) — por descarte van a Jefatura (2026-11-18).
+--     Un usuario sin área y sin cargo "Jefe de …" → p_area = NULL (menú de campo).
 --   · EXCEPCIÓN (2026-11-18) — área Servicio Técnico o Metrología: manda el ROL. Administrador / Supervisor = Jefatura de esa área; Usuario / Visor =
 --     p_area NULL (menú de campo: OS, u OM en Metrología), aunque el cargo sea "Jefe de …".
 --   · Deja en la variable de sesión @tw_jf_alcance_total (1/0) si el jefe ve TODOS los servicios aunque su área sea Servicio Técnico o Metrología
@@ -35,7 +37,7 @@ BEGIN
 
     SELECT IF(u.cargo LIKE 'jefe\_%',
               COALESCE(NULLIF(u.area, ''), NULLIF(c.String3, ''), SUBSTRING(u.cargo, 6)),
-              IF(u.rol_sistema IN ('supervisor', 'administrador') AND IFNULL(u.area, '') <> '', u.area, NULL)),
+              NULLIF(u.area, '')),
            s.String1,
            COALESCE(IF(c.String2 LIKE 'jefe\_%' AND c.String3 IN ('servicio_tecnico', 'metrologia'), c.String3, NULL),
                     IF(u.rol_sistema = 'supervisor' AND u.area = 'metrologia', 'metrologia', NULL)),
