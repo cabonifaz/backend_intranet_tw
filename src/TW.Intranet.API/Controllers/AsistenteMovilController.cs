@@ -25,6 +25,7 @@ public class AsistenteMovilController(
     GuardarAsistenteMovilCasoDeUso           guardar,
     ObtenerGuardadoAsistenteMovilCasoDeUso   obtenerGuardado,
     EliminarGuardadoAsistenteMovilCasoDeUso  eliminarGuardado,
+    ConversarAsistenteMovilCasoDeUso         conversar,
     ILogger<AsistenteMovilController>        logger) : ControladorAppMovil(logger)
 {
     /// <summary>Margen sobre el tope del audio para el formulario multipart (cabeceras y límites).</summary>
@@ -58,6 +59,15 @@ public class AsistenteMovilController(
     [RequestSizeLimit(4 * 1024)]
     public async Task<IActionResult> Consultar([FromBody] PeticionConsultaAsistenteMovilDto? d, CancellationToken ct)
         => Responder(await consultar.EjecutarAsync(IdUsuarioActual, d, ct));
+
+    /// <summary>
+    /// Conversación general: no exige elegir un equipo. Responde con lo que el sistema sabe del usuario (técnico: sus servicios, distancia y llegada a la planta, equipos,
+    /// viáticos y procedimientos; jefatura: también los movimientos de los técnicos y los equipos recepcionados) y con consultas básicas. Límite: 20 por minuto.
+    /// </summary>
+    [HttpPost("chat")]
+    [RequestSizeLimit(16 * 1024)]
+    public async Task<IActionResult> Chat([FromBody] PeticionChatAsistenteMovilDto? d, CancellationToken ct)
+        => Responder(await conversar.EjecutarAsync(IdUsuarioActual, d, ct));
 
     /// <summary>Reabre una consulta reciente con su respuesta. Solo del propio técnico.</summary>
     [HttpGet("consultas/{idConsulta:long}")]

@@ -325,6 +325,7 @@ builder.Services.AddScoped<IAsistenteMovilRepositorio, AsistenteMovilRepositorio
 builder.Services.AddScoped<ObtenerInicioAsistenteMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerEquiposAsistenteMovilCasoDeUso>();
 builder.Services.AddScoped<ConsultarAsistenteMovilCasoDeUso>();
+builder.Services.AddScoped<ConversarAsistenteMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerConsultaAsistenteMovilCasoDeUso>();
 builder.Services.AddScoped<ValorarConsultaAsistenteMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerFuenteAsistenteMovilCasoDeUso>();

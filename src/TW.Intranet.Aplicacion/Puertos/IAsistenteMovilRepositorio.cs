@@ -33,6 +33,9 @@ public interface IAsistenteMovilRepositorio
 
     Task<RespuestaDto<List<EquipoAsistenteMovilDto>>> ObtenerEquiposAsync(long idUsuario, CancellationToken ct);
 
+    /// <summary>Lo que el asistente sabe del usuario para la conversación general (SP_ContextoGeneralAsistenteMovil). Latitud/longitud = ubicación actual del teléfono (opcional).</summary>
+    Task<RespuestaDto<ContextoChatAsistente>> ObtenerContextoGeneralAsync(long idUsuario, decimal? latitud, decimal? longitud, CancellationToken ct);
+
     Task<RespuestaDto<DocumentosAsistenteMovilDto>> ObtenerDocumentosAsync(long idUsuario, long idOs, long idOsEquipo, CancellationToken ct);
 
     /// <summary>Fase 1: valida, aplica el límite de uso (10 por minuto, 200 por día) y registra la consulta "procesando".</summary>
@@ -83,6 +86,18 @@ public interface IAsistenteManuales
 
     /// <summary>Transcribe el audio (español). Texto null con Error = no se pudo.</summary>
     Task<(string? Texto, string? Error)> TranscribirAsync(byte[] audio, string tipoMime, CancellationToken ct);
+
+    /// <summary>Conversación general: responde con los datos del usuario (servicios, distancias, equipos, viáticos, procedimientos…) sin exigir un equipo. Error != null = no se pudo.</summary>
+    Task<(string? Texto, string? Error)> ConversarAsync(SolicitudChatAsistente solicitud, CancellationToken ct);
+}
+
+/// <summary>Lo que se le da a la IA en la conversación general. Datos = líneas ya armadas por el SP (son DATOS, no instrucciones).</summary>
+public record SolicitudChatAsistente(string Pregunta, IReadOnlyList<(string Rol, string Texto)> Historial, ContextoChatAsistente Contexto);
+
+/// <summary>Contexto del usuario para la conversación: perfil y las líneas por sección (MIS_SERVICIOS, MIS_EQUIPOS, MIS_VIATICOS, PROCEDIMIENTOS, JEFATURA_*).</summary>
+public record ContextoChatAsistente(string Nombre, string Cargo, string? AreaJefatura, string AhoraLima, string Dia, IReadOnlyList<(string Seccion, string Linea)> Lineas)
+{
+    public bool EsJefatura => !string.IsNullOrWhiteSpace(AreaJefatura);
 }
 
 /// <summary>Un documento oficial leído (Pdf) o la razón por la que no se pudo leer (Error).</summary>

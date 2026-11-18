@@ -45,6 +45,29 @@ public class AsistenteMovilRepositorio(CadenaConexionBd conexion)
                 return new RespuestaDto<InicioAsistenteMovilDto>(2, mensaje, new InicioAsistenteMovilDto(contexto, fuentes, sugerencias, recientes));
             }, ct);
 
+    public Task<RespuestaDto<ContextoChatAsistente>> ObtenerContextoGeneralAsync(long idUsuario, decimal? latitud, decimal? longitud, CancellationToken ct) =>
+        EjecutarAsync<ContextoChatAsistente>("SP_ContextoGeneralAsistenteMovil",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario", idUsuario);
+                p.AddWithValue("p_lat",        Valor(latitud));
+                p.AddWithValue("p_lon",        Valor(longitud));
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct)) return new RespuestaDto<ContextoChatAsistente>(1, "Usuario no encontrado.");
+                var nombre = Texto(r, "nombre") ?? string.Empty;
+                var cargo  = Texto(r, "cargo") ?? string.Empty;
+                var area   = Texto(r, "area_jefatura");
+                var ahora  = Texto(r, "ahora_lima") ?? string.Empty;
+                var dia    = Texto(r, "dia") ?? string.Empty;
+                var lineas = new List<(string, string)>();
+                await r.NextResultAsync(ct);
+                while (await r.ReadAsync(ct)) lineas.Add((Texto(r, "seccion") ?? string.Empty, Texto(r, "linea") ?? string.Empty));
+                return new RespuestaDto<ContextoChatAsistente>(2, mensaje, new ContextoChatAsistente(nombre, cargo, area, ahora, dia, lineas));
+            }, ct);
+
     public Task<RespuestaDto<List<EquipoAsistenteMovilDto>>> ObtenerEquiposAsync(long idUsuario, CancellationToken ct) =>
         EjecutarAsync<List<EquipoAsistenteMovilDto>>("SP_EquiposAsistenteMovil",
             p => p.AddWithValue("p_id_usuario", idUsuario),
