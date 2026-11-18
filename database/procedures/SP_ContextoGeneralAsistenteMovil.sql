@@ -27,15 +27,11 @@ proc: BEGIN
     DECLARE v_ahora       DATETIME;
     DECLARE v_vel         DECIMAL(18,6) DEFAULT 30;
 
-    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    -- Si UNA sección falla (p. ej. un dato que no se pudo leer) el chat sigue con las demás: el error queda como línea AVISO_SISTEMA para diagnóstico
+    DECLARE CONTINUE HANDLER FOR SQLEXCEPTION
     BEGIN
         GET DIAGNOSTICS CONDITION 1 @err_msg = MESSAGE_TEXT, @err_code = MYSQL_ERRNO;
-        DROP TEMPORARY TABLE IF EXISTS tmp_ctx_ia;
-        DROP TEMPORARY TABLE IF EXISTS tmp_jf_alc;
-        DROP TEMPORARY TABLE IF EXISTS tmp_viat_mov;
-        DROP TEMPORARY TABLE IF EXISTS tmp_gasto_mov;
-        CALL SP_LimpiarSeguimientoOperativo();
-        SELECT 3 AS IdTipoMensaje, CONCAT('[MySQL ', @err_code, '] ', @err_msg) AS Mensaje;
+        INSERT INTO tmp_ctx_ia (seccion, linea) VALUES ('AVISO_SISTEMA', LEFT(CONCAT('una parte de los datos no se pudo leer: [MySQL ', @err_code, '] ', @err_msg), 700));
     END;
 
     IF NOT EXISTS (SELECT 1 FROM usuario WHERE id_usuario = p_id_usuario AND eliminado_en IS NULL AND estado = 'activo') THEN
@@ -103,7 +99,7 @@ proc: BEGIN
                CONCAT('serie ', NULLIF(TRIM(ec.num_serie), '')),
                CONCAT('código ', NULLIF(ec.codigo_tw, '')),
                CONCAT('ejecución: ', IFNULL(oe.estado_ejecucion, 'por iniciar')),
-               IF(ing.id_ingreso IS NULL, 'aún sin registrar el ingreso',
+               IF(ing.id IS NULL, 'aún sin registrar el ingreso',
                   CONCAT('ingreso registrado ', DATE_FORMAT(CONVERT_TZ(ing.ingresado_utc, '+00:00', '-05:00'), '%d/%m %H:%i'), ' como ',
                          CASE ing.estado_ingreso WHEN 'operativo' THEN 'operativo' WHEN 'con_observaciones' THEN 'operativo con observaciones' ELSE 'inoperativo' END,
                          IF(NULLIF(TRIM(ing.observacion), '') IS NULL, '', CONCAT(' (', LEFT(ing.observacion, 120), ')'))))
