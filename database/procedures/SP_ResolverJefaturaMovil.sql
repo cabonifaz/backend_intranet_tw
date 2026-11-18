@@ -61,6 +61,11 @@ BEGIN
     --   · Servicio Técnico / Metrología con rol ADMINISTRADOR → TODOS los servicios, como las demás áreas.
     --   · Las demás áreas (Gerencia, Operaciones, Administración, TI, SSOMA, Calidad, Comercial) ya ven todo.
     SET @tw_jf_alcance_total = IF(p_area IN ('servicio_tecnico', 'metrologia') AND IFNULL(v_rol, '') IN ('administrador', 'admin'), 1, 0);
+
+    -- Aprobaciones (p_aut_area / p_aut_general): la MISMA regla Área + Rol. General = ve las de todas las áreas; p_aut_area = Supervisor de ST / Metrología (solo la suya).
+    SET p_aut_area    = IF(p_area IN ('servicio_tecnico', 'metrologia') AND @tw_jf_alcance_total = 0, p_area, NULL);
+    SET p_aut_general = IF((p_area IS NOT NULL AND (p_area NOT IN ('servicio_tecnico', 'metrologia') OR @tw_jf_alcance_total = 1))
+                           OR IFNULL(v_rol, '') IN ('administrador', 'admin'), 1, 0);
 END$$
 
 DELIMITER ;

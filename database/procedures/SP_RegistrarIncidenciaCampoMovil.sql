@@ -99,12 +99,14 @@ proc: BEGIN
     IF v_estado = 'escalada' THEN
         SET v_texto = LEFT(CONCAT(v_nom_jefe, ' escaló una incidencia en ', v_num_os, ': ', v_tipo_txt, ' · severidad ', v_nivel_txt, ' · ',
                                   IF(v_impacto = 'detiene', 'detiene el servicio', 'retrasa el servicio'), '. ', v_desc), 500);
+        -- Regla Área + Rol (SP_ArmarAprobadoresOsMovil)
+        CALL SP_ArmarAprobadoresOsMovil(p_id_os);
         INSERT INTO notificacion (id_usuario_destino, id_canal, titulo, cuerpo, entidad_tipo, id_entidad, fecha_creacion, creado_por)
-        SELECT u.id_usuario, 5, CONCAT('Incidencia escalada: ', LEFT(v_tipo_txt, 60)), v_texto, 'orden_servicio', p_id_os, NOW(), p_id_usuario
-        FROM   usuario u
-        WHERE  u.eliminado_en IS NULL AND u.estado = 'activo' AND u.id_usuario <> p_id_usuario
-          AND  (u.rol_sistema IN ('administrador', 'admin') OR u.cargo = 'jefe_operaciones');
+        SELECT a.id_usuario, 5, CONCAT('Incidencia escalada: ', LEFT(v_tipo_txt, 60)), v_texto, 'orden_servicio', p_id_os, NOW(), p_id_usuario
+        FROM   tmp_aprobadores a
+        WHERE  a.id_usuario <> p_id_usuario;
         SET v_notif = ROW_COUNT();
+        DROP TEMPORARY TABLE IF EXISTS tmp_aprobadores;
     END IF;
 
     INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion, id_usuario, registrado_en, metadata)

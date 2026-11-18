@@ -224,14 +224,14 @@ proc: BEGIN
             -- Aviso para aprobar el registro: supervisores/administradores del área del técnico y su jefe; si no hay, administradores
             SET v_texto = LEFT(CONCAT(v_nombre_tec, ' registró un equipo nuevo en la O/S ', v_numero_os, ' (N/S ', v_serie, ' · ', v_marca, ' ', v_modelo,
                                       '). Falta aprobar el registro y asignar su COD TW.'), 500);
+            -- Regla Área + Rol (SP_ArmarAprobadoresOsMovil)
+            CALL SP_ArmarAprobadoresOsMovil(p_id_os);
             INSERT INTO notificacion (id_usuario_destino, id_canal, titulo, cuerpo, entidad_tipo, id_entidad, fecha_creacion, creado_por)
-            SELECT u.id_usuario, 5, 'Equipo nuevo por aprobar', v_texto, 'equipo_cliente', v_id_equipo, NOW(), p_id_usuario
-            FROM   usuario u
-            WHERE  u.eliminado_en IS NULL AND u.estado = 'activo' AND u.id_usuario <> p_id_usuario
-              AND  IFNULL(v_area, '') <> ''
-              AND  ((u.area = v_area AND u.rol_sistema IN ('supervisor', 'administrador'))
-                    OR u.cargo = CONCAT('jefe_', v_area));
+            SELECT a.id_usuario, 5, 'Equipo nuevo por aprobar', v_texto, 'equipo_cliente', v_id_equipo, NOW(), p_id_usuario
+            FROM   tmp_aprobadores a
+            WHERE  a.id_usuario <> p_id_usuario;
             SET v_notif = ROW_COUNT();
+            DROP TEMPORARY TABLE IF EXISTS tmp_aprobadores;
             IF v_notif = 0 THEN
                 INSERT INTO notificacion (id_usuario_destino, id_canal, titulo, cuerpo, entidad_tipo, id_entidad, fecha_creacion, creado_por)
                 SELECT u.id_usuario, 5, 'Equipo nuevo por aprobar', v_texto, 'equipo_cliente', v_id_equipo, NOW(), p_id_usuario

@@ -44,15 +44,8 @@ proc: BEGIN
         LEAVE proc;
     END IF;
 
-    SELECT COALESCE(IF(c.String2 LIKE 'jefe\_%' AND c.String3 IN ('servicio_tecnico', 'metrologia'), c.String3, NULL),
-                    IF(u.rol_sistema = 'supervisor' AND u.area = 'metrologia', 'metrologia', NULL)),
-           (u.cargo IN ('jefe_operaciones', 'coordinador_operaciones') OR u.rol_sistema IN ('administrador', 'admin')
-            OR (u.rol_sistema = 'supervisor' AND u.area = 'operaciones'))
-    INTO   v_area_jefe, v_general
-    FROM   usuario u
-    LEFT JOIN tabla_maestra c ON c.IdMaestro = 80 AND c.IdEmpresa = 1 AND c.String2 = u.cargo
-    WHERE  u.id_usuario = p_id_usuario AND u.eliminado_en IS NULL AND u.estado = 'activo'
-    LIMIT 1;
+    -- Regla Área + Rol (SP_ResolverAprobadorMovil)
+    CALL SP_ResolverAprobadorMovil(p_id_usuario, v_area_jefe, v_general);
     SET v_general = IFNULL(v_general, 0);
 
     IF v_tipo = 'evidencia' THEN

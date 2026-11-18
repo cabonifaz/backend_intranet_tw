@@ -129,7 +129,17 @@ proc: BEGIN
     CALL SP_ContactoEncargadoEnsayoMovil(p_id_os, v_area, v_id_enc, v_nom_enc, v_car_enc, v_tel_enc);
     SELECT TRIM(CONCAT(IFNULL(u.nombre, ''), ' ', IFNULL(u.apellido, ''))) INTO v_nombre_tec FROM usuario u WHERE u.id_usuario = p_id_usuario LIMIT 1;
     SET v_texto = LEFT(CONCAT(v_nombre_tec, ' aceptó a la fuerza la evidencia «', v_codigo, '» de ', v_nombre, ' (', v_num_os, '), rechazada por la IA. Motivo: ', v_motivo), 500);
-    IF v_id_enc IS NOT NULL AND v_id_enc <> p_id_usuario THEN
+    -- Regla Área + Rol (SP_ArmarAprobadoresOsMovil): ven y reciben el aviso las áreas que ven todo y el Supervisor del área de la OS
+    CALL SP_ArmarAprobadoresOsMovil(p_id_os);
+    INSERT INTO notificacion (id_usuario_destino, id_canal, titulo, cuerpo, entidad_tipo, id_entidad, fecha_creacion, creado_por)
+    SELECT a.id_usuario, 5, 'Evidencia forzada', v_texto, 'orden_servicio', p_id_os, NOW(), p_id_usuario
+    FROM   tmp_aprobadores a
+    WHERE  a.id_usuario <> p_id_usuario;
+    SET v_notif = ROW_COUNT();
+    DROP TEMPORARY TABLE IF EXISTS tmp_aprobadores;
+    IF v_notif > 0 THEN
+        SET v_notif = v_notif;
+    ELSEIF v_id_enc IS NOT NULL AND v_id_enc <> p_id_usuario THEN
         INSERT INTO notificacion (id_usuario_destino, id_canal, titulo, cuerpo, entidad_tipo, id_entidad, fecha_creacion, creado_por)
         VALUES (v_id_enc, 5, 'Evidencia forzada', v_texto, 'orden_servicio', p_id_os, NOW(), p_id_usuario);
         SET v_notif = 1;

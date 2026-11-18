@@ -227,13 +227,14 @@ proc: BEGIN
                                   v_motivo, ' · ', IFNULL(v_tecnico, ''),
                                   IF(v_diferida = 1, CONCAT(' · sin conexión, reportada ', TIME_FORMAT(v_registro, '%H:%i')), '')), 400);
 
+        -- Regla Área + Rol (SP_ArmarAprobadoresOsMovil): Operaciones y las demás áreas (cualquier rol), Administradores y el Supervisor del área de la OS
+        CALL SP_ArmarAprobadoresOsMovil(p_id_os);
         INSERT INTO notificacion (id_usuario_destino, id_canal, titulo, cuerpo, entidad_tipo, id_entidad, fecha_creacion, creado_por)
-        SELECT u.id_usuario, 5, 'Demora en ruta', v_texto, 'orden_servicio', p_id_os, NOW(), p_id_usuario
-        FROM   usuario u
-        WHERE  u.eliminado_en IS NULL AND u.estado = 'activo' AND u.id_usuario <> p_id_usuario
-          AND  ((u.area = 'operaciones' AND u.rol_sistema IN ('supervisor', 'administrador'))
-                OR u.cargo IN ('jefe_operaciones', 'coordinador_operaciones'));
+        SELECT a.id_usuario, 5, 'Demora en ruta', v_texto, 'orden_servicio', p_id_os, NOW(), p_id_usuario
+        FROM   tmp_aprobadores a
+        WHERE  a.id_usuario <> p_id_usuario;
         SET v_notif = ROW_COUNT();
+        DROP TEMPORARY TABLE IF EXISTS tmp_aprobadores;
 
         -- Respaldo: si no hay nadie en Operaciones, los administradores
         IF v_notif = 0 THEN

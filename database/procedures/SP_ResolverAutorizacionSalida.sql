@@ -57,6 +57,10 @@ proc: BEGIN
     WHERE  u.id_usuario = p_id_jefe AND u.eliminado_en IS NULL AND u.estado = 'activo'
     LIMIT 1;
 
+    -- Regla Área + Rol (SP_ResolverAprobadorMovil): reemplaza el área / alcance general calculado por el cargo
+    IF v_jefe IS NOT NULL THEN
+        CALL SP_ResolverAprobadorMovil(p_id_jefe, v_area_jefe, v_general);
+    END IF;
     IF v_jefe IS NULL OR (v_area_jefe IS NULL AND v_general = 0) THEN
         SELECT 1 AS IdTipoMensaje, 'Solo el encargado del área (Servicio Técnico o Metrología) puede dar el visto bueno de salida.' AS Mensaje;
         LEAVE proc;
