@@ -20,6 +20,16 @@ PREPARE st FROM @sql; EXECUTE st; DEALLOCATE PREPARE st;
 --   - Mismo acceso que los ensayos (SP_ContextoEnsayoMovil). p_detalle = el error reportado (hasta 300 caracteres).
 -- Resultados: 1 mensaje; 2 (nombre, cargo, telefono, area). Sin encargado con teléfono responde la regla de negocio.
 -- ============================================================
+
+-- Regenerado (2026-11-19) con las versiones ACTUALES de cada SP (incluye la regla Área + Rol en los avisos de la incidencia escalada).
+
+-- ============================================================
+-- SP_RegistrarLlamadaEnsayoMovil  (App Mobile HU-10 — "Llamar" al encargado ante un error crítico · escritura)
+-- El técnico llama al encargado del área (según la RQ) para comunicarle el error en la calibración. Se REGISTRA la llamada en el ensayo (hora y error
+-- reportado) en auditoria_evento, y se devuelve a quién llamar. La llamada en sí la hace el teléfono; aquí solo queda constancia.
+--   - Mismo acceso que los ensayos (SP_ContextoEnsayoMovil). p_detalle = el error reportado (hasta 300 caracteres).
+-- Resultados: 1 mensaje; 2 (nombre, cargo, telefono, area). Sin encargado con teléfono responde la regla de negocio.
+-- ============================================================
 DROP PROCEDURE IF EXISTS SP_RegistrarLlamadaEnsayoMovil;
 
 DELIMITER $$
@@ -414,12 +424,14 @@ proc: BEGIN
     IF v_estado = 'escalada' THEN
         SET v_texto = LEFT(CONCAT(v_nom_jefe, ' escaló una incidencia en ', v_num_os, ': ', v_tipo_txt, ' · severidad ', v_nivel_txt, ' · ',
                                   IF(v_impacto = 'detiene', 'detiene el servicio', 'retrasa el servicio'), '. ', v_desc), 500);
+        -- Regla Área + Rol (SP_ArmarAprobadoresOsMovil)
+        CALL SP_ArmarAprobadoresOsMovil(p_id_os);
         INSERT INTO notificacion (id_usuario_destino, id_canal, titulo, cuerpo, entidad_tipo, id_entidad, fecha_creacion, creado_por)
-        SELECT u.id_usuario, 5, CONCAT('Incidencia escalada: ', LEFT(v_tipo_txt, 60)), v_texto, 'orden_servicio', p_id_os, NOW(), p_id_usuario
-        FROM   usuario u
-        WHERE  u.eliminado_en IS NULL AND u.estado = 'activo' AND u.id_usuario <> p_id_usuario
-          AND  (u.rol_sistema IN ('administrador', 'admin') OR u.cargo = 'jefe_operaciones');
+        SELECT a.id_usuario, 5, CONCAT('Incidencia escalada: ', LEFT(v_tipo_txt, 60)), v_texto, 'orden_servicio', p_id_os, NOW(), p_id_usuario
+        FROM   tmp_aprobadores a
+        WHERE  a.id_usuario <> p_id_usuario;
         SET v_notif = ROW_COUNT();
+        DROP TEMPORARY TABLE IF EXISTS tmp_aprobadores;
     END IF;
 
     INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion, id_usuario, registrado_en, metadata)
@@ -689,3 +701,5 @@ proc: BEGIN
 END$$
 
 DELIMITER ;
+
+SELECT 'Procedimientos HU-32 (deben ser 6)' AS verificacion, COUNT(*) AS valor FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA = DATABASE() AND ROUTINE_NAME IN ('SP_RegistrarLlamadaEnsayoMovil','SP_ObtenerAlertaCampoMovil','SP_AccionAlertaCampoMovil','SP_RegistrarIncidenciaCampoMovil','SP_ObtenerTecnicosReasignacionMovil','SP_ReasignarTecnicoMovil');
