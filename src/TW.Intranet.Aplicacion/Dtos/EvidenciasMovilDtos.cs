@@ -57,7 +57,11 @@ public record EvidenciaMovilDto(
     JsonElement? ResultadoIa,
     bool         TieneCuadro);
 
-public record EvidenciasMovilDto(CabeceraEvidenciasMovilDto Cabecera, List<EvidenciaMovilDto> Evidencias);
+/// <summary>Una foto adicional (extra opcional del servicio): no cuenta en las 9 ni pasa por la IA. Numero = 1, 2, 3… Hora de Lima.</summary>
+public record AdicionalEvidenciaMovilDto(long IdEvidencia, int Numero, DateTime? CapturadaEn);
+
+/// <summary>El panel: la cabecera, las 9 evidencias y las fotos adicionales (0 a 20, aparte del avance).</summary>
+public record EvidenciasMovilDto(CabeceraEvidenciasMovilDto Cabecera, List<EvidenciaMovilDto> Evidencias, List<AdicionalEvidenciaMovilDto> Adicionales);
 
 /// <summary>Resultado de una captura. Estado: aprobada | rechazada | omitida. Coincide = la placa o el QR corresponden al equipo (null si no se pudo comparar).</summary>
 public record ResultadoEvidenciaMovilDto(

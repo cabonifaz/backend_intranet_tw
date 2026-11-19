@@ -311,6 +311,7 @@ builder.Services.AddScoped<RegistrarLlamadaEnsayoMovilCasoDeUso>();
 builder.Services.AddScoped<IEvidenciasMovilRepositorio, EvidenciasMovilRepositorio>();
 builder.Services.AddScoped<ObtenerEvidenciasMovilCasoDeUso>();
 builder.Services.AddScoped<RegistrarEvidenciaMovilCasoDeUso>();
+builder.Services.AddScoped<QuitarEvidenciaAdicionalMovilCasoDeUso>();
 builder.Services.AddScoped<ForzarEvidenciaMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerArchivoEvidenciaMovilCasoDeUso>();
 // App Mobile HU-15 / HU-16 — cabecera del informe (Datos · Detalle Serv. · Observación y pruebas) y Hard Stop de cierre del trabajo en el equipo

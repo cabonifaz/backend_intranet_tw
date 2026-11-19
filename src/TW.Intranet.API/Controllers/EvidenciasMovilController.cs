@@ -15,6 +15,7 @@ public class EvidenciasMovilController(
     ObtenerEvidenciasMovilCasoDeUso          obtener,
     RegistrarEvidenciaMovilCasoDeUso         registrar,
     ForzarEvidenciaMovilCasoDeUso            forzar,
+    QuitarEvidenciaAdicionalMovilCasoDeUso   quitarAdicional,
     ObtenerArchivoEvidenciaMovilCasoDeUso    archivo,
     ILogger<EvidenciasMovilController>       logger) : ControladorAppMovil(logger)
 {
@@ -66,6 +67,11 @@ public class EvidenciasMovilController(
     [RequestSizeLimit(4 * 1024)]
     public async Task<IActionResult> Forzar(long idOs, long idOsEquipo, long idEvidencia, [FromBody] PeticionForzarEvidenciaMovilDto? d, CancellationToken ct)
         => Responder(await forzar.EjecutarAsync(IdUsuarioActual, idOs, idOsEquipo, idEvidencia, d, ct));
+
+    /// <summary>Quita una foto ADICIONAL (las extras opcionales; las 9 del panel no se quitan). Solo con el equipo en ejecución. Devuelve el panel actualizado.</summary>
+    [HttpDelete("adicionales/{idEvidencia:long}")]
+    public async Task<IActionResult> QuitarAdicional(long idOs, long idOsEquipo, long idEvidencia, CancellationToken ct)
+        => Responder(await quitarAdicional.EjecutarAsync(IdUsuarioActual, idOs, idOsEquipo, idEvidencia, ct));
 
     /// <summary>El archivo de una evidencia (foto, video o, con ?cuadro=true, el cuadro del video). Solo de una OS del técnico.</summary>
     [HttpGet("{idEvidencia:long}/archivo")]
