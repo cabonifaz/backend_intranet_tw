@@ -17,6 +17,7 @@ public class InformeEquipoMovilController(
     SubirFotoFallaMovilCasoDeUso            subirFoto,
     ValidarCierreEquipoMovilCasoDeUso       validarCierre,
     GenerarInformeEquipoMovilCasoDeUso      generar,
+    GenerarPreInformeMovilCasoDeUso         preInforme,
     ILogger<InformeEquipoMovilController>   logger) : ControladorAppMovil(logger)
 {
     private const long TamanoMaximoPeticionFoto = 8 * 1024 * 1024;
@@ -46,6 +47,19 @@ public class InformeEquipoMovilController(
     [RequestSizeLimit(64 * 1024)]
     public async Task<IActionResult> Guardar(long idOs, long idOsEquipo, [FromBody] GuardarCabeceraInformeMovilDto? d, CancellationToken ct)
         => Responder(await guardar.EjecutarAsync(IdUsuarioActual, idOs, idOsEquipo, d, ct));
+
+    /// <summary>
+    /// PRE-INFORME: PDF de la cabecera del informe (lo ya guardado) con un espacio para la firma del encargado de planta, para imprimirlo y dárselo al cliente. Solo con la cabecera
+    /// completa; no asigna el N° de informe ni cambia nada. Si falta algo responde 400 con lo que falta.
+    /// </summary>
+    [HttpGet("cabecera-informe/pdf")]
+    public async Task<IActionResult> PreInformePdf(long idOs, long idOsEquipo, CancellationToken ct)
+    {
+        var r = await preInforme.EjecutarAsync(IdUsuarioActual, idOs, idOsEquipo, ct);
+        if (r.IdTipoMensaje != 2 || r.Datos is null)
+            return r.IdTipoMensaje == 1 ? BadRequest(new RespuestaDto<object>(1, r.Mensaje)) : StatusCode(500, new RespuestaDto<object>(3, r.Mensaje));
+        return File(r.Datos, "application/pdf", $"pre-informe-{idOs}-{idOsEquipo}.pdf");
+    }
 
     /// <summary>Foto de una falla (JPEG de la cámara de la app). Devuelve su id: se envía en "fotos" de la falla al guardar la cabecera. Se ve con /evidencias/{id}/archivo.</summary>
     [HttpPost("cabecera-informe/fotos")]

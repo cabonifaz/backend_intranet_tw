@@ -321,6 +321,8 @@ builder.Services.AddScoped<GuardarCabeceraInformeMovilCasoDeUso>();
 builder.Services.AddScoped<SubirFotoFallaMovilCasoDeUso>();
 builder.Services.AddScoped<ValidarCierreEquipoMovilCasoDeUso>();
 builder.Services.AddScoped<GenerarInformeEquipoMovilCasoDeUso>();
+builder.Services.AddScoped<GenerarPreInformeMovilCasoDeUso>();
+builder.Services.AddSingleton<IGeneradorPreInformePdf, GeneradorPreInformePdf>();
 // App Mobile HU-19 — Asistente IA y Procedimientos (la IA y la lectura de los PDF oficiales se registran más abajo, junto a Gemini)
 builder.Services.AddScoped<IAsistenteMovilRepositorio, AsistenteMovilRepositorio>();
 builder.Services.AddScoped<ObtenerInicioAsistenteMovilCasoDeUso>();
