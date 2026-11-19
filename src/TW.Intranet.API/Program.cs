@@ -363,6 +363,11 @@ builder.Services.AddScoped<IEquipoJefaturaMovilRepositorio, EquipoJefaturaMovilR
 builder.Services.AddScoped<ObtenerEquipoJefaturaMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerFichaEquipoTecnicoMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerHorasTecnicoMovilCasoDeUso>();
+// HU-37 — Agenda y carga del área, con la resolución rápida de conflictos (Jefe de Área)
+builder.Services.AddScoped<IAgendaAreaMovilRepositorio, AgendaAreaMovilRepositorio>();
+builder.Services.AddScoped<ObtenerAgendaAreaMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerConflictoAgendaMovilCasoDeUso>();
+builder.Services.AddScoped<ResolverConflictoAgendaMovilCasoDeUso>();
 // HU-14 / HU-34 — Correlativos de Metrología (técnico y Jefe de Metrología)
 builder.Services.AddScoped<ICorrelativosMovilRepositorio, CorrelativosMovilRepositorio>();
 builder.Services.AddScoped<CorrelativosTecnicoMovilCasoDeUso>();

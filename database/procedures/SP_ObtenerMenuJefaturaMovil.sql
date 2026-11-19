@@ -37,7 +37,8 @@
 --                               en refrigerio; no cuentan los que no marcaron o ya finalizaron). Es EL MISMO cálculo de «Mi equipo» (HU-36, SP_ArmarEquipoJefaturaMovil: regla Área + Rol; técnico =
 --                               la regla de la bandeja de Programación, de campo), así que el menú y la pantalla muestran los mismos números (KPI en_jornada). Para todas las áreas con menú de Jefatura.
 --        agenda_conflictos    : conflictos sobrevenidos de la Programación (HU-39, SP_ArmarConflictosProgramacion: el MISMO cálculo de la lista de
---                               conflictos). Solo con prog_bandeja; en Servicio Técnico y Metrología, los de técnicos de su área.
+--                               conflictos) de los técnicos del alcance Área + Rol del jefe (SP_ArmarEquipoAgendaMovil, HU-37: el mismo número que el banner de «Agenda del Área»).
+--                               Solo con prog_bandeja.
 --        viaticos_por_revisar : gastos rendidos por los técnicos pendientes de revisión (gasto_viatico tipo gasto_solicitado, estado pendiente).
 --                               Solo con prog_aprobar_reprogramacion (el Jefe de Operaciones, quien revisa los gastos: SP_RevisarGastoProgramacion) y solo los de servicios de su
 --                               alcance Área + Rol (HU-35, SP_ArmarAlcanceViaticosMovil: el mismo número que los "por revisar" de Viáticos y gastos del equipo).
@@ -142,20 +143,26 @@ proc: BEGIN
         DROP TEMPORARY TABLE IF EXISTS tmp_eq;
     END;
 
-    -- Agenda del Área: conflictos sobrevenidos de la Programación (HU-39)
+    -- Agenda del Área (HU-37): conflictos sobrevenidos de la Programación (HU-39) de los técnicos del alcance Área + Rol del jefe (SP_ArmarEquipoAgendaMovil: el MISMO equipo de la agenda,
+    -- incluidos los dados de baja); el número es el del banner de «Agenda del Área»
     BEGIN
+        DECLARE v_sin_ag TINYINT DEFAULT 0;
         DECLARE EXIT HANDLER FOR SQLEXCEPTION
         BEGIN
             CALL SP_LimpiarConflictosProgramacion();
+            DROP TEMPORARY TABLE IF EXISTS tmp_eq;
             SET v_conflictos = NULL;
         END;
         IF FN_PermisoAccion(p_id_usuario, 'prog_bandeja') = 1 THEN
-            CALL SP_ArmarConflictosProgramacion();
-            SELECT COUNT(*) INTO v_conflictos
-            FROM   tmp_cf c
-            WHERE  v_area NOT IN ('servicio_tecnico', 'metrologia')
-                   OR EXISTS (SELECT 1 FROM usuario t WHERE t.id_usuario = c.id_usuario AND t.area = v_area);
-            CALL SP_LimpiarConflictosProgramacion();
+            CALL SP_ArmarEquipoAgendaMovil(p_id_usuario, NULL, v_sin_ag);
+            IF v_sin_ag = 0 THEN
+                CALL SP_ArmarConflictosProgramacion();
+                SELECT COUNT(*) INTO v_conflictos
+                FROM   tmp_cf c
+                WHERE  c.id_usuario IN (SELECT e.id_usuario FROM tmp_eq e);
+                CALL SP_LimpiarConflictosProgramacion();
+            END IF;
+            DROP TEMPORARY TABLE IF EXISTS tmp_eq;
         END IF;
     END;
 

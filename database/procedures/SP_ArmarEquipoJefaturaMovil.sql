@@ -14,6 +14,8 @@
 -- ESTADO HOY (excluyente; la regla del orden de la jornada vive en SP_EstadoJornadaMovil y no se repite aquí):
 --   finalizada (marcó «Fin de labores») > refrigerio (está en refrigerio ahora) > sin_marcar (no marcó «Inicio de labores») > tardanza (inició fuera de la tolerancia: jornada_marcacion.puntualidad)
 --   > en_labores (inició a tiempo y sigue en jornada, incluso si ya salió de una planta). Es el estado del Reloj marcador (HU-20), NO el del servicio.
+-- @tw_eq_inactivos = 1 (lo fija SP_ArmarEquipoAgendaMovil, HU-37, y lo deja en 0): incluye también a los técnicos dados de baja / suspendidos (la agenda de conflictos debe verlos: «técnico de baja
+--   o ausente»). Sin la variable (menú, Mi equipo, ficha, horas) solo los activos.
 -- p_id_tecnico: no NULL = solo ese técnico (si pertenece al equipo del jefe; si no, tmp_eq queda vacía).
 -- p_completo = 0: solo jornada (liviano; lo usa el menú). p_completo = 1: además el servicio actual (el del seguimiento operativo: SP_ArmarSeguimientoOperativo), la última posición GPS y, si no hay
 --   servicio, el motivo (SSOMA bloqueado o con documentos faltantes: SP_EvaluarSsomaProgramacion contra los requisitos generales).
@@ -99,7 +101,7 @@ proc: BEGIN
            NULLIF(TRIM(u.telefono), '')
     FROM   usuario u
     LEFT JOIN tabla_maestra c ON c.IdMaestro = 80 AND c.IdEmpresa = 1 AND c.String2 = u.cargo
-    WHERE  u.eliminado_en IS NULL AND u.estado = 'activo'
+    WHERE  (IFNULL(@tw_eq_inactivos, 0) = 1 OR (u.eliminado_en IS NULL AND u.estado = 'activo'))
       AND  u.area IN ('servicio_tecnico', 'metrologia')
       AND  (u.cargo IS NULL OR (u.cargo NOT LIKE 'jefe\_%' AND u.cargo NOT LIKE 'asistente\_%'))
       AND  IFNULL(u.rol_sistema, 'usuario') NOT IN ('supervisor', 'administrador', 'admin')
