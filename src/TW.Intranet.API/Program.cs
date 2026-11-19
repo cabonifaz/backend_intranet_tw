@@ -353,6 +353,11 @@ builder.Services.AddScoped<ObtenerInformeRevisionMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerArchivoEvidenciaInformeMovilCasoDeUso>();
 builder.Services.AddScoped<ObservarInformeMovilCasoDeUso>();
 builder.Services.AddScoped<AprobarInformeMovilCasoDeUso>();
+// HU-35 — Viáticos y gastos del equipo (Jefe de Área)
+builder.Services.AddScoped<IViaticosEquipoMovilRepositorio, ViaticosEquipoMovilRepositorio>();
+builder.Services.AddScoped<ObtenerViaticosEquipoMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerViaticoServicioEquipoMovilCasoDeUso>();
+builder.Services.AddScoped<AsignarViaticoEquipoMovilCasoDeUso>();
 // HU-14 / HU-34 — Correlativos de Metrología (técnico y Jefe de Metrología)
 builder.Services.AddScoped<ICorrelativosMovilRepositorio, CorrelativosMovilRepositorio>();
 builder.Services.AddScoped<CorrelativosTecnicoMovilCasoDeUso>();

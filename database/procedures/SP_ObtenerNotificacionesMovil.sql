@@ -8,6 +8,7 @@
 --     autorizacion_solicitud  "Autorización de salida · …" (le llega al jefe cuando un técnico pide su visto bueno)
 --     solicitud_enviada       "Solicitud de autorización enviada" (confirmación para el técnico)
 --     gasto_aprobado | gasto_observado | gasto_rechazado   gastos revisados por el Jefe de Operaciones
+--     viatico_asignado        "Viático asignado: S/ …" (HU-35: el jefe le asignó viáticos; abre Viáticos y Gastos)
 --     servicio                "Nueva programación: …" (se asignó un servicio)
 --     demora                  "Demora en ruta" (le llega a Operaciones)
 --     ensayo_critico          "Ensayo con error crítico" (HU-10: le llega al encargado del área; el técnico pidió apoyo o aceptó guardar con una lectura fuera del EMP)
@@ -64,6 +65,7 @@ proc: BEGIN
                     WHEN n.titulo LIKE 'Gasto aprobado%'                                                                THEN 'gasto_aprobado'
                     WHEN n.titulo LIKE 'Gasto observado%'                                                               THEN 'gasto_observado'
                     WHEN n.titulo LIKE 'Gasto rechazado%'                                                               THEN 'gasto_rechazado'
+                    WHEN n.titulo LIKE 'Viático asignado%'                                                              THEN 'viatico_asignado'
                     WHEN n.titulo LIKE 'Nueva programación%' OR n.titulo LIKE 'Nuevo servicio%'                         THEN 'servicio'
                     WHEN n.titulo LIKE 'Demora en ruta%'                                                                THEN 'demora'
                     WHEN n.titulo LIKE 'Ensayo con error cr%'                                                           THEN 'ensayo_critico'

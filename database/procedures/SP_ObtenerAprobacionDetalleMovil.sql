@@ -68,7 +68,9 @@ proc: BEGIN
     WHERE os.id_os = v_id_os;
 
     IF v_tipo = 'gasto' THEN
-        SET v_ve = FN_PermisoAccion(p_id_usuario, 'prog_aprobar_reprogramacion');
+        -- HU-35: además del permiso, el servicio del gasto debe estar en el alcance Área + Rol del jefe (la misma regla de las demás aprobaciones y de SP_ArmarAlcanceViaticosMovil)
+        SET v_ve = IF(FN_PermisoAccion(p_id_usuario, 'prog_aprobar_reprogramacion') = 1
+                      AND (v_general = 1 OR (v_area_jefe IS NOT NULL AND (v_area_os IS NULL OR v_area_os = v_area_jefe))), 1, 0);
         SELECT COALESCE(g.id_programacion, (SELECT MAX(p2.id_programacion) FROM programacion p2
                                             WHERE p2.id_os = g.id_os AND p2.estado <> 'cancelada' AND p2.eliminado_en IS NULL))
           INTO v_prog FROM gasto_viatico g WHERE g.id_gasto = p_id;

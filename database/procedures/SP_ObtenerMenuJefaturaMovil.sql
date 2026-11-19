@@ -39,7 +39,8 @@
 --        agenda_conflictos    : conflictos sobrevenidos de la Programación (HU-39, SP_ArmarConflictosProgramacion: el MISMO cálculo de la lista de
 --                               conflictos). Solo con prog_bandeja; en Servicio Técnico y Metrología, los de técnicos de su área.
 --        viaticos_por_revisar : gastos rendidos por los técnicos pendientes de revisión (gasto_viatico tipo gasto_solicitado, estado pendiente).
---                               Solo con prog_aprobar_reprogramacion (el Jefe de Operaciones, quien revisa los gastos: SP_RevisarGastoProgramacion).
+--                               Solo con prog_aprobar_reprogramacion (el Jefe de Operaciones, quien revisa los gastos: SP_RevisarGastoProgramacion) y solo los de servicios de su
+--                               alcance Área + Rol (HU-35, SP_ArmarAlcanceViaticosMovil: el mismo número que los "por revisar" de Viáticos y gastos del equipo).
 --      Sin fuente todavía (no hay contador): Recepción en Taller (no existe el módulo ni tabla) y Panel de Campo usa en_ruta.
 -- Solo lectura. No usa funciones almacenadas propias (solo el FN_PermisoAccion que ya existe).
 -- ============================================================
@@ -163,13 +164,24 @@ proc: BEGIN
         END IF;
     END;
 
-    -- Viáticos y Gastos: gastos rendidos por revisar (solo quien los revisa)
+    -- Viáticos y Gastos: gastos rendidos por revisar (solo quien los revisa y solo los de su alcance Área + Rol: SP_ArmarAlcanceViaticosMovil, el mismo de "Viáticos y gastos del
+    -- equipo" y de la revisión de un gasto; el mismo número que los "por revisar" de esa pantalla)
     BEGIN
-        DECLARE EXIT HANDLER FOR SQLEXCEPTION SET v_gastos = NULL;
+        DECLARE v_sin_vi TINYINT DEFAULT 0;
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            SET v_gastos = NULL;
+            DROP TEMPORARY TABLE IF EXISTS tmp_vi_alc;
+        END;
         IF FN_PermisoAccion(p_id_usuario, 'prog_aprobar_reprogramacion') = 1 THEN
-            SELECT COUNT(*) INTO v_gastos
-            FROM   gasto_viatico g
-            WHERE  g.eliminado_en IS NULL AND g.tipo = 'gasto_solicitado' AND g.estado = 'pendiente';
+            CALL SP_ArmarAlcanceViaticosMovil(p_id_usuario, NULL, v_sin_vi);
+            IF v_sin_vi = 0 THEN
+                SELECT COUNT(*) INTO v_gastos
+                FROM   gasto_viatico g
+                JOIN   tmp_vi_alc a ON a.id_os = g.id_os
+                WHERE  g.eliminado_en IS NULL AND g.tipo = 'gasto_solicitado' AND g.estado = 'pendiente';
+            END IF;
+            DROP TEMPORARY TABLE IF EXISTS tmp_vi_alc;
         END IF;
     END;
 
