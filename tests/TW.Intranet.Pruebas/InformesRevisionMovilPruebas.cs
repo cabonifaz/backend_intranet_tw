@@ -1,3 +1,4 @@
+using System.Text.Json;
 using TW.Intranet.Aplicacion.CasosDeUso;
 using TW.Intranet.Aplicacion.Dtos;
 using TW.Intranet.Aplicacion.Puertos;
@@ -208,6 +209,52 @@ public class InformesRevisionMovilPruebas
         var r = await new AprobarInformeMovilCasoDeUso(repo).EjecutarAsync(7, 12, new AprobarInformeDto(new string('x', 501)));
         Assert.Equal(1, r.IdTipoMensaje);
         Assert.Equal(0, repo.Llamadas);
+    }
+
+    // ── Detalle ampliado (datos, ensayos, procedimiento, observaciones, recomendaciones) ────────────────
+
+    private static InformeRevisionCabeceraDto Cabecera() =>
+        new(12, "0845-2026", null, "OS-000014", "Antamina", null, null, null, null, null, null, null, "por_revisar", false, 3, true, true, null, null, null, null);
+
+    private static readonly JsonSerializerOptions Web = new(JsonSerializerDefaults.Web);
+
+    [Fact]
+    public void Detalle_ampliado_serializa_los_nombres_acordados_en_camelCase()
+    {
+        var detalle = new InformeRevisionDetalleDto(Cabecera(), [], [new EvidenciaInformeDto(3, "Placa del equipo", true, "placa ilegible", false, "rechazada", "Placa", "2026-11-18T10:30:00", "placa")],
+            null, [], [], [],
+            new InformeDatosRevisionDto(2, "Balanza", "Mettler", "X1", "08:00", "10:30", 150, "Rosa Quispe", "PR-1", "2026-11-18T11:00:00", "dentro", 0.5m, 0.3m, "Texto", "operativo"),
+            [new EnsayoRevisionDto("pesaje", 1, "P1", null, 100m, 100.1m, 0.1m, 0.5m, "conforme")],
+            [new PasoRevisionDto(1, "Limpieza", true)],
+            [new TextoRevisionDto("OBS-01 · Celda", "Deriva")],
+            [new TextoRevisionDto("REC-01 · Cambiar celda", null)]);
+
+        using var doc = JsonDocument.Parse(JsonSerializer.Serialize(detalle, Web));
+        var raiz = doc.RootElement;
+        Assert.Equal(2, raiz.GetProperty("datos").GetProperty("version").GetInt32());
+        Assert.Equal("dentro", raiz.GetProperty("datos").GetProperty("resultadoGlobal").GetString());
+        Assert.Equal(0.5m, raiz.GetProperty("datos").GetProperty("toleranciaPesaje").GetDecimal());
+        Assert.Equal("operativo", raiz.GetProperty("datos").GetProperty("estadoEquipoFinal").GetString());
+        Assert.Equal("P1", raiz.GetProperty("ensayos")[0].GetProperty("punto").GetString());
+        Assert.Equal("conforme", raiz.GetProperty("ensayos")[0].GetProperty("resultado").GetString());
+        Assert.True(raiz.GetProperty("procedimiento")[0].GetProperty("realizado").GetBoolean());
+        Assert.Equal("Deriva", raiz.GetProperty("observaciones")[0].GetProperty("detalle").GetString());
+        Assert.Equal(JsonValueKind.Null, raiz.GetProperty("recomendaciones")[0].GetProperty("detalle").ValueKind);
+        var ev = raiz.GetProperty("evidencias")[0];
+        Assert.Equal("Placa", ev.GetProperty("descripcion").GetString());
+        Assert.Equal("2026-11-18T10:30:00", ev.GetProperty("tomadaEn").GetString());
+        Assert.Equal("placa", ev.GetProperty("etapa").GetString());
+    }
+
+    [Fact]
+    public void Los_campos_nuevos_del_detalle_son_opcionales()
+    {
+        var detalle = new InformeRevisionDetalleDto(Cabecera(), [], [new EvidenciaInformeDto(3, "Inicial", false, null, false, null)], null, [], [], []);
+        Assert.Null(detalle.Datos);
+        Assert.Null(detalle.Ensayos);
+        Assert.Null(detalle.Evidencias[0].Descripcion);
+        Assert.Null(detalle.Evidencias[0].TomadaEn);
+        Assert.Null(detalle.Evidencias[0].Etapa);
     }
 
     // ── Archivo de la evidencia ─────────────────────────────────────────────

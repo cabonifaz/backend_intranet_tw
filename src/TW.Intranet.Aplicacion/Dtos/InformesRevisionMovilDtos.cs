@@ -29,7 +29,9 @@ public record InformeRevisionCabeceraDto(long IdInforme, string NumeroInforme, s
 public record ValidacionInformeDto(string Codigo, string Titulo, string? Detalle, string Estado, bool Obligatoria);
 
 /// <summary>Evidencia del informe (foto o video). Forzada = la IA la rechazó y el técnico la aceptó con un motivo (se resalta). Archivo: GET …/evidencias/{id}/archivo[?cuadro=true].</summary>
-public record EvidenciaInformeDto(long IdEvidencia, string Etiqueta, bool Forzada, string? MotivoForzada, bool EsVideo, string? ValidacionIa);
+/// Etiqueta = nombre completo del tipo de evidencia; Descripcion, TomadaEn (ISO sin zona, hora de Lima) y Etapa (código de la toma: placa, inicial, desmontaje…) pueden venir null.
+public record EvidenciaInformeDto(long IdEvidencia, string Etiqueta, bool Forzada, string? MotivoForzada, bool EsVideo, string? ValidacionIa,
+                                  string? Descripcion = null, string? TomadaEn = null, string? Etapa = null);
 
 /// <summary>Corrección pedida al técnico. Motivo y Secciones son códigos del catálogo; PlazoEn y CreadaEn ISO sin zona (hora de Lima).</summary>
 public record CorreccionInformeDto(long IdCorreccion, string Motivo, string MotivoNombre, List<string> Secciones, string Instruccion, string? PlazoEn, string Estado, string? Por, string? CreadaEn);
@@ -38,9 +40,30 @@ public record OpcionRevisionInformeDto(string Codigo, string Nombre);
 
 public record PlazoInformeDto(int Horas, string Texto);
 
-/// <summary>Detalle de un informe + catálogos fijos del modal "Observar informe" (motivos, secciones y plazos).</summary>
+/// <summary>
+/// Datos del informe. HoraInicio / HoraFin "HH:mm"; EnviadoEn ISO sin zona (hora de Lima). ResultadoGlobal dentro | fuera; EstadoEquipoFinal operativo | con_observaciones | inoperativo.
+/// ToleranciaPesaje = la mayor tolerancia de los puntos de pesaje (el informe no la guarda como dato propio).
+/// </summary>
+public record InformeDatosRevisionDto(int Version, string? TipoEquipo, string? Marca, string? Modelo, string? HoraInicio, string? HoraFin, int? DuracionMin, string? Contacto,
+                                      string? NumeroPropuesta, string? EnviadoEn, string? ResultadoGlobal, decimal? ToleranciaPesaje, decimal? ToleranciaExcentricidad,
+                                      string? DescripcionComplementaria, string? EstadoEquipoFinal);
+
+/// <summary>Una lectura del ensayo. Tipo pesaje | excentricidad; Resultado conforme | no_conforme | null (sin resultado).</summary>
+public record EnsayoRevisionDto(string Tipo, int Orden, string Punto, string? NotaPunto, decimal? Carga, decimal? Lectura, decimal? Error, decimal? Tolerancia, string? Resultado);
+
+public record PasoRevisionDto(int Orden, string Descripcion, bool Realizado);
+
+/// <summary>Observación o recomendación del informe: Texto = código y título; Detalle = descripción y datos secundarios (si existen).</summary>
+public record TextoRevisionDto(string Texto, string? Detalle);
+
+/// <summary>
+/// Detalle de un informe + catálogos fijos del modal "Observar informe" (motivos, secciones y plazos) + el detalle de la revisión (datos, ensayos, procedimiento, observaciones y recomendaciones,
+/// las mismas fuentes del detalle de la intranet). Los campos del final tienen valor por defecto.
+/// </summary>
 public record InformeRevisionDetalleDto(InformeRevisionCabeceraDto Cabecera, List<ValidacionInformeDto> Validaciones, List<EvidenciaInformeDto> Evidencias, CorreccionInformeDto? Correccion,
-                                        List<OpcionRevisionInformeDto> Motivos, List<OpcionRevisionInformeDto> Secciones, List<PlazoInformeDto> Plazos);
+                                        List<OpcionRevisionInformeDto> Motivos, List<OpcionRevisionInformeDto> Secciones, List<PlazoInformeDto> Plazos,
+                                        InformeDatosRevisionDto? Datos = null, List<EnsayoRevisionDto>? Ensayos = null, List<PasoRevisionDto>? Procedimiento = null,
+                                        List<TextoRevisionDto>? Observaciones = null, List<TextoRevisionDto>? Recomendaciones = null);
 
 /// <summary>Observar: motivo (código), secciones afectadas (códigos, al menos una), qué debe corregir (10 a 1000 caracteres) y plazo en horas (4, 24, 48 o 72).</summary>
 public record ObservarInformeDto(string? Motivo, List<string>? Secciones, string? Instruccion, int? PlazoHoras);

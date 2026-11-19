@@ -420,7 +420,10 @@ DELIMITER ;
 --   puede_aprobar  = rt_revisar + informe sin revisar ni observado + sin corrección pendiente + ninguna obligatoria en error (SP_AprobarInformeMovil lo vuelve a validar).
 --   puede_observar = rt_revisar + informe sin revisar + sin corrección pendiente. motivo_bloqueo = por qué no se puede aprobar (NULL si se puede).
 --   estado: por_revisar | en_correccion | aprobado (la misma pestaña de la lista).
--- Resultados: 1 mensaje · 2 cabecera (1 fila) · 3 validaciones · 4 evidencias · 5 corrección pendiente (0 o 1 fila) · 6 motivos · 7 secciones · 8 plazos. Fechas: ISO sin zona (hora de Lima).
+-- Resultados: 1 mensaje · 2 cabecera (1 fila) · 3 validaciones · 4 evidencias · 5 corrección pendiente (0 o 1 fila) · 6 motivos · 7 secciones · 8 plazos ·
+--   9 datos del informe (1 fila) · 10 ensayos · 11 procedimiento ejecutado · 12 observaciones · 13 recomendaciones. Los resultados 9 a 13 salen de las MISMAS fuentes del detalle de la intranet
+--   (SP_ObtenerDetalleInformeTecnico: tmp_rt_base, informe_tecnico, informe_ensayo, informe_procedimiento, informe_observacion, informe_recomendacion). La tolerancia de pesaje no es un dato del informe:
+--   es la mayor tolerancia de sus puntos de pesaje. Fechas: ISO sin zona (hora de Lima).
 -- Requiere las migraciones 93, 101, 113 y 121.
 -- ============================================================
 DROP PROCEDURE IF EXISTS SP_ObtenerInformeRevisionMovil;
@@ -611,7 +614,10 @@ proc: BEGIN
            IF(f.override_aprobado = 1, 1, 0)                                         AS forzada,
            f.motivo_forzado                                                          AS motivo_forzada,
            f.es_video,
-           f.validacion_ia
+           f.validacion_ia,
+           NULLIF(TRIM(IFNULL(f.descripcion, '')), '')                               AS descripcion,
+           IF(f.timestamp_captura IS NULL, NULL, DATE_FORMAT(CONVERT_TZ(f.timestamp_captura, '+00:00', '-05:00'), '%Y-%m-%dT%H:%i:%s')) AS tomada_en,
+           f.codigo                                                                  AS etapa
     FROM   evidencia_fotografica f
     JOIN   tmp_rt_base b ON b.id_informe = p_id_informe
     LEFT JOIN tabla_maestra tf ON tf.IdMaestro = 30 AND tf.IdEmpresa = 1 AND tf.Num1 = f.id_tipo_evidencia
@@ -636,6 +642,44 @@ proc: BEGIN
     SELECT k.codigo, k.nombre FROM tmp_cat_rev k WHERE k.tipo = 'motivo'  ORDER BY k.orden;
     SELECT k.codigo, k.nombre FROM tmp_cat_rev k WHERE k.tipo = 'seccion' ORDER BY k.orden;
     SELECT k.horas, k.nombre AS texto FROM tmp_cat_rev k WHERE k.tipo = 'plazo' ORDER BY k.orden;
+
+    -- 9 Datos del informe
+    SELECT b.version, b.tipo_equipo, b.marca, b.modelo, b.hora_inicio, b.hora_fin, b.duracion_min, b.contacto, b.numero_propuesta,
+           DATE_FORMAT(b.fecha_envio_revision, '%Y-%m-%dT%H:%i:%s')                         AS enviado_en,
+           it.resultado_global,
+           (SELECT MAX(en.tolerancia) FROM informe_ensayo en WHERE en.id_informe = p_id_informe AND en.eliminado_en IS NULL AND en.tipo = 'pesaje') AS tolerancia_pesaje,
+           it.tolerancia_excentricidad,
+           NULLIF(TRIM(IFNULL(it.descripcion_complementaria, '')), '')                      AS descripcion_complementaria,
+           it.estado_equipo_final
+    FROM   tmp_rt_base b
+    JOIN   informe_tecnico it ON it.id_informe = b.id_informe;
+
+    -- 10 Ensayos (pesaje primero, luego excentricidad)
+    SELECT en.tipo, en.orden, en.punto, en.nota_punto, en.carga, en.lectura, en.error, en.tolerancia, en.resultado
+    FROM   informe_ensayo en
+    WHERE  en.id_informe = p_id_informe AND en.eliminado_en IS NULL
+    ORDER BY (en.tipo = 'excentricidad'), en.orden, en.id_ensayo;
+
+    -- 11 Procedimiento ejecutado
+    SELECT ip.orden, NULLIF(TRIM(CONCAT_WS(' — ', NULLIF(TRIM(ip.titulo), ''), NULLIF(TRIM(ip.detalle), ''))), '') AS descripcion, IF(ip.realizado = 1, 1, 0) AS realizado
+    FROM   informe_procedimiento ip
+    WHERE  ip.id_informe = p_id_informe AND ip.eliminado_en IS NULL
+    ORDER BY ip.orden, ip.id_paso;
+
+    -- 12 Observaciones del técnico (OBS-01…)
+    SELECT NULLIF(TRIM(CONCAT_WS(' · ', NULLIF(TRIM(o.codigo), ''), NULLIF(TRIM(o.titulo), ''))), '') AS texto,
+           NULLIF(TRIM(CONCAT_WS(' · ', NULLIF(TRIM(o.descripcion), ''), NULLIF(TRIM(o.ubicacion), ''), NULLIF(TRIM(o.detalle_extra), ''),
+                                 IF(NULLIF(TRIM(o.nivel_afectacion), '') IS NULL, NULL, CONCAT('Afectación: ', o.nivel_afectacion)))), '') AS detalle
+    FROM   informe_observacion o
+    WHERE  o.id_informe = p_id_informe AND o.eliminado_en IS NULL
+    ORDER BY o.orden, o.id_observacion;
+
+    -- 13 Recomendaciones (REC-01…)
+    SELECT NULLIF(TRIM(CONCAT_WS(' · ', NULLIF(TRIM(r.codigo), ''), NULLIF(TRIM(r.titulo), ''))), '') AS texto,
+           NULLIF(TRIM(CONCAT_WS(' · ', NULLIF(TRIM(r.descripcion), ''), CONCAT('Prioridad ', r.prioridad), IF(NULLIF(TRIM(r.plazo), '') IS NULL, NULL, CONCAT('Plazo: ', r.plazo)))), '') AS detalle
+    FROM   informe_recomendacion r
+    WHERE  r.id_informe = p_id_informe AND r.eliminado_en IS NULL
+    ORDER BY r.orden, r.id_recomendacion;
 
     DROP TEMPORARY TABLE IF EXISTS tmp_irv;
     DROP TEMPORARY TABLE IF EXISTS tmp_cat_rev;

@@ -68,7 +68,7 @@ public class InformesRevisionMovilRepositorio(CadenaConexionBd conexion)
                 var evidencias = new List<EvidenciaInformeDto>();
                 while (await r.ReadAsync(ct))
                     evidencias.Add(new EvidenciaInformeDto(EnteroLargo(r, "id_evidencia"), Texto(r, "etiqueta") ?? "Evidencia", Booleano(r, "forzada"), Texto(r, "motivo_forzada"),
-                                                           Booleano(r, "es_video"), Texto(r, "validacion_ia")));
+                                                           Booleano(r, "es_video"), Texto(r, "validacion_ia"), Texto(r, "descripcion"), Texto(r, "tomada_en"), Texto(r, "etapa")));
 
                 // 5 Corrección pendiente (0 o 1 fila)
                 await r.NextResultAsync(ct);
@@ -92,8 +92,39 @@ public class InformesRevisionMovilRepositorio(CadenaConexionBd conexion)
                 var plazos = new List<PlazoInformeDto>();
                 while (await r.ReadAsync(ct)) plazos.Add(new PlazoInformeDto(Entero(r, "horas"), Texto(r, "texto") ?? string.Empty));
 
+                // 9 Datos del informe
+                await r.NextResultAsync(ct);
+                InformeDatosRevisionDto? datos = null;
+                if (await r.ReadAsync(ct))
+                    datos = new InformeDatosRevisionDto(Entero(r, "version"), Texto(r, "tipo_equipo"), Texto(r, "marca"), Texto(r, "modelo"), Texto(r, "hora_inicio"), Texto(r, "hora_fin"),
+                                                        EnteroNulo(r, "duracion_min"), Texto(r, "contacto"), Texto(r, "numero_propuesta"), Texto(r, "enviado_en"),
+                                                        Texto(r, "resultado_global"), DecimalNulo(r, "tolerancia_pesaje"), DecimalNulo(r, "tolerancia_excentricidad"),
+                                                        Texto(r, "descripcion_complementaria"), Texto(r, "estado_equipo_final"));
+
+                // 10 Ensayos
+                await r.NextResultAsync(ct);
+                var ensayos = new List<EnsayoRevisionDto>();
+                while (await r.ReadAsync(ct))
+                    ensayos.Add(new EnsayoRevisionDto(Texto(r, "tipo") ?? "pesaje", Entero(r, "orden"), Texto(r, "punto") ?? string.Empty, Texto(r, "nota_punto"), DecimalNulo(r, "carga"),
+                                                      DecimalNulo(r, "lectura"), DecimalNulo(r, "error"), DecimalNulo(r, "tolerancia"), Texto(r, "resultado")));
+
+                // 11 Procedimiento ejecutado
+                await r.NextResultAsync(ct);
+                var procedimiento = new List<PasoRevisionDto>();
+                while (await r.ReadAsync(ct))
+                    procedimiento.Add(new PasoRevisionDto(Entero(r, "orden"), Texto(r, "descripcion") ?? string.Empty, Booleano(r, "realizado")));
+
+                // 12 Observaciones · 13 Recomendaciones
+                await r.NextResultAsync(ct);
+                var observaciones = new List<TextoRevisionDto>();
+                while (await r.ReadAsync(ct)) observaciones.Add(new TextoRevisionDto(Texto(r, "texto") ?? string.Empty, Texto(r, "detalle")));
+
+                await r.NextResultAsync(ct);
+                var recomendaciones = new List<TextoRevisionDto>();
+                while (await r.ReadAsync(ct)) recomendaciones.Add(new TextoRevisionDto(Texto(r, "texto") ?? string.Empty, Texto(r, "detalle")));
+
                 return new RespuestaDto<InformeRevisionDetalleDto>(2, mensaje,
-                    new InformeRevisionDetalleDto(cabecera, validaciones, evidencias, correccion, motivos, secciones, plazos));
+                    new InformeRevisionDetalleDto(cabecera, validaciones, evidencias, correccion, motivos, secciones, plazos, datos, ensayos, procedimiento, observaciones, recomendaciones));
             }, ct);
 
     public Task<RespuestaDto<ArchivoAprobacionMovilDto>> ObtenerArchivoAsync(long idUsuario, long idInforme, long idEvidencia, CancellationToken ct) =>
