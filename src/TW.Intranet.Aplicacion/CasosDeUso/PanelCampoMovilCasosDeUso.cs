@@ -99,7 +99,8 @@ public class ObtenerRutaServicioJefaturaMovilCasoDeUso(IPanelCampoMovilRepositor
         if (respuesta.Datos is not { } datos) return respuesta;
         try
         {
-            return respuesta with { Datos = datos with { Resumen = await EnriquecerAsync(datos.Resumen, ct) } };
+            var (resumen, calles) = await EnriquecerAsync(datos.Resumen, ct);
+            return respuesta with { Datos = datos with { Resumen = resumen, Calles = calles } };
         }
         catch (Exception) when (!ct.IsCancellationRequested)
         {
@@ -111,18 +112,19 @@ public class ObtenerRutaServicioJefaturaMovilCasoDeUso(IPanelCampoMovilRepositor
     /// Con la sede ubicada (coordenada real, la de Maestros › Clientes › Sedes) calcula distancia y tiempo por calles. Sin ubicación real NO se inventa un destino: la coordenada
     /// que traiga el seguimiento puede ser la llegada del técnico, así que se omite (destino, distancia y ETA) y la app avisa que falta registrar la ubicación de la sede.
     /// </summary>
-    private async Task<RutaResumenDto> EnriquecerAsync(RutaResumenDto r, CancellationToken ct)
+    private async Task<(RutaResumenDto Resumen, List<PuntoGpsServicioDto>? Calles)> EnriquecerAsync(RutaResumenDto r, CancellationToken ct)
     {
         if (!r.PlantaUbicada || r.DestinoLatitud is null || r.DestinoLongitud is null)
-            return r with { PlantaUbicada = false, DestinoLatitud = null, DestinoLongitud = null, DistanciaM = null, EtaMinutos = null, EtaEstimada = null, Eta = null };
-        if (r.Latitud is null || r.Longitud is null) return r;
+            return (r with { PlantaUbicada = false, DestinoLatitud = null, DestinoLongitud = null, DistanciaM = null, EtaMinutos = null, EtaEstimada = null, Eta = null }, null);
+        if (r.Latitud is null || r.Longitud is null) return (r, null);
 
         var recta = (int)Math.Round(DistanciaMetros(r.Latitud.Value, r.Longitud.Value, r.DestinoLatitud.Value, r.DestinoLongitud.Value));
-        if (recta <= 150) return r with { EtaMinutos = 0, EtaEstimada = null, DistanciaRutaM = recta, EtaPorCalles = true };
+        if (recta <= 150) return (r with { EtaMinutos = 0, EtaEstimada = null, DistanciaRutaM = recta, EtaPorCalles = true }, null);
 
-        if (await rutas.CalcularAsync(r.Latitud.Value, r.Longitud.Value, r.DestinoLatitud.Value, r.DestinoLongitud.Value, ct) is not { } ruta) return r; // respaldo: la estimación del seguimiento
+        if (await rutas.CalcularAsync(r.Latitud.Value, r.Longitud.Value, r.DestinoLatitud.Value, r.DestinoLongitud.Value, ct) is not { } ruta) return (r, null); // respaldo: la estimación del seguimiento
         var llegada = DateTime.UtcNow.AddHours(-5).AddMinutes(ruta.Minutos); // hora de Lima
-        return r with { EtaMinutos = ruta.Minutos, EtaEstimada = llegada.ToString("HH:mm"), DistanciaRutaM = ruta.DistanciaM, EtaPorCalles = true };
+        var calles = ruta.Calles?.Select(p => new PuntoGpsServicioDto(p.Latitud, p.Longitud, null)).ToList();
+        return (r with { EtaMinutos = ruta.Minutos, EtaEstimada = llegada.ToString("HH:mm"), DistanciaRutaM = ruta.DistanciaM, EtaPorCalles = true }, calles);
     }
 
     /// <summary>Haversine (metros).</summary>

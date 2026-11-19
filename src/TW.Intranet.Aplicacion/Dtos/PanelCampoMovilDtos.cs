@@ -60,14 +60,17 @@ public record RutaResumenDto(long IdOs, string Numero, string? Cliente, string E
                              /// <summary>Distancia por calles (m) y si la ETA se calculó por calles (solo con la sede ubicada).</summary>
                              int? DistanciaRutaM = null, bool EtaPorCalles = false,
                              /// <summary>true si destino_* es la coordenada real de la sede; false: la sede no tiene ubicación y el destino se omite (no se dibuja ni se calcula el tiempo).</summary>
-                             bool PlantaUbicada = true);
+                             bool PlantaUbicada = true,
+                             /// <summary>Precisión del GPS de la última posición (m).</summary>
+                             int? PrecisionM = null);
 
 public record PuntoGpsServicioDto(decimal Latitud, decimal Longitud, string? Hora);
 
 /// <summary>Evento en ruta. Tono: verde (hito OK) | naranja o rojo (demora) | amarillo (alerta).</summary>
 public record EventoRutaDto(string? Hora, string Titulo, string? Detalle, string Badge, string Tono);
 
-public record RutaServicioDto(RutaResumenDto Resumen, List<PuntoGpsServicioDto> Recorrido, List<EventoRutaDto> Eventos);
+/// <summary>Calles = trazado por las calles de la posición actual a la planta (OSRM; null si el servicio externo no respondió o la sede no está ubicada): la app lo dibuja sobre el mapa.</summary>
+public record RutaServicioDto(RutaResumenDto Resumen, List<PuntoGpsServicioDto> Recorrido, List<EventoRutaDto> Eventos, List<PuntoGpsServicioDto>? Calles = null);
 
 /// <summary>Cambio manual de estado (solo avanzar). NuevoEstado: salida | en_ruta | llegada | ingreso | inicio | finalizado. Comentario de 10 a 1000 caracteres.</summary>
 public record CambiarEstadoServicioDto(string? NuevoEstado, int? IdMotivo, string? Comentario);
