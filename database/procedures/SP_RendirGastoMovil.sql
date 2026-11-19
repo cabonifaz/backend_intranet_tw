@@ -345,15 +345,18 @@ proc: BEGIN
     SELECT url INTO v_url1 FROM gasto_viatico_foto WHERE id_gasto = v_g_id AND eliminado_en IS NULL ORDER BY orden LIMIT 1;
     UPDATE gasto_viatico SET url_comprobante = v_url1 WHERE id_gasto = v_g_id;
 
-    -- Aviso a quienes revisan gastos (Jefe de Operaciones)
+    -- Aviso a quienes revisan gastos (Jefe de Operaciones). HU-35: solo a los que además ven este servicio (Área + Rol, SP_ArmarAprobadoresOsMovil): los demás no podrían revisarlo
+    CALL SP_ArmarAprobadoresOsMovil(v_id_os);
     INSERT INTO notificacion (id_usuario_destino, id_canal, titulo, cuerpo, entidad_tipo, id_entidad, fecha_creacion, creado_por)
     SELECT u.id_usuario, 5, LEFT(CONCAT(IF(v_es_nuevo = 1, 'Gasto por revisar: ', 'Gasto corregido: '), v_numero), 150),
            LEFT(CONCAT(v_codigo, ' · ', v_numero, ' · ', IFNULL(v_texto, IFNULL(v_conc_nom, 'Gasto')), ' S/ ', FORMAT(p_monto, 2),
                        IF(v_origen = 'reembolso', ' (reembolso)', ''), IF(v_n_nuevas + v_n_cons = 0, ' · sin foto', ''), '.'), 3000),
            'programacion', v_prog, NOW(), p_id_usuario
     FROM usuario u
+    JOIN tmp_aprobadores ap ON ap.id_usuario = u.id_usuario
     WHERE u.eliminado_en IS NULL AND u.estado = 'activo' AND u.id_usuario <> p_id_usuario
       AND FN_PermisoAccion(u.id_usuario, 'prog_aprobar_reprogramacion') = 1;
+    DROP TEMPORARY TABLE IF EXISTS tmp_aprobadores;
 
     INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion, id_usuario, registrado_en, metadata)
     VALUES ('programacion', v_prog, IF(v_es_nuevo = 1, 'rendir_gasto', 'corregir_gasto'), IF(v_es_nuevo = 1, NULL, 'observado'), 'pendiente',

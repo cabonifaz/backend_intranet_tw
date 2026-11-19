@@ -161,14 +161,15 @@ proc: BEGIN
         cargo      VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci
     );
 
+    -- Regla Área + Rol (SP_ArmarAprobadoresMovil)
+    CALL SP_ArmarAprobadoresMovil(v_area);
     INSERT IGNORE INTO tmp_llf_destino
     SELECT u.id_usuario, TRIM(CONCAT(IFNULL(u.nombre, ''), ' ', IFNULL(u.apellido, ''))), c.String1
-    FROM   usuario u
-    JOIN   tabla_maestra c ON c.IdMaestro = 80 AND c.IdEmpresa = 1 AND c.String2 = u.cargo
-    WHERE  u.eliminado_en IS NULL AND u.estado = 'activo'
-      AND  c.String2 LIKE 'jefe\_%'
-      AND  ((v_area IS NOT NULL AND c.String3 = v_area)
-            OR (v_area IS NULL AND c.String3 IN ('servicio_tecnico', 'metrologia')));
+    FROM   tmp_aprobadores a
+    JOIN   usuario u ON u.id_usuario = a.id_usuario
+    LEFT JOIN tabla_maestra c ON c.IdMaestro = 80 AND c.IdEmpresa = 1 AND c.String2 = u.cargo
+    WHERE  u.id_usuario <> p_id_usuario;
+    DROP TEMPORARY TABLE IF EXISTS tmp_aprobadores;
 
     IF (SELECT COUNT(*) FROM tmp_llf_destino) = 0 THEN
         INSERT IGNORE INTO tmp_llf_destino

@@ -346,6 +346,28 @@ builder.Services.AddScoped<ObtenerRutaServicioJefaturaMovilCasoDeUso>();
 builder.Services.AddSingleton(builder.Configuration.GetSection("Rutas").Get<ConfiguracionRutas>() ?? new ConfiguracionRutas());
 builder.Services.AddHttpClient<IProveedorRutas, OsrmProveedorRutas>(c => c.Timeout = TimeSpan.FromSeconds(6));
 builder.Services.AddScoped<RegistrarSeguimientoJefaturaMovilCasoDeUso>();
+// HU-33 — Revisión de informes técnicos del Jefe de Área
+builder.Services.AddScoped<IInformesRevisionMovilRepositorio, InformesRevisionMovilRepositorio>();
+builder.Services.AddScoped<ObtenerInformesRevisionMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerInformeRevisionMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerArchivoEvidenciaInformeMovilCasoDeUso>();
+builder.Services.AddScoped<ObservarInformeMovilCasoDeUso>();
+builder.Services.AddScoped<AprobarInformeMovilCasoDeUso>();
+// HU-35 — Viáticos y gastos del equipo (Jefe de Área)
+builder.Services.AddScoped<IViaticosEquipoMovilRepositorio, ViaticosEquipoMovilRepositorio>();
+builder.Services.AddScoped<ObtenerViaticosEquipoMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerViaticoServicioEquipoMovilCasoDeUso>();
+builder.Services.AddScoped<AsignarViaticoEquipoMovilCasoDeUso>();
+// HU-36 — Mi equipo: asistencia, ubicación y horas contabilizadas (Jefe de Área)
+builder.Services.AddScoped<IEquipoJefaturaMovilRepositorio, EquipoJefaturaMovilRepositorio>();
+builder.Services.AddScoped<ObtenerEquipoJefaturaMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerFichaEquipoTecnicoMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerHorasTecnicoMovilCasoDeUso>();
+// HU-37 — Agenda y carga del área, con la resolución rápida de conflictos (Jefe de Área)
+builder.Services.AddScoped<IAgendaAreaMovilRepositorio, AgendaAreaMovilRepositorio>();
+builder.Services.AddScoped<ObtenerAgendaAreaMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerConflictoAgendaMovilCasoDeUso>();
+builder.Services.AddScoped<ResolverConflictoAgendaMovilCasoDeUso>();
 // HU-14 / HU-34 — Correlativos de Metrología (técnico y Jefe de Metrología)
 builder.Services.AddScoped<ICorrelativosMovilRepositorio, CorrelativosMovilRepositorio>();
 builder.Services.AddScoped<CorrelativosTecnicoMovilCasoDeUso>();
@@ -422,6 +444,16 @@ builder.Services.AddSingleton<INotificadorTiempoReal, TW.Intranet.API.TiempoReal
 builder.Services.AddScoped<ObtenerNotificacionesNuevasCasoDeUso>();
 // notificacion.creada sin tocar los SPs que insertan (TiempoReal:Habilitado / IntervaloSegundos)
 builder.Services.AddHostedService<TW.Intranet.API.TiempoReal.NotificacionesTiempoRealWorker>();
+
+// App Mobile — notificaciones push: cada notificación nueva llega también a la bandeja de notificaciones del teléfono (Expo Push → Firebase).
+// Variables (opcionales): PushMovil__Habilitado (true), PushMovil__IntervaloSegundos (4), PushMovil__AccessToken (solo si en expo.dev se activó la seguridad mejorada).
+builder.Services.AddScoped<IPushMovilRepositorio, PushMovilRepositorio>();
+builder.Services.AddScoped<RegistrarDispositivoPushMovilCasoDeUso>();
+builder.Services.AddScoped<QuitarDispositivoPushMovilCasoDeUso>();
+builder.Services.AddScoped<EnviarPushNotificacionesCasoDeUso>();
+builder.Services.AddSingleton(new ConfiguracionPushMovil(builder.Configuration["PushMovil:AccessToken"]?.Trim() ?? ""));
+builder.Services.AddHttpClient<IEnviadorPushMovil, ExpoEnviadorPushMovil>(c => c.Timeout = TimeSpan.FromSeconds(15));
+builder.Services.AddHostedService<TW.Intranet.API.Configuracion.PushNotificacionesWorker>();
 
 // ── INYECCIÓN DE DEPENDENCIAS — Maestros ──────────────────────────────────────
 builder.Services.AddScoped<IMaestrosRepositorio, MaestrosRepositorio>();

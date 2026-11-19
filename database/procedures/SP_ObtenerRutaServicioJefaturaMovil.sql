@@ -5,7 +5,7 @@
 -- Resultados: 1 mensaje · 2 resumen (1 fila) · 3 recorrido GPS (máx. 120 puntos, en orden) · 4 eventos en ruta (cronológicos).
 --   Resumen: lat/lon = última posición; minutos_ubicacion = antigüedad de esa posición; destino_* = planta del cliente (sede); origen_* = coordenada del evento de
 --     salida (si la app no la envió, la primera posición GPS del técnico hoy). distancia_m = distancia EN LÍNEA RECTA de la última posición a la planta (no es la distancia por calle).
---     velocidad_kmh = entre las dos últimas posiciones de hoy (solo si distan entre 20 s y 10 min; NULL si no hay datos suficientes).
+--     precision_m = precisión del GPS de la última posición. velocidad_kmh = entre las dos últimas posiciones de hoy (solo si distan entre 20 s y 10 min; NULL si no hay datos suficientes).
 --     eta_estimada / eta_minutos = estimación en ruta desde la posición actual (línea recta × 1,3 a la velocidad promedio configurada; referencial). destino_direccion = dirección de la planta.
 --     eta (HH:MM) = solo en ruta: la hora de llegada recalculada por la última demora de la app (demora_registro.eta_recalculada) o, si no hay, la hora esperada de
 --     la bandeja de seguimiento (hora programada + demoras en ruta). eta_programada = hora programada del servicio.
@@ -136,6 +136,9 @@ proc: BEGIN
            o.id_tecnico AS id_tecnico, o.tecnico AS tecnico, NULLIF(TRIM(ut.telefono), '') AS telefono_tecnico,
            p.lat AS latitud, p.lon AS longitud,
            IF(p.ts_utc IS NULL, NULL, GREATEST(0, TIMESTAMPDIFF(MINUTE, p.ts_utc, c.ahora_utc))) AS minutos_ubicacion,
+           (SELECT x.precision_m FROM ubicacion_tecnico x
+            WHERE  x.id_usuario = o.id_tecnico AND x.timestamp_utc >= c.ini_utc AND x.timestamp_utc <= c.ahora_utc AND (x.id_os IS NULL OR x.id_os = o.id_os)
+            ORDER BY x.timestamp_utc DESC, x.id_ubicacion DESC LIMIT 1) AS precision_m,
            v_kmh AS velocidad_kmh, o.dist_m AS distancia_m,
            o.lat_sede AS destino_latitud, o.lon_sede AS destino_longitud,
            COALESCE(NULLIF(o.sede_nombre, ''), NULLIF(o.sede_direccion, '')) AS destino_nombre,

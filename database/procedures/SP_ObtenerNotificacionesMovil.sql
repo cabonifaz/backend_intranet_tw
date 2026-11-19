@@ -8,7 +8,8 @@
 --     autorizacion_solicitud  "Autorización de salida · …" (le llega al jefe cuando un técnico pide su visto bueno)
 --     solicitud_enviada       "Solicitud de autorización enviada" (confirmación para el técnico)
 --     gasto_aprobado | gasto_observado | gasto_rechazado   gastos revisados por el Jefe de Operaciones
---     servicio                "Nueva programación: …" (se asignó un servicio)
+--     viatico_asignado        "Viático asignado: S/ …" (HU-35: el jefe le asignó viáticos; abre Viáticos y Gastos)
+--     servicio                "Nueva programación: …" (se asignó un servicio) y "Servicio reprogramado: …" (HU-37: el jefe reasignó o reprogramó el servicio)
 --     demora                  "Demora en ruta" (le llega a Operaciones)
 --     ensayo_critico          "Ensayo con error crítico" (HU-10: le llega al encargado del área; el técnico pidió apoyo o aceptó guardar con una lectura fuera del EMP)
 --     evidencia_forzada       "Evidencia forzada" (HU-12: una foto rechazada por la IA que el técnico aceptó con un motivo)
@@ -16,6 +17,7 @@
 --                             Metrología) · correlativo_asignado "Correlativo asignado" (HU-14: Metrología asignó el correlativo; abre "Mis tickets"). entidad_tipo = ticket_metrologia.
 --     equipo_nuevo            "Equipo nuevo por aprobar" (HU-07: equipo NEW registrado en campo)
 --     servicio_detenido       "Servicio detenido: …" (Control de Campo)
+--     informe_observado       "Informe observado: …" (HU-33: el jefe pidió una corrección; le llega al técnico, entidad_tipo = informe_tecnico) · informe_revisado "Informe revisado: …" (HU-59)
 --     alerta_campo            otra alerta operativa del Control de Campo (tipo_notificacion = alerta_operativa)
 --     general                 cualquier otro
 --   critica / prioridad: la prioridad que ya clasifica el Centro de Notificaciones (HU-90, migración 102_centro_notificaciones: columna
@@ -63,12 +65,16 @@ proc: BEGIN
                     WHEN n.titulo LIKE 'Gasto aprobado%'                                                                THEN 'gasto_aprobado'
                     WHEN n.titulo LIKE 'Gasto observado%'                                                               THEN 'gasto_observado'
                     WHEN n.titulo LIKE 'Gasto rechazado%'                                                               THEN 'gasto_rechazado'
-                    WHEN n.titulo LIKE 'Nueva programación%' OR n.titulo LIKE 'Nuevo servicio%'                         THEN 'servicio'
+                    WHEN n.titulo LIKE 'Viático asignado%'                                                              THEN 'viatico_asignado'
+                    WHEN n.titulo LIKE 'Nueva programación%' OR n.titulo LIKE 'Nuevo servicio%'
+                         OR n.titulo LIKE 'Servicio reprogramado%'                                                       THEN 'servicio'
                     WHEN n.titulo LIKE 'Demora en ruta%'                                                                THEN 'demora'
                     WHEN n.titulo LIKE 'Ensayo con error cr%'                                                           THEN 'ensayo_critico'
                     WHEN n.titulo LIKE 'Evidencia forzada%'                                                             THEN 'evidencia_forzada'
                     WHEN n.titulo LIKE 'Equipo nuevo por aprobar%'                                                      THEN 'equipo_nuevo'
                     WHEN n.titulo LIKE 'Servicio detenido:%'                                                            THEN 'servicio_detenido'
+                    WHEN n.titulo LIKE 'Informe observado%'                                                             THEN 'informe_observado'
+                    WHEN n.titulo LIKE 'Informe revisado%'                                                              THEN 'informe_revisado'
                     WHEN n.tipo_notificacion = 'alerta_operativa'                                                       THEN 'alerta_campo'
                     ELSE 'general' END AS tipo,
                n.titulo,

@@ -33,13 +33,15 @@
 --        certificados_pendientes : órdenes de metrología en estado pendiente_certificado. Solo área Metrología.
 --        tickets_correlativo  : tickets de metrología solicitados (ticket_metrologia.estado = 'solicitado'), pendientes de asignar correlativo.
 --                               Solo área Metrología.
---        mi_equipo_total / mi_equipo_en_labores : técnicos activos del área (misma regla de técnico que la bandeja de Programación: sin
---                               jefaturas ni asistentes) y, de ellos, los que HOY tienen una orden en ruta, en ejecución o pausada (como técnico
---                               principal o personal de apoyo). Solo Servicio Técnico y Metrología.
+--        mi_equipo_total / mi_equipo_en_labores : el equipo de técnicos que ve este jefe y, de ellos, los que HOY están en su jornada según el Reloj marcador (HU-20: en labores, con tardanza o
+--                               en refrigerio; no cuentan los que no marcaron o ya finalizaron). Es EL MISMO cálculo de «Mi equipo» (HU-36, SP_ArmarEquipoJefaturaMovil: regla Área + Rol; técnico =
+--                               la regla de la bandeja de Programación, de campo), así que el menú y la pantalla muestran los mismos números (KPI en_jornada). Para todas las áreas con menú de Jefatura.
 --        agenda_conflictos    : conflictos sobrevenidos de la Programación (HU-39, SP_ArmarConflictosProgramacion: el MISMO cálculo de la lista de
---                               conflictos). Solo con prog_bandeja; en Servicio Técnico y Metrología, los de técnicos de su área.
+--                               conflictos) de los técnicos del alcance Área + Rol del jefe (SP_ArmarEquipoAgendaMovil, HU-37: el mismo número que el banner de «Agenda del Área»).
+--                               Solo con prog_bandeja.
 --        viaticos_por_revisar : gastos rendidos por los técnicos pendientes de revisión (gasto_viatico tipo gasto_solicitado, estado pendiente).
---                               Solo con prog_aprobar_reprogramacion (el Jefe de Operaciones, quien revisa los gastos: SP_RevisarGastoProgramacion).
+--                               Solo con prog_aprobar_reprogramacion (el Jefe de Operaciones, quien revisa los gastos: SP_RevisarGastoProgramacion) y solo los de servicios de su
+--                               alcance Área + Rol (HU-35, SP_ArmarAlcanceViaticosMovil: el mismo número que los "por revisar" de Viáticos y gastos del equipo).
 --      Sin fuente todavía (no hay contador): Recepción en Taller (no existe el módulo ni tabla) y Panel de Campo usa en_ruta.
 -- Solo lectura. No usa funciones almacenadas propias (solo el FN_PermisoAccion que ya existe).
 -- ============================================================
@@ -91,15 +93,23 @@ proc: BEGIN
 
     -- Informes pendientes de revisión: el cálculo compartido de la bandeja de Revisión Técnica
     BEGIN
+        DECLARE v_tiene_inf TINYINT DEFAULT 0;
         DECLARE EXIT HANDLER FOR SQLEXCEPTION
         BEGIN
+            SET @tw_inf_usuario = NULL, @tw_inf_ver_todo = NULL, @tw_inf_area = NULL;
             DROP TEMPORARY TABLE IF EXISTS tmp_rt_base;
             SET v_informes = NULL;
         END;
         IF FN_PermisoAccion(p_id_usuario, 'rt_bandeja') = 1 THEN
-            CALL SP_ArmarBaseInformes(p_id_usuario, NULL);
-            SELECT COUNT(*) INTO v_informes FROM tmp_rt_base WHERE grupo_estado IN ('pendiente_revision', 'pendiente_precotizacion');
-            DROP TEMPORARY TABLE IF EXISTS tmp_rt_base;
+            -- Con el alcance de la app (regla ÁREA + ROL) y sin los observados (esos esperan la corrección del técnico): los mismos de la pestaña "Por revisar" (HU-33)
+            CALL SP_FijarAlcanceInformesMovil(p_id_usuario, v_tiene_inf);
+            IF v_tiene_inf = 1 THEN
+                CALL SP_ArmarBaseInformes(p_id_usuario, NULL);
+                SELECT COUNT(*) INTO v_informes FROM tmp_rt_base
+                WHERE grupo_estado IN ('pendiente_revision', 'pendiente_precotizacion') AND estado <> 'observado';
+                DROP TEMPORARY TABLE IF EXISTS tmp_rt_base;
+            END IF;
+            SET @tw_inf_usuario = NULL, @tw_inf_ver_todo = NULL, @tw_inf_area = NULL;
         END IF;
     END;
 
@@ -115,53 +125,65 @@ proc: BEGIN
         END;
     END IF;
 
-    -- Mi Equipo: técnicos del área y los que hoy están en labores (solo Servicio Técnico y Metrología)
-    IF v_area IN ('servicio_tecnico', 'metrologia') THEN
-        BEGIN
-            DECLARE EXIT HANDLER FOR SQLEXCEPTION
-            BEGIN
-                SET v_eq_total = NULL;
-                SET v_eq_labores = NULL;
-            END;
-            SELECT COUNT(*),
-                   IFNULL(SUM(EXISTS (SELECT 1
-                                      FROM   orden_servicio os
-                                      WHERE  os.eliminado_en IS NULL AND os.fecha_ejecucion = v_hoy
-                                        AND  os.estado IN ('en_ruta', 'en_ejecucion', 'pausada')
-                                        AND  (os.id_tecnico_principal = u.id_usuario
-                                              OR EXISTS (SELECT 1 FROM os_personal op
-                                                         WHERE op.id_os = os.id_os AND op.id_usuario = u.id_usuario AND op.eliminado_en IS NULL)))), 0)
-            INTO   v_eq_total, v_eq_labores
-            FROM   usuario u
-            WHERE  u.eliminado_en IS NULL AND u.estado = 'activo' AND u.area = v_area
-              AND  (u.cargo IS NULL OR (u.cargo NOT LIKE 'jefe\_%' AND u.cargo NOT LIKE 'asistente\_%'));
-        END;
-    END IF;
-
-    -- Agenda del Área: conflictos sobrevenidos de la Programación (HU-39)
+    -- Mi Equipo (HU-36): los técnicos que ve el jefe y los que hoy están en su jornada. UNA sola fuente con la pantalla «Mi equipo»: SP_ArmarEquipoJefaturaMovil (modo liviano: solo el Reloj marcador)
     BEGIN
+        DECLARE v_sin_eq TINYINT DEFAULT 0;
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            SET v_eq_total = NULL;
+            SET v_eq_labores = NULL;
+            DROP TEMPORARY TABLE IF EXISTS tmp_eq;
+        END;
+        CALL SP_ArmarEquipoJefaturaMovil(p_id_usuario, NULL, 0, v_sin_eq);
+        IF v_sin_eq = 0 THEN
+            SELECT COUNT(*), IFNULL(SUM(e.estado IN ('en_labores', 'tardanza', 'refrigerio')), 0)
+            INTO   v_eq_total, v_eq_labores
+            FROM   tmp_eq e;
+        END IF;
+        DROP TEMPORARY TABLE IF EXISTS tmp_eq;
+    END;
+
+    -- Agenda del Área (HU-37): conflictos sobrevenidos de la Programación (HU-39) de los técnicos del alcance Área + Rol del jefe (SP_ArmarEquipoAgendaMovil: el MISMO equipo de la agenda,
+    -- incluidos los dados de baja); el número es el del banner de «Agenda del Área»
+    BEGIN
+        DECLARE v_sin_ag TINYINT DEFAULT 0;
         DECLARE EXIT HANDLER FOR SQLEXCEPTION
         BEGIN
             CALL SP_LimpiarConflictosProgramacion();
+            DROP TEMPORARY TABLE IF EXISTS tmp_eq;
             SET v_conflictos = NULL;
         END;
         IF FN_PermisoAccion(p_id_usuario, 'prog_bandeja') = 1 THEN
-            CALL SP_ArmarConflictosProgramacion();
-            SELECT COUNT(*) INTO v_conflictos
-            FROM   tmp_cf c
-            WHERE  v_area NOT IN ('servicio_tecnico', 'metrologia')
-                   OR EXISTS (SELECT 1 FROM usuario t WHERE t.id_usuario = c.id_usuario AND t.area = v_area);
-            CALL SP_LimpiarConflictosProgramacion();
+            CALL SP_ArmarEquipoAgendaMovil(p_id_usuario, NULL, v_sin_ag);
+            IF v_sin_ag = 0 THEN
+                CALL SP_ArmarConflictosProgramacion();
+                SELECT COUNT(*) INTO v_conflictos
+                FROM   tmp_cf c
+                WHERE  c.id_usuario IN (SELECT e.id_usuario FROM tmp_eq e);
+                CALL SP_LimpiarConflictosProgramacion();
+            END IF;
+            DROP TEMPORARY TABLE IF EXISTS tmp_eq;
         END IF;
     END;
 
-    -- Viáticos y Gastos: gastos rendidos por revisar (solo quien los revisa)
+    -- Viáticos y Gastos: gastos rendidos por revisar (solo quien los revisa y solo los de su alcance Área + Rol: SP_ArmarAlcanceViaticosMovil, el mismo de "Viáticos y gastos del
+    -- equipo" y de la revisión de un gasto; el mismo número que los "por revisar" de esa pantalla)
     BEGIN
-        DECLARE EXIT HANDLER FOR SQLEXCEPTION SET v_gastos = NULL;
+        DECLARE v_sin_vi TINYINT DEFAULT 0;
+        DECLARE EXIT HANDLER FOR SQLEXCEPTION
+        BEGIN
+            SET v_gastos = NULL;
+            DROP TEMPORARY TABLE IF EXISTS tmp_vi_alc;
+        END;
         IF FN_PermisoAccion(p_id_usuario, 'prog_aprobar_reprogramacion') = 1 THEN
-            SELECT COUNT(*) INTO v_gastos
-            FROM   gasto_viatico g
-            WHERE  g.eliminado_en IS NULL AND g.tipo = 'gasto_solicitado' AND g.estado = 'pendiente';
+            CALL SP_ArmarAlcanceViaticosMovil(p_id_usuario, NULL, v_sin_vi);
+            IF v_sin_vi = 0 THEN
+                SELECT COUNT(*) INTO v_gastos
+                FROM   gasto_viatico g
+                JOIN   tmp_vi_alc a ON a.id_os = g.id_os
+                WHERE  g.eliminado_en IS NULL AND g.tipo = 'gasto_solicitado' AND g.estado = 'pendiente';
+            END IF;
+            DROP TEMPORARY TABLE IF EXISTS tmp_vi_alc;
         END IF;
     END;
 

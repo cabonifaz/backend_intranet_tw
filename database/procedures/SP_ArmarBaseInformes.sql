@@ -2,6 +2,9 @@
 -- Llena tmp_rt_base (una fila por informe; el que llama hace DROP TEMPORARY TABLE tmp_rt_base al terminar).
 --   p_id_informe NULL = todos (bandeja). Solo informes ya enviados por el técnico (no borradores).
 --   Alcance: gerencia / TI ven todo; el resto, los informes de los técnicos de su área ("informes de mis técnicos").
+--   App móvil (HU-33): SP_FijarAlcanceInformesMovil fija @tw_inf_usuario / @tw_inf_ver_todo / @tw_inf_area con la regla ÁREA + ROL de la app (Gerencia, Operaciones, Administración,
+--   TI, SSOMA, Calidad y Comercial con cualquier rol, y Administradores, ven todo; el Supervisor de Servicio Técnico / Metrología, solo su área). Esas variables SOLO se respetan si
+--   @tw_inf_usuario es el usuario que consulta: la intranet no las fija y conserva su regla de siempre.
 -- grupo_estado (bandeja y tarjetas):
 --   pendiente_revision       enviado o en revisión, sin observaciones o con la precotización ya registrada
 --   pendiente_precotizacion  enviado o en revisión, con observaciones y sin precotización (no se puede marcar revisado)
@@ -24,6 +27,11 @@ BEGIN
     SELECT area INTO v_area FROM usuario
     WHERE id_usuario = p_id_usuario AND eliminado_en IS NULL AND estado = 'activo' LIMIT 1;
     SET v_ver_todo = IF(IFNULL(v_area, '') IN ('gerencia', 'ti'), 1, 0);
+    -- Alcance de la app móvil (regla ÁREA + ROL); sin área y sin "ver todo" no hay filas
+    IF @tw_inf_usuario IS NOT NULL AND @tw_inf_usuario = p_id_usuario THEN
+        SET v_ver_todo = IF(IFNULL(@tw_inf_ver_todo, 0) = 1, 1, 0);
+        SET v_area     = @tw_inf_area;
+    END IF;
 
     SELECT CAST(IFNULL(MAX(Num2), 48) AS SIGNED) INTO v_sla
     FROM tabla_maestra WHERE Descripcion = 'PARAMETRO_PROGRAMACION' AND String2 = 'RT_SLA_REVISION_HORAS';
@@ -87,6 +95,15 @@ BEGIN
             WHERE f.eliminado_en IS NULL AND f.id_tipo_evidencia NOT IN (6, 7) AND f.url_archivo NOT LIKE 'qr://%' AND IFNULL(f.vigente, 1) = 1 AND f.validacion_ia <> 'rechazada'
               AND (f.id_informe = it.id_informe
                    OR (f.id_informe IS NULL AND f.id_os = it.id_os AND (f.id_equipo = it.id_equipo OR f.id_equipo IS NULL)))) AS n_fotos_validas,
+           (SELECT COUNT(*) FROM evidencia_fotografica f
+            WHERE f.eliminado_en IS NULL AND f.id_tipo_evidencia NOT IN (6, 7) AND f.url_archivo NOT LIKE 'qr://%' AND IFNULL(f.vigente, 1) = 1 AND f.override_aprobado = 1
+              AND (f.id_informe = it.id_informe
+                   OR (f.id_informe IS NULL AND f.id_os = it.id_os AND (f.id_equipo = it.id_equipo OR f.id_equipo IS NULL)))) AS n_forzadas,
+           (SELECT COUNT(*) FROM evidencia_fotografica f
+            WHERE f.eliminado_en IS NULL AND f.id_tipo_evidencia NOT IN (6, 7) AND f.url_archivo NOT LIKE 'qr://%' AND IFNULL(f.vigente, 1) = 1 AND f.override_aprobado = 1
+              AND f.revision_jefe IS NULL
+              AND (f.id_informe = it.id_informe
+                   OR (f.id_informe IS NULL AND f.id_os = it.id_os AND (f.id_equipo = it.id_equipo OR f.id_equipo IS NULL)))) AS n_forzadas_sin_revision,
            (SELECT COUNT(*) FROM informe_ensayo en WHERE en.id_informe = it.id_informe AND en.eliminado_en IS NULL)      AS n_ensayos,
            (SELECT COUNT(*) FROM informe_ensayo en WHERE en.id_informe = it.id_informe AND en.eliminado_en IS NULL
               AND en.resultado IS NULL)                                                                                  AS n_ensayos_sin_resultado,

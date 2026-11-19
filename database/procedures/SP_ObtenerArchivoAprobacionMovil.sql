@@ -43,15 +43,8 @@ proc: BEGIN
           INTO v_id_os, v_ruta, v_cuadro, v_video
         FROM evidencia_fotografica f WHERE f.id_evidencia = p_id AND f.override_aprobado = 1 AND f.eliminado_en IS NULL;
 
-        SELECT COALESCE(IF(c.String2 LIKE 'jefe\_%' AND c.String3 IN ('servicio_tecnico', 'metrologia'), c.String3, NULL),
-                        IF(u.rol_sistema = 'supervisor' AND u.area = 'metrologia', 'metrologia', NULL)),
-               (u.cargo IN ('jefe_operaciones', 'coordinador_operaciones') OR u.rol_sistema IN ('administrador', 'admin')
-                OR (u.rol_sistema = 'supervisor' AND u.area = 'operaciones'))
-        INTO   v_area_jefe, v_general
-        FROM   usuario u
-        LEFT JOIN tabla_maestra c ON c.IdMaestro = 80 AND c.IdEmpresa = 1 AND c.String2 = u.cargo
-        WHERE  u.id_usuario = p_id_usuario AND u.eliminado_en IS NULL AND u.estado = 'activo'
-        LIMIT 1;
+        -- Regla Área + Rol (SP_ResolverAprobadorMovil): otras áreas con cualquier rol y Administradores ven todo; Supervisor de ST / Metrología, solo su área
+        CALL SP_ResolverAprobadorMovil(p_id_usuario, v_area_jefe, v_general);
 
         SELECT asr.area_usuario INTO v_area_os
         FROM orden_servicio os

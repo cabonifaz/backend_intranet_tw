@@ -8,6 +8,8 @@
 --   p_id_os_objetivo: la orden afectada por la resolución (debe formar parte del conflicto). NULL = p_id_os_a.
 --   p_id_nuevo_tecnico: solo en reasignar. p_fecha, p_hora_inicio, p_hora_fin: solo en reprogramar.
 --   p_comentario: opcional; se antepone el motivo autocompletado del conflicto (p. ej. 'SSOMA vencido del técnico Juan Pérez').
+-- Motivo: el del conflicto (id_motivo_sugerido). La app móvil (HU-37, SP_ResolverConflictoAgendaMovil) puede elegir otro del catálogo MOTIVO_REPROGRAMACION: lo deja en @tw_cf_motivo junto con
+--   @tw_cf_motivo_usuario (= el usuario del token) y lo limpia al terminar; solo se respeta si el usuario coincide. Sin las variables, el comportamiento de la intranet NO cambia.
 -- Resultados: 1 mensaje, 2 resultado (los de SP_ReprogramarProgramacion: modo directa | solicitud).
 DROP PROCEDURE IF EXISTS SP_ResolverConflictoProgramacion;
 
@@ -111,6 +113,9 @@ proc: BEGIN
         LEAVE proc;
     END IF;
     SELECT c.id_motivo, c.motivo_sugerido INTO v_id_motivo, v_sugerido FROM tmp_cf c WHERE c.clave = v_clave;
+    IF IFNULL(@tw_cf_motivo_usuario, 0) = p_id_usuario AND IFNULL(@tw_cf_motivo, 0) > 0 THEN
+        SET v_id_motivo = @tw_cf_motivo;
+    END IF;
     SELECT a.id_programacion, a.rol INTO v_id_prog, v_rol
     FROM tmp_cf_asig a WHERE a.id_os = v_objetivo AND a.id_usuario = p_id_tecnico;
     IF v_rol IS NULL THEN

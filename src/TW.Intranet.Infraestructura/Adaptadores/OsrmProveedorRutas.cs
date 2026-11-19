@@ -33,6 +33,24 @@ public class OsrmProveedorRutas(HttpClient http, ConfiguracionRutas configuracio
 
     private static string N(decimal v, int dec) => Math.Round(v, dec).ToString(CultureInfo.InvariantCulture);
 
+    /// <summary>Trazado por las calles (GeoJSON: [longitud, latitud]); se reduce a ~200 puntos para no cargar la respuesta.</summary>
+    private static IReadOnlyList<(decimal Latitud, decimal Longitud)>? LeerCalles(JsonElement ruta)
+    {
+        try
+        {
+            if (!ruta.TryGetProperty("geometry", out var g) || !g.TryGetProperty("coordinates", out var coords) || coords.GetArrayLength() < 2) return null;
+            var n = coords.GetArrayLength();
+            var paso = Math.Max(1, (int)Math.Ceiling(n / 200.0));
+            var puntos = new List<(decimal Latitud, decimal Longitud)>();
+            for (var i = 0; i < n; i += paso) puntos.Add(Punto(coords[i]));
+            if ((n - 1) % paso != 0) puntos.Add(Punto(coords[n - 1])); // el último punto (la planta) siempre
+            return puntos;
+        }
+        catch (Exception) { return null; }
+
+        static (decimal Latitud, decimal Longitud) Punto(JsonElement c) => (Math.Round(c[1].GetDecimal(), 6), Math.Round(c[0].GetDecimal(), 6));
+    }
+
     public async Task<RutaCarretera?> CalcularAsync(decimal latOrigen, decimal lonOrigen, decimal latDestino, decimal lonDestino, CancellationToken ct)
     {
         // El origen se redondea a ~100 m: un técnico que se mueve poco reutiliza la respuesta durante un minuto
@@ -42,7 +60,7 @@ public class OsrmProveedorRutas(HttpClient http, ConfiguracionRutas configuracio
         RutaCarretera? ruta = null;
         try
         {
-            var url = $"{_osrm}/route/v1/driving/{N(lonOrigen, 6)},{N(latOrigen, 6)};{N(lonDestino, 6)},{N(latDestino, 6)}?overview=false";
+            var url = $"{_osrm}/route/v1/driving/{N(lonOrigen, 6)},{N(latOrigen, 6)};{N(lonDestino, 6)},{N(latDestino, 6)}?overview=simplified&geometries=geojson";
             using var tiempo = CancellationTokenSource.CreateLinkedTokenSource(ct);
             tiempo.CancelAfter(TimeSpan.FromSeconds(4));
             using var resp = await http.GetAsync(url, tiempo.Token);
@@ -54,7 +72,7 @@ public class OsrmProveedorRutas(HttpClient http, ConfiguracionRutas configuracio
                     var r = rutas[0];
                     var metros   = r.GetProperty("distance").GetDouble();
                     var segundos = r.GetProperty("duration").GetDouble();
-                    ruta = new RutaCarretera((int)Math.Round(metros), Math.Max(1, (int)Math.Ceiling(segundos * _factorTrafico / 60.0)));
+                    ruta = new RutaCarretera((int)Math.Round(metros), Math.Max(1, (int)Math.Ceiling(segundos * _factorTrafico / 60.0)), LeerCalles(r));
                 }
             }
         }

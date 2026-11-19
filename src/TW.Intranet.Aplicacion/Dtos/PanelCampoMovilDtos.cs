@@ -8,9 +8,12 @@ public record PanelCampoKpisDto(int Programados, int EnRuta, int Ejecucion, int 
 /// <summary>
 /// Un pin del mapa por técnico. Estado = el de su servicio más urgente (sin_salir, en_ruta, en_planta, en_ejecucion, con_demora, con_incidente, finalizado).
 /// Latitud/Longitud NULL = el técnico aún no envía posición hoy.
+/// Jornada / Actividad / ActividadTono / ActividadColor: como en el Mapa Operativo de la intranet. Jornada = estado del Reloj marcador (en_labores · en_refrigerio · salio_planta ·
+/// finalizada; null si no inició), Actividad = lo que hace el técnico (texto) y ActividadColor = su color hexadecimal (verde = en labores, naranja = refrigerio…).
 /// </summary>
 public record PanelCampoPinDto(long IdUsuario, string Tecnico, string Iniciales, string Estado, decimal? Latitud, decimal? Longitud, int? MinutosUbicacion,
-                               long? IdOs, string? NumeroOs, string? Cliente);
+                               long? IdOs, string? NumeroOs, string? Cliente,
+                               string? Jornada = null, string? Actividad = null, string? ActividadTono = null, string? ActividadColor = null);
 
 /// <summary>Alerta del panel. Tipo: error_critico · incidente · demora · perdida_contacto · gps_parado · sin_ingreso_post_llegada · sin_iniciar_servicio. Severidad: critica | advertencia.</summary>
 public record PanelCampoAlertaDto(string Clave, string Tipo, string Severidad, string Titulo, string? Detalle, long IdOs, string NumeroOs, string? Cliente,
@@ -57,14 +60,17 @@ public record RutaResumenDto(long IdOs, string Numero, string? Cliente, string E
                              /// <summary>Distancia por calles (m) y si la ETA se calculó por calles (solo con la sede ubicada).</summary>
                              int? DistanciaRutaM = null, bool EtaPorCalles = false,
                              /// <summary>true si destino_* es la coordenada real de la sede; false: la sede no tiene ubicación y el destino se omite (no se dibuja ni se calcula el tiempo).</summary>
-                             bool PlantaUbicada = true);
+                             bool PlantaUbicada = true,
+                             /// <summary>Precisión del GPS de la última posición (m).</summary>
+                             int? PrecisionM = null);
 
 public record PuntoGpsServicioDto(decimal Latitud, decimal Longitud, string? Hora);
 
 /// <summary>Evento en ruta. Tono: verde (hito OK) | naranja o rojo (demora) | amarillo (alerta).</summary>
 public record EventoRutaDto(string? Hora, string Titulo, string? Detalle, string Badge, string Tono);
 
-public record RutaServicioDto(RutaResumenDto Resumen, List<PuntoGpsServicioDto> Recorrido, List<EventoRutaDto> Eventos);
+/// <summary>Calles = trazado por las calles de la posición actual a la planta (OSRM; null si el servicio externo no respondió o la sede no está ubicada): la app lo dibuja sobre el mapa.</summary>
+public record RutaServicioDto(RutaResumenDto Resumen, List<PuntoGpsServicioDto> Recorrido, List<EventoRutaDto> Eventos, List<PuntoGpsServicioDto>? Calles = null);
 
 /// <summary>Cambio manual de estado (solo avanzar). NuevoEstado: salida | en_ruta | llegada | ingreso | inicio | finalizado. Comentario de 10 a 1000 caracteres.</summary>
 public record CambiarEstadoServicioDto(string? NuevoEstado, int? IdMotivo, string? Comentario);

@@ -1,5 +1,6 @@
 -- ============================================================
 -- SP_RevisarGastoMovil  (App Mobile HU-31 — el Jefe de Operaciones aprueba, observa o rechaza un gasto desde la bandeja de aprobaciones · escritura)
+--   HU-35: además el gasto debe ser de un servicio del alcance del jefe (Área + Rol, SP_ArmarAlcanceViaticosMovil); fuera del alcance responde como si no existiera.
 --   Resuelve la programación del gasto y llama a SP_RevisarGastoProgramacion (HU-45), que valida: solo prog_aprobar_reprogramacion, programación confirmada,
 --   rendición abierta, acción aprobar | observar | rechazar con su comentario (obligatorio al observar o rechazar) y que un gasto ya aprobado o rechazado
 --   no se vuelve a resolver (si otro jefe ya lo resolvió responde con un mensaje de negocio). Notifica al técnico y deja auditoría.
@@ -19,10 +20,12 @@ proc: BEGIN
     DECLARE v_n    INT DEFAULT 0;
     DECLARE v_id_os BIGINT;
     DECLARE v_prog BIGINT;
+    DECLARE v_sin  TINYINT DEFAULT 0;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
         GET DIAGNOSTICS CONDITION 1 @err_msg = MESSAGE_TEXT, @err_code = MYSQL_ERRNO;
+        DROP TEMPORARY TABLE IF EXISTS tmp_vi_alc;
         SELECT 3 AS IdTipoMensaje, CONCAT('[MySQL ', @err_code, '] ', @err_msg) AS Mensaje;
     END;
 
@@ -48,6 +51,20 @@ proc: BEGIN
         SELECT 1 AS IdTipoMensaje, 'El servicio del gasto no tiene una programación activa.' AS Mensaje;
         LEAVE proc;
     END IF;
+
+    -- Alcance Área + Rol (HU-35, SP_ArmarAlcanceViaticosMovil): solo gastos de servicios que el jefe ve (Supervisor de ST / Metrología: los de su área)
+    CALL SP_ArmarAlcanceViaticosMovil(p_id_usuario, v_id_os, v_sin);
+    IF v_sin = 1 THEN
+        DROP TEMPORARY TABLE IF EXISTS tmp_vi_alc;
+        SELECT 1 AS IdTipoMensaje, 'Tu cargo no tiene el menú de Jefatura.' AS Mensaje;
+        LEAVE proc;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM tmp_vi_alc WHERE id_os = v_id_os) THEN
+        DROP TEMPORARY TABLE IF EXISTS tmp_vi_alc;
+        SELECT 1 AS IdTipoMensaje, 'El gasto no existe o no pertenece a tu alcance.' AS Mensaje;
+        LEAVE proc;
+    END IF;
+    DROP TEMPORARY TABLE IF EXISTS tmp_vi_alc;
 
     CALL SP_RevisarGastoProgramacion(p_id_usuario, v_prog, p_id_gasto, p_accion, p_comentario);
 END$$

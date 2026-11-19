@@ -9,6 +9,13 @@
 --     · Las líneas DEPOSITADAS (estado 'aprobado', las marca Contabilidad) son inmutables: deben venir tal cual y no se pueden quitar.
 -- Al guardar con cambios (o con líneas nunca avisadas) se NOTIFICA a Contabilidad (área contabilidad) con la lista consolidada de lo pendiente
 --   de depósito. Este módulo NUNCA marca "Depositado". Auditoría en el historial de la programación.
+-- EXCEPCIÓN (App Mobile HU-35, decisión del usuario): el jefe también puede marcar «Ya depositado» desde la app (hasta ahora solo Contabilidad lo marcaba, fuera de este módulo).
+--   SP_AsignarViaticoEquipoMovil lo pide con TRES variables de sesión que fija justo antes de llamar a este SP y limpia al terminar:
+--     @tw_vi_deposita_jefe (= quien guarda) · @tw_vi_deposita_prog (= esta programación) · @tw_vi_deposita_tecnico (técnico cuyos viáticos pendientes quedan depositados).
+--   Solo si las tres coinciden con esta llamada, al final de los cambios (misma transacción) las líneas pendientes de ese técnico pasan a 'aprobado' (depositado) con fecha_deposito
+--   de hoy (Lima). Es lo que Contabilidad hace por su lado, así que no se les avisa de lo ya depositado (la lista y el aviso solo cuentan lo pendiente). Queda auditado aparte
+--   («marcado como depositado por el jefe desde la app»). Sin esas variables este SP se comporta como siempre (la intranet no cambia).
+--   @tw_vi_ok = 1 al terminar con éxito (también «sin cambios»): lo lee SP_AsignarViaticoEquipoMovil para avisar al técnico solo si guardó.
 -- Concurrencia: OS → programación → catálogo (mismo orden que el resto). Resultados: 1 mensaje, 2 resultado.
 DROP PROCEDURE IF EXISTS SP_GuardarViaticosProgramacion;
 
@@ -49,6 +56,8 @@ proc: BEGIN
     DECLARE v_depos      DECIMAL(12,2) DEFAULT 0;
     DECLARE v_pend       DECIMAL(12,2) DEFAULT 0;
     DECLARE v_contab     INT DEFAULT 0;
+    DECLARE v_dep_app    INT DEFAULT 0;
+    DECLARE v_dep_nombre VARCHAR(210) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
     DECLARE v_mensaje    VARCHAR(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
@@ -285,6 +294,17 @@ proc: BEGIN
     FROM tmp_vi_in t WHERE t.id_gasto IS NULL;
     SET v_creadas = ROW_COUNT();
 
+    -- Depósito marcado por el jefe desde la app (HU-35): ver la excepción en la cabecera
+    IF IFNULL(@tw_vi_deposita_jefe, 0) = p_id_usuario AND IFNULL(@tw_vi_deposita_prog, 0) = p_id_programacion AND IFNULL(@tw_vi_deposita_tecnico, 0) > 0 THEN
+        UPDATE gasto_viatico g
+        SET g.estado = 'aprobado', g.fecha_deposito = DATE(UTC_TIMESTAMP() - INTERVAL 5 HOUR), g.modificado_por = p_id_usuario
+        WHERE g.tipo = 'viatico_asignado' AND g.eliminado_en IS NULL AND g.estado NOT IN ('aprobado', 'rendido')
+          AND g.id_usuario = @tw_vi_deposita_tecnico
+          AND (g.id_programacion = p_id_programacion OR (g.id_programacion IS NULL AND g.id_os = v_id_os));
+        SET v_dep_app = ROW_COUNT();
+        SELECT TRIM(CONCAT(IFNULL(u.nombre, ''), ' ', IFNULL(u.apellido, ''))) INTO v_dep_nombre FROM usuario u WHERE u.id_usuario = @tw_vi_deposita_tecnico;
+    END IF;
+
     DROP TEMPORARY TABLE IF EXISTS tmp_vi_in;
     DROP TEMPORARY TABLE IF EXISTS tmp_vi_nc;
 
@@ -294,8 +314,9 @@ proc: BEGIN
     FROM gasto_viatico g
     WHERE g.tipo = 'viatico_asignado' AND g.eliminado_en IS NULL AND (g.id_programacion = p_id_programacion OR (g.id_programacion IS NULL AND g.id_os = v_id_os));
 
-    IF v_creadas + v_modif + v_retiradas = 0 AND v_sin_avisar = 0 THEN
+    IF v_creadas + v_modif + v_retiradas + v_dep_app = 0 AND v_sin_avisar = 0 THEN
         COMMIT;
+        SET @tw_vi_ok = 1;
         SELECT 2 AS IdTipoMensaje, 'No hay cambios en la asignación de viáticos.' AS Mensaje;
         SELECT p_id_programacion AS id_programacion, 0 AS creadas, 0 AS modificadas, 0 AS retiradas, v_total AS total_asignado, v_depos AS total_depositado,
                v_pend AS total_pendiente, 0 AS notificados_contabilidad, 1 AS sin_cambios, v_nuevos AS conceptos_nuevos, v_version AS version;
@@ -314,6 +335,10 @@ proc: BEGIN
             AND (g.id_programacion = p_id_programacion OR (g.id_programacion IS NULL AND g.id_os = v_id_os))
           GROUP BY g.id_usuario) x;
 
+    -- Si lo único que pasó es que el jefe dejó todo depositado, no hay nada que pedirle a Contabilidad
+    IF v_dep_app > 0 AND v_pend = 0 AND v_retirados IS NULL THEN
+        SET v_contab = 0;
+    ELSE
     INSERT INTO notificacion (id_usuario_destino, id_canal, titulo, cuerpo, entidad_tipo, id_entidad, fecha_creacion, creado_por)
     SELECT u.id_usuario, 5, LEFT(CONCAT('Viáticos por depositar: ', v_numero), 150),
            LEFT(CONCAT('Programación ', v_codigo, ' · ', v_tipo, ' ', v_numero, IF(v_cliente IS NULL, '', CONCAT(' · ', v_cliente)), '. ',
@@ -323,6 +348,7 @@ proc: BEGIN
     FROM usuario u
     WHERE u.eliminado_en IS NULL AND u.estado = 'activo' AND u.area = 'contabilidad' AND u.id_usuario <> p_id_usuario;
     SET v_contab = ROW_COUNT();
+    END IF;
 
     UPDATE gasto_viatico g SET g.notificado_en = NOW()
     WHERE g.tipo = 'viatico_asignado' AND g.eliminado_en IS NULL AND g.estado NOT IN ('aprobado', 'rendido') AND g.notificado_en IS NULL
@@ -336,12 +362,21 @@ proc: BEGIN
             JSON_OBJECT('creadas', v_creadas, 'modificadas', v_modif, 'retiradas', v_retiradas, 'totalAsignado', v_total,
                         'totalDepositado', v_depos, 'totalPendiente', v_pend, 'conceptosNuevos', v_nuevos, 'notificadosContabilidad', v_contab));
 
+    IF v_dep_app > 0 THEN
+        INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion, id_usuario, registrado_en, metadata)
+        VALUES ('programacion', p_id_programacion, 'depositar_viaticos_app', v_estado, v_estado,
+                LEFT(CONCAT('Viáticos de ', IFNULL(v_dep_nombre, 'un técnico'), ' en ', v_codigo, ' marcados como depositados por el jefe desde la app (', v_dep_app, ' líneas).'), 900),
+                p_id_usuario, NOW(), JSON_OBJECT('idTecnico', @tw_vi_deposita_tecnico, 'lineas', v_dep_app, 'origen', 'app_movil'));
+    END IF;
+
     COMMIT;
+    SET @tw_vi_ok = 1;
 
     CALL SP_VersionViaticosProgramacion(p_id_programacion, v_id_os, 1, v_version);
     SET v_mensaje = CONCAT('Asignación de viáticos guardada.',
                            IF(v_contab > 0, CONCAT(' Se notificó a Contabilidad: S/ ', FORMAT(v_pend, 2), ' pendientes de depósito.'),
-                              ' No hay usuarios de Contabilidad configurados para recibir el aviso.'));
+                              IF(v_dep_app > 0 AND v_pend = 0, ' Los viáticos quedaron depositados: no hay nada que avisar a Contabilidad.',
+                                 ' No hay usuarios de Contabilidad configurados para recibir el aviso.')));
     SELECT 2 AS IdTipoMensaje, v_mensaje AS Mensaje;
     SELECT p_id_programacion AS id_programacion, v_creadas AS creadas, v_modif AS modificadas, v_retiradas AS retiradas, v_total AS total_asignado,
            v_depos AS total_depositado, v_pend AS total_pendiente, v_contab AS notificados_contabilidad, 0 AS sin_cambios, v_nuevos AS conceptos_nuevos,

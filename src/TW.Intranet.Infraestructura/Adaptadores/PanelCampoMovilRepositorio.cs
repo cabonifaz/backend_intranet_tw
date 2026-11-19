@@ -26,7 +26,8 @@ public class PanelCampoMovilRepositorio(CadenaConexionBd conexion)
                 while (await r.ReadAsync(ct))
                     pines.Add(new PanelCampoPinDto(EnteroLargo(r, "id_usuario"), Texto(r, "tecnico") ?? string.Empty, Texto(r, "iniciales") ?? string.Empty,
                                                    Texto(r, "estado") ?? "sin_salir", DecimalNulo(r, "latitud"), DecimalNulo(r, "longitud"), EnteroNulo(r, "minutos_ubicacion"),
-                                                   EnteroLargoNulo(r, "id_os"), Texto(r, "numero_os"), Texto(r, "cliente")));
+                                                   EnteroLargoNulo(r, "id_os"), Texto(r, "numero_os"), Texto(r, "cliente"),
+                                                   Texto(r, "jornada"), Texto(r, "actividad"), Texto(r, "actividad_tono"), Texto(r, "actividad_color")));
 
                 // 4 Alertas
                 await r.NextResultAsync(ct);
@@ -121,7 +122,7 @@ public class PanelCampoMovilRepositorio(CadenaConexionBd conexion)
                     Texto(r, "destino_nombre"), DecimalNulo(r, "origen_latitud"), DecimalNulo(r, "origen_longitud"), Texto(r, "eta"), Texto(r, "eta_programada"),
                     Texto(r, "demora_texto"), Texto(r, "demora_origen"), Texto(r, "contacto_nombre"), Texto(r, "contacto_telefono"), Texto(r, "actualizado"),
                     EnteroNulo(r, "eta_minutos"), Texto(r, "eta_estimada"), Texto(r, "destino_direccion"),
-                    PlantaUbicada: Booleano(r, "planta_ubicada"));
+                    PlantaUbicada: Booleano(r, "planta_ubicada"), PrecisionM: EnteroNulo(r, "precision_m"));
 
                 await r.NextResultAsync(ct);
                 var recorrido = new List<PuntoGpsServicioDto>();
