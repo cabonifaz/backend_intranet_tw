@@ -91,15 +91,23 @@ proc: BEGIN
 
     -- Informes pendientes de revisión: el cálculo compartido de la bandeja de Revisión Técnica
     BEGIN
+        DECLARE v_tiene_inf TINYINT DEFAULT 0;
         DECLARE EXIT HANDLER FOR SQLEXCEPTION
         BEGIN
+            SET @tw_inf_usuario = NULL, @tw_inf_ver_todo = NULL, @tw_inf_area = NULL;
             DROP TEMPORARY TABLE IF EXISTS tmp_rt_base;
             SET v_informes = NULL;
         END;
         IF FN_PermisoAccion(p_id_usuario, 'rt_bandeja') = 1 THEN
-            CALL SP_ArmarBaseInformes(p_id_usuario, NULL);
-            SELECT COUNT(*) INTO v_informes FROM tmp_rt_base WHERE grupo_estado IN ('pendiente_revision', 'pendiente_precotizacion');
-            DROP TEMPORARY TABLE IF EXISTS tmp_rt_base;
+            -- Con el alcance de la app (regla ÁREA + ROL) y sin los observados (esos esperan la corrección del técnico): los mismos de la pestaña "Por revisar" (HU-33)
+            CALL SP_FijarAlcanceInformesMovil(p_id_usuario, v_tiene_inf);
+            IF v_tiene_inf = 1 THEN
+                CALL SP_ArmarBaseInformes(p_id_usuario, NULL);
+                SELECT COUNT(*) INTO v_informes FROM tmp_rt_base
+                WHERE grupo_estado IN ('pendiente_revision', 'pendiente_precotizacion') AND estado <> 'observado';
+                DROP TEMPORARY TABLE IF EXISTS tmp_rt_base;
+            END IF;
+            SET @tw_inf_usuario = NULL, @tw_inf_ver_todo = NULL, @tw_inf_area = NULL;
         END IF;
     END;
 

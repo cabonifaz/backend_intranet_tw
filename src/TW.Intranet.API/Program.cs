@@ -346,6 +346,13 @@ builder.Services.AddScoped<ObtenerRutaServicioJefaturaMovilCasoDeUso>();
 builder.Services.AddSingleton(builder.Configuration.GetSection("Rutas").Get<ConfiguracionRutas>() ?? new ConfiguracionRutas());
 builder.Services.AddHttpClient<IProveedorRutas, OsrmProveedorRutas>(c => c.Timeout = TimeSpan.FromSeconds(6));
 builder.Services.AddScoped<RegistrarSeguimientoJefaturaMovilCasoDeUso>();
+// HU-33 — Revisión de informes técnicos del Jefe de Área
+builder.Services.AddScoped<IInformesRevisionMovilRepositorio, InformesRevisionMovilRepositorio>();
+builder.Services.AddScoped<ObtenerInformesRevisionMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerInformeRevisionMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerArchivoEvidenciaInformeMovilCasoDeUso>();
+builder.Services.AddScoped<ObservarInformeMovilCasoDeUso>();
+builder.Services.AddScoped<AprobarInformeMovilCasoDeUso>();
 // HU-14 / HU-34 — Correlativos de Metrología (técnico y Jefe de Metrología)
 builder.Services.AddScoped<ICorrelativosMovilRepositorio, CorrelativosMovilRepositorio>();
 builder.Services.AddScoped<CorrelativosTecnicoMovilCasoDeUso>();
