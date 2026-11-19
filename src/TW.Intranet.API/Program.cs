@@ -358,6 +358,11 @@ builder.Services.AddScoped<IViaticosEquipoMovilRepositorio, ViaticosEquipoMovilR
 builder.Services.AddScoped<ObtenerViaticosEquipoMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerViaticoServicioEquipoMovilCasoDeUso>();
 builder.Services.AddScoped<AsignarViaticoEquipoMovilCasoDeUso>();
+// HU-36 — Mi equipo: asistencia, ubicación y horas contabilizadas (Jefe de Área)
+builder.Services.AddScoped<IEquipoJefaturaMovilRepositorio, EquipoJefaturaMovilRepositorio>();
+builder.Services.AddScoped<ObtenerEquipoJefaturaMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerFichaEquipoTecnicoMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerHorasTecnicoMovilCasoDeUso>();
 // HU-14 / HU-34 — Correlativos de Metrología (técnico y Jefe de Metrología)
 builder.Services.AddScoped<ICorrelativosMovilRepositorio, CorrelativosMovilRepositorio>();
 builder.Services.AddScoped<CorrelativosTecnicoMovilCasoDeUso>();
