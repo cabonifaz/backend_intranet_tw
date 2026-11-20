@@ -311,6 +311,7 @@ builder.Services.AddScoped<RegistrarLlamadaEnsayoMovilCasoDeUso>();
 builder.Services.AddScoped<IEvidenciasMovilRepositorio, EvidenciasMovilRepositorio>();
 builder.Services.AddScoped<ObtenerEvidenciasMovilCasoDeUso>();
 builder.Services.AddScoped<RegistrarEvidenciaMovilCasoDeUso>();
+builder.Services.AddScoped<QuitarEvidenciaAdicionalMovilCasoDeUso>();
 builder.Services.AddScoped<ForzarEvidenciaMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerArchivoEvidenciaMovilCasoDeUso>();
 // App Mobile HU-15 / HU-16 — cabecera del informe (Datos · Detalle Serv. · Observación y pruebas) y Hard Stop de cierre del trabajo en el equipo
@@ -320,6 +321,8 @@ builder.Services.AddScoped<GuardarCabeceraInformeMovilCasoDeUso>();
 builder.Services.AddScoped<SubirFotoFallaMovilCasoDeUso>();
 builder.Services.AddScoped<ValidarCierreEquipoMovilCasoDeUso>();
 builder.Services.AddScoped<GenerarInformeEquipoMovilCasoDeUso>();
+builder.Services.AddScoped<GenerarPreInformeMovilCasoDeUso>();
+builder.Services.AddSingleton<IGeneradorPreInformePdf, GeneradorPreInformePdf>();
 // App Mobile HU-19 — Asistente IA y Procedimientos (la IA y la lectura de los PDF oficiales se registran más abajo, junto a Gemini)
 builder.Services.AddScoped<IAsistenteMovilRepositorio, AsistenteMovilRepositorio>();
 builder.Services.AddScoped<ObtenerInicioAsistenteMovilCasoDeUso>();

@@ -27,8 +27,10 @@ public class RegistrarEvidenciaMovilCasoDeUso(IEvidenciasMovilRepositorio reposi
 {
     public const long TamanoMaximoFotoBytes = 6 * 1024 * 1024;
     public const long TamanoMaximoVideoBytes = 15 * 1024 * 1024;
+    /// <summary>Código de las fotos adicionales: extras opcionales del servicio (hasta 20 por equipo), sin IA y fuera de las 9 del panel.</summary>
+    public const string CodigoAdicional = "adicional";
     public static readonly IReadOnlySet<string> Codigos = new HashSet<string>
-        { "placa", "inicial", "encendido", "desmontaje", "abierto", "prueba", "final", "informe", "qr" };
+        { "placa", "inicial", "encendido", "desmontaje", "abierto", "prueba", "final", "informe", "qr", CodigoAdicional };
 
     /// <summary>MP4 / MOV: la caja "ftyp" va en los bytes 4 a 7.</summary>
     public static bool EsMp4(ReadOnlySpan<byte> inicio) =>
@@ -40,7 +42,7 @@ public class RegistrarEvidenciaMovilCasoDeUso(IEvidenciasMovilRepositorio reposi
         if (d is null) return "Datos incompletos.";
         var codigo = (d.Codigo ?? string.Empty).Trim().ToLowerInvariant();
         if (!Codigos.Contains(codigo)) return "La evidencia no existe en el panel.";
-        if (d.Pagina < 1 || d.Pagina > 10) return "El informe admite hasta 10 hojas.";
+        if (codigo == "informe" && (d.Pagina < 1 || d.Pagina > 10)) return "El informe admite hasta 10 hojas.";
         if (d.Latitud is { } la && (la is < -90m or > 90m) || d.Longitud is { } lo && (lo is < -180m or > 180m)) return "La ubicación GPS no es válida.";
         if (d.Precision is < 0m or > 5000m) return "La precisión del GPS no es válida.";
         if (codigo == "encendido" && (d.DuracionSeg is null || d.DuracionSeg < 2.5m || d.DuracionSeg > 5.5m)) return "El microvideo debe durar de 3 a 5 segundos.";
@@ -103,8 +105,12 @@ public class RegistrarEvidenciaMovilCasoDeUso(IEvidenciasMovilRepositorio reposi
                 await almacen.GuardarAsync(rutaArchivo, new MemoryStream(imagen), ct);
             }
 
-            try { ia0 = await ia.ValidarAsync(new SolicitudValidacionEvidenciaIa(codigo, imagen, cab.Marca, cab.Modelo, cab.NumeroSerie), ct); }
-            catch (Exception) when (!ct.IsCancellationRequested) { ia0 = new("omitida", "La IA no estuvo disponible.", null); }
+            // Las fotos adicionales son extras del servicio: no se validan con IA (quedan "omitida")
+            if (codigo != CodigoAdicional)
+            {
+                try { ia0 = await ia.ValidarAsync(new SolicitudValidacionEvidenciaIa(codigo, imagen, cab.Marca, cab.Modelo, cab.NumeroSerie), ct); }
+                catch (Exception) when (!ct.IsCancellationRequested) { ia0 = new("omitida", "La IA no estuvo disponible.", null); }
+            }
         }
 
         var r = await repositorio.RegistrarAsync(idUsuario, idOs, idOsEquipo, codigo, codigo == "informe" ? d.Pagina : 1, rutaArchivo, rutaCuadro, video ? d.DuracionSeg : null,
@@ -135,6 +141,19 @@ public class ForzarEvidenciaMovilCasoDeUso(IEvidenciasMovilRepositorio repositor
         if (motivo.Length > MaxMotivo) return new(1, $"El motivo puede tener hasta {MaxMotivo} caracteres.");
 
         var r = await repositorio.ForzarAsync(idUsuario, idOs, idOsEquipo, idEvidencia, motivo, ct);
+        if (r.IdTipoMensaje != 2) return new(r.IdTipoMensaje, r.Mensaje);
+        var panel = await repositorio.ObtenerAsync(idUsuario, idOs, idOsEquipo, ct);
+        return new(2, r.Mensaje, panel.IdTipoMensaje == 2 ? panel.Datos : null);
+    }
+}
+
+/// <summary>El técnico quita una de sus fotos adicionales (borrado lógico, mientras el equipo está en ejecución). Las 9 evidencias del panel no se quitan.</summary>
+public class QuitarEvidenciaAdicionalMovilCasoDeUso(IEvidenciasMovilRepositorio repositorio)
+{
+    public async Task<RespuestaDto<EvidenciasMovilDto>> EjecutarAsync(long idUsuario, long idOs, long idOsEquipo, long idEvidencia, CancellationToken ct = default)
+    {
+        if (idUsuario <= 0 || idOs <= 0 || idOsEquipo <= 0 || idEvidencia <= 0) return new(1, "Foto no encontrada.");
+        var r = await repositorio.QuitarAdicionalAsync(idUsuario, idOs, idOsEquipo, idEvidencia, ct);
         if (r.IdTipoMensaje != 2) return new(r.IdTipoMensaje, r.Mensaje);
         var panel = await repositorio.ObtenerAsync(idUsuario, idOs, idOsEquipo, ct);
         return new(2, r.Mensaje, panel.IdTipoMensaje == 2 ? panel.Datos : null);

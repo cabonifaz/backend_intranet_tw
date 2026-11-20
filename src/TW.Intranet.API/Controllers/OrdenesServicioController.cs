@@ -82,7 +82,8 @@ public class OrdenesServicioController(
     public async Task<IActionResult> Preparar([FromQuery] long idPropuesta, CancellationToken ct = default)
         => Responder(await preparar.EjecutarAsync(idPropuesta, null, IdUsuarioActual, ct));
 
-    /// <summary>Ficha de edición: borrador, o emitida con la edición aprobada por el Jefe Comercial (modo edicion_aprobada).</summary>
+    /// <summary>Ficha de edición: borrador, o emitida con la edición aprobada por el Jefe Comercial (modo edicion_aprobada),
+    /// o editada directamente por un supervisor / administrador (modo edicion_directa).</summary>
     [RequierePermiso("os_guardar")]
     [HttpGet("{idOs:long}/edicion")]
     [HttpGet("{idOs:long}/preparar-edicion")]

@@ -11,6 +11,8 @@
 --     Placa: si la IA leyó la serie y no coincide con la del equipo, la toma se RECHAZA aquí (la regla vive solo en este SP).
 --   - Cada captura es un intento nuevo (intento = 1, 2, 3…); la última queda vigente y reemplaza a la anterior. Una toma rechazada se puede
 --     aceptar a la fuerza con SP_ForzarEvidenciaMovil (HU-12).
+--   - p_codigo = 'adicional' (fotos adicionales, opcionales): foto extra del servicio, hasta 20 por equipo; el SP le asigna el número; NO pasa por la IA
+--     (queda 'omitida'), no forma parte de las 9 ni cuenta para "Guardar y volver".
 --   - Deja el registro en auditoria_evento.
 -- Resultados: 1 mensaje; 2 (id_evidencia, estado, motivo_rechazo, intento, coincide, numero_rq).
 -- ============================================================
@@ -91,13 +93,18 @@ proc: BEGIN
     SET v_json = IF(p_ia_json IS NOT NULL AND JSON_VALID(p_ia_json) AND CHAR_LENGTH(p_ia_json) <= 8000, p_ia_json, NULL);
     SET v_motivo = LEFT(NULLIF(TRIM(IFNULL(p_ia_motivo, '')), ''), 300);
 
-    CALL SP_CatalogoEvidenciasMovil();
-    SELECT c.id_tipo, c.medio INTO v_id_tipo, v_medio FROM tmp_cat_evid c WHERE c.codigo = LOWER(TRIM(IFNULL(p_codigo, '')));
-    DROP TEMPORARY TABLE IF EXISTS tmp_cat_evid;
+    SET p_codigo = LOWER(TRIM(IFNULL(p_codigo, '')));
+    IF p_codigo = 'adicional' THEN
+        -- Fotos adicionales: extras opcionales del servicio. No forman parte de las 9 del panel, no pasan por la IA y no cuentan para "Guardar y volver"
+        SET v_id_tipo = 2, v_medio = 'foto', v_estado = 'omitida', v_json = NULL, v_motivo = NULL;
+    ELSE
+        CALL SP_CatalogoEvidenciasMovil();
+        SELECT c.id_tipo, c.medio INTO v_id_tipo, v_medio FROM tmp_cat_evid c WHERE c.codigo = p_codigo;
+        DROP TEMPORARY TABLE IF EXISTS tmp_cat_evid;
+    END IF;
     IF v_id_tipo IS NULL THEN
         SELECT 1 AS IdTipoMensaje, 'La evidencia no existe en el panel.' AS Mensaje; LEAVE proc;
     END IF;
-    SET p_codigo = LOWER(TRIM(p_codigo));
     SET v_pagina = IF(p_codigo = 'informe', IFNULL(p_pagina, 1), 1);
     IF v_pagina < 1 OR v_pagina > 10 THEN
         SELECT 1 AS IdTipoMensaje, 'El informe admite hasta 10 hojas.' AS Mensaje; LEAVE proc;
@@ -130,6 +137,17 @@ proc: BEGIN
     IF v_msg IS NOT NULL THEN
         ROLLBACK;
         SELECT 1 AS IdTipoMensaje, v_msg AS Mensaje; LEAVE proc;
+    END IF;
+
+    -- Foto adicional: el SP asigna el número (1, 2, 3…) y no admite más de 20 por equipo
+    IF p_codigo = 'adicional' THEN
+        SELECT IFNULL(MAX(f.pagina), 0) + 1 INTO v_pagina
+        FROM   evidencia_fotografica f
+        WHERE  f.id_os = p_id_os AND f.id_equipo = v_id_eq AND f.codigo = 'adicional' AND f.eliminado_en IS NULL;
+        IF v_pagina > 20 THEN
+            ROLLBACK;
+            SELECT 1 AS IdTipoMensaje, 'Un equipo admite hasta 20 fotos adicionales. Quita alguna para agregar otra.' AS Mensaje; LEAVE proc;
+        END IF;
     END IF;
 
     SELECT NULLIF(TRIM(ec.num_serie), ''), ec.codigo_tw, NULLIF(ec.codigo_cliente, '') INTO v_serie, v_cod_tw, v_cod_cli
@@ -209,6 +227,7 @@ proc: BEGIN
     SELECT 2 AS IdTipoMensaje,
            CASE WHEN v_medio = 'qr' AND v_estado = 'aprobada' THEN IF(v_vinculado = 1, 'QR leído y vinculado a este equipo.', 'QR del equipo leído.')
                 WHEN v_medio = 'qr' THEN 'El QR no corresponde a este equipo.'
+                WHEN p_codigo = 'adicional' THEN 'Foto adicional guardada.'
                 ELSE CASE v_estado WHEN 'aprobada' THEN 'Evidencia guardada y validada por la IA.'
                          WHEN 'omitida'  THEN 'Evidencia guardada (la IA no estuvo disponible para validarla).'
                          ELSE 'La IA rechazó la toma.' END END AS Mensaje;

@@ -36,6 +36,7 @@ BEGIN
     DECLARE v_guardar     TINYINT DEFAULT 0;
     DECLARE v_anular      TINYINT DEFAULT 0;
     DECLARE v_jefe        TINYINT DEFAULT 0;
+    DECLARE v_directo     TINYINT DEFAULT 0;
     DECLARE v_por_pagina  INT;
     DECLARE v_offset      INT;
     DECLARE v_estado      VARCHAR(30)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
@@ -57,6 +58,9 @@ BEGIN
         SET v_guardar    = FN_PermisoAccion(p_id_usuario, 'os_guardar');
         SET v_anular     = FN_PermisoAccion(p_id_usuario, 'os_anular');
         SET v_jefe       = FN_PermisoAccion(p_id_usuario, 'os_aprobar_edicion');
+        -- Supervisor y administrador editan sin solicitud
+        SELECT IF(COUNT(*) > 0, 1, 0) INTO v_directo FROM usuario u
+        WHERE u.id_usuario = p_id_usuario AND u.rol_sistema IN ('supervisor', 'administrador');
         SET v_por_pagina = IF(IFNULL(p_por_pagina, 0) < 1, 10, LEAST(p_por_pagina, 100));
         SET v_offset     = (GREATEST(IFNULL(p_pagina, 1), 1) - 1) * v_por_pagina;
         IF IFNULL(p_exportar, 0) = 1 THEN
@@ -181,10 +185,11 @@ BEGIN
             (sp.id_solicitud IS NOT NULL)                                                 AS solicitud_pendiente,
             (sa.id_solicitud IS NOT NULL)                                                 AS edicion_aprobada,
             -- Acciones según estado y rol
-            -- Sin borradores: solo se edita con una solicitud de edición aprobada y aún no ejecutada
-            (v_guardar = 1 AND sa.id_solicitud IS NOT NULL
+            -- Sin borradores: se edita con una solicitud de edición aprobada y aún no ejecutada,
+            -- o directamente si es supervisor / administrador (ese no necesita solicitar)
+            (v_guardar = 1 AND (sa.id_solicitud IS NOT NULL OR v_directo = 1)
              AND t.estado IN ('emitida', 'programada', 'reprogramada'))                   AS puede_editar,
-            (v_guardar = 1 AND (t.id_responsable <=> p_id_usuario)
+            (v_guardar = 1 AND v_directo = 0 AND (t.id_responsable <=> p_id_usuario)
              AND t.estado IN ('emitida', 'programada', 'reprogramada')
              AND sp.id_solicitud IS NULL AND sa.id_solicitud IS NULL)                     AS puede_solicitar_edicion,
             (v_jefe = 1 AND sp.id_solicitud IS NOT NULL

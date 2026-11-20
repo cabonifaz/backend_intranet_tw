@@ -17,6 +17,7 @@ proc: BEGIN
     DECLARE v_guardar   TINYINT;
     DECLARE v_jefe      TINYINT;
     DECLARE v_anular    TINYINT;
+    DECLARE v_directo   TINYINT DEFAULT 0;
 
     SET v_comercial = FN_PermisoAccion(p_id_usuario, 'os_bandeja');
     SELECT estado INTO v_estado FROM orden_servicio WHERE id_os = p_id_os AND eliminado_en IS NULL;
@@ -31,6 +32,9 @@ proc: BEGIN
     SET v_guardar = FN_PermisoAccion(p_id_usuario, 'os_guardar');
     SET v_jefe    = FN_PermisoAccion(p_id_usuario, 'os_aprobar_edicion');
     SET v_anular  = FN_PermisoAccion(p_id_usuario, 'os_anular');
+    -- Supervisor y administrador editan sin solicitud
+    SELECT IF(COUNT(*) > 0, 1, 0) INTO v_directo FROM usuario u
+    WHERE u.id_usuario = p_id_usuario AND u.rol_sistema IN ('supervisor', 'administrador');
 
     SELECT 2 AS IdTipoMensaje, 'Éxito.' AS Mensaje;
 
@@ -61,10 +65,11 @@ proc: BEGIN
            sp.id_aprobador, CONCAT(uj.nombre, ' ', uj.apellido) AS aprobador_solicitud,
            (sa.id_solicitud IS NOT NULL)                                                                AS edicion_aprobada,
            -- Acciones
-           -- Sin borradores: solo se edita con una solicitud de edición aprobada y aún no ejecutada
-           (v_guardar = 1 AND sa.id_solicitud IS NOT NULL
+           -- Sin borradores: se edita con una solicitud de edición aprobada y aún no ejecutada,
+           -- o directamente si es supervisor / administrador (ese no necesita solicitar)
+           (v_guardar = 1 AND (sa.id_solicitud IS NOT NULL OR v_directo = 1)
             AND os.estado IN ('emitida', 'programada', 'reprogramada'))                               AS puede_editar,
-           (v_guardar = 1 AND (os.id_responsable_comercial <=> p_id_usuario)
+           (v_guardar = 1 AND v_directo = 0 AND (os.id_responsable_comercial <=> p_id_usuario)
             AND os.estado IN ('emitida', 'programada', 'reprogramada') AND sp.id_solicitud IS NULL AND sa.id_solicitud IS NULL)
                                                                                                         AS puede_solicitar_edicion,
            (v_jefe = 1 AND sp.id_solicitud IS NOT NULL AND sp.id_solicitante <> p_id_usuario)           AS puede_resolver_solicitud,

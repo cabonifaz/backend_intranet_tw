@@ -3,7 +3,8 @@
 --           como sugerencias, los equipos y los conceptos de la propuesta. Una propuesta puede ejecutarse en varias
 --           OS/OM: se precargan solo los equipos cotizados que aún no están en una OS/OM activa de la propuesta; los
 --           conceptos se precargan completos, uno por ítem de servicio (mismo suministro con otro alcance = otro concepto).
---   Editar: p_id_os = la OS/OM. Solo quien tiene una solicitud de edición APROBADA (HU-40, flujo con el Jefe Comercial).
+--   Editar: p_id_os = la OS/OM. Solo quien tiene una solicitud de edición APROBADA (HU-40, flujo con el Jefe Comercial),
+--           o un supervisor / administrador (modo = 'edicion_directa', sin solicitud).
 --           Las OS/OM no tienen borrador: se emiten al guardar.
 -- Tipo: OM si el área de la RQ es Metrología (catálogo AREA_REQUERIMIENTO 64); OS en cualquier otro caso.
 -- Resultados: 1 mensaje, 2 ficha (cliente, propuesta origen, documento, certificado), 3 contactos del cliente,
@@ -28,6 +29,7 @@ proc: BEGIN
     DECLARE v_tipo         CHAR(2);
     DECLARE v_otra         VARCHAR(80)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_id_sol       BIGINT DEFAULT NULL;
+    DECLARE v_directo      TINYINT DEFAULT 0;
     DECLARE v_modo         VARCHAR(20);
     DECLARE v_numero       VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_num_prop     VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
@@ -57,13 +59,16 @@ proc: BEGIN
         SELECT MAX(s.id_solicitud) INTO v_id_sol FROM os_solicitud s
         WHERE s.id_os = v_id_os AND s.tipo = 'edicion' AND s.estado = 'aprobada' AND s.id_solicitante = p_id_usuario
           AND s.eliminado_en IS NULL;
-        IF v_id_sol IS NULL OR v_estado_os NOT IN ('borrador', 'emitida', 'programada', 'reprogramada') THEN
+        -- Supervisor y administrador editan sin solicitud
+        SELECT IF(COUNT(*) > 0, 1, 0) INTO v_directo FROM usuario u
+        WHERE u.id_usuario = p_id_usuario AND u.rol_sistema IN ('supervisor', 'administrador');
+        IF (v_id_sol IS NULL AND v_directo = 0) OR v_estado_os NOT IN ('borrador', 'emitida', 'programada', 'reprogramada') THEN
             SELECT 1 AS IdTipoMensaje,
                    CONCAT('La orden está ', UPPER(REPLACE(v_estado_os, '_', ' ')),
                           ': para modificarla solicite la edición al Jefe Comercial.') AS Mensaje;
             LEAVE proc;
         END IF;
-        SET v_modo = 'edicion_aprobada';
+        SET v_modo = IF(v_id_sol IS NOT NULL, 'edicion_aprobada', 'edicion_directa');
     ELSE
         -- ── Nueva ───────────────────────────────────────────────────────────
         SET v_id_prop = p_id_propuesta;

@@ -195,7 +195,7 @@ public record CertificadoOsDto(bool EsTercerizado, bool Editable, string? RazonS
 /// <summary>Ficha de la OS/OM (nueva desde la propuesta o edición).</summary>
 public record FichaOrdenServicioDto
 {
-    /// <summary>nueva | borrador | edicion_aprobada.</summary>
+    /// <summary>nueva | borrador | edicion_aprobada | edicion_directa (supervisor / administrador, sin solicitud).</summary>
     public string    Modo                 { get; init; } = "nueva";
     public long?     IdOs                 { get; init; }
     /// <summary>En una orden nueva, el número que se le asignará al guardar.</summary>

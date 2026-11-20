@@ -13,6 +13,9 @@ public interface IEvidenciasMovilRepositorio
 
     Task<RespuestaDto<ResultadoForzarEvidenciaMovilDto>> ForzarAsync(long idUsuario, long idOs, long idOsEquipo, long idEvidencia, string motivo, CancellationToken ct);
 
+    /// <summary>Quita (borrado lógico) una foto adicional del técnico mientras el equipo está en ejecución.</summary>
+    Task<RespuestaDto<object>> QuitarAdicionalAsync(long idUsuario, long idOs, long idOsEquipo, long idEvidencia, CancellationToken ct);
+
     Task<RespuestaDto<ArchivoEvidenciaMovilDto>> ObtenerArchivoAsync(long idUsuario, long idOs, long idOsEquipo, long idEvidencia, CancellationToken ct);
 }
 

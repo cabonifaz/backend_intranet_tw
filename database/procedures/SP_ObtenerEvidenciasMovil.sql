@@ -5,7 +5,7 @@
 --   estado de cada evidencia: pendiente | aprobada | rechazada | forzada | omitida  (omitida = la IA no estuvo disponible; cuenta como completa)
 --   Para una evidencia FORZADA (HU-12) trae lo de "Ver detalles": motivo del técnico, rechazo de la IA, quién la aceptó, cuándo y los intentos previos.
 --   Informe a mano: paginas = hojas válidas; la tarjeta muestra la primera.
--- Resultados: 1 mensaje · 2 cabecera (1 fila) · 3 evidencias (9 filas).
+-- Resultados: 1 mensaje · 2 cabecera (1 fila) · 3 evidencias (9 filas) · 4 fotos adicionales (0 a 20 filas; no cuentan en el avance ni en "Guardar y volver").
 -- Solo lectura.
 -- ============================================================
 DROP PROCEDURE IF EXISTS SP_ObtenerEvidenciasMovil;
@@ -88,6 +88,12 @@ proc: BEGIN
                                   AND f2.pagina = 1 AND f2.vigente = 1 AND f2.eliminado_en IS NULL)
     LEFT JOIN usuario uf ON uf.id_usuario = f.id_usuario_override
     ORDER BY c.orden;
+
+    -- 4. Fotos adicionales (opcionales, no cuentan en las 9): de la más antigua a la más reciente
+    SELECT f.id_evidencia, f.pagina AS numero, CONVERT_TZ(f.timestamp_captura, '+00:00', '-05:00') AS capturada_en
+    FROM   evidencia_fotografica f
+    WHERE  f.id_os = p_id_os AND f.id_equipo = v_id_eq AND f.codigo = 'adicional' AND f.eliminado_en IS NULL
+    ORDER BY f.pagina, f.id_evidencia;
 
     DROP TEMPORARY TABLE IF EXISTS tmp_cat_evid;
 END$$

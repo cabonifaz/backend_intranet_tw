@@ -45,7 +45,13 @@ public class EvidenciasMovilRepositorio(CadenaConexionBd conexion)
                         Texto(r, "motivo_forzado"), Texto(r, "forzada_por") is { Length: > 0 } fp ? fp : null, FechaHora(r, "forzada_en"), Entero(r, "intentos_previos"),
                         FechaHora(r, "capturada_en"), Json(Texto(r, "resultado_ia")), Booleano(r, "tiene_cuadro")));
 
-                return new RespuestaDto<EvidenciasMovilDto>(2, mensaje, new EvidenciasMovilDto(cabecera, lista));
+                // Fotos adicionales (un SP anterior sin este resultado deja la lista vacía)
+                var adicionales = new List<AdicionalEvidenciaMovilDto>();
+                if (await r.NextResultAsync(ct))
+                    while (await r.ReadAsync(ct))
+                        adicionales.Add(new AdicionalEvidenciaMovilDto(EnteroLargo(r, "id_evidencia"), Entero(r, "numero"), FechaHora(r, "capturada_en")));
+
+                return new RespuestaDto<EvidenciasMovilDto>(2, mensaje, new EvidenciasMovilDto(cabecera, lista, adicionales));
             }, ct);
 
     public Task<RespuestaDto<ResultadoEvidenciaMovilDto>> RegistrarAsync(
@@ -100,6 +106,17 @@ public class EvidenciasMovilRepositorio(CadenaConexionBd conexion)
                 return new RespuestaDto<ResultadoForzarEvidenciaMovilDto>(2, mensaje, new ResultadoForzarEvidenciaMovilDto(
                     EnteroLargo(r, "id_evidencia"), FechaHora(r, "forzada_en"), Entero(r, "intentos_previos"), Entero(r, "notificados")));
             }, ct);
+
+    public Task<RespuestaDto<object>> QuitarAdicionalAsync(long idUsuario, long idOs, long idOsEquipo, long idEvidencia, CancellationToken ct) =>
+        EjecutarAsync<object>("SP_QuitarEvidenciaAdicionalMovil",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario",   idUsuario);
+                p.AddWithValue("p_id_os",        idOs);
+                p.AddWithValue("p_id_os_equipo", idOsEquipo);
+                p.AddWithValue("p_id_evidencia", idEvidencia);
+            },
+            (_, mensaje) => Task.FromResult(new RespuestaDto<object>(2, mensaje)), ct);
 
     public Task<RespuestaDto<ArchivoEvidenciaMovilDto>> ObtenerArchivoAsync(long idUsuario, long idOs, long idOsEquipo, long idEvidencia, CancellationToken ct) =>
         EjecutarAsync<ArchivoEvidenciaMovilDto>("SP_ObtenerArchivoEvidenciaMovil",
