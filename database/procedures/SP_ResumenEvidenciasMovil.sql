@@ -3,6 +3,7 @@
 -- Avance del registro fotográfico de un equipo, UNA sola vez. Lo usan el panel de evidencias y la etapa "Registro fotográfico" del trabajo en el equipo.
 --   Evidencia COMPLETA = su última captura (vigente, página 1) está aprobada por la IA, fue forzada por el técnico (HU-12) o no se pudo validar con la IA
 --   ("omitida": no cuenta como rechazo). Una toma rechazada y no forzada NO completa la evidencia.
+-- Informe físico: sin él (orden_servicio.informe_fisico = 0, lo decide la respuesta del cliente a la programación) la evidencia «informe» NO forma parte del catálogo (8 en vez de 9).
 -- Deja la tabla temporal tmp_cat_evid armada, con completa / forzada / rechazada por evidencia (quien llama la borra; HU-16 lista las que faltan). Solo lectura.
 -- ============================================================
 DROP PROCEDURE IF EXISTS SP_ResumenEvidenciasMovil;
@@ -20,6 +21,12 @@ CREATE PROCEDURE SP_ResumenEvidenciasMovil(
 )
 BEGIN
     CALL SP_CatalogoEvidenciasMovil();
+
+    -- Si el cliente respondió que el servicio NO tendrá informe físico (orden_servicio.informe_fisico = 0), la foto del informe a mano no se pide: se quita del
+    -- catálogo y el registro fotográfico pasa de 9 a 8 evidencias (NULL o 1 = lleva informe físico, como siempre). Es el único lugar donde vive esta regla.
+    DELETE FROM tmp_cat_evid
+    WHERE  codigo = 'informe'
+      AND  EXISTS (SELECT 1 FROM orden_servicio os WHERE os.id_os = p_id_os AND os.informe_fisico = 0);
 
     -- Última toma vigente (página 1) de cada evidencia: completa = aprobada por la IA, forzada o sin validar ('omitida'); una rechazada y no forzada NO completa
     UPDATE tmp_cat_evid c

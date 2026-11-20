@@ -3,6 +3,8 @@
 -- Acceso: prog_gestionar (módulo operaciones).
 --   p_canal: correo | whatsapp | llamada | presencial · p_resultado: acepto | pidio_reprogramar | cancelo
 --   p_comentario: opcional, hasta 300 caracteres.
+--   p_informe_fisico: «¿El servicio tendrá informe físico?» (1 sí, 0 no). Solo se guarda con 'acepto' (con otro resultado se ignora). NULL se toma como SÍ (compatibilidad
+--     con la intranet anterior a este campo). Con 0 la app móvil no pide la foto del informe a mano (SP_ResumenEvidenciasMovil).
 -- Reglas (cada falla devuelve tipo 1 y no guarda nada):
 --   · la programación existe, no está cancelada y su orden sigue programada o reprogramada
 --   · 'acepto' solo si la programación está pendiente de confirmación y su fecha es de hoy en adelante
@@ -25,7 +27,8 @@ CREATE PROCEDURE SP_RegistrarRespuestaClienteProgramacion(
     IN p_id_programacion BIGINT,
     IN p_canal           VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
     IN p_resultado       VARCHAR(25)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
-    IN p_comentario      VARCHAR(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci
+    IN p_comentario      VARCHAR(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_informe_fisico  TINYINT
 )
 proc: BEGIN
     DECLARE v_id_os       BIGINT       DEFAULT NULL;
@@ -47,6 +50,7 @@ proc: BEGIN
     DECLARE v_result_txt  VARCHAR(40)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_n_bloq      INT          DEFAULT 0;
     DECLARE v_bloq_txt    VARCHAR(600) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_informe_fisico TINYINT   DEFAULT NULL;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -74,6 +78,13 @@ proc: BEGIN
         SELECT 1 AS IdTipoMensaje, 'Selecciona el resultado: aceptó, pidió reprogramar o canceló.' AS Mensaje;
         LEAVE proc;
     END IF;
+
+    IF p_informe_fisico IS NOT NULL AND p_informe_fisico NOT IN (0, 1) THEN
+        SELECT 1 AS IdTipoMensaje, 'Indica si el servicio tendrá informe físico: sí o no.' AS Mensaje;
+        LEAVE proc;
+    END IF;
+    -- Solo la aceptación decide el informe físico; sin respuesta (intranet anterior) se toma como SÍ
+    SET v_informe_fisico = IF(p_resultado = 'acepto', IFNULL(p_informe_fisico, 1), NULL);
 
     SET v_comentario = NULLIF(TRIM(IFNULL(p_comentario, '')), '');
     IF v_comentario IS NOT NULL AND CHAR_LENGTH(v_comentario) > 300 THEN
@@ -164,8 +175,8 @@ proc: BEGIN
     END IF;
 
     -- ── Registro ──────────────────────────────────────────────────────────
-    INSERT INTO programacion_confirmacion (id_programacion, canal, resultado, comentario, id_registrado_por, fecha_registro, creado_por)
-    VALUES (p_id_programacion, p_canal, p_resultado, v_comentario, p_id_usuario, NOW(), p_id_usuario);
+    INSERT INTO programacion_confirmacion (id_programacion, canal, resultado, comentario, informe_fisico, id_registrado_por, fecha_registro, creado_por)
+    VALUES (p_id_programacion, p_canal, p_resultado, v_comentario, v_informe_fisico, p_id_usuario, NOW(), p_id_usuario);
     SET v_id = LAST_INSERT_ID();
 
     SET v_estado_nuevo = IF(p_resultado = 'acepto', 'confirmada', v_estado);
@@ -173,7 +184,7 @@ proc: BEGIN
     IF p_resultado = 'acepto' THEN
         UPDATE programacion SET estado = 'confirmada', modificado_por = p_id_usuario WHERE id_programacion = p_id_programacion;
         UPDATE orden_servicio
-        SET confirmacion_cliente = 1, fecha_confirmacion_cliente = NOW(), modificado_por = p_id_usuario
+        SET confirmacion_cliente = 1, fecha_confirmacion_cliente = NOW(), informe_fisico = v_informe_fisico, modificado_por = p_id_usuario
         WHERE id_os = v_id_os;
     END IF;
 
@@ -181,9 +192,11 @@ proc: BEGIN
                                   id_usuario, registrado_en, metadata)
     VALUES ('programacion', p_id_programacion, 'respuesta_cliente', v_estado, v_estado_nuevo,
             CONCAT('Respuesta del cliente (', v_canal_txt, '): ', v_result_txt, '.',
+                   IF(v_informe_fisico IS NULL, '', CONCAT(' Informe físico: ', IF(v_informe_fisico = 1, 'sí', 'no'), '.')),
                    IF(v_comentario IS NULL, '', CONCAT(' ', v_comentario))),
             p_id_usuario, NOW(),
-            JSON_OBJECT('programacion', v_codigo, 'idConfirmacion', v_id, 'canal', p_canal, 'resultado', p_resultado, 'idOs', v_id_os));
+            JSON_OBJECT('programacion', v_codigo, 'idConfirmacion', v_id, 'canal', p_canal, 'resultado', p_resultado, 'idOs', v_id_os,
+                        'informeFisico', IF(v_informe_fisico IS NULL, NULL, v_informe_fisico = 1)));
 
     -- ── Aviso a los técnicos cuando el cliente acepta ─────────────────────
     IF p_resultado = 'acepto' THEN
@@ -193,7 +206,8 @@ proc: BEGIN
         INSERT INTO notificacion (id_usuario_destino, id_canal, titulo, cuerpo, entidad_tipo, id_entidad, fecha_creacion, creado_por)
         SELECT pt.id_usuario, 5, CONCAT('Servicio confirmado: ', v_numero),
                CONCAT('El cliente', IF(v_cliente IS NULL, '', CONCAT(' ', v_cliente)), ' confirmó la ', v_tipo, ' ', v_numero,
-                      ' del ', DATE_FORMAT(v_fecha, '%d/%m/%Y'), ' de ', TIME_FORMAT(v_ini, '%H:%i'), ' a ', TIME_FORMAT(v_fin, '%H:%i'), '.'),
+                      ' del ', DATE_FORMAT(v_fecha, '%d/%m/%Y'), ' de ', TIME_FORMAT(v_ini, '%H:%i'), ' a ', TIME_FORMAT(v_fin, '%H:%i'), '.',
+                      IF(v_informe_fisico = 0, ' Este servicio NO lleva informe físico: no se pide la foto del informe.', '')),
                'orden_servicio', v_id_os, NOW(), p_id_usuario
         FROM programacion_tecnico pt
         WHERE pt.id_programacion = p_id_programacion AND pt.eliminado_en IS NULL AND pt.id_usuario <> p_id_usuario;
@@ -225,6 +239,7 @@ proc: BEGIN
            p_canal                              AS canal,
            p_resultado                          AS resultado,
            v_comentario                         AS comentario,
+           v_informe_fisico                     AS informe_fisico,
            v_id_os                              AS id_os,
            v_numero                             AS numero_os,
            v_siguiente                          AS siguiente_accion,

@@ -372,7 +372,8 @@ proc: BEGIN
            pc.resultado,
            CASE pc.resultado WHEN 'acepto' THEN 'Aceptó la programación'
                              WHEN 'pidio_reprogramar' THEN 'Pidió reprogramar' ELSE 'Canceló' END AS resultado_label,
-           pc.comentario, pc.fecha_registro, TRIM(CONCAT(ur.nombre, ' ', ur.apellido)) AS registrado_por
+           pc.comentario, pc.fecha_registro, TRIM(CONCAT(ur.nombre, ' ', ur.apellido)) AS registrado_por,
+           pc.informe_fisico
     FROM programacion_confirmacion pc
     LEFT JOIN usuario ur ON ur.id_usuario = pc.id_registrado_por
     WHERE pc.id_programacion = p_id_programacion AND pc.eliminado_en IS NULL

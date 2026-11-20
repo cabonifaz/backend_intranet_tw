@@ -33,7 +33,8 @@ public class EvidenciasMovilRepositorio(CadenaConexionBd conexion)
                     EnteroLargo(r, "id_os"), EnteroLargo(r, "id_os_equipo"), Texto(r, "numero_os") ?? string.Empty, Texto(r, "nombre") ?? "Equipo", Entero(r, "numero"),
                     Texto(r, "servicio_sigla"), Texto(r, "num_serie"), Texto(r, "codigo_cliente"), Texto(r, "codigo_tw"), Texto(r, "marca"), Texto(r, "modelo"),
                     Texto(r, "estado") ?? "por_iniciar", Booleano(r, "puede_registrar"), Texto(r, "numero_rq"), Entero(r, "total"), Entero(r, "completas"),
-                    Entero(r, "forzadas"), Entero(r, "rechazadas"), Entero(r, "obligatorias_faltan"), Booleano(r, "puede_guardar"));
+                    Entero(r, "forzadas"), Entero(r, "rechazadas"), Entero(r, "obligatorias_faltan"), Booleano(r, "puede_guardar"),
+                    EsNulo(r, "informe_fisico") || Booleano(r, "informe_fisico"));
 
                 await r.NextResultAsync(ct);
                 var lista = new List<EvidenciaMovilDto>();

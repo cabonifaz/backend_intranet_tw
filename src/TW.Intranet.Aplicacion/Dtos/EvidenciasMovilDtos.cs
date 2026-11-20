@@ -6,7 +6,8 @@ namespace TW.Intranet.Aplicacion.Dtos;
 
 /// <summary>
 /// Cabecera del registro fotográfico. Completas = evidencias aprobadas por la IA, forzadas u "omitidas" (sin IA); PuedeGuardar = las 9 completas
-/// ("Guardar y volver"). ObligatoriasFaltan = cuántas de las marcadas con (*) —placa e inicial— faltan.
+/// ("Guardar y volver"). ObligatoriasFaltan = cuántas de las marcadas con (*) —placa e inicial— faltan. InformeFisico = false cuando el cliente respondió que el servicio
+/// NO tendrá informe físico: la evidencia «informe» no forma parte del panel (8 evidencias en vez de 9).
 /// </summary>
 public record CabeceraEvidenciasMovilDto(
     long    IdOs,
@@ -28,7 +29,8 @@ public record CabeceraEvidenciasMovilDto(
     int     Forzadas,
     int     Rechazadas,
     int     ObligatoriasFaltan,
-    bool    PuedeGuardar);
+    bool    PuedeGuardar,
+    bool    InformeFisico = true);
 
 /// <summary>
 /// Una de las 9 evidencias. Codigo: placa | inicial | encendido | desmontaje | abierto | prueba | final | informe | qr. Medio: foto | video | qr.

@@ -123,7 +123,7 @@ public class ProgramacionDetalleRepositorio(CadenaConexionBd conexion) : Reposit
                     respuestas.Add(new RespuestaClienteProgramacionDto(
                         EnteroLargo(r, "id"), Texto(r, "canal") ?? "", Texto(r, "canal_label") ?? "", Texto(r, "resultado") ?? "",
                         Texto(r, "resultado_label") ?? "", Texto(r, "comentario"), FechaHora(r, "fecha_registro"),
-                        Texto(r, "registrado_por")));
+                        Texto(r, "registrado_por"), EsNulo(r, "informe_fisico") ? null : Booleano(r, "informe_fisico")));
 
                 return new RespuestaDto<DetalleProgramacionDto>(2, mensaje,
                     new DetalleProgramacionDto(cabecera, tecnicos, equipos, conceptos, checklist, alertas, historial, respuestas));
@@ -142,6 +142,7 @@ public class ProgramacionDetalleRepositorio(CadenaConexionBd conexion) : Reposit
                 p.AddWithValue("p_canal",           n.Canal);
                 p.AddWithValue("p_resultado",       n.Resultado);
                 p.AddWithValue("p_comentario",      Valor(n.Comentario));
+                p.AddWithValue("p_informe_fisico",  n.InformeFisico is { } f ? (object)(f ? 1 : 0) : DBNull.Value);
             },
             async (r, mensaje) =>
             {
@@ -157,6 +158,7 @@ public class ProgramacionDetalleRepositorio(CadenaConexionBd conexion) : Reposit
                 var canal          = Texto(r, "canal") ?? "";
                 var resultado      = Texto(r, "resultado") ?? "";
                 var comentario     = Texto(r, "comentario");
+                bool? informeFisico = EsNulo(r, "informe_fisico") ? null : Booleano(r, "informe_fisico");
                 var idOs           = EnteroLargo(r, "id_os");
                 var numeroOs       = Texto(r, "numero_os") ?? "";
                 var siguiente      = Texto(r, "siguiente_accion") ?? "";
@@ -171,7 +173,7 @@ public class ProgramacionDetalleRepositorio(CadenaConexionBd conexion) : Reposit
 
                 return new RespuestaDto<RespuestaClienteRegistradaDto>(2, mensaje,
                     new RespuestaClienteRegistradaDto(idConfirmacion, idProgramacion, codigo, estado, estadoLabel, canal, resultado,
-                        comentario, idOs, numeroOs, siguiente, viaticos, solicitud, motivo, advertencias));
+                        comentario, idOs, numeroOs, siguiente, viaticos, solicitud, motivo, advertencias, informeFisico));
             },
             ct);
 }

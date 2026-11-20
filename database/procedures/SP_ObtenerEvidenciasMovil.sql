@@ -1,7 +1,7 @@
 -- ============================================================
 -- SP_ObtenerEvidenciasMovil  (App Mobile HU-11 / HU-12 / HU-13 — panel de evidencias del equipo · lectura)
 -- El panel del "Registro fotográfico": las 9 evidencias (SP_CatalogoEvidenciasMovil) con su estado, el avance "N de 9 completas" y lo que necesita el
--- botón "Guardar y volver" (puede_guardar = las 9 completas). Acceso: SP_ContextoEquipoMovil (OS del técnico, Hard Stop, equipo iniciado).
+-- botón "Guardar y volver" (puede_guardar = todas completas: 9, u 8 si el servicio no tiene informe físico, ver SP_ResumenEvidenciasMovil; la cabecera trae informe_fisico). Acceso: SP_ContextoEquipoMovil (OS del técnico, Hard Stop, equipo iniciado).
 --   estado de cada evidencia: pendiente | aprobada | rechazada | forzada | omitida  (omitida = la IA no estuvo disponible; cuenta como completa)
 --   Para una evidencia FORZADA (HU-12) trae lo de "Ver detalles": motivo del técnico, rechazo de la IA, quién la aceptó, cuándo y los intentos previos.
 --   Informe a mano: paginas = hojas válidas; la tarjeta muestra la primera.
@@ -62,7 +62,8 @@ proc: BEGIN
            NULLIF(TRIM(ec.num_serie), '') AS num_serie, NULLIF(ec.codigo_cliente, '') AS codigo_cliente, ec.codigo_tw, ec.marca, ec.modelo,
            v_est_eq AS estado, IF(v_est_eq = 'en_ejecucion' AND v_hab = 1, 1, 0) AS puede_registrar, v_rq AS numero_rq,
            v_total AS total, v_compl AS completas, v_forz AS forzadas, v_rech AS rechazadas, v_oblig AS obligatorias_faltan,
-           IF(v_compl = v_total, 1, 0) AS puede_guardar
+           IF(v_compl = v_total, 1, 0) AS puede_guardar,
+           IF(EXISTS (SELECT 1 FROM orden_servicio os WHERE os.id_os = p_id_os AND os.informe_fisico = 0), 0, 1) AS informe_fisico
     FROM   equipo_cliente ec WHERE ec.id_equipo = v_id_eq;
 
     -- 3. Las 9 evidencias (la última captura de cada una)

@@ -83,7 +83,7 @@ public record EventoProgramacionDto(
 
 public record RespuestaClienteProgramacionDto(
     long Id, string Canal, string CanalLabel, string Resultado, string ResultadoLabel,
-    string? Comentario, DateTime? FechaRegistro, string? RegistradoPor);
+    string? Comentario, DateTime? FechaRegistro, string? RegistradoPor, bool? InformeFisico = null);
 
 public record DetalleProgramacionDto(
     CabeceraProgramacionDto Programacion,
@@ -98,16 +98,19 @@ public record DetalleProgramacionDto(
 /// <summary>
 /// Cuerpo de POST /api/operaciones/programacion/programaciones/{idProgramacion}/respuesta-cliente.
 /// Canal: correo | whatsapp | llamada | presencial. Resultado: acepto | pidio_reprogramar | cancelo. Comentario opcional (300).
+/// InformeFisico: «¿El servicio tendrá informe físico?» (true sí · false no); solo cuenta con 'acepto' (en las demás respuestas se ignora). Si no llega
+/// (intranet anterior a este campo) se toma como SÍ: la foto del informe a mano sigue siendo obligatoria en la app móvil.
 /// </summary>
 public class RegistrarRespuestaClienteDto
 {
-    public string? Canal      { get; set; }
-    public string? Resultado  { get; set; }
-    public string? Comentario { get; set; }
+    public string? Canal         { get; set; }
+    public string? Resultado     { get; set; }
+    public string? Comentario    { get; set; }
+    public bool?   InformeFisico { get; set; }
 }
 
-/// <summary>Respuesta ya validada que recibe el repositorio.</summary>
-public record NuevaRespuestaCliente(long IdProgramacion, string Canal, string Resultado, string? Comentario);
+/// <summary>Respuesta ya validada que recibe el repositorio. InformeFisico = null salvo con 'acepto' (ahí true o false; sin dato se toma true).</summary>
+public record NuevaRespuestaCliente(long IdProgramacion, string Canal, string Resultado, string? Comentario, bool? InformeFisico = null);
 
 /// <summary>
 /// Respuesta registrada. SiguienteAccion: gestionar_viaticos (aceptó) · reprogramar | solicitar_reprogramacion (pidió reprogramar,
@@ -116,4 +119,4 @@ public record NuevaRespuestaCliente(long IdProgramacion, string Canal, string Re
 public record RespuestaClienteRegistradaDto(
     long IdConfirmacion, long IdProgramacion, string Codigo, string Estado, string EstadoLabel, string Canal, string Resultado,
     string? Comentario, long IdOs, string NumeroOs, string SiguienteAccion, bool PuedeGestionarViaticos,
-    bool RequiereSolicitud, bool RequiereMotivoCancelacion, IReadOnlyList<string> Advertencias);
+    bool RequiereSolicitud, bool RequiereMotivoCancelacion, IReadOnlyList<string> Advertencias, bool? InformeFisico = null);
