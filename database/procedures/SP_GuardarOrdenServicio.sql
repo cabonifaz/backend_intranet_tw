@@ -1,6 +1,7 @@
 -- HU-40 / HU-43 / HU-44 (Sprint 4) Registrar (emitir) una OS/OM o guardar la edición autorizada.
 --   Las OS/OM no tienen borrador: al registrarse quedan EMITIDAS (disponibles para Programación). Para modificar una orden
 --   emitida hace falta una solicitud de edición APROBADA por el Jefe Comercial; al guardar, la solicitud queda ejecutada.
+--   Supervisor y administrador (con os_guardar) editan directamente, sin solicitud (queda en la auditoría como edición directa).
 --   p_id_os = 0: crea la orden desde la propuesta aceptada p_id_propuesta. Una propuesta puede ejecutarse en varias
 --     OS/OM (los equipos se dividen en lotes) mientras le queden equipos cotizados sin OS/OM activa.
 --   p_datos: { idContacto, fechaProgramadaDesde, fechaProgramadaHasta (solo OS, AAAA-MM-DD), observaciones,
@@ -39,7 +40,8 @@ proc: BEGIN
     DECLARE v_resp       BIGINT;
     DECLARE v_id_cliente BIGINT;
     DECLARE v_id_sol     BIGINT DEFAULT NULL;
-    DECLARE v_numero     VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_directo    TINYINT DEFAULT 0;
+    DECLARE v_numero    VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_otra       VARCHAR(80)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_tercero    TINYINT DEFAULT 0;
     DECLARE v_contacto   BIGINT;
@@ -96,7 +98,10 @@ proc: BEGIN
         SELECT MAX(s.id_solicitud) INTO v_id_sol FROM os_solicitud s
         WHERE s.id_os = v_id_os AND s.tipo = 'edicion' AND s.estado = 'aprobada' AND s.id_solicitante = p_id_usuario
           AND s.eliminado_en IS NULL;
-        IF v_id_sol IS NULL OR v_estado NOT IN ('borrador', 'emitida', 'programada', 'reprogramada') THEN
+        -- Supervisor y administrador editan sin solicitud
+        SELECT IF(COUNT(*) > 0, 1, 0) INTO v_directo FROM usuario u
+        WHERE u.id_usuario = p_id_usuario AND u.rol_sistema IN ('supervisor', 'administrador');
+        IF (v_id_sol IS NULL AND v_directo = 0) OR v_estado NOT IN ('borrador', 'emitida', 'programada', 'reprogramada') THEN
             SELECT 1 AS IdTipoMensaje,
                    CONCAT('La orden está ', UPPER(REPLACE(v_estado, '_', ' ')),
                           ': para modificarla solicite la edición al Jefe Comercial.') AS Mensaje;
@@ -439,16 +444,20 @@ proc: BEGIN
         FROM usuario u
         WHERE u.eliminado_en IS NULL AND u.estado = 'activo' AND u.id_usuario <> p_id_usuario
           AND u.area = 'operaciones' AND u.rol_sistema IN ('supervisor', 'administrador');
-    ELSEIF v_id_sol IS NOT NULL THEN
-        UPDATE os_solicitud SET estado = 'ejecutada', fecha_ejecucion = NOW(), modificado_por = p_id_usuario
-        WHERE id_solicitud = v_id_sol;
+    ELSEIF v_id_sol IS NOT NULL OR v_directo = 1 THEN
+        IF v_id_sol IS NOT NULL THEN
+            UPDATE os_solicitud SET estado = 'ejecutada', fecha_ejecucion = NOW(), modificado_por = p_id_usuario
+            WHERE id_solicitud = v_id_sol;
+        END IF;
 
         INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion,
                                       id_usuario, registrado_en, metadata)
         VALUES ('orden_servicio', v_id_os, 'editar_os', v_estado, v_estado,
-                CONCAT(v_tipo, ' ', v_numero, ' editada con la autorización del Jefe Comercial y re-emitida: ',
+                CONCAT(v_tipo, ' ', v_numero,
+                       IF(v_id_sol IS NOT NULL, ' editada con la autorización del Jefe Comercial y re-emitida: ',
+                          ' editada directamente (supervisor/administrador) y re-emitida: '),
                        v_n_eq, ' equipos y ', v_n_conc, ' conceptos.'),
-                p_id_usuario, NOW(), JSON_OBJECT('id_solicitud', v_id_sol));
+                p_id_usuario, NOW(), JSON_OBJECT('id_solicitud', v_id_sol, 'edicion_directa', v_id_sol IS NULL));
 
         INSERT INTO notificacion (id_usuario_destino, id_canal, titulo, cuerpo, entidad_tipo, id_entidad, fecha_creacion, creado_por)
         SELECT u.id_usuario, 5, CONCAT(v_tipo, ' modificada: ', v_numero),
