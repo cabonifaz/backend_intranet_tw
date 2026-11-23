@@ -378,6 +378,20 @@ builder.Services.AddScoped<CorrelativosJefaturaMovilCasoDeUso>();
 // HU-17 — Firma de informes y constancia de servicio (app móvil)
 builder.Services.AddScoped<IFirmaConstanciaMovilRepositorio, FirmaConstanciaMovilRepositorio>();
 builder.Services.AddSingleton<IGeneradorConstanciaPdf, GeneradorConstanciaPdf>();
+
+// App Mobile HU-23 — Recepción de instrumentos (OM) en el taller
+builder.Services.AddScoped<IRecepcionOmMovilRepositorio, RecepcionOmMovilRepositorio>();
+builder.Services.AddSingleton<IGeneradorConstanciaRecepcionOmPdf, GeneradorConstanciaRecepcionOmPdf>();
+builder.Services.AddScoped<ObtenerListaRecepcionOmMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerDetalleRecepcionOmMovilCasoDeUso>();
+builder.Services.AddScoped<SubirFotoRecepcionOmMovilCasoDeUso>();
+builder.Services.AddScoped<QuitarFotoRecepcionOmMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerFotosRecepcionOmMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerArchivoFotoRecepcionOmMovilCasoDeUso>();
+builder.Services.AddScoped<BuscarQrRecepcionOmMovilCasoDeUso>();
+builder.Services.AddScoped<EmitirConstanciaRecepcionOmMovilCasoDeUso>();
+builder.Services.AddScoped<RegistrarRecepcionOmMovilCasoDeUso>();
+builder.Services.AddScoped<ObtenerConstanciaRecepcionOmMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerFirmasMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerResumenFirmasMovilCasoDeUso>();
 builder.Services.AddScoped<ObtenerConstanciaMovilCasoDeUso>();

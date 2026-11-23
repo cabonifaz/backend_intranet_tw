@@ -41,7 +41,10 @@ internal static class EntradaRespuestaCliente
         if (comentario is not null && comentario.Any(c => char.IsControl(c) && c is not ('\n' or '\r' or '\t')))
             return (null, "El comentario contiene caracteres no válidos.");
 
-        return (new NuevaRespuestaCliente(idProgramacion, canal, resultado, string.IsNullOrEmpty(comentario) ? null : comentario), null);
+        // Solo la aceptación decide el informe físico (sin dato = sí, como hasta ahora); con las demás respuestas se descarta
+        bool? informeFisico = resultado == "acepto" ? d.InformeFisico ?? true : null;
+
+        return (new NuevaRespuestaCliente(idProgramacion, canal, resultado, string.IsNullOrEmpty(comentario) ? null : comentario, informeFisico), null);
     }
 }
 

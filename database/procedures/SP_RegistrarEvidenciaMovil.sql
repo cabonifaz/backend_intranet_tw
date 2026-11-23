@@ -139,6 +139,12 @@ proc: BEGIN
         SELECT 1 AS IdTipoMensaje, v_msg AS Mensaje; LEAVE proc;
     END IF;
 
+    -- Sin informe físico (la respuesta del cliente a la programación) no se toma la foto del informe a mano
+    IF p_codigo = 'informe' AND EXISTS (SELECT 1 FROM orden_servicio os WHERE os.id_os = p_id_os AND os.informe_fisico = 0) THEN
+        ROLLBACK;
+        SELECT 1 AS IdTipoMensaje, 'Este servicio no tiene informe físico: no se toma la foto del informe.' AS Mensaje; LEAVE proc;
+    END IF;
+
     -- Foto adicional: el SP asigna el número (1, 2, 3…) y no admite más de 20 por equipo
     IF p_codigo = 'adicional' THEN
         SELECT IFNULL(MAX(f.pagina), 0) + 1 INTO v_pagina
