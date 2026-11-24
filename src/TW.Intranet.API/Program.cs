@@ -323,6 +323,19 @@ builder.Services.AddScoped<ValidarCierreEquipoMovilCasoDeUso>();
 builder.Services.AddScoped<GenerarInformeEquipoMovilCasoDeUso>();
 builder.Services.AddScoped<GenerarPreInformeMovilCasoDeUso>();
 builder.Services.AddSingleton<IGeneradorPreInformePdf, GeneradorPreInformePdf>();
+// HU-55 — registrar el informe de un equipo desde la intranet (en nombre del técnico). Reutiliza los casos de uso móviles registrados arriba y abajo.
+builder.Services.AddScoped<IRegistroInformeIntranetRepositorio, RegistroInformeIntranetRepositorio>();
+builder.Services.AddScoped<EjecutorRegistroIntranet>();
+builder.Services.AddScoped<ContextoRegistroIntranetCasoDeUso>();
+builder.Services.AddScoped<SesionRegistroIntranetCasoDeUso>();
+builder.Services.AddScoped<InformeEnCursoIntranetCasoDeUso>();
+builder.Services.AddScoped<TrabajoRegistroIntranetCasoDeUso>();
+builder.Services.AddScoped<EvidenciasRegistroIntranetCasoDeUso>();
+builder.Services.AddScoped<EnsayosRegistroIntranetCasoDeUso>();
+builder.Services.AddScoped<CabeceraRegistroIntranetCasoDeUso>();
+builder.Services.AddScoped<CorrelativoRegistroIntranetCasoDeUso>();
+builder.Services.AddScoped<CierreRegistroIntranetCasoDeUso>();
+builder.Services.AddScoped<FirmaConstanciaRegistroIntranetCasoDeUso>();
 // App Mobile HU-19 — Asistente IA y Procedimientos (la IA y la lectura de los PDF oficiales se registran más abajo, junto a Gemini)
 builder.Services.AddScoped<IAsistenteMovilRepositorio, AsistenteMovilRepositorio>();
 builder.Services.AddScoped<ObtenerInicioAsistenteMovilCasoDeUso>();
