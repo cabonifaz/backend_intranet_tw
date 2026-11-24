@@ -57,8 +57,8 @@ public class RevisionTecnicaRepositorio(CadenaConexionBd conexion) : Repositorio
             async (r, mensaje) =>
             {
                 await r.NextResultAsync(ct);
-                var cabecera = await LeerUnaAsync<CabeceraInformeDto>(r, ct);
-                if (cabecera is null) return new RespuestaDto<DetalleInformeTecnicoDto>(1, "El informe no existe o no está en tu alcance.");
+                var c = await LeerUnaAsync<CabeceraInformeCruda>(r, ct);
+                if (c is null) return new RespuestaDto<DetalleInformeTecnicoDto>(1, "El informe no existe o no está en tu alcance.");
                 await r.NextResultAsync(ct); var pasos   = await LeerFilasAsync<PasoInformeDto>(r, ct);
                 await r.NextResultAsync(ct); var ensayos = await LeerFilasAsync<EnsayoInformeDto>(r, ct);
                 await r.NextResultAsync(ct); var obs     = await LeerFilasAsync<ObservacionInformeDto>(r, ct);
@@ -66,9 +66,31 @@ public class RevisionTecnicaRepositorio(CadenaConexionBd conexion) : Repositorio
                 await r.NextResultAsync(ct); var fotos   = await LeerFilasAsync<FotoInformeDto>(r, ct);
                 await r.NextResultAsync(ct); var precot  = await LeerFilasAsync<ItemPrecotizacionDto>(r, ct);
                 await r.NextResultAsync(ct); var hist    = await LeerFilasAsync<EventoRecienteDto>(r, ct);
+                var det = InformeEquipoMovilRepositorio.LeerDetalle(c.DetalleServicio);
                 return new RespuestaDto<DetalleInformeTecnicoDto>(2, mensaje,
-                    new DetalleInformeTecnicoDto(cabecera, pasos, ensayos, obs, recs, fotos, precot, hist));
+                    new DetalleInformeTecnicoDto(c, pasos, ensayos, obs, recs, fotos, precot, hist,
+                        ResponsableCliente: new ResponsableClienteDto(c.ResponsableNombre, c.ResponsableCargo, c.ResponsableTelefono),
+                        DiagnosticoFinal:   new DiagnosticoFinalDto(c.SeveridadGeneral, c.EstadoEquipoFinal, c.RevJefatura, c.RequierePrecotizacion,
+                                                                    c.SegundaVisita, c.AplicaGarantia),
+                        ComentarioPruebas:  c.ComentarioPruebas,
+                        DetalleServicio:    new DetalleServicioInformeDto(det.Tipo, det.Celdas, det.Suma, det.Comp, det.Anillos)));
             }, ct);
+
+    /// <summary>Cabecera del informe con los campos crudos de la cabecera de la app (se devuelven en bloques; no salen en el JSON de la cabecera).</summary>
+    private sealed class CabeceraInformeCruda : CabeceraInformeDto
+    {
+        public string? ResponsableNombre     { get; init; }
+        public string? ResponsableCargo      { get; init; }
+        public string? ResponsableTelefono   { get; init; }
+        public string? DetalleServicio       { get; init; }
+        public string? ComentarioPruebas     { get; init; }
+        public string? SeveridadGeneral      { get; init; }
+        public string? EstadoEquipoFinal     { get; init; }
+        public bool    RevJefatura           { get; init; }
+        public bool    RequierePrecotizacion { get; init; }
+        public bool    SegundaVisita         { get; init; }
+        public bool    AplicaGarantia        { get; init; }
+    }
 
     public Task<RespuestaDto<InformeGuardadoDto>> GuardarInformeAsync(long idInforme, GuardarInformeTecnicoDto d, long idUsuario, CancellationToken ct)
         => EjecutarAsync("SP_GuardarInformeTecnico",

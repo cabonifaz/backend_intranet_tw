@@ -30,6 +30,7 @@ public class RevisionTecnicaController(
     RevisarGastoInformeCasoDeUso          revisarGasto,
     ObtenerComprobanteGastoInformeCasoDeUso comprobanteGasto,
     ObtenerObservacionesSeguimientoInformeCasoDeUso observacionesSeguimiento,
+    GenerarPdfInformeTecnicoCasoDeUso     pdfInforme,
     ILogger<RevisionTecnicaController>    logger) : ControllerBase
 {
     private long IdUsuarioActual =>
@@ -69,6 +70,18 @@ public class RevisionTecnicaController(
     [HttpGet("{idInforme:long}")]
     public async Task<IActionResult> Detalle(long idInforme, CancellationToken ct = default)
         => Responder(await detalle.EjecutarAsync(idInforme, IdUsuarioActual, ct));
+
+    /// <summary>PDF del informe técnico (lo que registró el técnico desde la app), generado en el momento. Lo descargan el supervisor y
+    /// Comercial (precot_ver, si la precotización del informe o de su complementario está en su alcance). Requiere el token.</summary>
+    [RequierePermiso("rt_bandeja", "precot_ver")]
+    [HttpGet("{idInforme:long}/pdf")]
+    public async Task<IActionResult> Pdf(long idInforme, CancellationToken ct = default)
+    {
+        var r = await pdfInforme.EjecutarAsync(idInforme, IdUsuarioActual, ct);
+        if (r.IdTipoMensaje != 2 || r.Datos is null) return Responder(r);
+        Response.Headers.CacheControl = "private, no-store";
+        return File(r.Datos.Contenido, r.Datos.TipoContenido, r.Datos.NombreArchivo);
+    }
 
     /// <summary>Bloqueado (23/11/2026): el informe del técnico es inmutable. Responde 403; los cambios van en el Informe Complementario
     /// (POST {idInforme}/complementario y PUT complementarios/{id}).</summary>

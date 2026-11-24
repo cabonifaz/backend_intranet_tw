@@ -880,6 +880,9 @@ builder.Services.AddScoped<SubirFotoInformeComplementarioCasoDeUso>();
 builder.Services.AddScoped<QuitarFotoInformeComplementarioCasoDeUso>();
 builder.Services.AddScoped<ObtenerArchivoFotoInformeComplementarioCasoDeUso>();
 builder.Services.AddScoped<GenerarPdfInformeComplementarioCasoDeUso>();
+// PDF del informe técnico (24/11/2026): lo genera la intranet en el momento
+builder.Services.AddSingleton<IGeneradorInformeTecnicoPdf, GeneradorInformeTecnicoPdf>();
+builder.Services.AddScoped<GenerarPdfInformeTecnicoCasoDeUso>();
 builder.Services.AddScoped<ObtenerBandejaPrecotizacionesCasoDeUso>();
 builder.Services.AddScoped<ObtenerDetallePrecotizacionCasoDeUso>();
 builder.Services.AddScoped<ObtenerPrecargaPrecotizacionCasoDeUso>();

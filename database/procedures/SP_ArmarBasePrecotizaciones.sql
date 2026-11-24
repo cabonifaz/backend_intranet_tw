@@ -5,7 +5,7 @@
 --   estado_grupo: pendiente (enviada, aún sin propuesta) · convertida (ya generó la propuesta)
 -- Informe Complementario (23/11/2026): la precotización nace del complementario (pc.id_informe = complementario). id_informe_original es el
 --   informe del técnico; pdf_informe_original_url y pdf_informe_complementario_url son los dos PDF del modal de Comercial
---   (el del original es el url_pdf que deja la app, si existe; el del complementario lo genera la intranet).
+--   (los dos los genera la intranet: GET /api/servicio-tecnico/informes/{id}/pdf y .../complementarios/{id}/pdf).
 DROP PROCEDURE IF EXISTS SP_ArmarBasePrecotizaciones;
 
 DELIMITER $$
@@ -42,7 +42,9 @@ BEGIN
            COALESCE(it.id_informe_padre, it.id_informe)                         AS id_informe_original,
            (it.id_informe_padre IS NOT NULL)                                    AS es_complementario,
            IF(it.id_informe_padre IS NOT NULL, it.id_informe, NULL)             AS id_informe_complementario,
-           COALESCE(io.url_pdf, it.url_pdf)                                     AS pdf_informe_original_url,
+           COALESCE(io.url_pdf, IF(it.id_informe_padre IS NULL, it.url_pdf, NULL),
+                    IF(it.id_informe IS NULL, NULL,
+                       CONCAT('/api/servicio-tecnico/informes/', COALESCE(it.id_informe_padre, it.id_informe), '/pdf'))) AS pdf_informe_original_url,
            IF(it.id_informe_padre IS NOT NULL,
               CONCAT('/api/servicio-tecnico/informes/complementarios/', it.id_informe, '/pdf'), NULL) AS pdf_informe_complementario_url,
            pc.id_os, os.numero AS numero_os, os.fecha_ejecucion, os.id_tipo_servicio, ts.String1 AS tipo_servicio,

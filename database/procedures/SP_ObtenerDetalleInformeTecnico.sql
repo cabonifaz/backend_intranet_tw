@@ -11,6 +11,10 @@
 -- Informe Complementario (23/11/2026): el informe del técnico es INMUTABLE (puede_editar y puede_registrar_precotizacion quedan siempre en 0).
 --   La cabecera trae id_informe_complementario / tiene_complementario / estado_complementario y puede_generar_complementario.
 --   Los ítems de precotización (resultado 8) son los de la precotización vigente: la del complementario o, si es anterior al cambio, la del original.
+-- PDF del informe del técnico (24/11/2026): también lo usa GET /informes/{id}/pdf. Acceso con SP_ArmarBaseInformeAcceso: rt_bandeja con el informe en su
+--   alcance, o precot_ver (Comercial) si una precotización del informe o de su complementario está en su alcance (solo lectura, sin acciones).
+--   url_pdf: el que dejó la app o, si no hay, el endpoint del PDF. La cabecera trae además lo que el técnico cargó en la app: N° de informe, quién
+--   atendió en planta, detalle del servicio (JSON), comentario de las pruebas y diagnóstico final.
 DROP PROCEDURE IF EXISTS SP_ObtenerDetalleInformeTecnico;
 
 DELIMITER $$
@@ -30,15 +34,17 @@ proc: BEGIN
     DECLARE v_rend_saldo  DECIMAL(12,2);
     DECLARE v_rend_tipo   VARCHAR(12)   CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_gastos_rev  INT DEFAULT 0;
+    DECLARE v_acceso      VARCHAR(10)   CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 
-    IF FN_PermisoAccion(p_id_usuario, 'rt_bandeja') = 0 THEN
+    IF FN_PermisoAccion(p_id_usuario, 'rt_bandeja') = 0 AND FN_PermisoAccion(p_id_usuario, 'precot_ver') = 0 THEN
         SELECT 1 AS IdTipoMensaje, 'No tienes permiso para ver la revisión de informes técnicos.' AS Mensaje;
         LEAVE proc;
     END IF;
-    SET v_editar  = FN_PermisoAccion(p_id_usuario, 'rt_editar');
-    SET v_revisar = FN_PermisoAccion(p_id_usuario, 'rt_revisar');
 
-    CALL SP_ArmarBaseInformes(p_id_usuario, IFNULL(p_id_informe, 0));
+    CALL SP_ArmarBaseInformeAcceso(p_id_usuario, p_id_informe, v_acceso);
+    -- Comercial solo lee: sin acciones
+    SET v_editar  = IF(v_acceso = 'rt', FN_PermisoAccion(p_id_usuario, 'rt_editar'), 0);
+    SET v_revisar = IF(v_acceso = 'rt', FN_PermisoAccion(p_id_usuario, 'rt_revisar'), 0);
     SELECT COUNT(*) INTO v_existe FROM tmp_rt_base;
     IF v_existe = 0 THEN
         DROP TEMPORARY TABLE IF EXISTS tmp_rt_base;
@@ -81,7 +87,7 @@ proc: BEGIN
                                                                      ELSE 'Pendiente de revisión' END
                WHEN 'revisado_sin_complementario' THEN 'Revisado'
                ELSE 'Revisado con complementario' END                  AS estado_label,
-           b.url_pdf,
+           COALESCE(b.url_pdf, CONCAT('/api/servicio-tecnico/informes/', b.id_informe, '/pdf')) AS url_pdf,
            b.id_os, b.numero_os, b.tipo_os,
            b.id_cliente, b.razon_social, b.ruc, b.id_sede, b.sede,
            b.id_equipo, b.equipo, b.codigo_tw, b.numero_serie, b.marca, b.modelo, b.tipo_equipo,
@@ -106,6 +112,16 @@ proc: BEGIN
            it.normativa, it.patron_ensayo, it.tolerancia_excentricidad, it.resultado_global,
            it.error_maximo, it.error_maximo_detalle, it.incertidumbre, it.factor_k, it.decision_tecnica,
            it.descripcion_complementaria,
+           -- Lo que cargó el técnico en la cabecera del informe de la app
+           it.numero_informe                                            AS numero_informe_tecnico,
+           it.generado_en                                               AS informe_generado_en,
+           COALESCE(NULLIF(TRIM(it.responsable_nombre), ''), ct.nombres) AS responsable_nombre,
+           COALESCE(NULLIF(TRIM(it.responsable_cargo), ''), ct.cargo)    AS responsable_cargo,
+           COALESCE(NULLIF(TRIM(it.responsable_telefono), ''), NULLIF(TRIM(ct.telefono_movil), '')) AS responsable_telefono,
+           it.detalle_servicio, it.comentario_pruebas, it.severidad_general, it.estado_equipo_final,
+           IFNULL(it.rev_jefatura, 0) AS rev_jefatura, IFNULL(it.requiere_precotizacion, 0) AS requiere_precotizacion,
+           IFNULL(it.segunda_visita, 0) AS segunda_visita, IFNULL(it.aplica_garantia, 0) AS aplica_garantia,
+           it.error_critico_motivo AS error_critico,
            -- Trazabilidad
            b.fecha_envio_revision, b.fecha_inicio_revision, b.fecha_revision, b.id_revisor, b.revisor, b.nota_revision,
            b.horas_espera, b.sla_horas, b.sla_vencido,
@@ -131,8 +147,10 @@ proc: BEGIN
                 WHEN b.estado_complementario = 'borrador' THEN 'continuar_complementario'
                 ELSE 'registrar_revision' END                          AS accion_principal
     FROM tmp_rt_base b
-    JOIN informe_tecnico it    ON it.id_informe = b.id_informe
-    LEFT JOIN precotizacion pc ON pc.id_precotizacion = b.id_precotizacion;
+    JOIN informe_tecnico it       ON it.id_informe = b.id_informe
+    LEFT JOIN orden_servicio os   ON os.id_os = b.id_os
+    LEFT JOIN contacto_cliente ct ON ct.id_contacto = os.id_contacto
+    LEFT JOIN precotizacion pc    ON pc.id_precotizacion = b.id_precotizacion;
 
     -- 3. Procedimiento ejecutado
     SELECT ip.id_paso, ip.orden, ip.titulo, ip.detalle, ip.realizado, ip.nota, ip.origen

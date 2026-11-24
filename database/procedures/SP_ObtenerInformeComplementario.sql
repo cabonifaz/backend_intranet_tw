@@ -95,7 +95,7 @@ proc: BEGIN
            b.numero_informe                                              AS numero_informe_original,
            b.estado                                                      AS estado_original,
            b.grupo_estado                                                AS grupo_estado_original,
-           o.url_pdf                                                     AS pdf_informe_original_url,
+           COALESCE(o.url_pdf, CONCAT('/api/servicio-tecnico/informes/', o.id_informe, '/pdf')) AS pdf_informe_original_url,
            CONCAT('/api/servicio-tecnico/informes/complementarios/', c.id_informe, '/pdf') AS pdf_informe_complementario_url,
            b.id_os, b.numero_os, b.tipo_os,
            b.id_cliente, b.razon_social, b.ruc, b.id_sede, b.sede,

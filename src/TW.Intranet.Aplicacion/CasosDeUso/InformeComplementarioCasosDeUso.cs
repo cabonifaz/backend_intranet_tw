@@ -201,15 +201,49 @@ public class GenerarPdfInformeComplementarioCasoDeUso(IRevisionTecnicaRepositori
             if (EntradaInformeComplementario.Tipo(m.GetBuffer().AsSpan(0, (int)Math.Min(m.Length, 16))) is "jpg" or "png") imagenes[f.IdEvidencia] = m.ToArray();
         }
 
-        var lima = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, ZonaLima());
-        var bytes = pdf.Generar(new DatosInformeComplementarioPdf(r.Datos, imagenes, lima));
+        var bytes = pdf.Generar(new DatosInformeComplementarioPdf(r.Datos, imagenes, HoraLima()));
         var numero = r.Datos.Cabecera.NumeroComplementario ?? $"CMP-{idComplementario}";
         return new(2, "PDF generado.", new ArchivoGeneradoDto(bytes, $"informe-complementario-{numero}.pdf", "application/pdf"));
     }
 
-    private static TimeZoneInfo ZonaLima()
+    internal static DateTime HoraLima()
     {
-        try { return TimeZoneInfo.FindSystemTimeZoneById("America/Lima"); }
-        catch { return TimeZoneInfo.CreateCustomTimeZone("Lima", TimeSpan.FromHours(-5), "Lima", "Lima"); }
+        TimeZoneInfo zona;
+        try { zona = TimeZoneInfo.FindSystemTimeZoneById("America/Lima"); }
+        catch { zona = TimeZoneInfo.CreateCustomTimeZone("Lima", TimeSpan.FromHours(-5), "Lima", "Lima"); }
+        return TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, zona);
+    }
+}
+
+/// <summary>PDF del informe técnico del servicio (lo que registró el técnico desde la app), generado en el momento por la intranet.
+/// Lo pueden descargar el supervisor (rt_bandeja) y Comercial (precot_ver, si la precotización del informe o de su complementario es suya).</summary>
+public class GenerarPdfInformeTecnicoCasoDeUso(IRevisionTecnicaRepositorio repositorio, IAlmacenArchivos almacen, IGeneradorInformeTecnicoPdf pdf)
+{
+    private const int MaxImagenes = 24;
+
+    public async Task<RespuestaDto<ArchivoGeneradoDto>> EjecutarAsync(long idInforme, long idUsuario, CancellationToken ct = default)
+    {
+        if (idInforme <= 0) return new(1, "Informe no válido.");
+        var r = await repositorio.ObtenerDetalleAsync(idInforme, idUsuario, ct);
+        if (r.IdTipoMensaje != 2 || r.Datos is null) return new(r.IdTipoMensaje, r.Mensaje);
+
+        var imagenes = new Dictionary<long, byte[]>();
+        foreach (var f in r.Datos.Fotos.Take(MaxImagenes))
+        {
+            var archivo = await repositorio.ObtenerArchivoFotoAsync(idInforme, f.IdEvidencia, idUsuario, ct);
+            if (archivo.IdTipoMensaje != 2 || archivo.Datos is null) continue;
+            var ruta = f.EsVideo ? archivo.Datos.RutaCuadro : archivo.Datos.Ruta;
+            if (string.IsNullOrEmpty(ruta) || ruta.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase)) continue;
+            await using var s = await almacen.AbrirLecturaAsync(ruta, ct);
+            if (s is null) continue;
+            using var m = new MemoryStream();
+            await s.CopyToAsync(m, ct);
+            if (EntradaInformeComplementario.Tipo(m.GetBuffer().AsSpan(0, (int)Math.Min(m.Length, 16))) is "jpg" or "png") imagenes[f.IdEvidencia] = m.ToArray();
+        }
+
+        var bytes = pdf.Generar(new DatosInformeTecnicoPdf(r.Datos, imagenes, GenerarPdfInformeComplementarioCasoDeUso.HoraLima()));
+        var c = r.Datos.Cabecera;
+        var numero = !string.IsNullOrWhiteSpace(c.NumeroInformeTecnico) ? c.NumeroInformeTecnico : c.NumeroInforme ?? $"{idInforme}";
+        return new(2, "PDF generado.", new ArchivoGeneradoDto(bytes, $"informe-tecnico-{numero}.pdf", "application/pdf"));
     }
 }

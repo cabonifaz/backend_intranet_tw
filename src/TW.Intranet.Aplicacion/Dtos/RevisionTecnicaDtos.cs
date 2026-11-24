@@ -110,8 +110,13 @@ public class CabeceraInformeDto
     public string?   Estado                    { get; init; }
     public string?   GrupoEstado               { get; init; }
     public string?   EstadoLabel               { get; init; }
-    /// <summary>"Descargar Informe PDF" (lo genera la app móvil).</summary>
+    /// <summary>"Descargar Informe PDF": GET /api/servicio-tecnico/informes/{id}/pdf (lo genera la intranet en el momento).</summary>
     public string?   UrlPdf                    { get; init; }
+    /// <summary>N° del informe que asignó la app al generarlo (NNNN-AAAA).</summary>
+    public string?   NumeroInformeTecnico      { get; init; }
+    public DateTime? InformeGeneradoEn         { get; init; }
+    /// <summary>Motivo con que el técnico guardó un ensayo con error crítico (si lo hubo).</summary>
+    public string?   ErrorCritico              { get; init; }
     public long?     IdOs                      { get; init; }
     public string?   NumeroOs                  { get; init; }
     public string?   TipoOs                    { get; init; }
@@ -359,6 +364,8 @@ public class EventoRecienteDto
     public string?   Usuario     { get; init; }
 }
 
+/// <summary>Detalle del informe. ResponsableCliente, DiagnosticoFinal, ComentarioPruebas y DetalleServicio = lo que el técnico cargó en la
+/// cabecera del informe de la app (24/11/2026; también los usa el PDF del informe).</summary>
 public record DetalleInformeTecnicoDto(
     CabeceraInformeDto            Cabecera,
     List<PasoInformeDto>          Procedimiento,
@@ -367,7 +374,17 @@ public record DetalleInformeTecnicoDto(
     List<RecomendacionInformeDto> Recomendaciones,
     List<FotoInformeDto>          Fotos,
     List<ItemPrecotizacionDto>    Precotizacion,
-    List<EventoRecienteDto>       HistorialReciente);
+    List<EventoRecienteDto>       HistorialReciente,
+    ResponsableClienteDto?        ResponsableCliente = null,
+    DiagnosticoFinalDto?          DiagnosticoFinal   = null,
+    string?                       ComentarioPruebas  = null,
+    DetalleServicioInformeDto?    DetalleServicio    = null);
+
+/// <summary>Lo que necesita el PDF del informe del técnico: el detalle y las imágenes (id de evidencia → JPEG/PNG).</summary>
+public record DatosInformeTecnicoPdf(
+    DetalleInformeTecnicoDto          Detalle,
+    IReadOnlyDictionary<long, byte[]> Imagenes,
+    DateTime                          GeneradoEn);
 
 // ── HU-58 Edición ──────────────────────────────────────────────────────────────────────────────
 
