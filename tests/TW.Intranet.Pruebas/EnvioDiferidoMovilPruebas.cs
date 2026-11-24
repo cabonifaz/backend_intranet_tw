@@ -133,3 +133,35 @@ public class EnvioDiferidoMovilPruebas
         Assert.True(siguio);
     }
 }
+
+internal sealed class PanelCampoRepoFalso(RespuestaDto<ServicioJefaturaDto> servicio) : IPanelCampoMovilRepositorio
+{
+    public Task<RespuestaDto<PanelCampoDto>> ObtenerPanelAsync(long idUsuario, CancellationToken ct) => throw new NotSupportedException();
+    public Task<RespuestaDto<ServiciosJefaturaDto>> ObtenerServiciosAsync(long idUsuario, string filtro, string? busqueda, CancellationToken ct) => throw new NotSupportedException();
+    public Task<RespuestaDto<ServicioJefaturaDto>> ObtenerServicioAsync(long idUsuario, long idOs, CancellationToken ct) => Task.FromResult(servicio);
+    public Task<RespuestaDto<RutaServicioDto>> ObtenerRutaAsync(long idUsuario, long idOs, CancellationToken ct) => throw new NotSupportedException();
+    public Task<RespuestaDto<RegistroSeguimientoResultadoDto>> RegistrarAsync(long idUsuario, long idOs, string modo, string? nuevoEstado, int? idMotivo, string texto, CancellationToken ct) => throw new NotSupportedException();
+}
+
+/// <summary>Los envíos tardíos de un servicio en la app de Jefatura: solo se listan si el jefe tiene alcance sobre el servicio.</summary>
+public class EnviosDiferidosJefaturaPruebas
+{
+    [Fact]
+    public async Task Con_alcance_sobre_el_servicio_lista_los_envios()
+    {
+        var uso = new ListarEnviosDiferidosJefaturaMovilCasoDeUso(
+            new ObtenerServicioJefaturaMovilCasoDeUso(new PanelCampoRepoFalso(new RespuestaDto<ServicioJefaturaDto>(2, "Éxito."))), new EnvioDiferidoRepoFalso());
+        var r = await uso.EjecutarAsync(9, 15);
+        Assert.Equal(2, r.IdTipoMensaje);
+    }
+
+    [Fact]
+    public async Task Sin_alcance_no_lista_y_devuelve_el_motivo_del_detalle()
+    {
+        var uso = new ListarEnviosDiferidosJefaturaMovilCasoDeUso(
+            new ObtenerServicioJefaturaMovilCasoDeUso(new PanelCampoRepoFalso(new RespuestaDto<ServicioJefaturaDto>(1, "El servicio no existe, no es de hoy o no pertenece a tu área."))), new EnvioDiferidoRepoFalso());
+        var r = await uso.EjecutarAsync(9, 15);
+        Assert.Equal((1, "El servicio no existe, no es de hoy o no pertenece a tu área."), (r.IdTipoMensaje, r.Mensaje));
+        Assert.Null(r.Datos);
+    }
+}

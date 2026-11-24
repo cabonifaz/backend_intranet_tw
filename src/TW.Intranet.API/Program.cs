@@ -334,6 +334,7 @@ builder.Services.AddScoped<IRegistroInformeIntranetRepositorio, RegistroInformeI
 builder.Services.AddScoped<IEnvioDiferidoMovilRepositorio, EnvioDiferidoMovilRepositorio>();
 builder.Services.AddScoped<RegistrarEnvioDiferidoMovilCasoDeUso>();
 builder.Services.AddScoped<ListarEnviosDiferidosMovilCasoDeUso>();
+builder.Services.AddScoped<ListarEnviosDiferidosJefaturaMovilCasoDeUso>();
 builder.Services.AddScoped<EjecutorRegistroIntranet>();
 builder.Services.AddScoped<ContextoRegistroIntranetCasoDeUso>();
 builder.Services.AddScoped<SesionRegistroIntranetCasoDeUso>();

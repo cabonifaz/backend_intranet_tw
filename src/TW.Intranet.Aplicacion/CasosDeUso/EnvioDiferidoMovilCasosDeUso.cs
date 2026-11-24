@@ -43,7 +43,22 @@ public class RegistrarEnvioDiferidoMovilCasoDeUso(IEnvioDiferidoMovilRepositorio
         repo.RegistrarAsync(idUsuario, metodo, ruta, idOs, idOsEquipo, capturadoUtc, motivo, intentos, ct);
 }
 
-/// <summary>Los registros que la app envió tarde de un servicio (o de un equipo), para Jefatura y la intranet.</summary>
+/// <summary>
+/// Los registros que la app envió tarde de un servicio, para la app de Jefatura. Primero se valida el alcance con el detalle del servicio (el jefe solo ve servicios de su área y de hoy, la
+/// misma regla de SP_ObtenerServicioJefaturaMovil) y recién entonces se listan.
+/// </summary>
+public class ListarEnviosDiferidosJefaturaMovilCasoDeUso(ObtenerServicioJefaturaMovilCasoDeUso servicio, IEnvioDiferidoMovilRepositorio repo)
+{
+    public async Task<RespuestaDto<IReadOnlyList<EnvioDiferidoDto>>> EjecutarAsync(long idUsuario, long idOs, CancellationToken ct = default)
+    {
+        var acceso = await servicio.EjecutarAsync(idUsuario, idOs, ct);
+        return acceso.IdTipoMensaje == 2
+            ? await repo.ListarAsync(idOs, null, ct)
+            : new RespuestaDto<IReadOnlyList<EnvioDiferidoDto>>(acceso.IdTipoMensaje, acceso.Mensaje);
+    }
+}
+
+/// <summary>Los registros que la app envió tarde de un servicio (o de un equipo), para la intranet (Seguimiento Operativo).</summary>
 public class ListarEnviosDiferidosMovilCasoDeUso(IEnvioDiferidoMovilRepositorio repo)
 {
     public Task<RespuestaDto<IReadOnlyList<EnvioDiferidoDto>>> EjecutarAsync(long idOs, long? idOsEquipo, CancellationToken ct) =>
