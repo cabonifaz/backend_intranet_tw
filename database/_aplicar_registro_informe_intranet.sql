@@ -1244,5 +1244,7 @@ SELECT 'Forzar de intranet NO toca el scorecard (debe ser 1)',
           AND ROUTINE_DEFINITION NOT LIKE '%INSERT INTO tecnico_scorecard%' AND ROUTINE_DEFINITION NOT LIKE '%UPDATE tecnico_scorecard%')
 UNION ALL
 SELECT 'Los SP móviles no cambiaron de firma: ContextoEquipo y CambiarEstadoEquipo siguen sin parámetros de intranet (debe ser 2)',
-       (SELECT COUNT(*) FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA = DATABASE() AND ROUTINE_NAME IN ('SP_ContextoEquipoMovil', 'SP_CambiarEstadoEquipoMovil')
-          AND ROUTINE_DEFINITION NOT LIKE '%registrador%' AND ROUTINE_DEFINITION NOT LIKE '%intranet%');
+       (SELECT COUNT(*) FROM information_schema.ROUTINES r WHERE r.ROUTINE_SCHEMA = DATABASE() AND r.ROUTINE_NAME IN ('SP_ContextoEquipoMovil', 'SP_CambiarEstadoEquipoMovil')
+          AND NOT EXISTS (SELECT 1 FROM information_schema.PARAMETERS p
+                          WHERE p.SPECIFIC_SCHEMA = r.ROUTINE_SCHEMA AND p.SPECIFIC_NAME = r.ROUTINE_NAME
+                            AND (p.PARAMETER_NAME LIKE '%registrador%' OR p.PARAMETER_NAME LIKE '%intranet%')));
