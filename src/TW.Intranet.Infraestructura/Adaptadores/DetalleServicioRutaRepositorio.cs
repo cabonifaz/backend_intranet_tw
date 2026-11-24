@@ -52,11 +52,14 @@ public class DetalleServicioRutaRepositorio(CadenaConexionBd conexion) : Reposit
             async (r, mensaje) =>
             {
                 await r.NextResultAsync(ct);
-                var filas = new List<(long Id, string Codigo, string? Modelo, string? Serie, string Estado, int Fotos, int Ensayos, int Cert, int Obs, int Med, string? Ini, string? Fin, int? Min)>();
+                var filas = new List<(long Id, string Codigo, string? Modelo, string? Serie, string Estado, int Fotos, int Ensayos, int Cert, int Obs, int Med, string? Ini, string? Fin, int? Min,
+                    bool InfGen, string? NumInf, bool RegAct, long? RegId, string? RegNombre, bool RegPropio, string? Otro, long IdOsEq)>();
                 while (await r.ReadAsync(ct))
                     filas.Add((EnteroLargo(r, "IdEquipo"), Texto(r, "Codigo") ?? "", Texto(r, "Modelo"), Texto(r, "Serie"), Texto(r, "Estado") ?? "pendiente",
                         Entero(r, "Fotos"), Entero(r, "Ensayos"), Entero(r, "CertificadoPreliminar"), Entero(r, "Observaciones"), Entero(r, "Mediciones"),
-                        Texto(r, "Iniciado"), Texto(r, "Finalizado"), EnteroNulo(r, "Minutos")));
+                        Texto(r, "Iniciado"), Texto(r, "Finalizado"), EnteroNulo(r, "Minutos"),
+                        Booleano(r, "InformeGenerado"), Texto(r, "NumeroInforme"), Booleano(r, "RegistroActivo"), EnteroLargoNulo(r, "RegistradorId"),
+                        Texto(r, "RegistradorNombre"), Booleano(r, "RegistroPropio"), Texto(r, "OtroEquipoAbierto"), EnteroLargo(r, "IdOsEquipo")));
 
                 await r.NextResultAsync(ct);
                 var etapas = new Dictionary<long, List<EtapaEquipoRutaDto>>();
@@ -69,7 +72,7 @@ public class DetalleServicioRutaRepositorio(CadenaConexionBd conexion) : Reposit
                 }
 
                 var equipos = filas.Select(f => new EquipoAvanceRutaDto(f.Id, f.Codigo, f.Modelo, f.Serie, f.Estado, f.Fotos, f.Ensayos, f.Cert, f.Obs, f.Med, f.Ini, f.Fin, f.Min,
-                    etapas.TryGetValue(f.Id, out var e) ? e : [])).ToList();
+                    etapas.TryGetValue(f.Id, out var e) ? e : [], f.InfGen, f.NumInf, f.RegAct, f.RegId, f.RegNombre, f.RegPropio, f.Otro, f.IdOsEq)).ToList();
                 return new RespuestaDto<AvanceServicioRutaDto>(2, mensaje,
                     new AvanceServicioRutaDto(equipos.Count(x => x.Estado == "ejecutado"), equipos.Count, equipos));
             },
