@@ -15,6 +15,8 @@
 --   alcance, o precot_ver (Comercial) si una precotización del informe o de su complementario está en su alcance (solo lectura, sin acciones).
 --   url_pdf: el que dejó la app o, si no hay, el endpoint del PDF. La cabecera trae además lo que el técnico cargó en la app: N° de informe, quién
 --   atendió en planta, detalle del servicio (JSON), comentario de las pruebas y diagnóstico final.
+-- HU-55 (24/11/2026, requiere la migración 127): via (app · intranet) y, solo con via = 'intranet', id_registrado_por, registrado_por (nombre de quien lo
+--   registró en nombre del técnico) y fecha_registro (primera vez, hora de Lima).
 DROP PROCEDURE IF EXISTS SP_ObtenerDetalleInformeTecnico;
 
 DELIMITER $$
@@ -122,6 +124,11 @@ proc: BEGIN
            IFNULL(it.rev_jefatura, 0) AS rev_jefatura, IFNULL(it.requiere_precotizacion, 0) AS requiere_precotizacion,
            IFNULL(it.segunda_visita, 0) AS segunda_visita, IFNULL(it.aplica_garantia, 0) AS aplica_garantia,
            it.error_critico_motivo AS error_critico,
+           -- HU-55 (migración 127): registrado desde la intranet en nombre del técnico. registrado_en está en UTC → hora de Lima
+           it.via,
+           IF(it.via = 'intranet', it.id_registrado_por, NULL)          AS id_registrado_por,
+           IF(it.via = 'intranet', NULLIF(TRIM(CONCAT(IFNULL(urg.nombre, ''), ' ', IFNULL(urg.apellido, ''))), ''), NULL) AS registrado_por,
+           IF(it.via = 'intranet' AND it.registrado_en IS NOT NULL, CONVERT_TZ(it.registrado_en, '+00:00', '-05:00'), NULL) AS fecha_registro,
            -- Trazabilidad
            b.fecha_envio_revision, b.fecha_inicio_revision, b.fecha_revision, b.id_revisor, b.revisor, b.nota_revision,
            b.horas_espera, b.sla_horas, b.sla_vencido,
@@ -150,6 +157,7 @@ proc: BEGIN
     JOIN informe_tecnico it       ON it.id_informe = b.id_informe
     LEFT JOIN orden_servicio os   ON os.id_os = b.id_os
     LEFT JOIN contacto_cliente ct ON ct.id_contacto = os.id_contacto
+    LEFT JOIN usuario urg         ON urg.id_usuario = it.id_registrado_por
     LEFT JOIN precotizacion pc    ON pc.id_precotizacion = b.id_precotizacion;
 
     -- 3. Procedimiento ejecutado

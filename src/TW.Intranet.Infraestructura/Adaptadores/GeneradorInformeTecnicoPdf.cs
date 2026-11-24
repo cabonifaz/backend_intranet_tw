@@ -66,6 +66,8 @@ public class GeneradorInformeTecnicoPdf : IGeneradorInformeTecnicoPdf
                         {
                             t.Item().AlignRight().Text($"Informe N° {Texto(numero)}").Bold();
                             t.Item().AlignRight().Text($"Estado: {Texto(c.EstadoLabel)}").FontSize(8).FontColor(Gris);
+                            if (c.Via == "intranet")
+                                t.Item().AlignRight().Text($"Registrado desde la intranet por {Texto(c.RegistradoPor)}").FontSize(7.5f).FontColor(Gris);
                         });
                     });
                     col.Item().PaddingTop(6).PaddingBottom(6).LineHorizontal(1).LineColor(Borde);

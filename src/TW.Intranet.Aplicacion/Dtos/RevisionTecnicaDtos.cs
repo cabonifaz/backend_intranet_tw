@@ -117,6 +117,12 @@ public class CabeceraInformeDto
     public DateTime? InformeGeneradoEn         { get; init; }
     /// <summary>Motivo con que el técnico guardó un ensayo con error crítico (si lo hubo).</summary>
     public string?   ErrorCritico              { get; init; }
+    /// <summary>HU-55: app (lo registró el técnico) · intranet (lo registró la Asistente o el Jefe en nombre del técnico).</summary>
+    public string?   Via                       { get; init; }
+    /// <summary>Solo con Via = intranet: quién lo registró y cuándo (primera vez, hora de Lima). Badge "Registrado desde Intranet por…".</summary>
+    public long?     IdRegistradoPor           { get; init; }
+    public string?   RegistradoPor             { get; init; }
+    public DateTime? FechaRegistro             { get; init; }
     public long?     IdOs                      { get; init; }
     public string?   NumeroOs                  { get; init; }
     public string?   TipoOs                    { get; init; }
