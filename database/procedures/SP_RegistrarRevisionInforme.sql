@@ -1,6 +1,9 @@
 -- HU-59 (Sprint 5) Revisión Técnica: "Confirmar Revisión". El informe queda REVISADO, cerrado e inmutable.
 -- Acceso: rt_revisar. Vuelve a validar el checklist obligatorio de SP_PrepararRevisionInforme (fotos, ensayos completos,
--- precotización si hay observaciones y procedimiento ejecutado). p_nota: nota interna del supervisor (opcional, hasta 500).
+-- informe complementario guardado si existe y procedimiento ejecutado). p_nota: nota interna del supervisor (opcional, hasta 500).
+-- Informe Complementario (23/11/2026): ya no exige precotización. El estado en BD queda 'revisado'; si hay un complementario guardado,
+--   la respuesta trae estado = 'revisado_con_complementario' (es el grupo de la bandeja) y el complementario también queda cerrado.
+--   Un complementario sin guardar (borrador) bloquea la revisión: hay que guardarlo o descartarlo.
 -- Efectos: estado 'revisado' con fecha y revisor, la precotización (si hay) queda enviada a Comercial, evento 'revisado' en el
 -- historial y aviso al técnico y al responsable del RQ. Dos supervisores a la vez: gana el primero, el otro ve "ya fue revisado".
 -- Resultados: 1 mensaje, 2 informe revisado.
@@ -24,6 +27,9 @@ proc: BEGIN
     DECLARE v_numero_os  VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_equipo     VARCHAR(300) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_nota       VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_id_comp    BIGINT;
+    DECLARE v_est_comp   VARCHAR(30)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+    DECLARE v_con_comp   TINYINT DEFAULT 0;
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -42,8 +48,8 @@ proc: BEGIN
     SELECT COUNT(*),
            MAX(CASE WHEN n_fotos = 0 THEN 'Faltan las fotos del servicio.'
                     WHEN n_ensayos_sin_resultado > 0 THEN 'Hay lecturas de ensayo sin resultado.'
-                    WHEN n_observaciones > 0 AND IFNULL(n_items_precot, 0) = 0
-                        THEN 'Este servicio tiene observaciones registradas. Debes registrar la precotización antes de marcar el informe como revisado.'
+                    WHEN estado_complementario = 'borrador'
+                        THEN 'Tienes un informe complementario sin guardar. Guárdalo o descártalo antes de marcar el informe como revisado.'
                     WHEN n_pasos_realizados = 0 THEN 'Falta registrar el procedimiento ejecutado.'
                     ELSE NULL END),
            MAX(id_tecnico), MAX(id_responsable_rq), MAX(id_precotizacion), MAX(numero_precot), MAX(numero_os), MAX(equipo)
@@ -67,14 +73,34 @@ proc: BEGIN
         LEAVE proc;
     END IF;
 
+    -- Complementario: se vuelve a leer dentro de la transacción (pudo guardarse o descartarse mientras tanto)
+    SELECT c.id_informe, c.estado INTO v_id_comp, v_est_comp
+    FROM informe_tecnico c
+    WHERE c.id_informe = (SELECT MAX(c2.id_informe) FROM informe_tecnico c2 WHERE c2.id_informe_padre = p_id_informe AND c2.eliminado_en IS NULL)
+    FOR UPDATE;
+    IF v_est_comp = 'borrador' THEN
+        ROLLBACK;
+        SELECT 1 AS IdTipoMensaje, 'Tienes un informe complementario sin guardar. Guárdalo o descártalo antes de marcar el informe como revisado.' AS Mensaje;
+        LEAVE proc;
+    END IF;
+    SET v_con_comp = IF(v_est_comp = 'complementario', 1, 0);
+
     UPDATE informe_tecnico
     SET estado = 'revisado', fecha_revision = NOW(), id_revisor = p_id_usuario, nota_revision = v_nota,
         fecha_inicio_revision = IFNULL(fecha_inicio_revision, NOW()), modificado_por = p_id_usuario
     WHERE id_informe = p_id_informe;
 
+    -- El complementario queda cerrado junto con el original
+    IF v_con_comp = 1 THEN
+        UPDATE informe_tecnico SET fecha_revision = NOW(), id_revisor = p_id_usuario, modificado_por = p_id_usuario
+        WHERE id_informe = v_id_comp;
+    END IF;
+
     INSERT INTO auditoria_evento (entidad_tipo, id_entidad, accion, estado_anterior, estado_nuevo, descripcion, id_usuario, registrado_en, metadata)
-    VALUES ('informe_tecnico', p_id_informe, 'revisado', v_estado, 'revisado', 'Marcó el informe como revisado',
-            p_id_usuario, NOW(), JSON_OBJECT('categoria', 'revision', 'nota', v_nota, 'precotizacion', v_numero_pc));
+    VALUES ('informe_tecnico', p_id_informe, 'revisado', v_estado, 'revisado',
+            IF(v_con_comp = 1, 'Marcó el informe como revisado con informe complementario', 'Marcó el informe como revisado'),
+            p_id_usuario, NOW(), JSON_OBJECT('categoria', 'revision', 'nota', v_nota, 'precotizacion', v_numero_pc,
+                                             'id_complementario', IF(v_con_comp = 1, v_id_comp, NULL)));
 
     IF v_id_pc IS NOT NULL THEN
         UPDATE precotizacion SET estado = 'enviado', fecha_envio = IFNULL(fecha_envio, NOW()), modificado_por = p_id_usuario
@@ -85,15 +111,17 @@ proc: BEGIN
     INSERT INTO notificacion (id_usuario_destino, id_canal, titulo, cuerpo, entidad_tipo, id_entidad, fecha_creacion, creado_por)
     SELECT d.id_usuario, 5, CONCAT('Informe revisado: ', IFNULL(v_numero_os, '')),
            CONCAT('El informe de ', IFNULL(v_equipo, 'el equipo'), IF(v_numero_os IS NULL, '', CONCAT(' (', v_numero_os, ')')),
-                  ' fue revisado', IF(v_numero_pc IS NULL, '.', CONCAT(' y generó la precotización ', v_numero_pc, '.'))),
+                  ' fue revisado', IF(v_con_comp = 1, ' con informe complementario', ''),
+                  IF(v_numero_pc IS NULL, '.', CONCAT(' y generó la precotización ', v_numero_pc, '.'))),
            'informe_tecnico', p_id_informe, NOW(), p_id_usuario
     FROM (SELECT v_id_tecnico AS id_usuario UNION SELECT v_id_resp) d
     WHERE d.id_usuario IS NOT NULL AND d.id_usuario <> p_id_usuario;
 
     COMMIT;
 
-    SELECT 2 AS IdTipoMensaje, 'Informe marcado como revisado.' AS Mensaje;
-    SELECT p_id_informe AS id_informe, 'revisado' AS estado, NOW() AS fecha_revision, v_id_pc AS id_precotizacion, v_numero_pc AS numero_precotizacion;
+    SELECT 2 AS IdTipoMensaje, IF(v_con_comp = 1, 'Informe marcado como revisado con informe complementario.', 'Informe marcado como revisado.') AS Mensaje;
+    SELECT p_id_informe AS id_informe, IF(v_con_comp = 1, 'revisado_con_complementario', 'revisado') AS estado, NOW() AS fecha_revision,
+           v_id_pc AS id_precotizacion, v_numero_pc AS numero_precotizacion, IF(v_con_comp = 1, v_id_comp, NULL) AS id_informe_complementario;
 END$$
 
 DELIMITER ;

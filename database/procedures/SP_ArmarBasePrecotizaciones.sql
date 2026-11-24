@@ -3,6 +3,9 @@
 --   Alcance (pedido 14, SP_ObtenerAlcanceCrm) sobre el responsable del RQ de origen: el comercial ve las de sus RQ y suplencias,
 --   supervisor / visor las de su área, gerencia / TI todas.
 --   estado_grupo: pendiente (enviada, aún sin propuesta) · convertida (ya generó la propuesta)
+-- Informe Complementario (23/11/2026): la precotización nace del complementario (pc.id_informe = complementario). id_informe_original es el
+--   informe del técnico; pdf_informe_original_url y pdf_informe_complementario_url son los dos PDF del modal de Comercial
+--   (el del original es el url_pdf que deja la app, si existe; el del complementario lo genera la intranet).
 DROP PROCEDURE IF EXISTS SP_ArmarBasePrecotizaciones;
 
 DELIMITER $$
@@ -36,6 +39,12 @@ BEGIN
            IF(us.rol_sistema IN ('supervisor', 'administrador'),
               CONCAT('Supervisor ', IF(us.area = 'metrologia', 'de Metrología', 'Técnico')), 'Servicio Técnico') AS cargo_supervisor,
            pc.id_informe, it.version AS version_informe,
+           COALESCE(it.id_informe_padre, it.id_informe)                         AS id_informe_original,
+           (it.id_informe_padre IS NOT NULL)                                    AS es_complementario,
+           IF(it.id_informe_padre IS NOT NULL, it.id_informe, NULL)             AS id_informe_complementario,
+           COALESCE(io.url_pdf, it.url_pdf)                                     AS pdf_informe_original_url,
+           IF(it.id_informe_padre IS NOT NULL,
+              CONCAT('/api/servicio-tecnico/informes/complementarios/', it.id_informe, '/pdf'), NULL) AS pdf_informe_complementario_url,
            pc.id_os, os.numero AS numero_os, os.fecha_ejecucion, os.id_tipo_servicio, ts.String1 AS tipo_servicio,
            (SELECT COUNT(*) FROM precotizacion_item pi WHERE pi.id_precotizacion = pc.id_precotizacion AND pi.eliminado_en IS NULL) AS items,
            (SELECT COUNT(*) FROM informe_observacion o WHERE o.id_informe = pc.id_informe AND o.eliminado_en IS NULL)                AS observaciones,
@@ -56,6 +65,7 @@ BEGIN
     LEFT JOIN sede_cliente sc        ON sc.id_sede = os.id_sede
     LEFT JOIN tabla_maestra ts       ON ts.IdMaestro = 3 AND ts.IdEmpresa = 1 AND ts.Num1 = os.id_tipo_servicio
     LEFT JOIN informe_tecnico it     ON it.id_informe = pc.id_informe
+    LEFT JOIN informe_tecnico io     ON io.id_informe = it.id_informe_padre
     LEFT JOIN equipo_cliente ec      ON ec.id_equipo = pc.id_equipo
     LEFT JOIN suministros su         ON su.id_suministro = ec.id_suministro
     LEFT JOIN usuario us             ON us.id_usuario = pc.id_creador

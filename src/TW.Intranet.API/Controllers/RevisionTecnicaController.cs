@@ -9,8 +9,10 @@ namespace TW.Intranet.API.Controllers;
 
 /// <summary>
 /// Servicio Técnico › Revisión de Informes (Sprint 5, HU-56 a HU-59). El Supervisor / Jefe de Servicio Técnico revisa los
-/// informes que generan sus técnicos desde la app móvil: los edita, registra la precotización cuando hay observaciones y los
-/// marca como revisados (inmutables). Permisos: rt_bandeja (ver), rt_editar (editar y precotizar), rt_revisar (cerrar).
+/// informes que generan sus técnicos desde la app móvil y los marca como revisados.
+/// Cambio del 23/11/2026: el informe del técnico es INMUTABLE. Ya no se edita ni se precotiza aquí: el supervisor genera un
+/// Informe Complementario (InformeComplementarioController) donde agrega fotos, observaciones, recomendaciones y la precotización.
+/// Permisos: rt_bandeja (ver), rt_editar (complementario), rt_revisar (cerrar).
 /// Cada SP vuelve a validar el permiso, el alcance (informes de los técnicos de su área) y el estado.
 /// </summary>
 [ApiController]
@@ -20,8 +22,6 @@ public class RevisionTecnicaController(
     ObtenerBandejaInformesCasoDeUso       bandeja,
     ExportarBandejaInformesCasoDeUso      exportar,
     ObtenerDetalleInformeCasoDeUso        detalle,
-    GuardarInformeTecnicoCasoDeUso        guardar,
-    GuardarPrecotizacionInformeCasoDeUso  guardarPrecotizacion,
     PrepararRevisionInformeCasoDeUso      prepararRevision,
     RegistrarRevisionInformeCasoDeUso     registrarRevision,
     ObtenerHistorialInformeCasoDeUso      historial,
@@ -64,23 +64,26 @@ public class RevisionTecnicaController(
     }
 
     /// <summary>HU-57 Detalle: resumen, procedimiento, ensayos, observaciones, recomendaciones, fotos, precotización, historial
-    /// reciente y acciones permitidas (sirve también para la pantalla de edición).</summary>
+    /// reciente, acciones permitidas e informe complementario (idInformeComplementario, tieneComplementario).</summary>
     [RequierePermiso("rt_bandeja")]
     [HttpGet("{idInforme:long}")]
     public async Task<IActionResult> Detalle(long idInforme, CancellationToken ct = default)
         => Responder(await detalle.EjecutarAsync(idInforme, IdUsuarioActual, ct));
 
-    /// <summary>HU-58 "Guardar cambios" (pasos 1 a 4). Secciones opcionales; una lista enviada reemplaza a la anterior.</summary>
+    /// <summary>Bloqueado (23/11/2026): el informe del técnico es inmutable. Responde 403; los cambios van en el Informe Complementario
+    /// (POST {idInforme}/complementario y PUT complementarios/{id}).</summary>
     [RequierePermiso("rt_editar")]
     [HttpPut("{idInforme:long}")]
-    public async Task<IActionResult> Guardar(long idInforme, [FromBody] GuardarInformeTecnicoDto datos, CancellationToken ct = default)
-        => Responder(await guardar.EjecutarAsync(idInforme, datos, IdUsuarioActual, ct));
+    public IActionResult Guardar(long idInforme)
+        => StatusCode(StatusCodes.Status403Forbidden,
+                      new RespuestaDto<object>(1, "El informe del técnico es inmutable: genera un informe complementario para registrar tus cambios."));
 
-    /// <summary>HU-58 Paso 4: registrar / actualizar la precotización (queda enviada a Comercial).</summary>
+    /// <summary>Bloqueado (23/11/2026): la precotización se registra en el Informe Complementario (PUT complementarios/{id}). Responde 403.</summary>
     [RequierePermiso("rt_editar")]
     [HttpPut("{idInforme:long}/precotizacion")]
-    public async Task<IActionResult> GuardarPrecotizacion(long idInforme, [FromBody] GuardarPrecotizacionInformeDto datos, CancellationToken ct = default)
-        => Responder(await guardarPrecotizacion.EjecutarAsync(idInforme, datos, IdUsuarioActual, ct));
+    public IActionResult GuardarPrecotizacion(long idInforme)
+        => StatusCode(StatusCodes.Status403Forbidden,
+                      new RespuestaDto<object>(1, "La precotización se registra en el informe complementario."));
 
     /// <summary>HU-59 Modal "Registrar Revisión": checklist de cumplimiento e impacto tras el cierre.</summary>
     [RequierePermiso("rt_revisar")]

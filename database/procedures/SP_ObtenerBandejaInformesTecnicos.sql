@@ -1,8 +1,9 @@
 -- HU-56 (Sprint 5) Revisión Técnica: bandeja de informes de servicio técnico del Supervisor / Jefe de Servicio Técnico.
 -- Acceso: rt_bandeja. Alcance y estados: ver SP_ArmarBaseInformes.
 -- Filtros:
---   p_grupo: vacío o todos · pendiente_revision · pendiente_precotizacion · revisado_sin_precot · revisado_con_precot
---            · pendientes (las dos primeras) · revisados (las dos últimas)
+--   p_grupo: vacío o todos · pendiente_revision · revisado_sin_complementario · revisado_con_complementario
+--            · pendientes (= pendiente_revision) · revisados (los dos revisados)
+--   Informe Complementario (23/11/2026): ya no existe el paso "pendiente de precotización" (la precotización vive en el complementario y es opcional).
 --   p_busqueda: N° OS, cliente, RUC, técnico, equipo, código TW o N° de serie
 --   p_id_tecnico, p_id_cliente, p_con_observaciones (1 = con, 0 = sin, NULL = todos), p_sla_vencido (1 = solo vencidos)
 --   p_fecha_desde / p_fecha_hasta: fecha de ejecución
@@ -41,8 +42,8 @@ proc: BEGIN
 
     SET v_grupo    = LOWER(TRIM(IFNULL(p_grupo, '')));
     IF v_grupo = '' THEN SET v_grupo = 'todos'; END IF;
-    IF v_grupo NOT IN ('todos', 'pendientes', 'revisados', 'pendiente_revision', 'pendiente_precotizacion',
-                       'revisado_sin_precot', 'revisado_con_precot') THEN
+    IF v_grupo NOT IN ('todos', 'pendientes', 'revisados', 'pendiente_revision',
+                       'revisado_sin_complementario', 'revisado_con_complementario') THEN
         SELECT 1 AS IdTipoMensaje, 'Estado no válido.' AS Mensaje;
         LEAVE proc;
     END IF;
@@ -87,11 +88,10 @@ proc: BEGIN
     SELECT 2 AS IdTipoMensaje, 'Éxito.' AS Mensaje;
 
     -- 2. Tarjetas
-    SELECT IFNULL(SUM(grupo_estado = 'pendiente_revision'), 0)      AS pendientes_revision,
-           IFNULL(SUM(grupo_estado = 'pendiente_precotizacion'), 0) AS pendientes_precotizacion,
-           IFNULL(SUM(grupo_estado = 'revisado_sin_precot'), 0)     AS revisados_sin_precot,
-           IFNULL(SUM(grupo_estado = 'revisado_con_precot'), 0)     AS revisados_con_precot,
-           IFNULL(SUM(sla_vencido = 1), 0)                          AS sla_vencidos,
+    SELECT IFNULL(SUM(grupo_estado = 'pendiente_revision'), 0)          AS pendientes_revision,
+           IFNULL(SUM(grupo_estado = 'revisado_sin_complementario'), 0) AS revisados_sin_complementario,
+           IFNULL(SUM(grupo_estado = 'revisado_con_complementario'), 0) AS revisados_con_complementario,
+           IFNULL(SUM(sla_vencido = 1), 0)                              AS sla_vencidos,
            -- Sin informes en la consulta la tabla está vacía: se devuelve el SLA configurado (antes salía NULL y el back respondía 500)
            IFNULL(MAX(sla_horas), (SELECT CAST(IFNULL(MAX(m.Num2), 48) AS SIGNED) FROM tabla_maestra m
                                    WHERE m.Descripcion = 'PARAMETRO_PROGRAMACION' AND m.String2 = 'RT_SLA_REVISION_HORAS')) AS sla_horas
@@ -99,8 +99,8 @@ proc: BEGIN
 
     DELETE FROM tmp_rt_base
     WHERE NOT (v_grupo = 'todos'
-               OR (v_grupo = 'pendientes' AND grupo_estado IN ('pendiente_revision', 'pendiente_precotizacion'))
-               OR (v_grupo = 'revisados'  AND grupo_estado IN ('revisado_sin_precot', 'revisado_con_precot'))
+               OR (v_grupo = 'pendientes' AND grupo_estado = 'pendiente_revision')
+               OR (v_grupo = 'revisados'  AND grupo_estado IN ('revisado_sin_complementario', 'revisado_con_complementario'))
                OR grupo_estado = v_grupo);
 
     -- 3. Filas
@@ -111,16 +111,17 @@ proc: BEGIN
            n_observaciones, (n_observaciones > 0) AS con_observaciones,
            estado, grupo_estado,
            CASE grupo_estado
-               WHEN 'pendiente_revision'      THEN IF(estado = 'en_revision', 'En revisión', 'Pendiente de revisión')
-               WHEN 'pendiente_precotizacion' THEN 'Pendiente de precotización'
-               WHEN 'revisado_sin_precot'     THEN 'Revisado'
-               ELSE 'Revisado con precotización' END                 AS estado_label,
+               WHEN 'pendiente_revision'          THEN CASE estado WHEN 'en_revision' THEN 'En revisión' WHEN 'observado' THEN 'Observado'
+                                                                   ELSE 'Pendiente de revisión' END
+               WHEN 'revisado_sin_complementario' THEN 'Revisado'
+               ELSE 'Revisado con complementario' END                AS estado_label,
+           id_complementario, estado_complementario, (estado_complementario = 'complementario') AS tiene_complementario,
            id_precotizacion, numero_precot, id_propuesta_derivada, numero_propuesta_derivada,
            fecha_envio_revision, horas_espera, sla_horas, sla_vencido,
            fecha_revision, revisor
     FROM tmp_rt_base
-    ORDER BY (grupo_estado IN ('revisado_sin_precot', 'revisado_con_precot')),
-             IF(grupo_estado IN ('revisado_sin_precot', 'revisado_con_precot'), NULL, fecha_envio_revision),
+    ORDER BY (grupo_estado IN ('revisado_sin_complementario', 'revisado_con_complementario')),
+             IF(grupo_estado IN ('revisado_sin_complementario', 'revisado_con_complementario'), NULL, fecha_envio_revision),
              fecha_revision DESC, fecha_ejecucion DESC, id_informe DESC
     LIMIT v_por_pagina OFFSET v_offset;
 

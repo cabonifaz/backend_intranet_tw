@@ -8,6 +8,9 @@
 --     ensayos, descripción complementaria, precotización (cabecera) y acciones permitidas
 --   3 procedimiento ejecutado · 4 ensayos · 5 observaciones · 6 recomendaciones · 7 fotos · 8 ítems de la precotización
 --   9 historial reciente (5 últimos eventos; el completo está en SP_ObtenerHistorialInforme)
+-- Informe Complementario (23/11/2026): el informe del técnico es INMUTABLE (puede_editar y puede_registrar_precotizacion quedan siempre en 0).
+--   La cabecera trae id_informe_complementario / tiene_complementario / estado_complementario y puede_generar_complementario.
+--   Los ítems de precotización (resultado 8) son los de la precotización vigente: la del complementario o, si es anterior al cambio, la del original.
 DROP PROCEDURE IF EXISTS SP_ObtenerDetalleInformeTecnico;
 
 DELIMITER $$
@@ -74,10 +77,10 @@ proc: BEGIN
     -- 2. Cabecera
     SELECT b.id_informe, b.numero_informe, b.version, b.estado, b.grupo_estado,
            CASE b.grupo_estado
-               WHEN 'pendiente_revision'      THEN IF(b.estado = 'en_revision', 'En revisión', 'Pendiente de revisión')
-               WHEN 'pendiente_precotizacion' THEN 'Pendiente de precotización'
-               WHEN 'revisado_sin_precot'     THEN 'Revisado'
-               ELSE 'Revisado con precotización' END                  AS estado_label,
+               WHEN 'pendiente_revision'          THEN CASE b.estado WHEN 'en_revision' THEN 'En revisión' WHEN 'observado' THEN 'Observado'
+                                                                     ELSE 'Pendiente de revisión' END
+               WHEN 'revisado_sin_complementario' THEN 'Revisado'
+               ELSE 'Revisado con complementario' END                  AS estado_label,
            b.url_pdf,
            b.id_os, b.numero_os, b.tipo_os,
            b.id_cliente, b.razon_social, b.ruc, b.id_sede, b.sede,
@@ -95,10 +98,9 @@ proc: BEGIN
            CASE WHEN b.n_ensayos = 0 THEN 'sin_registro'
                 WHEN b.n_ensayos_sin_resultado > 0 THEN 'incompletos'
                 ELSE 'completos' END                                   AS estado_ensayos,
-           CASE WHEN b.n_observaciones = 0 THEN 'no_aplica'
-                WHEN b.id_propuesta_derivada IS NOT NULL THEN 'convertida'
+           CASE WHEN b.id_propuesta_derivada IS NOT NULL THEN 'convertida'
                 WHEN IFNULL(b.n_items_precot, 0) > 0 THEN 'precotizacion_enviada'
-                ELSE 'requiere_precotizacion' END                      AS oportunidad_comercial,
+                ELSE 'no_aplica' END                                   AS oportunidad_comercial,
            v_rend_estado AS rendicion_estado, v_rend_saldo AS rendicion_saldo, v_rend_tipo AS rendicion_tipo, v_gastos_rev AS gastos_por_revisar,
            -- Resultado global de los ensayos
            it.normativa, it.patron_ensayo, it.tolerancia_excentricidad, it.resultado_global,
@@ -110,17 +112,23 @@ proc: BEGIN
            b.id_precotizacion, b.numero_precot, b.estado_precot, b.fecha_precot, b.autor_precot, b.n_items_precot,
            pc.nota_supervisor                                          AS nota_precotizacion,
            b.id_propuesta_derivada, b.numero_propuesta_derivada, b.version_propuesta_derivada, b.estado_propuesta_derivada,
-           -- Acciones
-           (v_editar = 1 AND b.estado NOT IN ('revisado', 'aprobado'))                                  AS puede_editar,
-           (v_editar = 1 AND b.estado NOT IN ('revisado', 'aprobado') AND b.n_observaciones > 0)         AS puede_registrar_precotizacion,
+           -- Informe complementario
+           b.id_complementario                                          AS id_informe_complementario,
+           b.numero_complementario                                      AS numero_complementario,
+           b.estado_complementario,
+           (b.estado_complementario = 'complementario')                 AS tiene_complementario,
+           -- Acciones (el informe del técnico es inmutable: se corrige con un complementario)
+           0                                                            AS puede_editar,
+           0                                                            AS puede_registrar_precotizacion,
+           (v_editar = 1 AND b.estado NOT IN ('revisado', 'aprobado') AND b.id_complementario IS NULL)  AS puede_generar_complementario,
            (v_revisar = 1 AND b.estado NOT IN ('revisado', 'aprobado')
-            AND NOT (b.n_observaciones > 0 AND IFNULL(b.n_items_precot, 0) = 0))                         AS puede_registrar_revision,
+            AND IFNULL(b.estado_complementario, '') <> 'borrador')                                        AS puede_registrar_revision,
            CASE WHEN b.estado IN ('revisado', 'aprobado') THEN NULL
-                WHEN b.n_observaciones > 0 AND IFNULL(b.n_items_precot, 0) = 0
-                    THEN 'Este servicio tiene observaciones registradas. Debes registrar la precotización antes de marcar el informe como revisado.'
+                WHEN b.estado_complementario = 'borrador'
+                    THEN 'Tienes un informe complementario sin guardar. Guárdalo o descártalo antes de marcar el informe como revisado.'
                 ELSE NULL END                                          AS mensaje_bloqueo,
            CASE WHEN b.estado IN ('revisado', 'aprobado') THEN NULL
-                WHEN b.n_observaciones > 0 AND IFNULL(b.n_items_precot, 0) = 0 THEN 'registrar_precotizacion'
+                WHEN b.estado_complementario = 'borrador' THEN 'continuar_complementario'
                 ELSE 'registrar_revision' END                          AS accion_principal
     FROM tmp_rt_base b
     JOIN informe_tecnico it    ON it.id_informe = b.id_informe

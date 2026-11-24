@@ -5,11 +5,14 @@
 --   App móvil (HU-33): SP_FijarAlcanceInformesMovil fija @tw_inf_usuario / @tw_inf_ver_todo / @tw_inf_area con la regla ÁREA + ROL de la app (Gerencia, Operaciones, Administración,
 --   TI, SSOMA, Calidad y Comercial con cualquier rol, y Administradores, ven todo; el Supervisor de Servicio Técnico / Metrología, solo su área). Esas variables SOLO se respetan si
 --   @tw_inf_usuario es el usuario que consulta: la intranet no las fija y conserva su regla de siempre.
+-- Informe Complementario (migración 126): las filas con id_informe_padre (complementarios) NO son informes de la bandeja; cada original trae
+--   el suyo en id_complementario / estado_complementario (borrador = generado sin guardar · complementario = guardado). La precotización
+--   vive en el complementario (precotizacion.id_informe = complementario); las anteriores a este cambio siguen en el original y se muestran igual.
 -- grupo_estado (bandeja y tarjetas):
---   pendiente_revision       enviado o en revisión, sin observaciones o con la precotización ya registrada
---   pendiente_precotizacion  enviado o en revisión, con observaciones y sin precotización (no se puede marcar revisado)
---   revisado_sin_precot      revisado sin precotización
---   revisado_con_precot      revisado con precotización (generó oportunidad comercial)
+--   pendiente_revision           enviado, en revisión u observado (aún sin revisar)
+--   revisado_sin_complementario  revisado (o aprobado) sin informe complementario guardado
+--   revisado_con_complementario  revisado (o aprobado) con informe complementario guardado
+--   (La app móvil sigue leyendo 'pendiente_revision' y 'pendiente_precotizacion': este último ya no se produce y no afecta su cálculo.)
 -- SLA: horas desde que llegó a la bandeja (fecha_envio_revision) contra RT_SLA_REVISION_HORAS (48 h por defecto).
 DROP PROCEDURE IF EXISTS SP_ArmarBaseInformes;
 
@@ -112,6 +115,9 @@ BEGIN
            (SELECT COUNT(*) FROM informe_procedimiento ip WHERE ip.id_informe = it.id_informe AND ip.eliminado_en IS NULL) AS n_pasos,
            (SELECT COUNT(*) FROM informe_procedimiento ip WHERE ip.id_informe = it.id_informe AND ip.eliminado_en IS NULL
               AND ip.realizado = 1)                                                                                       AS n_pasos_realizados,
+           cp.id_informe                                               AS id_complementario,
+           cp.numero                                                   AS numero_complementario,
+           cp.estado                                                   AS estado_complementario,
            pc.id_precotizacion,
            pc.numero                                                   AS numero_precot,
            pc.estado                                                   AS estado_precot,
@@ -137,12 +143,19 @@ BEGIN
     LEFT JOIN tabla_maestra ts       ON ts.IdMaestro = 3 AND ts.IdEmpresa = 1 AND ts.Num1 = os.id_tipo_servicio
     LEFT JOIN usuario ut             ON ut.id_usuario = it.id_tecnico
     LEFT JOIN usuario ur             ON ur.id_usuario = it.id_revisor
-    LEFT JOIN precotizacion pc       ON pc.id_precotizacion = (SELECT MAX(p2.id_precotizacion) FROM precotizacion p2
-                                                               WHERE p2.id_informe = it.id_informe AND p2.eliminado_en IS NULL)
+    LEFT JOIN informe_tecnico cp     ON cp.id_informe = (SELECT MAX(c2.id_informe) FROM informe_tecnico c2
+                                                         WHERE c2.id_informe_padre = it.id_informe AND c2.eliminado_en IS NULL)
+    -- Precotización: la del complementario; si no hay, la registrada en el original antes del cambio
+    LEFT JOIN precotizacion pc       ON pc.id_precotizacion = COALESCE(
+                                            (SELECT MAX(p2.id_precotizacion) FROM precotizacion p2
+                                             WHERE p2.id_informe = cp.id_informe AND p2.eliminado_en IS NULL),
+                                            (SELECT MAX(p3.id_precotizacion) FROM precotizacion p3
+                                             WHERE p3.id_informe = it.id_informe AND p3.eliminado_en IS NULL))
     LEFT JOIN usuario up             ON up.id_usuario = pc.id_creador
     LEFT JOIN propuesta_comercial pd ON pd.id_propuesta = pc.id_propuesta_generada
     WHERE it.eliminado_en IS NULL
       AND it.estado <> 'borrador'
+      AND it.id_informe_padre IS NULL          -- los complementarios no son informes de la bandeja
       AND (p_id_informe IS NULL OR it.id_informe = p_id_informe)
       -- solo la última versión del informe de cada OS + equipo
       AND NOT EXISTS (SELECT 1 FROM informe_tecnico i2
@@ -157,9 +170,8 @@ BEGIN
 
     UPDATE tmp_rt_base SET
         grupo_estado = CASE
-            WHEN estado IN ('revisado', 'aprobado') AND id_precotizacion IS NOT NULL THEN 'revisado_con_precot'
-            WHEN estado IN ('revisado', 'aprobado')                                  THEN 'revisado_sin_precot'
-            WHEN n_observaciones > 0 AND IFNULL(n_items_precot, 0) = 0               THEN 'pendiente_precotizacion'
+            WHEN estado IN ('revisado', 'aprobado') AND estado_complementario = 'complementario' THEN 'revisado_con_complementario'
+            WHEN estado IN ('revisado', 'aprobado')                                             THEN 'revisado_sin_complementario'
             ELSE 'pendiente_revision' END,
         sla_vencido = IF(estado NOT IN ('revisado', 'aprobado') AND horas_espera > sla_horas, 1, 0);
 END$$

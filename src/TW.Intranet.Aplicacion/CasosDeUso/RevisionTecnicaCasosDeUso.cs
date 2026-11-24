@@ -15,7 +15,7 @@ internal static class ValidacionRevisionTecnica
     public const int MaxElementos = 100;
 
     public static readonly string[] Grupos =
-        ["todos", "pendientes", "revisados", "pendiente_revision", "pendiente_precotizacion", "revisado_sin_precot", "revisado_con_precot"];
+        ["todos", "pendientes", "revisados", "pendiente_revision", "revisado_sin_complementario", "revisado_con_complementario"];
 
     public static string? Recortar(string? v, int max)
     {

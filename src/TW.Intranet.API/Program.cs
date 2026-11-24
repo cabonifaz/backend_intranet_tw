@@ -857,6 +857,16 @@ builder.Services.AddScoped<PrepararRevisionInformeCasoDeUso>();
 builder.Services.AddScoped<RegistrarRevisionInformeCasoDeUso>();
 builder.Services.AddScoped<ObtenerHistorialInformeCasoDeUso>();
 builder.Services.AddScoped<ObtenerArchivoFotoInformeCasoDeUso>();
+// Informe Complementario (23/11/2026): el informe del técnico es inmutable; el supervisor lo corrige con un complementario
+builder.Services.AddSingleton<IGeneradorInformeComplementarioPdf, GeneradorInformeComplementarioPdf>();
+builder.Services.AddScoped<GenerarInformeComplementarioCasoDeUso>();
+builder.Services.AddScoped<ObtenerInformeComplementarioCasoDeUso>();
+builder.Services.AddScoped<GuardarInformeComplementarioCasoDeUso>();
+builder.Services.AddScoped<DescartarInformeComplementarioCasoDeUso>();
+builder.Services.AddScoped<SubirFotoInformeComplementarioCasoDeUso>();
+builder.Services.AddScoped<QuitarFotoInformeComplementarioCasoDeUso>();
+builder.Services.AddScoped<ObtenerArchivoFotoInformeComplementarioCasoDeUso>();
+builder.Services.AddScoped<GenerarPdfInformeComplementarioCasoDeUso>();
 builder.Services.AddScoped<ObtenerBandejaPrecotizacionesCasoDeUso>();
 builder.Services.AddScoped<ObtenerDetallePrecotizacionCasoDeUso>();
 builder.Services.AddScoped<ObtenerPrecargaPrecotizacionCasoDeUso>();
