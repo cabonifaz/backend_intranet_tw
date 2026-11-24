@@ -42,8 +42,8 @@ public class EvidenciasMovilController(
 
     /// <summary>Panel de las 9 evidencias con su estado, el avance y lo de "Ver detalles" de las forzadas. Exige la llegada registrada y el equipo iniciado.</summary>
     [HttpGet]
-    public async Task<IActionResult> Obtener(long idOs, long idOsEquipo, CancellationToken ct)
-        => Responder(await obtener.EjecutarAsync(IdUsuarioActual, idOs, idOsEquipo, ct));
+    public async Task<IActionResult> Obtener(long idOs, long idOsEquipo, CancellationToken ct, [FromQuery] bool previo = false)
+        => Responder(await obtener.EjecutarAsync(IdUsuarioActual, idOs, idOsEquipo, ct, previo));
 
     /// <summary>
     /// Captura una evidencia (foto JPEG de la cámara, microvideo MP4 de 3 a 5 s para el encendido, o el texto leído del QR). Se valida con IA y se registra el

@@ -16,7 +16,7 @@ internal sealed class EvidenciasRepoFalso : IEvidenciasMovilRepositorio
         new CabeceraEvidenciasMovilDto(1, 2, "OS-000003", "Balanza", 1, null, null, null, null, null, null, "en_ejecucion", PuedeRegistrar, null, 9, 0, 0, 0, 2, false),
         [], []));
 
-    public Task<RespuestaDto<EvidenciasMovilDto>> ObtenerAsync(long idUsuario, long idOs, long idOsEquipo, CancellationToken ct) => Task.FromResult(Panel());
+    public Task<RespuestaDto<EvidenciasMovilDto>> ObtenerAsync(long idUsuario, long idOs, long idOsEquipo, CancellationToken ct, bool previo = false) => Task.FromResult(Panel());
 
     public Task<RespuestaDto<ResultadoEvidenciaMovilDto>> RegistrarAsync(
         long idUsuario, long idOs, long idOsEquipo, string codigo, int pagina, string? rutaArchivo, string? rutaCuadro, decimal? duracionSeg,

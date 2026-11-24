@@ -33,13 +33,14 @@ public class InformeEquipoMovilRepositorio(CadenaConexionBd conexion)
         catch (JsonException) { return (null, celdas, null, null, null); }
     }
 
-    public Task<RespuestaDto<CabeceraInformeMovilDto>> ObtenerCabeceraAsync(long idUsuario, long idOs, long idOsEquipo, CancellationToken ct) =>
+    public Task<RespuestaDto<CabeceraInformeMovilDto>> ObtenerCabeceraAsync(long idUsuario, long idOs, long idOsEquipo, CancellationToken ct, bool previo = false) =>
         EjecutarAsync<CabeceraInformeMovilDto>("SP_ObtenerCabeceraInformeMovil",
             p =>
             {
                 p.AddWithValue("p_id_usuario",   idUsuario);
                 p.AddWithValue("p_id_os",        idOs);
                 p.AddWithValue("p_id_os_equipo", idOsEquipo);
+                p.AddWithValue("p_previo",       Bit(previo));
             },
             async (r, mensaje) =>
             {

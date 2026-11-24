@@ -11,6 +11,8 @@
 --   - Avance = etapas conformes de 5. "Finalizar trabajo" se habilita cuando las 5 están conformes (puede_finalizar).
 --   - puede_registrar = el equipo está EN EJECUCIÓN y el servicio en curso: solo así se guardan datos de las etapas.
 -- Resultados: 1 mensaje · 2 cabecera (1 fila) · 3 variables ambientales (0 o 1 fila) · 4 etapas (5 filas).
+--   - p_previo = 1 (HU-18, descarga por adelantado con señal): NO aplica el Hard Stop de la llegada ni el de "equipo iniciado"; entrega el trabajo del equipo con puede_registrar = 0 para que
+--     la app lo tenga guardado sin señal. Solo con la OS programada, reprogramada, en ruta, en ejecución o pausada. 0 = el comportamiento de siempre.
 -- Solo lectura.
 -- ============================================================
 DROP PROCEDURE IF EXISTS SP_ObtenerTrabajoEquipoMovil;
@@ -20,7 +22,8 @@ DELIMITER $$
 CREATE PROCEDURE SP_ObtenerTrabajoEquipoMovil(
     IN p_id_usuario   BIGINT,
     IN p_id_os        BIGINT,
-    IN p_id_os_equipo BIGINT
+    IN p_id_os_equipo BIGINT,
+    IN p_previo       TINYINT
 )
 proc: BEGIN
     DECLARE v_estado_os   VARCHAR(20)  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
@@ -60,7 +63,12 @@ proc: BEGIN
 
     -- Objetivo (equipo) de esa OS, con su estado: SP_ArmarObjetivosMovil (una sola vez)
     CALL SP_ArmarObjetivosMovil(p_id_os, v_estado_os, v_salida_utc, v_llegada_utc, v_habilitado, v_motivo);
-    IF v_llegada_utc IS NULL THEN
+    IF IFNULL(p_previo, 0) = 1 AND v_estado_os NOT IN ('programada', 'reprogramada', 'en_ruta', 'en_ejecucion', 'pausada') THEN
+        DROP TEMPORARY TABLE IF EXISTS tmp_obj_mov;
+        SELECT 1 AS IdTipoMensaje, 'El servicio no está disponible para trabajar.' AS Mensaje;
+        LEAVE proc;
+    END IF;
+    IF v_llegada_utc IS NULL AND IFNULL(p_previo, 0) = 0 THEN
         DROP TEMPORARY TABLE IF EXISTS tmp_obj_mov;
         SELECT 1 AS IdTipoMensaje, v_motivo AS Mensaje;
         LEAVE proc;
@@ -72,7 +80,7 @@ proc: BEGIN
         SELECT 1 AS IdTipoMensaje, 'El equipo no forma parte de los objetivos de este servicio.' AS Mensaje;
         LEAVE proc;
     END IF;
-    IF v_estado NOT IN ('en_ejecucion', 'pausado', 'completado') THEN
+    IF v_estado NOT IN ('en_ejecucion', 'pausado', 'completado') AND IFNULL(p_previo, 0) = 0 THEN
         DROP TEMPORARY TABLE IF EXISTS tmp_obj_mov;
         SELECT 1 AS IdTipoMensaje, 'Primero inicia el trabajo en este equipo desde los objetivos.' AS Mensaje;
         LEAVE proc;

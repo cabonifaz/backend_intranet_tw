@@ -6,7 +6,8 @@ namespace TW.Intranet.Aplicacion.Puertos;
 public interface IObjetivosMovilRepositorio
 {
     /// <summary>Objetivos de la OS (con el Hard Stop de la llegada). buscar filtra solo la lista de equipos.</summary>
-    Task<RespuestaDto<ObjetivosMovilDto>> ObtenerAsync(long idUsuario, long idOs, string buscar, CancellationToken ct);
+    /// <summary>previo = true: descarga por adelantado con señal (HU-18), sin el Hard Stop de la llegada; solo lectura.</summary>
+    Task<RespuestaDto<ObjetivosMovilDto>> ObtenerAsync(long idUsuario, long idOs, string buscar, CancellationToken ct, bool previo = false);
 
     /// <summary>Equipo de la OS cuyo N/S, código del cliente o COD TW coincide con lo escaneado.</summary>
     Task<RespuestaDto<ObjetivoEquipoMovilDto>> BuscarPorQrAsync(long idUsuario, long idOs, string codigo, CancellationToken ct);

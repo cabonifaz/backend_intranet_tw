@@ -5,7 +5,8 @@ namespace TW.Intranet.Aplicacion.Puertos;
 /// <summary>Cabecera del informe y Hard Stop de cierre del trabajo en el equipo (App Mobile HU-15 / HU-16).</summary>
 public interface IInformeEquipoMovilRepositorio
 {
-    Task<RespuestaDto<CabeceraInformeMovilDto>> ObtenerCabeceraAsync(long idUsuario, long idOs, long idOsEquipo, CancellationToken ct);
+    /// <summary>previo = true: descarga por adelantado con señal (HU-18), sin los Hard Stop de la llegada ni de "equipo iniciado"; solo lectura.</summary>
+    Task<RespuestaDto<CabeceraInformeMovilDto>> ObtenerCabeceraAsync(long idUsuario, long idOs, long idOsEquipo, CancellationToken ct, bool previo = false);
 
     /// <summary>json: las secciones de la cabecera que se guardan, ya validadas por el caso de uso (el SP vuelve a validar y calcula E, EMP y conformidad).</summary>
     Task<RespuestaDto<ResultadoGuardarCabeceraMovilDto>> GuardarCabeceraAsync(long idUsuario, long idOs, long idOsEquipo, string json, CancellationToken ct);

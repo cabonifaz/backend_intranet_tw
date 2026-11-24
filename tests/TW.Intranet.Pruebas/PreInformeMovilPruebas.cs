@@ -12,7 +12,7 @@ internal sealed class InformeCabeceraRepoFalso(RespuestaDto<CabeceraInformeMovil
 {
     public int Llamadas { get; private set; }
 
-    public Task<RespuestaDto<CabeceraInformeMovilDto>> ObtenerCabeceraAsync(long idUsuario, long idOs, long idOsEquipo, CancellationToken ct)
+    public Task<RespuestaDto<CabeceraInformeMovilDto>> ObtenerCabeceraAsync(long idUsuario, long idOs, long idOsEquipo, CancellationToken ct, bool previo = false)
     { Llamadas++; return Task.FromResult(respuesta); }
 
     public Task<RespuestaDto<ResultadoGuardarCabeceraMovilDto>> GuardarCabeceraAsync(long idUsuario, long idOs, long idOsEquipo, string json, CancellationToken ct) => throw new NotSupportedException();

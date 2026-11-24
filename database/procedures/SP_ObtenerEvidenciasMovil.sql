@@ -6,6 +6,8 @@
 --   Para una evidencia FORZADA (HU-12) trae lo de "Ver detalles": motivo del técnico, rechazo de la IA, quién la aceptó, cuándo y los intentos previos.
 --   Informe a mano: paginas = hojas válidas; la tarjeta muestra la primera.
 -- Resultados: 1 mensaje · 2 cabecera (1 fila) · 3 evidencias (9 filas) · 4 fotos adicionales (0 a 20 filas; no cuentan en el avance ni en "Guardar y volver").
+--   p_previo = 1 (HU-18, descarga por adelantado con señal): usa SP_ContextoEquipoPrevioMovil (sin el Hard Stop de la llegada ni el de "equipo iniciado"); puede_registrar sale 0 mientras el
+--   equipo no esté en ejecución. 0 = el comportamiento de siempre.
 -- Solo lectura.
 -- ============================================================
 DROP PROCEDURE IF EXISTS SP_ObtenerEvidenciasMovil;
@@ -15,7 +17,8 @@ DELIMITER $$
 CREATE PROCEDURE SP_ObtenerEvidenciasMovil(
     IN p_id_usuario   BIGINT,
     IN p_id_os        BIGINT,
-    IN p_id_os_equipo BIGINT
+    IN p_id_os_equipo BIGINT,
+    IN p_previo       TINYINT
 )
 proc: BEGIN
     DECLARE v_msg      VARCHAR(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
@@ -41,7 +44,11 @@ proc: BEGIN
         SELECT 3 AS IdTipoMensaje, CONCAT('[MySQL ', @err_code, '] ', @err_msg) AS Mensaje;
     END;
 
-    CALL SP_ContextoEquipoMovil(p_id_usuario, p_id_os, p_id_os_equipo, v_msg, v_id_eq, v_est_eq, v_hab, v_numero, v_nombre, v_num_os, v_servicio);
+    IF IFNULL(p_previo, 0) = 1 THEN
+        CALL SP_ContextoEquipoPrevioMovil(p_id_usuario, p_id_os, p_id_os_equipo, v_msg, v_id_eq, v_est_eq, v_hab, v_numero, v_nombre, v_num_os, v_servicio);
+    ELSE
+        CALL SP_ContextoEquipoMovil(p_id_usuario, p_id_os, p_id_os_equipo, v_msg, v_id_eq, v_est_eq, v_hab, v_numero, v_nombre, v_num_os, v_servicio);
+    END IF;
     IF v_msg IS NOT NULL THEN
         SELECT 1 AS IdTipoMensaje, v_msg AS Mensaje;
         LEAVE proc;

@@ -66,7 +66,7 @@ internal sealed class RepoMovilFalso(List<string> bitacora) : ITrabajoEquipoMovi
     }
 
     // Trabajo en el equipo
-    Task<RespuestaDto<TrabajoEquipoMovilDto>> ITrabajoEquipoMovilRepositorio.ObtenerAsync(long idUsuario, long idOs, long idOsEquipo, CancellationToken ct) =>
+    Task<RespuestaDto<TrabajoEquipoMovilDto>> ITrabajoEquipoMovilRepositorio.ObtenerAsync(long idUsuario, long idOs, long idOsEquipo, CancellationToken ct, bool previo) =>
         Llamar("Trabajo", idUsuario, Trabajo);
 
     Task<RespuestaDto<ResultadoVariablesAmbientalesMovilDto>> ITrabajoEquipoMovilRepositorio.GuardarVariablesAsync(
@@ -74,7 +74,7 @@ internal sealed class RepoMovilFalso(List<string> bitacora) : ITrabajoEquipoMovi
         Llamar("Variables", idUsuario, new RespuestaDto<ResultadoVariablesAmbientalesMovilDto>(2, "Éxito.", new(temperatura, humedad, "N.I", null, false, false)));
 
     // Evidencias
-    Task<RespuestaDto<EvidenciasMovilDto>> IEvidenciasMovilRepositorio.ObtenerAsync(long idUsuario, long idOs, long idOsEquipo, CancellationToken ct) =>
+    Task<RespuestaDto<EvidenciasMovilDto>> IEvidenciasMovilRepositorio.ObtenerAsync(long idUsuario, long idOs, long idOsEquipo, CancellationToken ct, bool previo) =>
         Llamar("Evidencias", idUsuario, new RespuestaDto<EvidenciasMovilDto>(2, "Éxito."));
 
     Task<RespuestaDto<ResultadoEvidenciaMovilDto>> IEvidenciasMovilRepositorio.RegistrarAsync(
@@ -104,7 +104,7 @@ internal sealed class RepoMovilFalso(List<string> bitacora) : ITrabajoEquipoMovi
         throw new NotSupportedException();
 
     // Informe del equipo
-    Task<RespuestaDto<CabeceraInformeMovilDto>> IInformeEquipoMovilRepositorio.ObtenerCabeceraAsync(long idUsuario, long idOs, long idOsEquipo, CancellationToken ct) =>
+    Task<RespuestaDto<CabeceraInformeMovilDto>> IInformeEquipoMovilRepositorio.ObtenerCabeceraAsync(long idUsuario, long idOs, long idOsEquipo, CancellationToken ct, bool previo) =>
         Llamar("Cabecera", idUsuario, new RespuestaDto<CabeceraInformeMovilDto>(2, "Éxito."));
 
     Task<RespuestaDto<ResultadoGuardarCabeceraMovilDto>> IInformeEquipoMovilRepositorio.GuardarCabeceraAsync(long idUsuario, long idOs, long idOsEquipo, string json, CancellationToken ct) =>

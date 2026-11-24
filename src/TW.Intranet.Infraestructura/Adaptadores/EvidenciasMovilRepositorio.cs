@@ -16,13 +16,14 @@ public class EvidenciasMovilRepositorio(CadenaConexionBd conexion)
         catch (JsonException) { return null; }
     }
 
-    public Task<RespuestaDto<EvidenciasMovilDto>> ObtenerAsync(long idUsuario, long idOs, long idOsEquipo, CancellationToken ct) =>
+    public Task<RespuestaDto<EvidenciasMovilDto>> ObtenerAsync(long idUsuario, long idOs, long idOsEquipo, CancellationToken ct, bool previo = false) =>
         EjecutarAsync<EvidenciasMovilDto>("SP_ObtenerEvidenciasMovil",
             p =>
             {
                 p.AddWithValue("p_id_usuario",   idUsuario);
                 p.AddWithValue("p_id_os",        idOs);
                 p.AddWithValue("p_id_os_equipo", idOsEquipo);
+                p.AddWithValue("p_previo",       Bit(previo));
             },
             async (r, mensaje) =>
             {

@@ -61,7 +61,13 @@ builder.Services.AddCors(options =>
 // Se apaga con la variable de entorno Permisos__ValidarEnBack=false.
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<TW.Intranet.API.Seguridad.PermisosFilter>();
-builder.Services.AddControllers(o => o.Filters.AddService<TW.Intranet.API.Seguridad.PermisosFilter>())
+builder.Services.AddScoped<TW.Intranet.API.Seguridad.EnvioDiferidoMovilFilter>();
+builder.Services.AddControllers(o =>
+    {
+        o.Filters.AddService<TW.Intranet.API.Seguridad.PermisosFilter>();
+        // App móvil sin señal: constancia de los envíos tardíos (cabecera X-TW-Capturado-En)
+        o.Filters.AddService<TW.Intranet.API.Seguridad.EnvioDiferidoMovilFilter>();
+    })
     // Fechas en hora de Lima (UTC-5): ver Configuracion/ZonaHorariaLima.cs
     .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new TW.Intranet.API.Configuracion.FechaHoraLimaJsonConverter()));
 
@@ -325,6 +331,9 @@ builder.Services.AddScoped<GenerarPreInformeMovilCasoDeUso>();
 builder.Services.AddSingleton<IGeneradorPreInformePdf, GeneradorPreInformePdf>();
 // HU-55 — registrar el informe de un equipo desde la intranet (en nombre del técnico). Reutiliza los casos de uso móviles registrados arriba y abajo.
 builder.Services.AddScoped<IRegistroInformeIntranetRepositorio, RegistroInformeIntranetRepositorio>();
+builder.Services.AddScoped<IEnvioDiferidoMovilRepositorio, EnvioDiferidoMovilRepositorio>();
+builder.Services.AddScoped<RegistrarEnvioDiferidoMovilCasoDeUso>();
+builder.Services.AddScoped<ListarEnviosDiferidosMovilCasoDeUso>();
 builder.Services.AddScoped<EjecutorRegistroIntranet>();
 builder.Services.AddScoped<ContextoRegistroIntranetCasoDeUso>();
 builder.Services.AddScoped<SesionRegistroIntranetCasoDeUso>();

@@ -9,6 +9,8 @@
 -- Resultados: 1 mensaje · 2 cabecera (1 fila) · 3 checklist de Detalle Serv. (catálogo CHECKLIST_SERVICIO del tipo OS / OM, con lo marcado) · 4 recomendaciones ·
 --   5 fallas · 6 fotos de las fallas · 7 pruebas de las fallas · 8 ensayos de HU-10 (Pruebas generales, formato resumido) · 9 opciones (tipos de equipo, clasificación y
 --   componente de las fallas).
+--   p_previo = 1 (HU-18, descarga por adelantado con señal): usa SP_ContextoEquipoPrevioMovil (sin el Hard Stop de la llegada ni el de "equipo iniciado"); puede_editar sale 0 mientras el
+--   equipo no esté en ejecución. 0 = el comportamiento de siempre.
 -- ============================================================
 DROP PROCEDURE IF EXISTS SP_ObtenerCabeceraInformeMovil;
 
@@ -17,7 +19,8 @@ DELIMITER $$
 CREATE PROCEDURE SP_ObtenerCabeceraInformeMovil(
     IN p_id_usuario   BIGINT,
     IN p_id_os        BIGINT,
-    IN p_id_os_equipo BIGINT
+    IN p_id_os_equipo BIGINT,
+    IN p_previo       TINYINT
 )
 proc: BEGIN
     DECLARE v_msg      VARCHAR(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
@@ -43,7 +46,11 @@ proc: BEGIN
         SELECT 1 AS IdTipoMensaje, 'Servicio o equipo no encontrado.' AS Mensaje; LEAVE proc;
     END IF;
 
-    CALL SP_ContextoEquipoMovil(p_id_usuario, p_id_os, p_id_os_equipo, v_msg, v_id_eq, v_estado, v_hab, v_numero, v_nombre, v_num_os, v_servicio);
+    IF IFNULL(p_previo, 0) = 1 THEN
+        CALL SP_ContextoEquipoPrevioMovil(p_id_usuario, p_id_os, p_id_os_equipo, v_msg, v_id_eq, v_estado, v_hab, v_numero, v_nombre, v_num_os, v_servicio);
+    ELSE
+        CALL SP_ContextoEquipoMovil(p_id_usuario, p_id_os, p_id_os_equipo, v_msg, v_id_eq, v_estado, v_hab, v_numero, v_nombre, v_num_os, v_servicio);
+    END IF;
     IF v_msg IS NOT NULL THEN
         SELECT 1 AS IdTipoMensaje, v_msg AS Mensaje; LEAVE proc;
     END IF;

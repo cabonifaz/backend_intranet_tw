@@ -11,10 +11,10 @@ namespace TW.Intranet.Aplicacion.CasosDeUso;
 /// </summary>
 public class ObtenerTrabajoEquipoMovilCasoDeUso(ITrabajoEquipoMovilRepositorio repositorio)
 {
-    public Task<RespuestaDto<TrabajoEquipoMovilDto>> EjecutarAsync(long idUsuario, long idOs, long idOsEquipo, CancellationToken ct = default) =>
+    public Task<RespuestaDto<TrabajoEquipoMovilDto>> EjecutarAsync(long idUsuario, long idOs, long idOsEquipo, CancellationToken ct = default, bool previo = false) =>
         idUsuario <= 0 || idOs <= 0 || idOsEquipo <= 0
             ? Task.FromResult(new RespuestaDto<TrabajoEquipoMovilDto>(1, "Servicio o equipo no encontrado."))
-            : repositorio.ObtenerAsync(idUsuario, idOs, idOsEquipo, ct);
+            : repositorio.ObtenerAsync(idUsuario, idOs, idOsEquipo, ct, previo);
 }
 
 /// <summary>
