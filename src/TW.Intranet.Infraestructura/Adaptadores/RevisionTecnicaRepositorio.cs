@@ -209,17 +209,60 @@ public class RevisionTecnicaRepositorio(CadenaConexionBd conexion) : Repositorio
             async (r, mensaje) =>
             {
                 await r.NextResultAsync(ct);
-                var cabecera = await LeerUnaAsync<CabeceraInformeComplementarioDto>(r, ct);
-                if (cabecera is null) return new RespuestaDto<DetalleInformeComplementarioDto>(1, "El informe complementario no existe o no está en tu alcance.");
-                await r.NextResultAsync(ct); var pasos   = await LeerFilasAsync<PasoInformeDto>(r, ct);
-                await r.NextResultAsync(ct); var ensayos = await LeerFilasAsync<EnsayoInformeDto>(r, ct);
-                await r.NextResultAsync(ct); var obs     = await LeerFilasAsync<ObservacionComplementarioDto>(r, ct);
-                await r.NextResultAsync(ct); var recs    = await LeerFilasAsync<RecomendacionInformeDto>(r, ct);
-                await r.NextResultAsync(ct); var fotos   = await LeerFilasAsync<FotoInformeComplementarioDto>(r, ct);
-                await r.NextResultAsync(ct); var precot  = await LeerFilasAsync<ItemPrecotizacionDto>(r, ct);
+                var c = await LeerUnaAsync<CabeceraComplementarioCruda>(r, ct);
+                if (c is null) return new RespuestaDto<DetalleInformeComplementarioDto>(1, "El informe complementario no existe o no está en tu alcance.");
+                await r.NextResultAsync(ct); var pasos    = await LeerFilasAsync<PasoInformeDto>(r, ct);
+                await r.NextResultAsync(ct); var ensayos  = await LeerFilasAsync<EnsayoInformeDto>(r, ct);
+                await r.NextResultAsync(ct); var obs      = await LeerFilasAsync<ObservacionComplementarioDto>(r, ct);
+                await r.NextResultAsync(ct); var recs     = await LeerFilasAsync<RecomendacionInformeDto>(r, ct);
+                await r.NextResultAsync(ct); var fotos    = await LeerFilasAsync<FotoInformeComplementarioDto>(r, ct);
+                await r.NextResultAsync(ct); var precot   = await LeerFilasAsync<ItemPrecotizacionDto>(r, ct);
+                await r.NextResultAsync(ct); var opciones = await LeerFilasAsync<OpcionListaCruda>(r, ct);
+
+                var det = InformeEquipoMovilRepositorio.LeerDetalle(c.DetalleServicio);
+                List<OpcionFichaComplementarioDto> Lista(string lista) =>
+                    opciones.Where(o => o.Lista == lista && o.Codigo is not null).Select(o => new OpcionFichaComplementarioDto(o.Codigo!, o.Nombre ?? o.Codigo!, o.Padre)).ToList();
                 return new RespuestaDto<DetalleInformeComplementarioDto>(2, mensaje,
-                    new DetalleInformeComplementarioDto(cabecera, pasos, ensayos, obs, recs, fotos, precot));
+                    new DetalleInformeComplementarioDto(c, pasos, ensayos, obs, recs, fotos, precot,
+                        ResponsableCliente: new ResponsableClienteDto(c.ResponsableNombre, c.ResponsableCargo, c.ResponsableTelefono),
+                        DiagnosticoFinal:   new DiagnosticoFinalDto(c.SeveridadGeneral, c.EstadoEquipoFinal, c.RevJefatura, c.RequierePrecotizacion,
+                                                                    c.SegundaVisita, c.AplicaGarantia),
+                        ComentarioPruebas:  c.ComentarioPruebas,
+                        DetalleServicio:    new DetalleServicioInformeDto(det.Tipo, det.Celdas, det.Suma, det.Comp, det.Anillos),
+                        ResultadoOriginal:  new ResultadoOriginalDto(c.ResultadoGlobal, c.ErrorMaximo, c.DecisionTecnica, c.ErrorCritico),
+                        PrecotizacionDetalle: new PrecotizacionComplementarioDetalleDto(c.IdPrecotizacion, c.NumeroPrecot, c.EstadoPrecot, c.NotaPrecotizacion, precot),
+                        Opciones: new OpcionesInformeComplementarioDto(
+                            Lista("tipo_equipo"), Lista("clasificacion"), Lista("componente"),
+                            [new("critico", "Crítico"), new("alto", "Alto"), new("medio", "Medio"), new("bajo", "Bajo")],
+                            [new("alta", "Alta"), new("media", "Media"), new("baja", "Baja")],
+                            [new("alta", "Alta"), new("media", "Media"), new("opcional", "Opcional")])));
             }, ct);
+
+    /// <summary>Cabecera del complementario con los campos crudos de la app (se arman en bloques: responsable, diagnóstico, detalle del servicio).
+    /// Se devuelve como CabeceraInformeComplementarioDto: los campos crudos no salen en el JSON de la cabecera.</summary>
+    private sealed class CabeceraComplementarioCruda : CabeceraInformeComplementarioDto
+    {
+        public string? ResponsableNombre     { get; init; }
+        public string? ResponsableCargo      { get; init; }
+        public string? ResponsableTelefono   { get; init; }
+        public string? DetalleServicio       { get; init; }
+        public string? ComentarioPruebas     { get; init; }
+        public string? SeveridadGeneral      { get; init; }
+        public string? EstadoEquipoFinal     { get; init; }
+        public bool    RevJefatura           { get; init; }
+        public bool    RequierePrecotizacion { get; init; }
+        public bool    SegundaVisita         { get; init; }
+        public bool    AplicaGarantia        { get; init; }
+        public string? ErrorCritico          { get; init; }
+    }
+
+    private sealed class OpcionListaCruda
+    {
+        public string? Lista  { get; init; }
+        public string? Codigo { get; init; }
+        public string? Nombre { get; init; }
+        public string? Padre  { get; init; }
+    }
 
     public Task<RespuestaDto<InformeComplementarioGuardadoDto>> GuardarComplementarioAsync(long idComplementario, GuardarInformeComplementarioDto d, long idUsuario, CancellationToken ct)
         => EjecutarAsync("SP_GuardarInformeComplementario",

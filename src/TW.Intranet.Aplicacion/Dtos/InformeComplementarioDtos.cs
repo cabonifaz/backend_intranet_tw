@@ -39,6 +39,9 @@ public class CabeceraInformeComplementarioDto
     // Informe original (solo lectura)
     public long      IdInformeOriginal           { get; init; }
     public string?   NumeroInformeOriginal       { get; init; }
+    /// <summary>N° del informe que asignó la app al generarlo (NNNN-AAAA).</summary>
+    public string?   NumeroInformeTecnico        { get; init; }
+    public DateTime? InformeGeneradoEn           { get; init; }
     public string?   EstadoOriginal              { get; init; }
     public string?   GrupoEstadoOriginal         { get; init; }
     public string?   PdfInformeOriginalUrl       { get; init; }
@@ -115,8 +118,39 @@ public class CabeceraInformeComplementarioDto
 public class ObservacionComplementarioDto : ObservacionInformeDto
 {
     /// <summary>true = precargada del informe del técnico.</summary>
-    public bool Copiada { get; init; }
+    public bool    Copiada             { get; init; }
+    /// <summary>Clasificación y componente de la falla (catálogos CLASIFICACION_FALLA / COMPONENTE_FALLA); solo las que vienen de la app.</summary>
+    public string? Clasificacion       { get; init; }
+    public string? ClasificacionNombre { get; init; }
+    public string? Componente          { get; init; }
+    public string? ComponenteNombre    { get; init; }
 }
+
+/// <summary>Quién atendió al técnico en planta (lo que cargó en "Datos" del informe; si no, el contacto de la OS).</summary>
+public record ResponsableClienteDto(string? Nombre, string? Cargo, string? Telefono);
+
+/// <summary>Diagnóstico final que marcó el técnico en la app (severidadGeneral: baja · media · alta · critica; estadoEquipo: operativo · con_observaciones · inoperativo).</summary>
+public record DiagnosticoFinalDto(string? SeveridadGeneral, string? EstadoEquipo, bool RevisionJefatura, bool Precotizacion, bool SegundaVisita, bool AplicaGarantia);
+
+/// <summary>"Detalle Serv." del informe en la app: tipo de equipo, celdas (mV, hasta 12), pruebas por sumatoria / comparación y anillos de fijación.</summary>
+public record DetalleServicioInformeDto(string? TipoEquipo, IReadOnlyList<decimal> Celdas, decimal? SumatoriaHasta, decimal? ComparacionHasta, bool? AnillosFijacion);
+
+/// <summary>Resultado global de los ensayos del técnico (dentro · fuera), calculado por el servidor.</summary>
+public record ResultadoOriginalDto(string? ResultadoGlobal, decimal? ErrorMaximo, string? DecisionTecnica, string? ErrorCritico);
+
+/// <summary>Precotización del complementario: nota para Comercial e ítems.</summary>
+public record PrecotizacionComplementarioDetalleDto(long? IdPrecotizacion, string? Numero, string? Estado, string? Nota, List<ItemPrecotizacionDto> Items);
+
+public record OpcionFichaComplementarioDto(string Codigo, string Nombre, string? Padre = null);
+
+/// <summary>Catálogos de la ficha: tipos de equipo, clasificación y componente de falla (padre = clasificación), niveles y prioridades.</summary>
+public record OpcionesInformeComplementarioDto(
+    List<OpcionFichaComplementarioDto> TiposEquipo,
+    List<OpcionFichaComplementarioDto> ClasificacionesFalla,
+    List<OpcionFichaComplementarioDto> ComponentesFalla,
+    List<OpcionFichaComplementarioDto> SeveridadesObservacion,
+    List<OpcionFichaComplementarioDto> PrioridadesRecomendacion,
+    List<OpcionFichaComplementarioDto> PrioridadesItemPrecotizacion);
 
 public class FotoInformeComplementarioDto
 {
@@ -137,19 +171,33 @@ public class FotoInformeComplementarioDto
     public string?   MotivoRechazoIa   { get; init; }
     /// <summary>true = copiada del informe del técnico; false = la subió el supervisor.</summary>
     public bool      Copiada           { get; init; }
+    /// <summary>tecnico (copiada del informe del técnico) · supervisor (subida al complementario).</summary>
+    public string?   Origen            { get; init; }
     public string?   SubidaPor         { get; init; }
     public long?     IdObservacion     { get; init; }
     public string?   CodigoObservacion { get; init; }
 }
 
+/// <summary>
+/// Ficha del complementario (5 pestañas). Cabecera = datos del servicio y del complementario; ResponsableCliente, DiagnosticoFinal,
+/// ComentarioPruebas, DetalleServicio, Procedimiento, Ensayos y ResultadoOriginal = lo del técnico (solo lectura); Fotos, Observaciones,
+/// Recomendaciones y PrecotizacionDetalle = lo editable. Precotizacion (solo los ítems) se mantiene por compatibilidad.
+/// </summary>
 public record DetalleInformeComplementarioDto(
-    CabeceraInformeComplementarioDto    Cabecera,
-    List<PasoInformeDto>                Procedimiento,
-    List<EnsayoInformeDto>              Ensayos,
-    List<ObservacionComplementarioDto>  Observaciones,
-    List<RecomendacionInformeDto>       Recomendaciones,
-    List<FotoInformeComplementarioDto>  Fotos,
-    List<ItemPrecotizacionDto>          Precotizacion);
+    CabeceraInformeComplementarioDto      Cabecera,
+    List<PasoInformeDto>                  Procedimiento,
+    List<EnsayoInformeDto>                Ensayos,
+    List<ObservacionComplementarioDto>    Observaciones,
+    List<RecomendacionInformeDto>         Recomendaciones,
+    List<FotoInformeComplementarioDto>    Fotos,
+    List<ItemPrecotizacionDto>            Precotizacion,
+    ResponsableClienteDto?                ResponsableCliente      = null,
+    DiagnosticoFinalDto?                  DiagnosticoFinal        = null,
+    string?                               ComentarioPruebas       = null,
+    DetalleServicioInformeDto?            DetalleServicio         = null,
+    ResultadoOriginalDto?                 ResultadoOriginal       = null,
+    PrecotizacionComplementarioDetalleDto? PrecotizacionDetalle   = null,
+    OpcionesInformeComplementarioDto?     Opciones                = null);
 
 /// <summary>
 /// "Guardar" del complementario. Cada sección es opcional (null = no cambia). Una lista enviada es la lista COMPLETA de esa sección

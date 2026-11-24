@@ -9,6 +9,10 @@
 --     original en solo lectura (OS, cliente, equipo, técnico, fechas, diagnóstico y resultado global de los ensayos)
 --   3 procedimiento del original (solo lectura) · 4 ensayos del original (solo lectura)
 --   5 observaciones · 6 recomendaciones · 7 fotos y videos (copiada = viene del original; si no, la subió el supervisor) · 8 ítems de la precotización
+--   9 opciones de las listas (tipo de equipo, clasificación y componente de las fallas: las mismas de la cabecera del informe en la app)
+-- Ampliado el 24/11/2026 (ficha de 5 pestañas): la cabecera trae además lo que el técnico cargó en la app —quién atendió en planta, detalle del
+--   servicio (JSON detalle_servicio), comentario de las pruebas y diagnóstico final— y las observaciones su clasificación y componente.
+--   fotos.origen: tecnico (copiada del informe del técnico) · supervisor (subida al complementario).
 -- ============================================================
 DROP PROCEDURE IF EXISTS SP_ObtenerInformeComplementario;
 
@@ -104,6 +108,17 @@ proc: BEGIN
            b.diagnostico,
            o.normativa, o.patron_ensayo, o.tolerancia_excentricidad, o.resultado_global,
            o.error_maximo, o.error_maximo_detalle, o.incertidumbre, o.factor_k, o.decision_tecnica,
+           -- Lo que cargó el técnico en la cabecera del informe de la app (solo lectura)
+           o.numero_informe                                              AS numero_informe_tecnico,
+           o.generado_en                                                 AS informe_generado_en,
+           COALESCE(NULLIF(TRIM(o.responsable_nombre), ''), ct.nombres)  AS responsable_nombre,
+           COALESCE(NULLIF(TRIM(o.responsable_cargo), ''), ct.cargo)     AS responsable_cargo,
+           COALESCE(NULLIF(TRIM(o.responsable_telefono), ''), NULLIF(TRIM(ct.telefono_movil), '')) AS responsable_telefono,
+           o.detalle_servicio, o.comentario_pruebas,
+           o.severidad_general, o.estado_equipo_final,
+           IFNULL(o.rev_jefatura, 0) AS rev_jefatura, IFNULL(o.requiere_precotizacion, 0) AS requiere_precotizacion,
+           IFNULL(o.segunda_visita, 0) AS segunda_visita, IFNULL(o.aplica_garantia, 0) AS aplica_garantia,
+           o.error_critico_motivo AS error_critico,
            -- Contadores del complementario
            (SELECT COUNT(*) FROM evidencia_fotografica f WHERE f.id_informe = c.id_informe AND f.eliminado_en IS NULL)                      AS n_fotos,
            (SELECT COUNT(*) FROM evidencia_fotografica f WHERE f.id_informe = c.id_informe AND f.eliminado_en IS NULL
@@ -123,6 +138,8 @@ proc: BEGIN
     FROM tmp_rt_base b
     JOIN informe_tecnico o           ON o.id_informe = b.id_informe
     JOIN informe_tecnico c           ON c.id_informe = p_id_complementario
+    LEFT JOIN orden_servicio os      ON os.id_os = b.id_os
+    LEFT JOIN contacto_cliente ct    ON ct.id_contacto = os.id_contacto
     LEFT JOIN usuario us             ON us.id_usuario = c.id_tecnico
     LEFT JOIN precotizacion pc       ON pc.id_precotizacion = v_id_pc
     LEFT JOIN propuesta_comercial pd ON pd.id_propuesta = pc.id_propuesta_generada;
@@ -146,9 +163,14 @@ proc: BEGIN
     -- 5. Observaciones del complementario
     SELECT x.id_observacion, x.codigo, x.orden, x.titulo, x.descripcion, x.ubicacion, x.detalle_extra,
            x.nivel_afectacion, x.id_evidencia, f.url_archivo AS url_foto, x.origen,
-           (x.id_observacion_origen IS NOT NULL) AS copiada
+           (x.id_observacion_origen IS NOT NULL) AS copiada,
+           x.clasificacion, cf.String1 AS clasificacion_nombre, x.componente, mf.String1 AS componente_nombre
     FROM informe_observacion x
     LEFT JOIN evidencia_fotografica f ON f.id_evidencia = x.id_evidencia AND f.eliminado_en IS NULL
+    LEFT JOIN tabla_maestra cf ON cf.IdTablaMaestra = (SELECT MIN(m.IdTablaMaestra) FROM tabla_maestra m
+                                                      WHERE m.Descripcion = 'CLASIFICACION_FALLA' AND m.IdEmpresa = 1 AND m.String2 = x.clasificacion AND m.eliminado_en IS NULL)
+    LEFT JOIN tabla_maestra mf ON mf.IdTablaMaestra = (SELECT MIN(m.IdTablaMaestra) FROM tabla_maestra m
+                                                      WHERE m.Descripcion = 'COMPONENTE_FALLA' AND m.IdEmpresa = 1 AND m.String2 = x.componente AND m.eliminado_en IS NULL)
     WHERE x.id_informe = p_id_complementario AND x.eliminado_en IS NULL
     ORDER BY x.orden, x.id_observacion;
 
@@ -170,6 +192,7 @@ proc: BEGIN
            IF(f.override_aprobado = 1, 1, 0)                  AS forzada,
            f.motivo_forzado, f.motivo_rechazo_ia,
            (f.id_evidencia_origen IS NOT NULL)                AS copiada,
+           IF(f.id_evidencia_origen IS NOT NULL, 'tecnico', 'supervisor') AS origen,
            NULLIF(TRIM(CONCAT(IFNULL(uf.nombre, ''), ' ', IFNULL(uf.apellido, ''))), '') AS subida_por,
            COALESCE(f.id_observacion, x.id_observacion)       AS id_observacion,
            COALESCE(xv.codigo, x.codigo)                      AS codigo_observacion
@@ -188,6 +211,17 @@ proc: BEGIN
     LEFT JOIN informe_observacion x ON x.id_observacion = pi.id_observacion AND x.eliminado_en IS NULL
     WHERE pi.id_precotizacion = v_id_pc AND pi.eliminado_en IS NULL
     ORDER BY pi.orden, pi.id_item;
+
+    -- 9. Opciones de las listas (las mismas de la cabecera del informe en la app)
+    SELECT 'tipo_equipo' AS lista, m.String2 AS codigo, m.String1 AS nombre, NULL AS padre
+    FROM   tabla_maestra m WHERE m.Descripcion = 'CLASIFICACION_EQUIPO' AND m.IdEmpresa = 1 AND m.eliminado_en IS NULL
+    UNION ALL
+    SELECT 'clasificacion', m.String2, m.String1, NULL
+    FROM   tabla_maestra m WHERE m.Descripcion = 'CLASIFICACION_FALLA' AND m.IdEmpresa = 1 AND m.eliminado_en IS NULL
+    UNION ALL
+    SELECT 'componente', m.String2, m.String1, m.String3
+    FROM   tabla_maestra m WHERE m.Descripcion = 'COMPONENTE_FALLA' AND m.IdEmpresa = 1 AND m.eliminado_en IS NULL
+    ORDER BY lista, nombre;
 
     DROP TEMPORARY TABLE IF EXISTS tmp_rt_base;
 END$$
