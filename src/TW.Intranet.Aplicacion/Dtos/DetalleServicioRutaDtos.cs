@@ -28,7 +28,15 @@ public record DetalleServicioRutaDto(
 public record EtapaEquipoRutaDto(string Etapa, int Orden, string Estado, string? Hora, string? Detalle = null);
 public record EquipoAvanceRutaDto(
     long IdEquipo, string Codigo, string? Modelo, string? Serie, string Estado, int Fotos, int Ensayos, int CertificadoPreliminar, int Observaciones, int Mediciones,
-    string? Iniciado, string? Finalizado, int? Minutos, IReadOnlyList<EtapaEquipoRutaDto> Etapas);
+    string? Iniciado, string? Finalizado, int? Minutos, IReadOnlyList<EtapaEquipoRutaDto> Etapas,
+    /// <summary>HU-55: el equipo ya tiene el informe generado (N° NNNN-AAAA en NumeroInforme); el botón «Registrar informe» no se muestra.</summary>
+    bool InformeGenerado = false, string? NumeroInforme = null,
+    /// <summary>HU-55: hay una sesión de registro viva (bloqueo de 30 min sin actividad); quién la tiene y si es el usuario actual.</summary>
+    bool RegistroActivo = false, long? RegistradorId = null, string? RegistradorNombre = null, bool RegistroPropio = false,
+    /// <summary>HU-55: «CÓDIGO (N° OS)» del OTRO equipo del técnico que está en ejecución; null si no hay. Pausarlo: pausar-equipo-abierto.</summary>
+    string? OtroEquipoAbierto = null,
+    /// <summary>HU-55: id de os_equipo, el que usan los endpoints de registro (…/equipos/{idOsEquipo}/…). IdEquipo es el id del equipo del cliente.</summary>
+    long IdOsEquipo = 0);
 public record AvanceServicioRutaDto(int EquiposCompletados, int EquiposTotal, IReadOnlyList<EquipoAvanceRutaDto> Equipos);
 
 /// <summary>Fila común de los drill-downs del equipo (Fotos, Ensayos, Documentos, Observaciones, Mediciones).</summary>

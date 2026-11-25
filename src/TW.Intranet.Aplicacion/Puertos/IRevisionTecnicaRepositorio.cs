@@ -16,6 +16,16 @@ public interface IRevisionTecnicaRepositorio
     Task<RespuestaDto<IReadOnlyList<ObservacionSeguimientoInformeDto>>> ObtenerObservacionesSeguimientoAsync(long idInforme, long idUsuario, CancellationToken ct);
     Task<RespuestaDto<ArchivoEvidenciaMovilDto>> ObtenerArchivoFotoAsync(long idInforme, long idEvidencia, long idUsuario, CancellationToken ct);
 
+    // Servicio Técnico › Informe Complementario (23/11/2026)
+    Task<RespuestaDto<InformeComplementarioCreadoDto>> CrearComplementarioAsync(long idInforme, long idUsuario, CancellationToken ct);
+    Task<RespuestaDto<DetalleInformeComplementarioDto>> ObtenerComplementarioAsync(long idComplementario, long idUsuario, CancellationToken ct);
+    Task<RespuestaDto<InformeComplementarioGuardadoDto>> GuardarComplementarioAsync(long idComplementario, GuardarInformeComplementarioDto datos, long idUsuario, CancellationToken ct);
+    Task<RespuestaDto<FotoComplementarioSubidaDto>> RegistrarFotoComplementarioAsync(long idComplementario, string ruta, bool esVideo, string? momento,
+                                                                                    string? descripcion, long? idObservacion, long idUsuario, CancellationToken ct);
+    Task<RespuestaDto<ArchivoBorrableDto?>> QuitarFotoComplementarioAsync(long idComplementario, long idEvidencia, long idUsuario, CancellationToken ct);
+    Task<RespuestaDto<ArchivoEvidenciaMovilDto>> ObtenerArchivoFotoComplementarioAsync(long idComplementario, long idEvidencia, long idUsuario, CancellationToken ct);
+    Task<RespuestaDto<List<ArchivoBorrableDto>>> DescartarComplementarioAsync(long idComplementario, long idUsuario, CancellationToken ct);
+
     // CRM › Precotizaciones Técnicas
     Task<RespuestaDto<BandejaPrecotizacionesDto>> ObtenerBandejaPrecotizacionesAsync(FiltrosPrecotizacionesDto filtros, long idUsuario, CancellationToken ct);
     Task<RespuestaDto<DetallePrecotizacionDto>> ObtenerDetallePrecotizacionAsync(long idPrecotizacion, long idUsuario, CancellationToken ct);

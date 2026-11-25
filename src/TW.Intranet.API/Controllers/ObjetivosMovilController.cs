@@ -38,8 +38,8 @@ public class ObjetivosMovilController(
     /// Sin llegada registrada (Hard Stop) responde 400 con el motivo.
     /// </summary>
     [HttpGet("objetivos")]
-    public async Task<IActionResult> Obtener(long idOs, [FromQuery] string? buscar, CancellationToken ct)
-        => Responder(await obtener.EjecutarAsync(IdUsuarioActual, idOs, buscar, ct));
+    public async Task<IActionResult> Obtener(long idOs, [FromQuery] string? buscar, CancellationToken ct, [FromQuery] bool previo = false)
+        => Responder(await obtener.EjecutarAsync(IdUsuarioActual, idOs, buscar, ct, previo));
 
     /// <summary>Equipo de la OS que corresponde a lo escaneado (N/S, código del cliente o COD TW). Si no es de la OS responde 400.</summary>
     [HttpGet("equipos/qr")]

@@ -4,6 +4,8 @@
 --   - Hard Stop (HU-06): sin llegada registrada en este viaje NO se entregan los objetivos (responde la regla de negocio con el motivo).
 --   - p_buscar (opcional, máx. 100): filtra la LISTA por N/S, código del cliente, COD TW, marca, modelo, ubicación o tipo de equipo
 --     (sin comodines: se busca el texto tal cual). Los contadores y el tiempo estimado siempre son de TODOS los objetivos.
+--   - p_previo = 1 (HU-18, descarga por adelantado con señal): NO aplica ese Hard Stop; entrega la lista aunque aún no haya llegada (los botones salen deshabilitados) para que la
+--     app la tenga guardada sin señal. Solo con la OS programada, reprogramada, en ruta, en ejecución o pausada. 0 = el comportamiento de siempre.
 --   - Los objetivos los arma SP_ArmarObjetivosMovil (una sola vez); aquí solo se leen.
 -- Resultados: 1 mensaje · 2 resumen (1 fila) · 3 contadores (1 fila) · 4 equipos (con puede_iniciar/pausar/reanudar) ·
 --             5 cambios (historial del equipo y cambios de estado desde la app, el más reciente primero, máx. 300 de la OS).
@@ -16,7 +18,8 @@ DELIMITER $$
 CREATE PROCEDURE SP_ObtenerObjetivosMovil(
     IN p_id_usuario BIGINT,
     IN p_id_os      BIGINT,
-    IN p_buscar     VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci
+    IN p_buscar     VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci,
+    IN p_previo     TINYINT
 )
 proc: BEGIN
     DECLARE v_existe     TINYINT DEFAULT 0;
@@ -55,8 +58,14 @@ proc: BEGIN
 
     CALL SP_ArmarObjetivosMovil(p_id_os, v_estado, v_salida_utc, v_llegada_utc, v_habilitado, v_motivo);
 
-    -- Hard Stop: sin llegada no hay objetivos
-    IF v_llegada_utc IS NULL THEN
+    IF IFNULL(p_previo, 0) = 1 AND v_estado NOT IN ('programada', 'reprogramada', 'en_ruta', 'en_ejecucion', 'pausada') THEN
+        DROP TEMPORARY TABLE IF EXISTS tmp_obj_mov;
+        SELECT 1 AS IdTipoMensaje, 'El servicio no está disponible para trabajar.' AS Mensaje;
+        LEAVE proc;
+    END IF;
+
+    -- Hard Stop: sin llegada no hay objetivos (salvo la descarga por adelantado, p_previo = 1)
+    IF v_llegada_utc IS NULL AND IFNULL(p_previo, 0) = 0 THEN
         DROP TEMPORARY TABLE IF EXISTS tmp_obj_mov;
         SELECT 1 AS IdTipoMensaje, v_motivo AS Mensaje;
         LEAVE proc;
@@ -76,7 +85,7 @@ proc: BEGIN
            CONVERT_TZ(v_salida_utc, '+00:00', '-05:00')                      AS salida_en,
            CONVERT_TZ(v_llegada_utc, '+00:00', '-05:00')                     AS llegada_en,
            IF(v_salida_utc IS NULL, NULL, GREATEST(0, TIMESTAMPDIFF(MINUTE, v_salida_utc, v_llegada_utc))) AS traslado_min,
-           GREATEST(0, TIMESTAMPDIFF(MINUTE, v_llegada_utc, v_ahora_utc))    AS en_planta_min,
+           IF(v_llegada_utc IS NULL, 0, GREATEST(0, TIMESTAMPDIFF(MINUTE, v_llegada_utc, v_ahora_utc))) AS en_planta_min,
            v_estimado                                                        AS estimado_min
     FROM   orden_servicio os
     LEFT JOIN cliente      c  ON c.id_cliente = os.id_cliente

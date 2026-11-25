@@ -36,8 +36,8 @@ public class InformeEquipoMovilController(
 
     /// <summary>Las 3 pestañas de la cabecera del informe. Exige la llegada registrada y el equipo iniciado.</summary>
     [HttpGet("cabecera-informe")]
-    public async Task<IActionResult> Obtener(long idOs, long idOsEquipo, CancellationToken ct)
-        => Responder(await obtener.EjecutarAsync(IdUsuarioActual, idOs, idOsEquipo, ct));
+    public async Task<IActionResult> Obtener(long idOs, long idOsEquipo, CancellationToken ct, [FromQuery] bool previo = false)
+        => Responder(await obtener.EjecutarAsync(IdUsuarioActual, idOs, idOsEquipo, ct, previo));
 
     /// <summary>
     /// Guarda las secciones de la cabecera que vienen (una sección ausente no se toca). Cada falla exige una prueba que la justifique: el servidor calcula E, el EMP y la

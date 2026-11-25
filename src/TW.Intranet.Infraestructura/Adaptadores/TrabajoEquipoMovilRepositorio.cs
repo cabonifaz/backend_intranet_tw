@@ -8,13 +8,14 @@ namespace TW.Intranet.Infraestructura.Adaptadores;
 public class TrabajoEquipoMovilRepositorio(CadenaConexionBd conexion)
     : RepositorioSpBase(conexion), ITrabajoEquipoMovilRepositorio
 {
-    public Task<RespuestaDto<TrabajoEquipoMovilDto>> ObtenerAsync(long idUsuario, long idOs, long idOsEquipo, CancellationToken ct) =>
+    public Task<RespuestaDto<TrabajoEquipoMovilDto>> ObtenerAsync(long idUsuario, long idOs, long idOsEquipo, CancellationToken ct, bool previo = false) =>
         EjecutarAsync<TrabajoEquipoMovilDto>("SP_ObtenerTrabajoEquipoMovil",
             p =>
             {
                 p.AddWithValue("p_id_usuario",   idUsuario);
                 p.AddWithValue("p_id_os",        idOs);
                 p.AddWithValue("p_id_os_equipo", idOsEquipo);
+                p.AddWithValue("p_previo",       Bit(previo));
             },
             async (r, mensaje) =>
             {

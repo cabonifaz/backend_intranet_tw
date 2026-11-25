@@ -12,13 +12,14 @@ public class ObjetivosMovilRepositorio(CadenaConexionBd conexion)
     /// <summary>Cambios que se muestran por equipo en "Ver detalles" (los más recientes).</summary>
     private const int CambiosPorEquipo = 5;
 
-    public Task<RespuestaDto<ObjetivosMovilDto>> ObtenerAsync(long idUsuario, long idOs, string buscar, CancellationToken ct) =>
+    public Task<RespuestaDto<ObjetivosMovilDto>> ObtenerAsync(long idUsuario, long idOs, string buscar, CancellationToken ct, bool previo = false) =>
         EjecutarAsync<ObjetivosMovilDto>("SP_ObtenerObjetivosMovil",
             p =>
             {
                 p.AddWithValue("p_id_usuario", idUsuario);
                 p.AddWithValue("p_id_os",      idOs);
                 p.AddWithValue("p_buscar",     Valor(buscar));
+                p.AddWithValue("p_previo",     Bit(previo));
             },
             async (r, mensaje) =>
             {
@@ -32,7 +33,7 @@ public class ObjetivosMovilRepositorio(CadenaConexionBd conexion)
                     Texto(r, "estado_os") ?? string.Empty,
                     Texto(r, "cliente"),
                     Texto(r, "sede"),
-                    true,                       // sin llegada el SP no entrega objetivos (Hard Stop)
+                    !EsNulo(r, "llegada_en"),   // sin llegada el SP solo entrega objetivos en la descarga previa (p_previo = 1)
                     FechaHora(r, "salida_en"),
                     FechaHora(r, "llegada_en"),
                     EnteroNulo(r, "traslado_min"),

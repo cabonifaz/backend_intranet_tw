@@ -8,6 +8,15 @@
 --     ensayos, descripción complementaria, precotización (cabecera) y acciones permitidas
 --   3 procedimiento ejecutado · 4 ensayos · 5 observaciones · 6 recomendaciones · 7 fotos · 8 ítems de la precotización
 --   9 historial reciente (5 últimos eventos; el completo está en SP_ObtenerHistorialInforme)
+-- Informe Complementario (23/11/2026): el informe del técnico es INMUTABLE (puede_editar y puede_registrar_precotizacion quedan siempre en 0).
+--   La cabecera trae id_informe_complementario / tiene_complementario / estado_complementario y puede_generar_complementario.
+--   Los ítems de precotización (resultado 8) son los de la precotización vigente: la del complementario o, si es anterior al cambio, la del original.
+-- PDF del informe del técnico (24/11/2026): también lo usa GET /informes/{id}/pdf. Acceso con SP_ArmarBaseInformeAcceso: rt_bandeja con el informe en su
+--   alcance, o precot_ver (Comercial) si una precotización del informe o de su complementario está en su alcance (solo lectura, sin acciones).
+--   url_pdf: el que dejó la app o, si no hay, el endpoint del PDF. La cabecera trae además lo que el técnico cargó en la app: N° de informe, quién
+--   atendió en planta, detalle del servicio (JSON), comentario de las pruebas y diagnóstico final.
+-- HU-55 (24/11/2026, requiere la migración 127): via (app · intranet) y, solo con via = 'intranet', id_registrado_por, registrado_por (nombre de quien lo
+--   registró en nombre del técnico) y fecha_registro (primera vez, hora de Lima).
 DROP PROCEDURE IF EXISTS SP_ObtenerDetalleInformeTecnico;
 
 DELIMITER $$
@@ -27,15 +36,17 @@ proc: BEGIN
     DECLARE v_rend_saldo  DECIMAL(12,2);
     DECLARE v_rend_tipo   VARCHAR(12)   CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_gastos_rev  INT DEFAULT 0;
+    DECLARE v_acceso      VARCHAR(10)   CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 
-    IF FN_PermisoAccion(p_id_usuario, 'rt_bandeja') = 0 THEN
+    IF FN_PermisoAccion(p_id_usuario, 'rt_bandeja') = 0 AND FN_PermisoAccion(p_id_usuario, 'precot_ver') = 0 THEN
         SELECT 1 AS IdTipoMensaje, 'No tienes permiso para ver la revisión de informes técnicos.' AS Mensaje;
         LEAVE proc;
     END IF;
-    SET v_editar  = FN_PermisoAccion(p_id_usuario, 'rt_editar');
-    SET v_revisar = FN_PermisoAccion(p_id_usuario, 'rt_revisar');
 
-    CALL SP_ArmarBaseInformes(p_id_usuario, IFNULL(p_id_informe, 0));
+    CALL SP_ArmarBaseInformeAcceso(p_id_usuario, p_id_informe, v_acceso);
+    -- Comercial solo lee: sin acciones
+    SET v_editar  = IF(v_acceso = 'rt', FN_PermisoAccion(p_id_usuario, 'rt_editar'), 0);
+    SET v_revisar = IF(v_acceso = 'rt', FN_PermisoAccion(p_id_usuario, 'rt_revisar'), 0);
     SELECT COUNT(*) INTO v_existe FROM tmp_rt_base;
     IF v_existe = 0 THEN
         DROP TEMPORARY TABLE IF EXISTS tmp_rt_base;
@@ -74,11 +85,11 @@ proc: BEGIN
     -- 2. Cabecera
     SELECT b.id_informe, b.numero_informe, b.version, b.estado, b.grupo_estado,
            CASE b.grupo_estado
-               WHEN 'pendiente_revision'      THEN IF(b.estado = 'en_revision', 'En revisión', 'Pendiente de revisión')
-               WHEN 'pendiente_precotizacion' THEN 'Pendiente de precotización'
-               WHEN 'revisado_sin_precot'     THEN 'Revisado'
-               ELSE 'Revisado con precotización' END                  AS estado_label,
-           b.url_pdf,
+               WHEN 'pendiente_revision'          THEN CASE b.estado WHEN 'en_revision' THEN 'En revisión' WHEN 'observado' THEN 'Observado'
+                                                                     ELSE 'Pendiente de revisión' END
+               WHEN 'revisado_sin_complementario' THEN 'Revisado'
+               ELSE 'Revisado con complementario' END                  AS estado_label,
+           COALESCE(b.url_pdf, CONCAT('/api/servicio-tecnico/informes/', b.id_informe, '/pdf')) AS url_pdf,
            b.id_os, b.numero_os, b.tipo_os,
            b.id_cliente, b.razon_social, b.ruc, b.id_sede, b.sede,
            b.id_equipo, b.equipo, b.codigo_tw, b.numero_serie, b.marca, b.modelo, b.tipo_equipo,
@@ -95,36 +106,59 @@ proc: BEGIN
            CASE WHEN b.n_ensayos = 0 THEN 'sin_registro'
                 WHEN b.n_ensayos_sin_resultado > 0 THEN 'incompletos'
                 ELSE 'completos' END                                   AS estado_ensayos,
-           CASE WHEN b.n_observaciones = 0 THEN 'no_aplica'
-                WHEN b.id_propuesta_derivada IS NOT NULL THEN 'convertida'
+           CASE WHEN b.id_propuesta_derivada IS NOT NULL THEN 'convertida'
                 WHEN IFNULL(b.n_items_precot, 0) > 0 THEN 'precotizacion_enviada'
-                ELSE 'requiere_precotizacion' END                      AS oportunidad_comercial,
+                ELSE 'no_aplica' END                                   AS oportunidad_comercial,
            v_rend_estado AS rendicion_estado, v_rend_saldo AS rendicion_saldo, v_rend_tipo AS rendicion_tipo, v_gastos_rev AS gastos_por_revisar,
            -- Resultado global de los ensayos
            it.normativa, it.patron_ensayo, it.tolerancia_excentricidad, it.resultado_global,
            it.error_maximo, it.error_maximo_detalle, it.incertidumbre, it.factor_k, it.decision_tecnica,
            it.descripcion_complementaria,
+           -- Lo que cargó el técnico en la cabecera del informe de la app
+           it.numero_informe                                            AS numero_informe_tecnico,
+           it.generado_en                                               AS informe_generado_en,
+           COALESCE(NULLIF(TRIM(it.responsable_nombre), ''), ct.nombres) AS responsable_nombre,
+           COALESCE(NULLIF(TRIM(it.responsable_cargo), ''), ct.cargo)    AS responsable_cargo,
+           COALESCE(NULLIF(TRIM(it.responsable_telefono), ''), NULLIF(TRIM(ct.telefono_movil), '')) AS responsable_telefono,
+           it.detalle_servicio, it.comentario_pruebas, it.severidad_general, it.estado_equipo_final,
+           IFNULL(it.rev_jefatura, 0) AS rev_jefatura, IFNULL(it.requiere_precotizacion, 0) AS requiere_precotizacion,
+           IFNULL(it.segunda_visita, 0) AS segunda_visita, IFNULL(it.aplica_garantia, 0) AS aplica_garantia,
+           it.error_critico_motivo AS error_critico,
+           -- HU-55 (migración 127): registrado desde la intranet en nombre del técnico. registrado_en está en UTC → hora de Lima
+           it.via,
+           IF(it.via = 'intranet', it.id_registrado_por, NULL)          AS id_registrado_por,
+           IF(it.via = 'intranet', NULLIF(TRIM(CONCAT(IFNULL(urg.nombre, ''), ' ', IFNULL(urg.apellido, ''))), ''), NULL) AS registrado_por,
+           IF(it.via = 'intranet' AND it.registrado_en IS NOT NULL, CONVERT_TZ(it.registrado_en, '+00:00', '-05:00'), NULL) AS fecha_registro,
            -- Trazabilidad
            b.fecha_envio_revision, b.fecha_inicio_revision, b.fecha_revision, b.id_revisor, b.revisor, b.nota_revision,
            b.horas_espera, b.sla_horas, b.sla_vencido,
            b.id_precotizacion, b.numero_precot, b.estado_precot, b.fecha_precot, b.autor_precot, b.n_items_precot,
            pc.nota_supervisor                                          AS nota_precotizacion,
            b.id_propuesta_derivada, b.numero_propuesta_derivada, b.version_propuesta_derivada, b.estado_propuesta_derivada,
-           -- Acciones
-           (v_editar = 1 AND b.estado NOT IN ('revisado', 'aprobado'))                                  AS puede_editar,
-           (v_editar = 1 AND b.estado NOT IN ('revisado', 'aprobado') AND b.n_observaciones > 0)         AS puede_registrar_precotizacion,
+           -- Informe complementario
+           b.id_complementario                                          AS id_informe_complementario,
+           b.numero_complementario                                      AS numero_complementario,
+           b.estado_complementario,
+           (b.estado_complementario = 'complementario')                 AS tiene_complementario,
+           -- Acciones (el informe del técnico es inmutable: se corrige con un complementario)
+           0                                                            AS puede_editar,
+           0                                                            AS puede_registrar_precotizacion,
+           (v_editar = 1 AND b.estado NOT IN ('revisado', 'aprobado') AND b.id_complementario IS NULL)  AS puede_generar_complementario,
            (v_revisar = 1 AND b.estado NOT IN ('revisado', 'aprobado')
-            AND NOT (b.n_observaciones > 0 AND IFNULL(b.n_items_precot, 0) = 0))                         AS puede_registrar_revision,
+            AND IFNULL(b.estado_complementario, '') <> 'borrador')                                        AS puede_registrar_revision,
            CASE WHEN b.estado IN ('revisado', 'aprobado') THEN NULL
-                WHEN b.n_observaciones > 0 AND IFNULL(b.n_items_precot, 0) = 0
-                    THEN 'Este servicio tiene observaciones registradas. Debes registrar la precotización antes de marcar el informe como revisado.'
+                WHEN b.estado_complementario = 'borrador'
+                    THEN 'Tienes un informe complementario sin guardar. Guárdalo o descártalo antes de marcar el informe como revisado.'
                 ELSE NULL END                                          AS mensaje_bloqueo,
            CASE WHEN b.estado IN ('revisado', 'aprobado') THEN NULL
-                WHEN b.n_observaciones > 0 AND IFNULL(b.n_items_precot, 0) = 0 THEN 'registrar_precotizacion'
+                WHEN b.estado_complementario = 'borrador' THEN 'continuar_complementario'
                 ELSE 'registrar_revision' END                          AS accion_principal
     FROM tmp_rt_base b
-    JOIN informe_tecnico it    ON it.id_informe = b.id_informe
-    LEFT JOIN precotizacion pc ON pc.id_precotizacion = b.id_precotizacion;
+    JOIN informe_tecnico it       ON it.id_informe = b.id_informe
+    LEFT JOIN orden_servicio os   ON os.id_os = b.id_os
+    LEFT JOIN contacto_cliente ct ON ct.id_contacto = os.id_contacto
+    LEFT JOIN usuario urg         ON urg.id_usuario = it.id_registrado_por
+    LEFT JOIN precotizacion pc    ON pc.id_precotizacion = b.id_precotizacion;
 
     -- 3. Procedimiento ejecutado
     SELECT ip.id_paso, ip.orden, ip.titulo, ip.detalle, ip.realizado, ip.nota, ip.origen

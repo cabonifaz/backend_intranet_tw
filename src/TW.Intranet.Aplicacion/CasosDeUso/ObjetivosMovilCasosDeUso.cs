@@ -31,7 +31,7 @@ public static class EntradaObjetivosMovil
 /// </summary>
 public class ObtenerObjetivosMovilCasoDeUso(IObjetivosMovilRepositorio repositorio)
 {
-    public Task<RespuestaDto<ObjetivosMovilDto>> EjecutarAsync(long idUsuario, long idOs, string? buscar, CancellationToken ct = default)
+    public Task<RespuestaDto<ObjetivosMovilDto>> EjecutarAsync(long idUsuario, long idOs, string? buscar, CancellationToken ct = default, bool previo = false)
     {
         if (idUsuario <= 0 || idOs <= 0)
             return Task.FromResult(new RespuestaDto<ObjetivosMovilDto>(1, EntradaObjetivosMovil.SinServicio));
@@ -40,7 +40,7 @@ public class ObtenerObjetivosMovilCasoDeUso(IObjetivosMovilRepositorio repositor
         if (texto.Length > EntradaObjetivosMovil.MaxBusqueda)
             return Task.FromResult(new RespuestaDto<ObjetivosMovilDto>(1, $"La búsqueda puede tener hasta {EntradaObjetivosMovil.MaxBusqueda} caracteres."));
 
-        return repositorio.ObtenerAsync(idUsuario, idOs, texto, ct);
+        return repositorio.ObtenerAsync(idUsuario, idOs, texto, ct, previo);
     }
 }
 

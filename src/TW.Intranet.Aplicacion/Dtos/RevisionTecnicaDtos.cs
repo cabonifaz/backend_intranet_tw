@@ -2,7 +2,8 @@ namespace TW.Intranet.Aplicacion.Dtos;
 
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
 // Revisión Técnica (Sprint 5, HU-56 a HU-59) — informes de servicio técnico que revisa el Supervisor / Jefe de Servicio Técnico.
-// Estados (GrupoEstado): pendiente_revision · pendiente_precotizacion · revisado_sin_precot · revisado_con_precot.
+// Estados (GrupoEstado): pendiente_revision · revisado_sin_complementario · revisado_con_complementario.
+// Informe Complementario (23/11/2026): el informe del técnico es inmutable; el supervisor lo corrige con un complementario (sección al final).
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
 
 // ── HU-56 Bandeja ──────────────────────────────────────────────────────────────────────────────
@@ -10,7 +11,7 @@ namespace TW.Intranet.Aplicacion.Dtos;
 /// <summary>Filtros de la bandeja (query string).</summary>
 public class FiltrosBandejaInformesDto
 {
-    /// <summary>todos (defecto) · pendientes · revisados · pendiente_revision · pendiente_precotizacion · revisado_sin_precot · revisado_con_precot.</summary>
+    /// <summary>todos (defecto) · pendientes · revisados · pendiente_revision · revisado_sin_complementario · revisado_con_complementario.</summary>
     public string?   Grupo            { get; set; }
     /// <summary>N° OS, cliente, RUC, técnico, equipo, código TW o N° de serie.</summary>
     public string?   Busqueda         { get; set; }
@@ -27,15 +28,14 @@ public class FiltrosBandejaInformesDto
     public int       PorPagina        { get; set; } = 10;
 }
 
-/// <summary>Las 4 tarjetas de la bandeja (+ SLA vencidos).</summary>
+/// <summary>Las 3 tarjetas de la bandeja (+ SLA vencidos).</summary>
 public class TarjetasInformesDto
 {
-    public int PendientesRevision      { get; init; }
-    public int PendientesPrecotizacion { get; init; }
-    public int RevisadosSinPrecot      { get; init; }
-    public int RevisadosConPrecot      { get; init; }
-    public int SlaVencidos             { get; init; }
-    public int SlaHoras                { get; init; }
+    public int PendientesRevision         { get; init; }
+    public int RevisadosSinComplementario { get; init; }
+    public int RevisadosConComplementario { get; init; }
+    public int SlaVencidos                { get; init; }
+    public int SlaHoras                   { get; init; }
 }
 
 public class ItemBandejaInformeDto
@@ -65,6 +65,12 @@ public class ItemBandejaInformeDto
     public string?   Estado                  { get; init; }
     public string?   GrupoEstado             { get; init; }
     public string?   EstadoLabel             { get; init; }
+    /// <summary>Informe complementario del informe (null si no tiene).</summary>
+    public long?     IdComplementario        { get; init; }
+    /// <summary>borrador (generado, sin guardar) · complementario (guardado).</summary>
+    public string?   EstadoComplementario    { get; init; }
+    /// <summary>true = tiene un complementario guardado.</summary>
+    public bool      TieneComplementario     { get; init; }
     public long?     IdPrecotizacion         { get; init; }
     public string?   NumeroPrecot            { get; init; }
     public long?     IdPropuestaDerivada     { get; init; }
@@ -104,8 +110,19 @@ public class CabeceraInformeDto
     public string?   Estado                    { get; init; }
     public string?   GrupoEstado               { get; init; }
     public string?   EstadoLabel               { get; init; }
-    /// <summary>"Descargar Informe PDF" (lo genera la app móvil).</summary>
+    /// <summary>"Descargar Informe PDF": GET /api/servicio-tecnico/informes/{id}/pdf (lo genera la intranet en el momento).</summary>
     public string?   UrlPdf                    { get; init; }
+    /// <summary>N° del informe que asignó la app al generarlo (NNNN-AAAA).</summary>
+    public string?   NumeroInformeTecnico      { get; init; }
+    public DateTime? InformeGeneradoEn         { get; init; }
+    /// <summary>Motivo con que el técnico guardó un ensayo con error crítico (si lo hubo).</summary>
+    public string?   ErrorCritico              { get; init; }
+    /// <summary>HU-55: app (lo registró el técnico) · intranet (lo registró la Asistente o el Jefe en nombre del técnico).</summary>
+    public string?   Via                       { get; init; }
+    /// <summary>Solo con Via = intranet: quién lo registró y cuándo (primera vez, hora de Lima). Badge "Registrado desde Intranet por…".</summary>
+    public long?     IdRegistradoPor           { get; init; }
+    public string?   RegistradoPor             { get; init; }
+    public DateTime? FechaRegistro             { get; init; }
     public long?     IdOs                      { get; init; }
     public string?   NumeroOs                  { get; init; }
     public string?   TipoOs                    { get; init; }
@@ -153,7 +170,7 @@ public class CabeceraInformeDto
     public decimal?  PorcentajeProcedimiento   { get; init; }
     /// <summary>sin_registro · incompletos · completos.</summary>
     public string?   EstadoEnsayos             { get; init; }
-    /// <summary>no_aplica · requiere_precotizacion · precotizacion_enviada · convertida.</summary>
+    /// <summary>no_aplica · precotizacion_enviada · convertida.</summary>
     public string?   OportunidadComercial      { get; init; }
     /// <summary>Rendición de viáticos de la OS: abierta · cerrada · sin_programacion.</summary>
     public string?   RendicionEstado           { get; init; }
@@ -199,13 +216,26 @@ public class CabeceraInformeDto
     public int?      VersionPropuestaDerivada  { get; init; }
     public string?   EstadoPropuestaDerivada   { get; init; }
 
+    // Informe complementario
+    /// <summary>Id del informe complementario (null si no tiene). Se abre con GET /api/servicio-tecnico/informes/complementarios/{id}.</summary>
+    public long?     IdInformeComplementario   { get; init; }
+    public string?   NumeroComplementario      { get; init; }
+    /// <summary>borrador (generado, sin guardar) · complementario (guardado) · null.</summary>
+    public string?   EstadoComplementario      { get; init; }
+    /// <summary>true = tiene un complementario guardado.</summary>
+    public bool      TieneComplementario       { get; init; }
+
     // Acciones
+    /// <summary>Siempre false: el informe del técnico es inmutable (se corrige con un complementario).</summary>
     public bool      PuedeEditar               { get; init; }
+    /// <summary>Siempre false: la precotización se registra en el complementario.</summary>
     public bool      PuedeRegistrarPrecotizacion { get; init; }
+    /// <summary>"Generar Informe Complementario": con rt_editar, sin revisar y sin complementario.</summary>
+    public bool      PuedeGenerarComplementario { get; init; }
     public bool      PuedeRegistrarRevision    { get; init; }
-    /// <summary>Aviso ámbar: "Este servicio tiene observaciones registradas. Debes registrar la precotización…".</summary>
+    /// <summary>Aviso ámbar: hay un complementario sin guardar (bloquea la revisión).</summary>
     public string?   MensajeBloqueo            { get; init; }
-    /// <summary>Botón principal del modal: registrar_precotizacion · registrar_revision · null (revisado).</summary>
+    /// <summary>Botón principal del modal: registrar_revision · continuar_complementario · null (revisado).</summary>
     public string?   AccionPrincipal           { get; init; }
 }
 
@@ -340,6 +370,8 @@ public class EventoRecienteDto
     public string?   Usuario     { get; init; }
 }
 
+/// <summary>Detalle del informe. ResponsableCliente, DiagnosticoFinal, ComentarioPruebas y DetalleServicio = lo que el técnico cargó en la
+/// cabecera del informe de la app (24/11/2026; también los usa el PDF del informe).</summary>
 public record DetalleInformeTecnicoDto(
     CabeceraInformeDto            Cabecera,
     List<PasoInformeDto>          Procedimiento,
@@ -348,7 +380,17 @@ public record DetalleInformeTecnicoDto(
     List<RecomendacionInformeDto> Recomendaciones,
     List<FotoInformeDto>          Fotos,
     List<ItemPrecotizacionDto>    Precotizacion,
-    List<EventoRecienteDto>       HistorialReciente);
+    List<EventoRecienteDto>       HistorialReciente,
+    ResponsableClienteDto?        ResponsableCliente = null,
+    DiagnosticoFinalDto?          DiagnosticoFinal   = null,
+    string?                       ComentarioPruebas  = null,
+    DetalleServicioInformeDto?    DetalleServicio    = null);
+
+/// <summary>Lo que necesita el PDF del informe del técnico: el detalle y las imágenes (id de evidencia → JPEG/PNG).</summary>
+public record DatosInformeTecnicoPdf(
+    DetalleInformeTecnicoDto          Detalle,
+    IReadOnlyDictionary<long, byte[]> Imagenes,
+    DateTime                          GeneradoEn);
 
 // ── HU-58 Edición ──────────────────────────────────────────────────────────────────────────────
 
@@ -483,7 +525,7 @@ public class CabeceraRevisionInformeDto
 public class ItemChecklistRevisionDto
 {
     public int     Orden       { get; init; }
-    /// <summary>fotos · ensayos · observaciones · precotizacion · procedimiento.</summary>
+    /// <summary>fotos · ensayos · observaciones · complementario · procedimiento.</summary>
     public string? Codigo      { get; init; }
     public string? Titulo      { get; init; }
     public string? Detalle     { get; init; }
@@ -501,11 +543,13 @@ public class RegistrarRevisionInformeDto
 
 public class InformeRevisadoDto
 {
-    public long      IdInforme           { get; init; }
-    public string?   Estado              { get; init; }
-    public DateTime? FechaRevision       { get; init; }
-    public long?     IdPrecotizacion     { get; init; }
-    public string?   NumeroPrecotizacion { get; init; }
+    public long      IdInforme               { get; init; }
+    /// <summary>revisado · revisado_con_complementario.</summary>
+    public string?   Estado                  { get; init; }
+    public DateTime? FechaRevision           { get; init; }
+    public long?     IdPrecotizacion         { get; init; }
+    public string?   NumeroPrecotizacion     { get; init; }
+    public long?     IdInformeComplementario { get; init; }
 }
 
 public class ContadoresHistorialInformeDto
@@ -633,8 +677,17 @@ public class CabeceraPrecotizacionDto
     public long?     IdSupervisor               { get; init; }
     public string?   Supervisor                 { get; init; }
     public string?   CargoSupervisor            { get; init; }
+    /// <summary>Informe del que nace la precotización: el complementario (o el original si es anterior al 23/11/2026).</summary>
     public long?     IdInforme                  { get; init; }
     public int?      VersionInforme             { get; init; }
+    /// <summary>Informe del técnico.</summary>
+    public long?     IdInformeOriginal          { get; init; }
+    public bool      EsComplementario           { get; init; }
+    public long?     IdInformeComplementario    { get; init; }
+    /// <summary>PDF del informe del técnico (el que deja la app, si existe).</summary>
+    public string?   PdfInformeOriginalUrl      { get; init; }
+    /// <summary>PDF del informe complementario (GET con token; lo genera la intranet).</summary>
+    public string?   PdfInformeComplementarioUrl { get; init; }
     public long?     IdOs                       { get; init; }
     public string?   NumeroOs                   { get; init; }
     public DateTime? FechaEjecucion             { get; init; }

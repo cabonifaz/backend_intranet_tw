@@ -61,7 +61,13 @@ builder.Services.AddCors(options =>
 // Se apaga con la variable de entorno Permisos__ValidarEnBack=false.
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<TW.Intranet.API.Seguridad.PermisosFilter>();
-builder.Services.AddControllers(o => o.Filters.AddService<TW.Intranet.API.Seguridad.PermisosFilter>())
+builder.Services.AddScoped<TW.Intranet.API.Seguridad.EnvioDiferidoMovilFilter>();
+builder.Services.AddControllers(o =>
+    {
+        o.Filters.AddService<TW.Intranet.API.Seguridad.PermisosFilter>();
+        // App móvil sin señal: constancia de los envíos tardíos (cabecera X-TW-Capturado-En)
+        o.Filters.AddService<TW.Intranet.API.Seguridad.EnvioDiferidoMovilFilter>();
+    })
     // Fechas en hora de Lima (UTC-5): ver Configuracion/ZonaHorariaLima.cs
     .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new TW.Intranet.API.Configuracion.FechaHoraLimaJsonConverter()));
 
@@ -323,6 +329,23 @@ builder.Services.AddScoped<ValidarCierreEquipoMovilCasoDeUso>();
 builder.Services.AddScoped<GenerarInformeEquipoMovilCasoDeUso>();
 builder.Services.AddScoped<GenerarPreInformeMovilCasoDeUso>();
 builder.Services.AddSingleton<IGeneradorPreInformePdf, GeneradorPreInformePdf>();
+// HU-55 — registrar el informe de un equipo desde la intranet (en nombre del técnico). Reutiliza los casos de uso móviles registrados arriba y abajo.
+builder.Services.AddScoped<IRegistroInformeIntranetRepositorio, RegistroInformeIntranetRepositorio>();
+builder.Services.AddScoped<IEnvioDiferidoMovilRepositorio, EnvioDiferidoMovilRepositorio>();
+builder.Services.AddScoped<RegistrarEnvioDiferidoMovilCasoDeUso>();
+builder.Services.AddScoped<ListarEnviosDiferidosMovilCasoDeUso>();
+builder.Services.AddScoped<ListarEnviosDiferidosJefaturaMovilCasoDeUso>();
+builder.Services.AddScoped<EjecutorRegistroIntranet>();
+builder.Services.AddScoped<ContextoRegistroIntranetCasoDeUso>();
+builder.Services.AddScoped<SesionRegistroIntranetCasoDeUso>();
+builder.Services.AddScoped<InformeEnCursoIntranetCasoDeUso>();
+builder.Services.AddScoped<TrabajoRegistroIntranetCasoDeUso>();
+builder.Services.AddScoped<EvidenciasRegistroIntranetCasoDeUso>();
+builder.Services.AddScoped<EnsayosRegistroIntranetCasoDeUso>();
+builder.Services.AddScoped<CabeceraRegistroIntranetCasoDeUso>();
+builder.Services.AddScoped<CorrelativoRegistroIntranetCasoDeUso>();
+builder.Services.AddScoped<CierreRegistroIntranetCasoDeUso>();
+builder.Services.AddScoped<FirmaConstanciaRegistroIntranetCasoDeUso>();
 // App Mobile HU-19 — Asistente IA y Procedimientos (la IA y la lectura de los PDF oficiales se registran más abajo, junto a Gemini)
 builder.Services.AddScoped<IAsistenteMovilRepositorio, AsistenteMovilRepositorio>();
 builder.Services.AddScoped<ObtenerInicioAsistenteMovilCasoDeUso>();
@@ -857,6 +880,19 @@ builder.Services.AddScoped<PrepararRevisionInformeCasoDeUso>();
 builder.Services.AddScoped<RegistrarRevisionInformeCasoDeUso>();
 builder.Services.AddScoped<ObtenerHistorialInformeCasoDeUso>();
 builder.Services.AddScoped<ObtenerArchivoFotoInformeCasoDeUso>();
+// Informe Complementario (23/11/2026): el informe del técnico es inmutable; el supervisor lo corrige con un complementario
+builder.Services.AddSingleton<IGeneradorInformeComplementarioPdf, GeneradorInformeComplementarioPdf>();
+builder.Services.AddScoped<GenerarInformeComplementarioCasoDeUso>();
+builder.Services.AddScoped<ObtenerInformeComplementarioCasoDeUso>();
+builder.Services.AddScoped<GuardarInformeComplementarioCasoDeUso>();
+builder.Services.AddScoped<DescartarInformeComplementarioCasoDeUso>();
+builder.Services.AddScoped<SubirFotoInformeComplementarioCasoDeUso>();
+builder.Services.AddScoped<QuitarFotoInformeComplementarioCasoDeUso>();
+builder.Services.AddScoped<ObtenerArchivoFotoInformeComplementarioCasoDeUso>();
+builder.Services.AddScoped<GenerarPdfInformeComplementarioCasoDeUso>();
+// PDF del informe técnico (24/11/2026): lo genera la intranet en el momento
+builder.Services.AddSingleton<IGeneradorInformeTecnicoPdf, GeneradorInformeTecnicoPdf>();
+builder.Services.AddScoped<GenerarPdfInformeTecnicoCasoDeUso>();
 builder.Services.AddScoped<ObtenerBandejaPrecotizacionesCasoDeUso>();
 builder.Services.AddScoped<ObtenerDetallePrecotizacionCasoDeUso>();
 builder.Services.AddScoped<ObtenerPrecargaPrecotizacionCasoDeUso>();

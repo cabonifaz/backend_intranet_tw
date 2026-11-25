@@ -17,6 +17,7 @@ public class JefaturaMovilController(
     ObtenerServicioJefaturaMovilCasoDeUso        obtenerServicio,
     ObtenerRutaServicioJefaturaMovilCasoDeUso    obtenerRuta,
     RegistrarSeguimientoJefaturaMovilCasoDeUso   registrarSeguimiento,
+    ListarEnviosDiferidosJefaturaMovilCasoDeUso  listarEnviosDiferidos,
     ILogger<JefaturaMovilController>             logger) : ControladorAppMovil(logger)
 {
     /// <summary>
@@ -39,6 +40,14 @@ public class JefaturaMovilController(
     [HttpGet("servicios/{idOs:long}")]
     public async Task<IActionResult> ObtenerServicio(long idOs, CancellationToken ct)
         => Responder(await obtenerServicio.EjecutarAsync(IdUsuarioActual, idOs, ct));
+
+    /// <summary>
+    /// HU-30 / HU-18 — Registros que el técnico tomó sin señal y la app envió después: qué fue, cuándo lo tomó, cuándo llegó, cuánto tardó, el motivo y los intentos. Mismo alcance
+    /// que el detalle del servicio. Solo lectura.
+    /// </summary>
+    [HttpGet("servicios/{idOs:long}/envios-diferidos")]
+    public async Task<IActionResult> ObtenerEnviosDiferidos(long idOs, CancellationToken ct)
+        => Responder(await listarEnviosDiferidos.EjecutarAsync(IdUsuarioActual, idOs, ct));
 
     /// <summary>HU-30 — Ubicación y ruta: última posición, recorrido GPS, velocidad, ETA, distancia, demora registrada por el técnico y eventos en ruta.</summary>
     [HttpGet("servicios/{idOs:long}/ruta")]

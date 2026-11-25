@@ -2,6 +2,8 @@
 -- Acceso: rt_bandeja (o precot_ver: Comercial ve el historial del informe que originó su precotización).
 --   p_categoria: vacío o todos · edicion (ediciones del supervisor) · precotizacion · revision · sistema
 -- Origen del evento: movil (lo registró el técnico desde la app), sistema (sin usuario) o el rol del usuario de la intranet.
+-- Informe Complementario (23/11/2026): p_id_informe puede ser el original o su complementario; el historial es siempre el del original
+--   (los eventos del complementario y de su precotización se registran en el original). Comercial entra si la precotización es del original o de su complementario.
 -- Resultados: 1 mensaje, 2 contadores por categoría, 3 eventos (más reciente primero, hasta 500).
 DROP PROCEDURE IF EXISTS SP_ObtenerHistorialInforme;
 
@@ -16,6 +18,12 @@ proc: BEGIN
     DECLARE v_existe    INT DEFAULT 0;
     DECLARE v_categoria VARCHAR(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
     DECLARE v_id_tec    BIGINT;
+    DECLARE v_id        BIGINT;
+
+    -- Un complementario muestra el historial de su informe original
+    SELECT COALESCE(it.id_informe_padre, it.id_informe) INTO v_id
+    FROM informe_tecnico it WHERE it.id_informe = p_id_informe AND it.eliminado_en IS NULL;
+    SET v_id = IFNULL(v_id, p_id_informe);
 
     SET v_categoria = LOWER(TRIM(IFNULL(p_categoria, '')));
     IF v_categoria IN ('', 'todos') THEN SET v_categoria = 'todos'; END IF;
@@ -25,14 +33,17 @@ proc: BEGIN
     END IF;
 
     IF FN_PermisoAccion(p_id_usuario, 'rt_bandeja') = 1 THEN
-        CALL SP_ArmarBaseInformes(p_id_usuario, IFNULL(p_id_informe, 0));
+        CALL SP_ArmarBaseInformes(p_id_usuario, IFNULL(v_id, 0));
         SELECT COUNT(*), MAX(id_tecnico) INTO v_existe, v_id_tec FROM tmp_rt_base;
         DROP TEMPORARY TABLE IF EXISTS tmp_rt_base;
-    ELSEIF FN_PermisoAccion(p_id_usuario, 'precot_ver') = 1 THEN
+    END IF;
+    IF v_existe = 0 AND FN_PermisoAccion(p_id_usuario, 'precot_ver') = 1 THEN
         SELECT COUNT(*), MAX(it.id_tecnico) INTO v_existe, v_id_tec
         FROM informe_tecnico it
-        JOIN precotizacion pc ON pc.id_informe = it.id_informe AND pc.eliminado_en IS NULL
-        WHERE it.id_informe = p_id_informe AND it.eliminado_en IS NULL;
+        WHERE it.id_informe = v_id AND it.eliminado_en IS NULL
+          AND EXISTS (SELECT 1 FROM precotizacion pc
+                      LEFT JOIN informe_tecnico c ON c.id_informe = pc.id_informe
+                      WHERE pc.eliminado_en IS NULL AND (pc.id_informe = it.id_informe OR c.id_informe_padre = it.id_informe));
     END IF;
     IF v_existe = 0 THEN
         SELECT 1 AS IdTipoMensaje, 'El informe no existe o no está en tu alcance.' AS Mensaje;
@@ -65,7 +76,7 @@ proc: BEGIN
            JSON_UNQUOTE(JSON_EXTRACT(a.metadata, '$.nota'))              AS nota
     FROM auditoria_evento a
     LEFT JOIN usuario u ON u.id_usuario = a.id_usuario
-    WHERE a.entidad_tipo = 'informe_tecnico' AND a.id_entidad = p_id_informe;
+    WHERE a.entidad_tipo = 'informe_tecnico' AND a.id_entidad = v_id;
 
     SELECT 2 AS IdTipoMensaje, 'Éxito.' AS Mensaje;
 

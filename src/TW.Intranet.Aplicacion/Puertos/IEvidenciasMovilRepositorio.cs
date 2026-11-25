@@ -5,7 +5,8 @@ namespace TW.Intranet.Aplicacion.Puertos;
 /// <summary>Registro fotográfico del equipo en la app móvil (App Mobile HU-11 / HU-12 / HU-13).</summary>
 public interface IEvidenciasMovilRepositorio
 {
-    Task<RespuestaDto<EvidenciasMovilDto>> ObtenerAsync(long idUsuario, long idOs, long idOsEquipo, CancellationToken ct);
+    /// <summary>previo = true: descarga por adelantado con señal (HU-18), sin los Hard Stop de la llegada ni de "equipo iniciado"; solo lectura.</summary>
+    Task<RespuestaDto<EvidenciasMovilDto>> ObtenerAsync(long idUsuario, long idOs, long idOsEquipo, CancellationToken ct, bool previo = false);
 
     Task<RespuestaDto<ResultadoEvidenciaMovilDto>> RegistrarAsync(
         long idUsuario, long idOs, long idOsEquipo, string codigo, int pagina, string? rutaArchivo, string? rutaCuadro, decimal? duracionSeg,

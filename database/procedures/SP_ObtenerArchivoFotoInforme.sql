@@ -2,6 +2,7 @@
 -- SP_ObtenerArchivoFotoInforme  (Revisión Técnica HU-57 — ruta del archivo de una foto del informe, para mostrar la vista previa · lectura)
 -- Acceso: rt_bandeja y el informe dentro del alcance del usuario (SP_ArmarBaseInformes). La evidencia debe ser del informe (id_informe) o, si no tiene informe asignado,
 -- de la misma OS y equipo (la misma regla de SP_ObtenerDetalleInformeTecnico). Las del QR no tienen archivo.
+-- 24/11/2026: acceso con SP_ArmarBaseInformeAcceso (también Comercial con precot_ver, para las fotos del PDF del informe).
 -- Resultados: 1 mensaje; 2 (ruta, ruta_cuadro, es_video).
 -- ============================================================
 DROP PROCEDURE IF EXISTS SP_ObtenerArchivoFotoInforme;
@@ -17,13 +18,14 @@ proc: BEGIN
     DECLARE v_ruta   VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
     DECLARE v_cuadro VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci DEFAULT NULL;
     DECLARE v_video  TINYINT DEFAULT 0;
+    DECLARE v_acceso VARCHAR(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 
-    IF FN_PermisoAccion(p_id_usuario, 'rt_bandeja') = 0 THEN
+    IF FN_PermisoAccion(p_id_usuario, 'rt_bandeja') = 0 AND FN_PermisoAccion(p_id_usuario, 'precot_ver') = 0 THEN
         SELECT 1 AS IdTipoMensaje, 'No tienes permiso para ver la revisión de informes técnicos.' AS Mensaje;
         LEAVE proc;
     END IF;
 
-    CALL SP_ArmarBaseInformes(p_id_usuario, IFNULL(p_id_informe, 0));
+    CALL SP_ArmarBaseInformeAcceso(p_id_usuario, p_id_informe, v_acceso);
 
     SELECT f.url_archivo, f.ruta_cuadro, f.es_video INTO v_ruta, v_cuadro, v_video
     FROM   evidencia_fotografica f

@@ -4,8 +4,9 @@
 --   fotos          Fotos registradas por el técnico (al menos una)                                  obligatorio
 --   ensayos        Ensayos metrológicos completos (sin lecturas sin resultado; "No aplica" si no hay) obligatorio
 --   observaciones  Observaciones registradas (informativo)
---   precotizacion  Precotización completada (obligatoria solo si hay observaciones)                  obligatorio
+--   complementario Informe complementario: no hay o está guardado (uno sin guardar bloquea)          obligatorio
 --   procedimiento  Procedimiento ejecutado (al menos un paso realizado)                              obligatorio
+-- Informe Complementario (23/11/2026): se quitó "Precotización completada" (la precotización vive en el complementario y es opcional).
 -- Resultados: 1 mensaje, 2 cabecera (puede_confirmar, verificados / total e impacto tras el cierre), 3 checklist.
 DROP PROCEDURE IF EXISTS SP_PrepararRevisionInforme;
 
@@ -71,12 +72,13 @@ proc: BEGIN
            1, 0
     FROM tmp_rt_base;
     INSERT INTO tmp_rt_check
-    SELECT 4, 'precotizacion', 'Precotización completada',
-           CASE WHEN n_observaciones = 0 THEN 'No aplica: el servicio no tiene observaciones'
-                WHEN IFNULL(n_items_precot, 0) = 0 THEN 'Falta registrar la precotización (el servicio tiene observaciones)'
-                ELSE CONCAT(n_items_precot, IF(n_items_precot = 1, ' concepto enviado', ' conceptos enviados'),
-                            IF(numero_rq IS NULL, '', CONCAT(' — ', numero_rq))) END,
-           n_observaciones = 0 OR IFNULL(n_items_precot, 0) > 0, 1
+    SELECT 4, 'complementario', 'Informe complementario',
+           CASE WHEN id_complementario IS NULL THEN 'Sin informe complementario'
+                WHEN estado_complementario = 'borrador' THEN 'Hay un informe complementario sin guardar: guárdalo o descártalo'
+                ELSE CONCAT('Informe complementario ', numero_complementario,
+                            IF(IFNULL(n_items_precot, 0) > 0,
+                               CONCAT(' con precotización (', n_items_precot, IF(n_items_precot = 1, ' concepto)', ' conceptos)')), '')) END,
+           IFNULL(estado_complementario, '') <> 'borrador', 1
     FROM tmp_rt_base;
     INSERT INTO tmp_rt_check
     SELECT 5, 'procedimiento', 'Procedimiento ejecutado',
@@ -97,7 +99,7 @@ proc: BEGIN
            -- Impacto tras el cierre
            'PDF final inmutable'                                                      AS impacto_informe,
            IF(b.id_precotizacion IS NULL, NULL, 'Auto-envío a Área Comercial')        AS impacto_precotizacion,
-           'REVISADO'                                                                 AS impacto_estado,
+           IF(b.estado_complementario = 'complementario', 'REVISADO CON COMPLEMENTARIO', 'REVISADO') AS impacto_estado,
            CONCAT_WS(' y ', b.tecnico,
                      (SELECT TRIM(CONCAT(u.nombre, ' ', u.apellido)) FROM usuario u WHERE u.id_usuario = b.id_responsable_rq)) AS impacto_notificacion
     FROM tmp_rt_base b;

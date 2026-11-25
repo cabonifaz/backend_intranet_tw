@@ -57,8 +57,8 @@ public class RevisionTecnicaRepositorio(CadenaConexionBd conexion) : Repositorio
             async (r, mensaje) =>
             {
                 await r.NextResultAsync(ct);
-                var cabecera = await LeerUnaAsync<CabeceraInformeDto>(r, ct);
-                if (cabecera is null) return new RespuestaDto<DetalleInformeTecnicoDto>(1, "El informe no existe o no está en tu alcance.");
+                var c = await LeerUnaAsync<CabeceraInformeCruda>(r, ct);
+                if (c is null) return new RespuestaDto<DetalleInformeTecnicoDto>(1, "El informe no existe o no está en tu alcance.");
                 await r.NextResultAsync(ct); var pasos   = await LeerFilasAsync<PasoInformeDto>(r, ct);
                 await r.NextResultAsync(ct); var ensayos = await LeerFilasAsync<EnsayoInformeDto>(r, ct);
                 await r.NextResultAsync(ct); var obs     = await LeerFilasAsync<ObservacionInformeDto>(r, ct);
@@ -66,9 +66,31 @@ public class RevisionTecnicaRepositorio(CadenaConexionBd conexion) : Repositorio
                 await r.NextResultAsync(ct); var fotos   = await LeerFilasAsync<FotoInformeDto>(r, ct);
                 await r.NextResultAsync(ct); var precot  = await LeerFilasAsync<ItemPrecotizacionDto>(r, ct);
                 await r.NextResultAsync(ct); var hist    = await LeerFilasAsync<EventoRecienteDto>(r, ct);
+                var det = InformeEquipoMovilRepositorio.LeerDetalle(c.DetalleServicio);
                 return new RespuestaDto<DetalleInformeTecnicoDto>(2, mensaje,
-                    new DetalleInformeTecnicoDto(cabecera, pasos, ensayos, obs, recs, fotos, precot, hist));
+                    new DetalleInformeTecnicoDto(c, pasos, ensayos, obs, recs, fotos, precot, hist,
+                        ResponsableCliente: new ResponsableClienteDto(c.ResponsableNombre, c.ResponsableCargo, c.ResponsableTelefono),
+                        DiagnosticoFinal:   new DiagnosticoFinalDto(c.SeveridadGeneral, c.EstadoEquipoFinal, c.RevJefatura, c.RequierePrecotizacion,
+                                                                    c.SegundaVisita, c.AplicaGarantia),
+                        ComentarioPruebas:  c.ComentarioPruebas,
+                        DetalleServicio:    new DetalleServicioInformeDto(det.Tipo, det.Celdas, det.Suma, det.Comp, det.Anillos)));
             }, ct);
+
+    /// <summary>Cabecera del informe con los campos crudos de la cabecera de la app (se devuelven en bloques; no salen en el JSON de la cabecera).</summary>
+    private sealed class CabeceraInformeCruda : CabeceraInformeDto
+    {
+        public string? ResponsableNombre     { get; init; }
+        public string? ResponsableCargo      { get; init; }
+        public string? ResponsableTelefono   { get; init; }
+        public string? DetalleServicio       { get; init; }
+        public string? ComentarioPruebas     { get; init; }
+        public string? SeveridadGeneral      { get; init; }
+        public string? EstadoEquipoFinal     { get; init; }
+        public bool    RevJefatura           { get; init; }
+        public bool    RequierePrecotizacion { get; init; }
+        public bool    SegundaVisita         { get; init; }
+        public bool    AplicaGarantia        { get; init; }
+    }
 
     public Task<RespuestaDto<InformeGuardadoDto>> GuardarInformeAsync(long idInforme, GuardarInformeTecnicoDto d, long idUsuario, CancellationToken ct)
         => EjecutarAsync("SP_GuardarInformeTecnico",
@@ -182,6 +204,172 @@ public class RevisionTecnicaRepositorio(CadenaConexionBd conexion) : Repositorio
                 if (!await r.ReadAsync(ct)) return new RespuestaDto<ArchivoEvidenciaMovilDto>(1, "Foto no encontrada.");
                 return new RespuestaDto<ArchivoEvidenciaMovilDto>(2, mensaje, new ArchivoEvidenciaMovilDto(
                     Texto(r, "ruta") ?? string.Empty, Texto(r, "ruta_cuadro"), Booleano(r, "es_video")));
+            }, ct);
+
+    // ── Servicio Técnico › Informe Complementario (23/11/2026) ─────────────────────────────────
+
+    public Task<RespuestaDto<InformeComplementarioCreadoDto>> CrearComplementarioAsync(long idInforme, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_CrearInformeComplementario",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario", idUsuario);
+                p.AddWithValue("p_id_informe", idInforme);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                return new RespuestaDto<InformeComplementarioCreadoDto>(2, mensaje, await LeerUnaAsync<InformeComplementarioCreadoDto>(r, ct));
+            }, ct);
+
+    public Task<RespuestaDto<DetalleInformeComplementarioDto>> ObtenerComplementarioAsync(long idComplementario, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_ObtenerInformeComplementario",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario",        idUsuario);
+                p.AddWithValue("p_id_complementario", idComplementario);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                var c = await LeerUnaAsync<CabeceraComplementarioCruda>(r, ct);
+                if (c is null) return new RespuestaDto<DetalleInformeComplementarioDto>(1, "El informe complementario no existe o no está en tu alcance.");
+                await r.NextResultAsync(ct); var pasos    = await LeerFilasAsync<PasoInformeDto>(r, ct);
+                await r.NextResultAsync(ct); var ensayos  = await LeerFilasAsync<EnsayoInformeDto>(r, ct);
+                await r.NextResultAsync(ct); var obs      = await LeerFilasAsync<ObservacionComplementarioDto>(r, ct);
+                await r.NextResultAsync(ct); var recs     = await LeerFilasAsync<RecomendacionInformeDto>(r, ct);
+                await r.NextResultAsync(ct); var fotos    = await LeerFilasAsync<FotoInformeComplementarioDto>(r, ct);
+                await r.NextResultAsync(ct); var precot   = await LeerFilasAsync<ItemPrecotizacionDto>(r, ct);
+                await r.NextResultAsync(ct); var opciones = await LeerFilasAsync<OpcionListaCruda>(r, ct);
+
+                var det = InformeEquipoMovilRepositorio.LeerDetalle(c.DetalleServicio);
+                List<OpcionFichaComplementarioDto> Lista(string lista) =>
+                    opciones.Where(o => o.Lista == lista && o.Codigo is not null).Select(o => new OpcionFichaComplementarioDto(o.Codigo!, o.Nombre ?? o.Codigo!, o.Padre)).ToList();
+                return new RespuestaDto<DetalleInformeComplementarioDto>(2, mensaje,
+                    new DetalleInformeComplementarioDto(c, pasos, ensayos, obs, recs, fotos, precot,
+                        ResponsableCliente: new ResponsableClienteDto(c.ResponsableNombre, c.ResponsableCargo, c.ResponsableTelefono),
+                        DiagnosticoFinal:   new DiagnosticoFinalDto(c.SeveridadGeneral, c.EstadoEquipoFinal, c.RevJefatura, c.RequierePrecotizacion,
+                                                                    c.SegundaVisita, c.AplicaGarantia),
+                        ComentarioPruebas:  c.ComentarioPruebas,
+                        DetalleServicio:    new DetalleServicioInformeDto(det.Tipo, det.Celdas, det.Suma, det.Comp, det.Anillos),
+                        ResultadoOriginal:  new ResultadoOriginalDto(c.ResultadoGlobal, c.ErrorMaximo, c.DecisionTecnica, c.ErrorCritico),
+                        PrecotizacionDetalle: new PrecotizacionComplementarioDetalleDto(c.IdPrecotizacion, c.NumeroPrecot, c.EstadoPrecot, c.NotaPrecotizacion, precot),
+                        Opciones: new OpcionesInformeComplementarioDto(
+                            Lista("tipo_equipo"), Lista("clasificacion"), Lista("componente"),
+                            [new("critico", "Crítico"), new("alto", "Alto"), new("medio", "Medio"), new("bajo", "Bajo")],
+                            [new("alta", "Alta"), new("media", "Media"), new("baja", "Baja")],
+                            [new("alta", "Alta"), new("media", "Media"), new("opcional", "Opcional")])));
+            }, ct);
+
+    /// <summary>Cabecera del complementario con los campos crudos de la app (se arman en bloques: responsable, diagnóstico, detalle del servicio).
+    /// Se devuelve como CabeceraInformeComplementarioDto: los campos crudos no salen en el JSON de la cabecera.</summary>
+    private sealed class CabeceraComplementarioCruda : CabeceraInformeComplementarioDto
+    {
+        public string? ResponsableNombre     { get; init; }
+        public string? ResponsableCargo      { get; init; }
+        public string? ResponsableTelefono   { get; init; }
+        public string? DetalleServicio       { get; init; }
+        public string? ComentarioPruebas     { get; init; }
+        public string? SeveridadGeneral      { get; init; }
+        public string? EstadoEquipoFinal     { get; init; }
+        public bool    RevJefatura           { get; init; }
+        public bool    RequierePrecotizacion { get; init; }
+        public bool    SegundaVisita         { get; init; }
+        public bool    AplicaGarantia        { get; init; }
+        public string? ErrorCritico          { get; init; }
+    }
+
+    private sealed class OpcionListaCruda
+    {
+        public string? Lista  { get; init; }
+        public string? Codigo { get; init; }
+        public string? Nombre { get; init; }
+        public string? Padre  { get; init; }
+    }
+
+    public Task<RespuestaDto<InformeComplementarioGuardadoDto>> GuardarComplementarioAsync(long idComplementario, GuardarInformeComplementarioDto d, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_GuardarInformeComplementario",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario",          idUsuario);
+                p.AddWithValue("p_id_complementario",   idComplementario);
+                p.AddWithValue("p_cambiar_descripcion", Bit(d.ObservacionesGenerales is not null));
+                p.AddWithValue("p_descripcion",         (object?)d.ObservacionesGenerales ?? DBNull.Value);
+                p.AddWithValue("p_observaciones",       Json(d.Observaciones));
+                p.AddWithValue("p_recomendaciones",     Json(d.Recomendaciones));
+                p.AddWithValue("p_precotizacion",       Json(d.Precotizacion));
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                return new RespuestaDto<InformeComplementarioGuardadoDto>(2, mensaje, await LeerUnaAsync<InformeComplementarioGuardadoDto>(r, ct));
+            }, ct);
+
+    public Task<RespuestaDto<FotoComplementarioSubidaDto>> RegistrarFotoComplementarioAsync(long idComplementario, string ruta, bool esVideo, string? momento,
+                                                                                           string? descripcion, long? idObservacion, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_RegistrarFotoInformeComplementario",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario",        idUsuario);
+                p.AddWithValue("p_id_complementario", idComplementario);
+                p.AddWithValue("p_ruta",              ruta);
+                p.AddWithValue("p_es_video",          Bit(esVideo));
+                p.AddWithValue("p_momento",           Valor(momento));
+                p.AddWithValue("p_descripcion",       Valor(descripcion));
+                p.AddWithValue("p_id_observacion",    Valor(idObservacion));
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                return new RespuestaDto<FotoComplementarioSubidaDto>(2, mensaje, await LeerUnaAsync<FotoComplementarioSubidaDto>(r, ct));
+            }, ct);
+
+    public Task<RespuestaDto<ArchivoBorrableDto?>> QuitarFotoComplementarioAsync(long idComplementario, long idEvidencia, long idUsuario, CancellationToken ct)
+        => EjecutarAsync<ArchivoBorrableDto?>("SP_QuitarFotoInformeComplementario",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario",        idUsuario);
+                p.AddWithValue("p_id_complementario", idComplementario);
+                p.AddWithValue("p_id_evidencia",      idEvidencia);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                ArchivoBorrableDto? archivo = null;
+                if (await r.ReadAsync(ct) && Texto(r, "ruta_borrable") is { Length: > 0 } ruta)
+                    archivo = new ArchivoBorrableDto(ruta, Texto(r, "ruta_cuadro_borrable"));
+                return new RespuestaDto<ArchivoBorrableDto?>(2, mensaje, archivo);
+            }, ct);
+
+    public Task<RespuestaDto<ArchivoEvidenciaMovilDto>> ObtenerArchivoFotoComplementarioAsync(long idComplementario, long idEvidencia, long idUsuario, CancellationToken ct)
+        => EjecutarAsync<ArchivoEvidenciaMovilDto>("SP_ObtenerArchivoFotoInformeComplementario",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario",        idUsuario);
+                p.AddWithValue("p_id_complementario", idComplementario);
+                p.AddWithValue("p_id_evidencia",      idEvidencia);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                if (!await r.ReadAsync(ct)) return new RespuestaDto<ArchivoEvidenciaMovilDto>(1, "Foto no encontrada.");
+                return new RespuestaDto<ArchivoEvidenciaMovilDto>(2, mensaje, new ArchivoEvidenciaMovilDto(
+                    Texto(r, "ruta") ?? string.Empty, Texto(r, "ruta_cuadro"), Booleano(r, "es_video")));
+            }, ct);
+
+    public Task<RespuestaDto<List<ArchivoBorrableDto>>> DescartarComplementarioAsync(long idComplementario, long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_DescartarInformeComplementario",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario",        idUsuario);
+                p.AddWithValue("p_id_complementario", idComplementario);
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                var archivos = new List<ArchivoBorrableDto>();
+                while (await r.ReadAsync(ct))
+                    if (Texto(r, "ruta") is { Length: > 0 } ruta) archivos.Add(new ArchivoBorrableDto(ruta, Texto(r, "ruta_cuadro")));
+                return new RespuestaDto<List<ArchivoBorrableDto>>(2, mensaje, archivos);
             }, ct);
 
     // ── CRM › Precotizaciones Técnicas ────────────────────────────────────────────────────────

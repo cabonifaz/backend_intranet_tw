@@ -4,6 +4,8 @@
 -- Etapas = las 5 del trabajo en el equipo de la app (SP_ArmarEtapasEquipoMovil: Variables ambientales · Registro fotográfico · Ensayos y Calibración · Cabecera del informe · Correlativo y certificado),
 -- con su estado (pendiente · en_curso · completada · observada · bloqueada) y el detalle de lo que lleva (p. ej. «0 de 9 · incluye foto del informe a mano»); se recalculan en cada consulta (tiempo real).
 -- Los chips de Ensayos / Observaciones / Mediciones también cuentan lo que el técnico guarda en la app (informe_ensayo, informe_observacion).
+-- HU-55 (24/11): cada equipo trae también InformeGenerado/NumeroInforme, RegistroActivo/RegistradorId/RegistradorNombre/RegistroPropio (bloqueo de 30 min) y OtroEquipoAbierto
+-- (otro equipo del técnico en ejecución), más IdOsEquipo (el id que usan los endpoints de registro). RegistroPropio se compara con p_id_usuario.
 -- Fix 06/11: los equipos de la OS son de equipo_cliente (os_equipo.id_equipo), no de la tabla equipo (activos TW).
 DROP PROCEDURE IF EXISTS SP_ObtenerAvanceServicioRuta;
 
@@ -19,6 +21,8 @@ proc: BEGIN
     DECLARE v_fin   TINYINT DEFAULT 0;
     DECLARE v_eq    BIGINT;
     DECLARE v_conf  INT DEFAULT 0;
+    DECLARE v_limite  DATETIME;
+    DECLARE v_tecnico BIGINT DEFAULT NULL;
     DECLARE c_eq CURSOR FOR
         SELECT oe.id_equipo FROM os_equipo oe
         WHERE oe.id_os = p_id_os AND oe.eliminado_en IS NULL AND EXISTS (SELECT 1 FROM vw_objetivo_visible vv WHERE vv.id_os_equipo = oe.id)
@@ -42,6 +46,9 @@ proc: BEGIN
 
     SELECT 2 AS IdTipoMensaje, 'OK' AS Mensaje;
 
+    SET v_limite = UTC_TIMESTAMP() - INTERVAL 30 MINUTE;
+    SELECT os.id_tecnico_principal INTO v_tecnico FROM orden_servicio os WHERE os.id_os = p_id_os;
+
     SELECT e.id_equipo AS IdEquipo, e.codigo_tw AS Codigo, e.modelo AS Modelo, e.numero_serie AS Serie, oe.estado_ejecucion AS Estado,
            (SELECT COUNT(*) FROM evidencia_fotografica f WHERE f.id_os = oe.id_os AND f.id_equipo = oe.id_equipo AND f.eliminado_en IS NULL) AS Fotos,
            (SELECT COUNT(DISTINCT mm.id_tipo_prueba) FROM medicion_metrologica mm JOIN orden_metrologia om ON om.id_om = mm.id_om
@@ -60,8 +67,24 @@ proc: BEGIN
               AND oe.estado_ejecucion = 'ejecutado') AS Finalizado,
            (SELECT IF(MIN(g.inicio_utc) IS NULL, NULL, GREATEST(0, TIMESTAMPDIFF(MINUTE, MIN(g.inicio_utc),
                       IF(oe.estado_ejecucion = 'ejecutado', MAX(g.fin_utc), UTC_TIMESTAMP()))))
-              FROM os_equipo_etapa g WHERE g.id_os = oe.id_os AND g.id_equipo = oe.id_equipo AND g.eliminado_en IS NULL) AS Minutos
+              FROM os_equipo_etapa g WHERE g.id_os = oe.id_os AND g.id_equipo = oe.id_equipo AND g.eliminado_en IS NULL) AS Minutos,
+           -- HU-55: lo que necesita el botón "Registrar informe" (mismas reglas que SP_ContextoRegistroIntranet)
+           IF(inf.generado_en IS NULL, 0, 1) AS InformeGenerado, IF(inf.generado_en IS NULL, NULL, inf.numero_informe) AS NumeroInforme,
+           IF(reg.id_registrador IS NULL, 0, 1) AS RegistroActivo, reg.id_registrador AS RegistradorId,
+           IF(reg.id_registrador IS NULL, NULL, NULLIF(TRIM(CONCAT(IFNULL(ur.nombre, ''), ' ', IFNULL(ur.apellido, ''))), '')) AS RegistradorNombre,
+           IF(reg.id_registrador = p_id_usuario, 1, 0) AS RegistroPropio,
+           (SELECT CONCAT(IFNULL(NULLIF(ec2.codigo_cliente, ''), ec2.codigo_tw), ' (', o2.numero, ')')
+              FROM os_equipo x JOIN equipo_cliente ec2 ON ec2.id_equipo = x.id_equipo JOIN orden_servicio o2 ON o2.id_os = x.id_os
+             WHERE v_tecnico IS NOT NULL AND x.id_usuario_ejecucion = v_tecnico AND x.estado_ejecucion = 'en_proceso' AND x.pausado = 0
+               AND x.id <> oe.id AND x.eliminado_en IS NULL LIMIT 1) AS OtroEquipoAbierto,
+           oe.id AS IdOsEquipo
     FROM os_equipo oe JOIN (SELECT ec.id_equipo, ec.codigo_tw, ec.modelo, ec.num_serie AS numero_serie, ec.estado_operativo FROM equipo_cliente ec) e ON e.id_equipo = oe.id_equipo
+    LEFT JOIN informe_tecnico inf ON inf.id_informe = (SELECT i3.id_informe FROM informe_tecnico i3 WHERE i3.id_os = oe.id_os AND i3.id_equipo = oe.id_equipo AND i3.eliminado_en IS NULL
+                                                        ORDER BY i3.id_informe DESC LIMIT 1)
+    LEFT JOIN registro_informe_intranet reg ON reg.id_registro = (SELECT r3.id_registro FROM registro_informe_intranet r3 WHERE r3.id_os_equipo = oe.id AND r3.estado = 'activo'
+                                                                  ORDER BY r3.id_registro DESC LIMIT 1)
+                                            AND reg.ultima_actividad >= v_limite
+    LEFT JOIN usuario ur ON ur.id_usuario = reg.id_registrador
     WHERE oe.id_os = p_id_os AND oe.eliminado_en IS NULL AND EXISTS (SELECT 1 FROM vw_objetivo_visible vv WHERE vv.id_os_equipo = oe.id)   -- mismos equipos que ve el técnico en la app
     ORDER BY oe.orden, oe.id;
 

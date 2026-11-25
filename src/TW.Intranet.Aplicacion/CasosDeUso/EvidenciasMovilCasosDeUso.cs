@@ -8,10 +8,10 @@ namespace TW.Intranet.Aplicacion.CasosDeUso;
 /// <summary>Panel de las 9 evidencias del equipo con su estado y el avance "N de 9 completas".</summary>
 public class ObtenerEvidenciasMovilCasoDeUso(IEvidenciasMovilRepositorio repositorio)
 {
-    public Task<RespuestaDto<EvidenciasMovilDto>> EjecutarAsync(long idUsuario, long idOs, long idOsEquipo, CancellationToken ct = default) =>
+    public Task<RespuestaDto<EvidenciasMovilDto>> EjecutarAsync(long idUsuario, long idOs, long idOsEquipo, CancellationToken ct = default, bool previo = false) =>
         idUsuario <= 0 || idOs <= 0 || idOsEquipo <= 0
             ? Task.FromResult(new RespuestaDto<EvidenciasMovilDto>(1, "Servicio o equipo no encontrado."))
-            : repositorio.ObtenerAsync(idUsuario, idOs, idOsEquipo, ct);
+            : repositorio.ObtenerAsync(idUsuario, idOs, idOsEquipo, ct, previo);
 }
 
 /// <summary>Lo que llega de la app al capturar una evidencia (los números como texto con punto decimal).</summary>

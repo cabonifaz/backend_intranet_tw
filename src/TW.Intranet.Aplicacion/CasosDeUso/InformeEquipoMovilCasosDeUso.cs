@@ -84,10 +84,10 @@ public static class EntradaInformeEquipoMovil
 /// <summary>Las 3 pestañas de la Cabecera del informe del equipo.</summary>
 public class ObtenerCabeceraInformeMovilCasoDeUso(IInformeEquipoMovilRepositorio repositorio)
 {
-    public Task<RespuestaDto<CabeceraInformeMovilDto>> EjecutarAsync(long idUsuario, long idOs, long idOsEquipo, CancellationToken ct = default) =>
+    public Task<RespuestaDto<CabeceraInformeMovilDto>> EjecutarAsync(long idUsuario, long idOs, long idOsEquipo, CancellationToken ct = default, bool previo = false) =>
         idUsuario <= 0 || idOs <= 0 || idOsEquipo <= 0
             ? Task.FromResult(new RespuestaDto<CabeceraInformeMovilDto>(1, "Servicio o equipo no encontrado."))
-            : repositorio.ObtenerCabeceraAsync(idUsuario, idOs, idOsEquipo, ct);
+            : repositorio.ObtenerCabeceraAsync(idUsuario, idOs, idOsEquipo, ct, previo);
 }
 
 /// <summary>Guarda las secciones de la cabecera y devuelve la cabecera ya actualizada (con E, EMP y conformidad calculados por el servidor).</summary>

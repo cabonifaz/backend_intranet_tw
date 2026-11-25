@@ -17,8 +17,8 @@ public class TrabajoEquipoMovilController(
 {
     /// <summary>Cabecera del equipo (servicio, tipo de orden OS/OM según la RQ, tiempos) y sus 5 etapas con estado. Sin llegada registrada o sin iniciar el equipo responde 400.</summary>
     [HttpGet("trabajo")]
-    public async Task<IActionResult> Obtener(long idOs, long idOsEquipo, CancellationToken ct)
-        => Responder(await obtener.EjecutarAsync(IdUsuarioActual, idOs, idOsEquipo, ct));
+    public async Task<IActionResult> Obtener(long idOs, long idOsEquipo, CancellationToken ct, [FromQuery] bool previo = false)
+        => Responder(await obtener.EjecutarAsync(IdUsuarioActual, idOs, idOsEquipo, ct, previo));
 
     /// <summary>
     /// HU-09: guarda temperatura (°C) y humedad (%) obligatorias y la procedencia ("N.I" si va vacía). Fecha y hora las pone el servidor.

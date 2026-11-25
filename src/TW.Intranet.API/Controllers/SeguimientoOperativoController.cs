@@ -22,6 +22,7 @@ public class SeguimientoOperativoController(
     ObtenerTecnicosSeguimientoCasoDeUso   tecnicos,
     ObtenerIncidenciasSeguimientoCasoDeUso incidencias,
     ObtenerFiltrosSeguimientoCasoDeUso    filtros,
+    ListarEnviosDiferidosMovilCasoDeUso   enviosDiferidos,
     ILogger<SeguimientoOperativoController> logger) : ControllerBase
 {
     private long IdUsuarioActual =>
@@ -49,6 +50,15 @@ public class SeguimientoOperativoController(
     [HttpGet("servicios")]
     public async Task<IActionResult> Servicios([FromQuery] ConsultaSeguimientoDto q, CancellationToken ct = default)
         => Responder(await servicios.EjecutarAsync(q, IdUsuarioActual, ct));
+
+    /// <summary>
+    /// Registros que el técnico tomó sin señal en la app y que se enviaron después (llegada, demoras, acciones de equipos, variables, ensayos, cabecera, evidencias…): cuándo se tomó,
+    /// cuándo llegó al servidor (horas de Lima), cuánto tardó (retrasoSeg), el motivo (sin_senal · servidor_no_disponible · otro) y los intentos. Query opcional: idOsEquipo.
+    /// </summary>
+    [RequierePermiso("seg_bandeja")]
+    [HttpGet("servicios/{idOs:long}/envios-diferidos")]
+    public async Task<IActionResult> EnviosDiferidos(long idOs, [FromQuery] long? idOsEquipo, CancellationToken ct = default)
+        => Responder(await enviosDiferidos.EjecutarAsync(idOs, idOsEquipo, ct));
 
     /// <summary>Pestaña 3 Técnicos Activos: tarjeta por técnico con sus servicios del día.</summary>
     [RequierePermiso("seg_bandeja")]
