@@ -25,6 +25,7 @@ public class InformeComplementarioController(
     DescartarInformeComplementarioCasoDeUso          descartar,
     SubirFotoInformeComplementarioCasoDeUso          subirFoto,
     QuitarFotoInformeComplementarioCasoDeUso         quitarFoto,
+    ActualizarDescripcionFotoInformeComplementarioCasoDeUso descripcionFoto,
     ObtenerArchivoFotoInformeComplementarioCasoDeUso archivoFoto,
     GenerarPdfInformeComplementarioCasoDeUso         pdf,
     ILogger<InformeComplementarioController>         logger) : ControllerBase
@@ -104,6 +105,15 @@ public class InformeComplementarioController(
     [HttpDelete("complementarios/{idComplementario:long}/fotos/{idEvidencia:long}")]
     public async Task<IActionResult> QuitarFoto(long idComplementario, long idEvidencia, CancellationToken ct = default)
         => Responder(await quitarFoto.EjecutarAsync(idComplementario, idEvidencia, IdUsuarioActual, ct));
+
+    /// <summary>OBS #4478: edita la descripción de una foto o video que subió el supervisor (hasta 200 caracteres; null o "" la borra).
+    /// Las fotos copiadas del técnico no se editan.</summary>
+    [RequierePermiso("rt_editar")]
+    [RequestSizeLimit(16 * 1024)]
+    [HttpPatch("complementarios/{idComplementario:long}/fotos/{idEvidencia:long}/descripcion")]
+    public async Task<IActionResult> ActualizarDescripcionFoto(long idComplementario, long idEvidencia,
+                                                               [FromBody] ActualizarDescripcionFotoComplementarioDto? datos, CancellationToken ct = default)
+        => Responder(await descripcionFoto.EjecutarAsync(idComplementario, idEvidencia, datos?.Descripcion, IdUsuarioActual, ct));
 
     /// <summary>El archivo de una foto o video del complementario (?cuadro=true: la miniatura del video, si la tiene). Requiere el token:
     /// el front lo pide con fetch y lo muestra con URL.createObjectURL.</summary>

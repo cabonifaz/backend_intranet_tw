@@ -340,6 +340,22 @@ public class RevisionTecnicaRepositorio(CadenaConexionBd conexion) : Repositorio
                 return new RespuestaDto<ArchivoBorrableDto?>(2, mensaje, archivo);
             }, ct);
 
+    public Task<RespuestaDto<DescripcionFotoComplementarioDto>> ActualizarDescripcionFotoComplementarioAsync(long idComplementario, long idEvidencia, string? descripcion,
+                                                                                                             long idUsuario, CancellationToken ct)
+        => EjecutarAsync("SP_ActualizarDescripcionFotoInformeComplementario",
+            p =>
+            {
+                p.AddWithValue("p_id_usuario",        idUsuario);
+                p.AddWithValue("p_id_complementario", idComplementario);
+                p.AddWithValue("p_id_evidencia",      idEvidencia);
+                p.AddWithValue("p_descripcion",       Valor(descripcion));
+            },
+            async (r, mensaje) =>
+            {
+                await r.NextResultAsync(ct);
+                return new RespuestaDto<DescripcionFotoComplementarioDto>(2, mensaje, await LeerUnaAsync<DescripcionFotoComplementarioDto>(r, ct));
+            }, ct);
+
     public Task<RespuestaDto<ArchivoEvidenciaMovilDto>> ObtenerArchivoFotoComplementarioAsync(long idComplementario, long idEvidencia, long idUsuario, CancellationToken ct)
         => EjecutarAsync<ArchivoEvidenciaMovilDto>("SP_ObtenerArchivoFotoInformeComplementario",
             p =>

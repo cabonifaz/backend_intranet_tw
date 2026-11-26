@@ -247,6 +247,19 @@ public class FotoComplementarioSubidaDto
     public int  TotalFotos  { get; init; }
 }
 
+/// <summary>Body de PATCH …/complementarios/{id}/fotos/{idEvidencia}/descripcion (OBS #4478). null o "" borra la descripción.</summary>
+public class ActualizarDescripcionFotoComplementarioDto
+{
+    public string? Descripcion { get; set; }
+}
+
+/// <summary>Descripción vigente de la foto del supervisor tras editarla (null = sin descripción).</summary>
+public class DescripcionFotoComplementarioDto
+{
+    public long    IdEvidencia { get; init; }
+    public string? Descripcion { get; init; }
+}
+
 /// <summary>Archivo que ya nadie usa tras quitar una foto o descartar el complementario (el back lo borra del almacenamiento).</summary>
 public record ArchivoBorrableDto(string Ruta, string? RutaCuadro);
 

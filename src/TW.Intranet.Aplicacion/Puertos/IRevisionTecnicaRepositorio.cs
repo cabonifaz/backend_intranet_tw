@@ -23,6 +23,8 @@ public interface IRevisionTecnicaRepositorio
     Task<RespuestaDto<FotoComplementarioSubidaDto>> RegistrarFotoComplementarioAsync(long idComplementario, string ruta, bool esVideo, string? momento,
                                                                                     string? descripcion, long? idObservacion, long idUsuario, CancellationToken ct);
     Task<RespuestaDto<ArchivoBorrableDto?>> QuitarFotoComplementarioAsync(long idComplementario, long idEvidencia, long idUsuario, CancellationToken ct);
+    Task<RespuestaDto<DescripcionFotoComplementarioDto>> ActualizarDescripcionFotoComplementarioAsync(long idComplementario, long idEvidencia, string? descripcion,
+                                                                                                      long idUsuario, CancellationToken ct);
     Task<RespuestaDto<ArchivoEvidenciaMovilDto>> ObtenerArchivoFotoComplementarioAsync(long idComplementario, long idEvidencia, long idUsuario, CancellationToken ct);
     Task<RespuestaDto<List<ArchivoBorrableDto>>> DescartarComplementarioAsync(long idComplementario, long idUsuario, CancellationToken ct);
 
