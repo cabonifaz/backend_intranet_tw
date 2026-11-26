@@ -157,6 +157,10 @@ public class FotoInformeComplementarioDto
     public long      IdEvidencia       { get; init; }
     public string?   UrlArchivo        { get; init; }
     public string?   Descripcion       { get; init; }
+    /// <summary>Solo en las fotos copiadas del técnico: etapa de la app (placa, inicial, prueba…) con su nombre y descripción como en el móvil.</summary>
+    public string?   Etapa             { get; init; }
+    public string?   EtapaNombre       { get; init; }
+    public string?   EtapaDescripcion  { get; init; }
     /// <summary>ANTES · DURANTE · DESPUES…</summary>
     public string?   Momento           { get; init; }
     public string?   MomentoLabel      { get; init; }

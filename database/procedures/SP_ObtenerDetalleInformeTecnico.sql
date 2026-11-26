@@ -193,7 +193,13 @@ proc: BEGIN
     ORDER BY r.orden, r.id_recomendacion;
 
     -- 7. Fotos (subidas desde la app; solo lectura)
+    --    etapa / etapa_nombre / etapa_descripcion: la etapa del registro fotográfico de la app (placa, inicial, prueba…) con el mismo nombre y
+    --    descripción que muestra el móvil (SP_CatalogoEvidenciasMovil). La app no guarda una descripción propia por foto.
+    CALL SP_CatalogoEvidenciasMovil();
     SELECT f.id_evidencia, f.url_archivo, f.descripcion,
+           f.codigo                                           AS etapa,
+           COALESCE(ce.nombre, IF(f.codigo = 'falla', 'Falla', NULL)) AS etapa_nombre,
+           ce.descripcion                                     AS etapa_descripcion,
            tf.String2                                         AS momento,
            IF(f.es_video = 1, 'Video de encendido', tf.String1) AS momento_label,
            CONVERT_TZ(f.timestamp_captura, '+00:00', '-05:00') AS fecha_captura,   -- hora de Lima
@@ -212,11 +218,13 @@ proc: BEGIN
     LEFT JOIN usuario uf ON uf.id_usuario = f.id_usuario_override
     LEFT JOIN informe_observacion ov ON ov.id_observacion = f.id_observacion AND ov.eliminado_en IS NULL
     LEFT JOIN informe_observacion o  ON o.id_evidencia = f.id_evidencia AND o.id_informe = p_id_informe AND o.eliminado_en IS NULL
+    LEFT JOIN tmp_cat_evid ce        ON ce.codigo = f.codigo
     WHERE f.eliminado_en IS NULL AND f.id_tipo_evidencia NOT IN (6, 7)
       AND f.url_archivo NOT LIKE 'qr://%' AND IFNULL(f.vigente, 1) = 1   -- sin las lecturas del QR (no tienen archivo) ni los intentos descartados por retoma
       AND (f.id_informe = p_id_informe
            OR (f.id_informe IS NULL AND f.id_os = b.id_os AND (f.id_equipo = b.id_equipo OR f.id_equipo IS NULL)))
     ORDER BY f.timestamp_captura, f.id_evidencia;
+    DROP TEMPORARY TABLE IF EXISTS tmp_cat_evid;
 
     -- 8. Ítems de la precotización
     SELECT pi.id_item, pi.orden, pi.concepto, pi.codigo, pi.id_suministro, pi.descripcion_tecnica, pi.cantidad, pi.unidad,
