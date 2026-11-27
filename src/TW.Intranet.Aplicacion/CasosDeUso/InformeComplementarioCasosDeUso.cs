@@ -147,6 +147,18 @@ public class QuitarFotoInformeComplementarioCasoDeUso(IRevisionTecnicaRepositori
     }
 }
 
+/// <summary>OBS #4478: edita la descripción de una foto o video que subió el supervisor al complementario (hasta 200 caracteres; vacío la borra).</summary>
+public class ActualizarDescripcionFotoInformeComplementarioCasoDeUso(IRevisionTecnicaRepositorio repositorio)
+{
+    public Task<RespuestaDto<DescripcionFotoComplementarioDto>> EjecutarAsync(long idComplementario, long idEvidencia, string? descripcion, long idUsuario,
+                                                                            CancellationToken ct = default)
+    {
+        if (idComplementario <= 0 || idEvidencia <= 0) return Task.FromResult(new RespuestaDto<DescripcionFotoComplementarioDto>(1, "Foto no encontrada."));
+        if (ValidacionRevisionTecnica.Largo(descripcion, 200, "Descripción") is { } e) return Task.FromResult(new RespuestaDto<DescripcionFotoComplementarioDto>(1, e));
+        return repositorio.ActualizarDescripcionFotoComplementarioAsync(idComplementario, idEvidencia, ValidacionRevisionTecnica.Recortar(descripcion, 200), idUsuario, ct);
+    }
+}
+
 /// <summary>Descarta un complementario en borrador (nunca guardado) y borra los archivos que subió el supervisor.</summary>
 public class DescartarInformeComplementarioCasoDeUso(IRevisionTecnicaRepositorio repositorio, IAlmacenArchivos almacen)
 {

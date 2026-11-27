@@ -157,6 +157,10 @@ public class FotoInformeComplementarioDto
     public long      IdEvidencia       { get; init; }
     public string?   UrlArchivo        { get; init; }
     public string?   Descripcion       { get; init; }
+    /// <summary>Solo en las fotos copiadas del técnico: etapa de la app (placa, inicial, prueba…) con su nombre y descripción como en el móvil.</summary>
+    public string?   Etapa             { get; init; }
+    public string?   EtapaNombre       { get; init; }
+    public string?   EtapaDescripcion  { get; init; }
     /// <summary>ANTES · DURANTE · DESPUES…</summary>
     public string?   Momento           { get; init; }
     public string?   MomentoLabel      { get; init; }
@@ -241,6 +245,19 @@ public class FotoComplementarioSubidaDto
     public long IdEvidencia { get; init; }
     public bool EsVideo     { get; init; }
     public int  TotalFotos  { get; init; }
+}
+
+/// <summary>Body de PATCH …/complementarios/{id}/fotos/{idEvidencia}/descripcion (OBS #4478). null o "" borra la descripción.</summary>
+public class ActualizarDescripcionFotoComplementarioDto
+{
+    public string? Descripcion { get; set; }
+}
+
+/// <summary>Descripción vigente de la foto del supervisor tras editarla (null = sin descripción).</summary>
+public class DescripcionFotoComplementarioDto
+{
+    public long    IdEvidencia { get; init; }
+    public string? Descripcion { get; init; }
 }
 
 /// <summary>Archivo que ya nadie usa tras quitar una foto o descartar el complementario (el back lo borra del almacenamiento).</summary>

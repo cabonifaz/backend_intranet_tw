@@ -182,8 +182,12 @@ proc: BEGIN
     WHERE r.id_informe = p_id_complementario AND r.eliminado_en IS NULL
     ORDER BY r.orden, r.id_recomendacion;
 
-    -- 7. Fotos y videos del complementario
+    -- 7. Fotos y videos del complementario (etapa*: la etapa de la app de las fotos copiadas del técnico, como en el móvil)
+    CALL SP_CatalogoEvidenciasMovil();
     SELECT f.id_evidencia, f.url_archivo, f.descripcion,
+           IF(f.id_evidencia_origen IS NULL, NULL, f.codigo)  AS etapa,
+           IF(f.id_evidencia_origen IS NULL, NULL, COALESCE(ce.nombre, IF(f.codigo = 'falla', 'Falla', NULL))) AS etapa_nombre,
+           IF(f.id_evidencia_origen IS NULL, NULL, ce.descripcion) AS etapa_descripcion,
            tf.String2                                         AS momento,
            IF(f.es_video = 1, 'Video', tf.String1)            AS momento_label,
            CONVERT_TZ(f.timestamp_captura, '+00:00', '-05:00') AS fecha_captura,   -- hora de Lima
@@ -201,8 +205,10 @@ proc: BEGIN
     LEFT JOIN usuario uf             ON uf.id_usuario = f.id_usuario
     LEFT JOIN informe_observacion xv ON xv.id_observacion = f.id_observacion AND xv.eliminado_en IS NULL
     LEFT JOIN informe_observacion x  ON x.id_evidencia = f.id_evidencia AND x.id_informe = p_id_complementario AND x.eliminado_en IS NULL
+    LEFT JOIN tmp_cat_evid ce        ON ce.codigo = f.codigo
     WHERE f.id_informe = p_id_complementario AND f.eliminado_en IS NULL
     ORDER BY (f.id_evidencia_origen IS NULL), f.timestamp_captura, f.id_evidencia;
+    DROP TEMPORARY TABLE IF EXISTS tmp_cat_evid;
 
     -- 8. Ítems de la precotización
     SELECT pi.id_item, pi.orden, pi.concepto, pi.codigo, pi.id_suministro, pi.descripcion_tecnica, pi.cantidad, pi.unidad,

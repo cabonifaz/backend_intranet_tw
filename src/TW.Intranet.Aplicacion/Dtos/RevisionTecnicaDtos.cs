@@ -323,6 +323,12 @@ public class FotoInformeDto
     public long      IdEvidencia       { get; init; }
     public string?   UrlArchivo        { get; init; }
     public string?   Descripcion       { get; init; }
+    /// <summary>Etapa del registro fotográfico de la app (placa, inicial, encendido, desmontaje, abierto, prueba, final, informe, falla).</summary>
+    public string?   Etapa             { get; init; }
+    /// <summary>Nombre de la etapa como lo muestra el móvil, p. ej. "Placa de identificación".</summary>
+    public string?   EtapaNombre       { get; init; }
+    /// <summary>Descripción de la etapa como la muestra el móvil, p. ej. "Especificaciones del equipo".</summary>
+    public string?   EtapaDescripcion  { get; init; }
     /// <summary>ANTES · DURANTE · DESPUES · FALLA · VERIFICACION (filtros de la galería).</summary>
     public string?   Momento           { get; init; }
     public string?   MomentoLabel      { get; init; }
